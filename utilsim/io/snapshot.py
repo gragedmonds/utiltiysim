@@ -58,7 +58,8 @@ def _clean(v: Any):
     return v
 
 
-def build_snapshot(town, *, include_reads: bool = True, units: str | None = None) -> dict:
+def build_snapshot(town, *, include_reads: bool = True, units: str | None = None, detail: str = "full") -> dict:
+    """``detail='viewer'`` omits reads and the customer/billing tables (fetch them per premise from the API)."""
     cfg, prem, geo, lu = town.cfg, town.prem, town.geo, town.lu
     profile = get_profile(units or cfg.town.units)
     cust = town.customers
@@ -225,6 +226,14 @@ def build_snapshot(town, *, include_reads: bool = True, units: str | None = None
     }
     snap["validation"] = validate_town(town)
     snap["stats"] = town_stats(town)
+    snap["detail"] = detail
+    if detail == "viewer":
+        for k in ("sampleReads", "contracts", "tariffAssignments", "installations", "registers", "accounts",
+                  "businessPartners", "readSchedules", "parcels"):
+            snap[k] = []
+        snap["meters"] = [{k: m[k] for k in ("id", "servicePointId", "registerIds", "multiplier", "technology",
+                                              "serialNumber")} for m in snap["meters"]]
+        snap["mrus"] = [{k: v for k, v in m.items() if k not in ("sequence", "premiseIds")} for m in snap["mrus"]]
     return snap
 
 

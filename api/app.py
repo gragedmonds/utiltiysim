@@ -114,9 +114,10 @@ def get_town(tid: str):
 
 
 @app.get("/api/towns/{tid}/snapshot.json")
-def get_snapshot(tid: str):
+def get_snapshot(tid: str, profile: Literal["full", "viewer"] = "full"):
     _town(tid)
-    return Response(store.snapshot_gz(tid), media_type="application/json", headers={"Content-Encoding": "gzip"})
+    return Response(store.snapshot_gz(tid, profile), media_type="application/json",
+                    headers={"Content-Encoding": "gzip"})
 
 
 @app.get("/api/towns/{tid}/layers/{name}.geojson")

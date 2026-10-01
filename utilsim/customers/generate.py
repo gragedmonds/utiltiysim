@@ -136,27 +136,35 @@ def build_customers(town) -> Customers:
     if len(ami_idx):
         pts = prem.xy[ami_idx]
         radius = cfg.ami.collector_radius_m
+        # Mounting points: poles (overhead areas), pad-mount transformers (underground areas), tanks, substations.
         mounts = [(q["xy"], "pole", q["id"]) for q in nets["electric"].equipment if q["kind"] == "pole"]
+        mounts += [(nd.xy, "transformer_pad", nd.id) for nd in nets["electric"].nodes
+                   if nd.kind == "transformer" and nd.attrs.get("mount") == "pad"]
         mounts += [(f.xy, f.kind, f.id) for f in town.lu.facilities if f.kind in ("elevated_tank", "substation")]
-        if not mounts:
-            mounts = [(prem.xy[i], "streetlight", prem.ids[i]) for i in ami_idx]
-        mxy = np.array([m[0] for m in mounts])
-        mtree = cKDTree(mxy)
-        uncovered = np.ones(len(pts), dtype=bool)
+        mxy = np.array([m[0] for m in mounts]) if mounts else np.zeros((0, 2))
+        mtree = cKDTree(mxy) if len(mxy) else None
+        sites: list[tuple[np.ndarray, str, str]] = []
+
+        def site_for(p: np.ndarray, i_prem: int):
+            if mtree is not None:
+                d, mi = mtree.query(p)
+                if d < 150.0:
+                    return mxy[mi], mounts[mi][1], mounts[mi][2]
+            return prem.front_xy[i_prem], "streetlight", f"SL-{prem.ids[i_prem]}"
+
         cen = pts.mean(0)
         first = int(np.argmin(np.hypot(*(pts - cen).T)))
-        chosen = [first]
-        while True:
-            cxy = np.array([mxy[mtree.query(pts[c])[1]] for c in chosen])
-            d = cKDTree(cxy).query(pts)[0]
+        sites.append(site_for(pts[first], int(ami_idx[first])))
+        while len(sites) < 500:
+            d = cKDTree(np.array([s[0] for s in sites])).query(pts)[0]
             uncovered = d > radius * 0.9
-            if not uncovered.any() or len(chosen) > 200:
+            if not uncovered.any():
                 break
-            chosen.append(int(np.argmax(np.where(uncovered, d, -1))))
-        for k, c in enumerate(chosen):
-            mi = int(mtree.query(pts[c])[1])
-            collectors.append({"id": f"COL-{k + 1:02d}", "x": float(mxy[mi, 0]), "y": float(mxy[mi, 1]),
-                               "mountedOn": mounts[mi][1], "mountId": mounts[mi][2], "coverageRadiusM": radius})
+            far = int(np.argmax(np.where(uncovered, d, -1)))
+            sites.append(site_for(pts[far], int(ami_idx[far])))
+        for k, (xy, kind, mid_) in enumerate(sites):
+            collectors.append({"id": f"COL-{k + 1:02d}", "x": float(xy[0]), "y": float(xy[1]), "mountedOn": kind,
+                               "mountId": mid_, "coverageRadiusM": radius})
     col_tree = cKDTree(np.array([[c["x"], c["y"]] for c in collectors])) if collectors else None
     depot = next((f for f in town.lu.facilities if f.kind == "depot"), None)
     cust.ami = {"headend": {"id": "HEADEND-01", "facilityId": depot.id if depot else None,

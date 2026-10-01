@@ -54,7 +54,8 @@ class TownStore:
                 self._towns.move_to_end(tid)
                 while len(self._towns) > MAX_TOWNS:
                     old, _ = self._towns.popitem(last=False)
-                    self._snap_gz.pop(old, None)
+                    for k in [k for k in self._snap_gz if k.startswith(old + ":")]:
+                        self._snap_gz.pop(k, None)
             self._errors.pop(tid, None)
         except Exception as exc:  # surfaced through status
             self._errors[tid] = f"{type(exc).__name__}: {exc}"
@@ -80,21 +81,22 @@ class TownStore:
             town = self._towns.get(tid)
         return town
 
-    def snapshot_gz(self, tid: str) -> bytes:
-        if tid in self._snap_gz:
-            return self._snap_gz[tid]
-        path = CACHE_DIR / tid / "snapshot.json.gz"
+    def snapshot_gz(self, tid: str, profile: str = "full") -> bytes:
+        key = f"{tid}:{profile}"
+        if key in self._snap_gz:
+            return self._snap_gz[key]
+        path = CACHE_DIR / tid / f"snapshot-{profile}.json.gz"
         if path.exists():
             data = path.read_bytes()
         else:
             town = self.get(tid)
-            data = gzip.compress(orjson.dumps(build_snapshot(town)), 6, mtime=0)
+            data = gzip.compress(orjson.dumps(build_snapshot(town, detail=profile)), 6, mtime=0)
             try:
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_bytes(data)
             except OSError:
                 pass
-        self._snap_gz[tid] = data
+        self._snap_gz[key] = data
         return data
 
     def snapshot(self, tid: str) -> dict:
