@@ -156,3 +156,15 @@ def test_register_preset_with_fixed_size(tmp_path):
         register_preset(path, houses=120, preset_dir=tmp_path / "presets")
     with pytest.raises(OsmError):
         register_preset(path, name="bad name!", houses=120, preset_dir=tmp_path / "presets2")
+
+
+def test_saved_overpass_answer_gives_the_same_extract(tmp_path):
+    raw = overpass_grid()
+    saved = tmp_path / "overpass.json"
+    saved.write_text(json.dumps(raw))
+    calls: list = []
+    from_file = fetch.fetch_extract("Ayr, Ontario", 1500, get=fake_get(raw, calls), overpass_file=saved)
+    assert [c[0].split("?")[0] for c in calls] == [fetch.NOMINATIM_URL]  # geocode only
+    assert fetch.dumps(from_file) == fetch.dumps(fetch.fetch_extract("Ayr, Ontario", 1500, get=fake_get(raw)))
+    url = fetch.overpass_url(from_file["query"])
+    assert url.startswith(fetch.OVERPASS_URL + "?data=") and "%5Bbbox%3A" in url

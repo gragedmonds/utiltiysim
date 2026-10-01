@@ -157,11 +157,21 @@ def normalise(raw: dict, *, place: Place | None, bbox: list[float], query: str) 
     return doc
 
 
-def fetch_extract(place: str, radius_m: float = DEFAULT_RADIUS_M, *, get: HttpGet = http_get) -> dict:
+def overpass_url(query: str) -> str:
+    """A link that downloads the same Overpass answer in a browser (for ``--from-file`` when the API is busy)."""
+    return f"{OVERPASS_URL}?{urllib.parse.urlencode({'data': query})}"
+
+
+def fetch_extract(place: str, radius_m: float = DEFAULT_RADIUS_M, *, get: HttpGet = http_get,
+                  overpass_file: Path | None = None) -> dict:
+    """Geocode ``place`` and fetch its streets; ``overpass_file`` is a saved answer to the same query instead."""
     p = geocode(place, get=get)
     bbox = bbox_around(p.lat, p.lon, radius_m)
     query = overpass_query(bbox)
-    raw = json.loads(get(OVERPASS_URL, urllib.parse.urlencode({"data": query}).encode()))
+    if overpass_file is not None:
+        raw = json.loads(Path(overpass_file).read_bytes())
+    else:
+        raw = json.loads(get(OVERPASS_URL, urllib.parse.urlencode({"data": query}).encode()))
     doc = normalise(raw, place=p, bbox=bbox, query=query)
     doc["radius_m"] = radius_m
     return doc

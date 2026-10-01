@@ -97,15 +97,30 @@ def osm_fetch(place: str = typer.Option(..., help='Place to geocode, e.g. "Ayr, 
               register: bool = typer.Option(True, help="Register a preset sized to the streets' natural capacity."),
               timezone: str = typer.Option(None, help="IANA timezone for the preset (default America/Toronto)."),
               units: str = typer.Option(None, help="Unit profile for the preset: ontario | us | uk."),
-              overwrite: bool = typer.Option(False, help="Replace an existing file/preset.")):
+              overwrite: bool = typer.Option(False, help="Replace an existing file/preset."),
+              from_file: Path = typer.Option(None, help="Use a saved Overpass answer (see --print-url) instead "
+                                                        "of querying Overpass."),
+              print_url: bool = typer.Option(False, help="Only print the Overpass download link for this place.")):
     """Geocode (Nominatim), fetch streets (Overpass), write a frozen extract, register a preset."""
-    from utilsim.gen.roads.fetch import fetch_extract, slugify, write_extract
+    from utilsim.gen.roads.fetch import (
+        bbox_around,
+        fetch_extract,
+        geocode,
+        overpass_query,
+        overpass_url,
+        slugify,
+        write_extract,
+    )
     from utilsim.gen.sources import DATA_DIR, register_preset
 
+    if print_url:
+        p = geocode(place)
+        typer.echo(overpass_url(overpass_query(bbox_around(p.lat, p.lon, radius_m))))
+        return
     out = out or DATA_DIR / f"{slugify(place)}.json"
     if out.exists() and not overwrite:
         raise typer.BadParameter(f"{out} exists; pass --overwrite to replace it.")
-    doc = fetch_extract(place, radius_m)
+    doc = fetch_extract(place, radius_m, overpass_file=from_file)
     sha = write_extract(doc, out)
     res = {"file": str(out), "sha256": sha, "snapshotDate": doc["snapshot_date"], "place": doc["place"],
            "ways": sum(1 for e in doc["elements"] if e["type"] == "way")}
