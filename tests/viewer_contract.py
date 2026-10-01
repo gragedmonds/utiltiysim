@@ -97,3 +97,71 @@ def inspect_snapshot(s: dict) -> None:
         v = t.get("values")
         _need(isinstance(v, list) and len(v) == t["rows"] * t["cols"] and all(_finite(x) for x in v),
               "Heightmap value count does not match dimensions.")
+
+
+def _time_ok(s) -> bool:
+    import re
+    from datetime import datetime
+
+    if not isinstance(s, str) or not re.search(r"T.*(?:Z|[+-]\d{2}:\d{2})$", s):
+        return False
+    try:
+        datetime.fromisoformat(s.replace("Z", "+00:00"))
+        return True
+    except ValueError:
+        return False
+
+
+def validate_frame(snap: dict, f: dict) -> None:
+    """Port of StateReceiver.validate (packages/town-viewer/dist/adapter.js)."""
+    from zoneinfo import ZoneInfo
+
+    _need(f.get("schemaVersion") == "utility-state/1.0", "schemaVersion")
+    _need(f.get("townId") == snap["id"], "State belongs to another town.")
+    _need(f.get("topologyRevision") == snap["topologyRevision"] and f.get("indexRevision") == snap["indexRevision"],
+          "State revision mismatch")
+    _need(isinstance(f.get("simulationId"), str) and f["simulationId"], "simulationId")
+    _need(isinstance(f.get("sequence"), int) and f["sequence"] >= 0, "sequence")
+    _need(f.get("complete") is True, "Only complete frames are supported.")
+    _need(_time_ok(f.get("simTime")), "simTime")
+    for u, unit in UNITS.items():
+        g = f["networks"][u]
+        _need(g.get("unit") == unit == snap["networks"][u]["unit"], f"Missing {u} state or mismatched units.")
+        ids = g["edgeIds"]
+        known = {e["id"]: e for e in snap["networks"][u]["edges"]}
+        _need(len(set(ids)) == len(ids) == len(known) == len(g["flows"]) and all(i in known for i in ids),
+              f"Incomplete or unknown {u} edge index.")
+        enabled = g.get("enabled") or [known[i].get("enabled", not known[i].get("normallyOpen", False)) for i in ids]
+        _need(len(enabled) == len(ids) and all(isinstance(x, bool) for x in enabled), f"{u}: enabled")
+        for i, v in enumerate(g["flows"]):
+            _need(v is None or _finite(v), f"{u}: flow {ids[i]}")
+            _need(enabled[i] or v is None or v == 0, f"Disabled edge {ids[i]} has nonzero flow.")
+        _need("sourceFlow" in g and (g["sourceFlow"] is None or _finite(g["sourceFlow"])), f"{u}: sourceFlow")
+    if "premises" in f:
+        p = f["premises"]
+        _need(len(set(p["ids"])) == len(p["ids"]) == len(snap["premises"]), "premise ids")
+        for u in UNITS:
+            _need(len(p[u]) == len(p["ids"]) and all(v is None or _finite(v) for v in p[u]), f"premises.{u}")
+    if "clock" in f:
+        c = f["clock"]
+        _need(_time_ok(c.get("simTime")), "clock simTime")
+        ZoneInfo(c["timezone"])
+        if "sunElevationDeg" in c:
+            _need(_finite(c["sunElevationDeg"]) and -90 <= c["sunElevationDeg"] <= 90, "sunElevationDeg")
+        if "sunAzimuthDeg" in c:
+            _need(_finite(c["sunAzimuthDeg"]), "sunAzimuthDeg")
+        if "moonPhase" in c:
+            _need(_finite(c["moonPhase"]) and 0 <= c["moonPhase"] <= 1, "moonPhase")
+        _need(c["simTime"] == f["simTime"], "Clock timestamp differs")
+
+
+def accept_replay(snap: dict, replay: dict) -> None:
+    frames = replay["frames"]
+    _need(1 <= len(frames) <= 2000, "replay frame count")
+    last, run, t = -1, None, None
+    for f in frames:
+        validate_frame(snap, f)
+        _need(run in (None, f["simulationId"]), "New simulation run requires an explicit replay reset.")
+        _need(f["sequence"] > last, "Stale or duplicate frame.")
+        _need(t is None or f["simTime"] >= t, "Rewind requires reset")
+        run, last, t = f["simulationId"], f["sequence"], f["simTime"]

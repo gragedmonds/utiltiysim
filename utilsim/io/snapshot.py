@@ -64,7 +64,8 @@ def _clean(v: Any):
     return v
 
 
-def build_snapshot(town, *, include_reads: bool = True, units: str | None = None, detail: str = "full") -> dict:
+def build_snapshot(town, *, include_reads: bool = True, units: str | None = None, detail: str = "full",
+                   embed_state: bool = True) -> dict:
     """``detail='viewer'`` omits reads and the customer/billing tables (fetch them per premise from the API)."""
     cfg, prem, geo, lu = town.cfg, town.prem, town.geo, town.lu
     profile = get_profile(units or cfg.town.units)
@@ -243,6 +244,10 @@ def build_snapshot(town, *, include_reads: bool = True, units: str | None = None
     }
     snap["validation"] = validate_town(town)
     snap["stats"] = town_stats(town)
+    if embed_state:
+        from utilsim.sim.state import initial_frame
+
+        snap["stateFrame"] = initial_frame(town)
     snap["detail"] = detail
     if detail == "viewer":
         for k in ("sampleReads", "contracts", "tariffAssignments", "installations", "registers", "accounts",

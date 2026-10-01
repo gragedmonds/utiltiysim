@@ -1,9 +1,9 @@
 {
   "schemaVersion": "utility-town/2.0",
-  "generatorVersion": "0.1.0",
-  "id": "town-b44070bf3c15e9c0",
+  "generatorVersion": "0.2.0",
+  "id": "town-629f54bde38fe9d7",
   "seed": "WHITBY-042",
-  "count": 480,
+  "count": 552,
   "premiseCount": 552,
   "bounds": {
     "minX": -825.18,
@@ -63,14 +63,14 @@
     "mrus": 21,
     "amiCollectors": 2,
     "timingsS": {
-      "roads": 0.042,
-      "land_use": 1.48,
-      "buildings": 0.199,
-      "electric": 0.106,
-      "water": 0.199,
-      "gas": 0.109,
-      "customers": 0.136,
-      "total": 2.271
+      "roads": 0.031,
+      "land_use": 1.259,
+      "buildings": 0.181,
+      "electric": 0.133,
+      "water": 0.188,
+      "gas": 0.093,
+      "customers": 0.116,
+      "total": 2.001
     }
   },
   "validation": {
@@ -82,9 +82,11 @@
     "checks": [
       "Unique identifiers",
       "Valid edge endpoints",
-      "Radial topology (edges = nodes - 1)",
-      "Source reachability",
-      "All active services connected",
+      "Construction forest (one parent edge per non-source node)",
+      "Loop edges join existing nodes and are never parent edges",
+      "Every node reachable from a source",
+      "Every active service reachable through enabled edges",
+      "Meters resolve by premiseId or servicePointId",
       "Sizes non-increasing away from source",
       "Capacity covers design load",
       "Electric voltage stages",
@@ -92,5 +94,5 @@
       "Referential integrity"
     ]
   },
-  "configHash": "72c1c398d180691eb165deef31020a5f29ddc3f4d6ff12426b91923ebcf1530a"
+  "configHash": "3c2d68190ecba5f36f0f643178beaf067d522ec4c16a606a38c6232ac23105b0"
 }

@@ -227,6 +227,48 @@ def flows(tid: str, hour: float = Query(8.0, ge=0, lt=24), scenario: str = "norm
               "edgeIds": {u: [e.id for e in town.networks[u].edges] for u in town.networks}})
 
 
+_frame_builders: dict[str, Any] = {}
+
+
+def _builder(tid: str):
+    from utilsim.sim.state import FrameBuilder
+
+    town = _town(tid)
+    if tid not in _frame_builders:
+        fm = _flow_models.get(tid) or _flow_models.setdefault(tid, FlowModel(town))
+        _frame_builders[tid] = FrameBuilder(town, fm)
+    return _frame_builders[tid]
+
+
+@app.get("/api/towns/{tid}/state")
+def state_frame(tid: str, hour: float = Query(8.0, ge=0, lt=24), date: str | None = None,
+                scenario: str = "normal", target: str | None = None, premises: bool = True):
+    """One complete ``utility-state/1.0`` frame (static solver output). Stateless and idempotent."""
+    from utilsim.sim.state import local_time
+
+    if scenario not in SCENARIOS:
+        raise HTTPException(422, f"unknown scenario {scenario}")
+    fb = _builder(tid)
+    day = date or fb.town.cfg.scenario.date
+    return J(fb.frame(local_time(fb.town, day, hour), scenario=scenario, target=target, include_premises=premises))
+
+
+@app.get("/api/towns/{tid}/replay")
+def replay(tid: str, date: str | None = None, scenario: str = "normal", target: str | None = None,
+           start_hour: float = Query(0.0, ge=0, lt=24, alias="startHour"),
+           hours: float = Query(24.0, gt=0, le=168), step_minutes: int = Query(60, ge=1, le=1440, alias="stepMinutes"),
+           premises: bool = True):
+    """``utility-replay/1.0``: frames with one simulationId and increasing sequence (≤ 2,000 frames)."""
+    if scenario not in SCENARIOS:
+        raise HTTPException(422, f"unknown scenario {scenario}")
+    fb = _builder(tid)
+    try:
+        return J(fb.replay(date or fb.town.cfg.scenario.date, scenario=scenario, target=target,
+                           start_hour=start_hour, hours=hours, step_minutes=step_minutes, include_premises=premises))
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
 @app.get("/api/towns/{tid}/tables/{name}.{fmt}")
 def get_table(tid: str, name: str, fmt: Literal["parquet", "csv", "json"]):
     snap = store.snapshot(_town(tid).id)

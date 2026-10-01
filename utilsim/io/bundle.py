@@ -33,6 +33,14 @@ def write_bundle(town, out: str | Path, *, geojson: bool = True, tables: bool = 
     (out / "town.json").write_bytes(orjson.dumps(summary, option=orjson.OPT_INDENT_2))
     (out / "config.json").write_bytes(orjson.dumps(snap["config"], option=orjson.OPT_INDENT_2))
     (out / "vee-fixture.json").write_bytes(orjson.dumps(fixture(snap["sampleReads"]), option=orjson.OPT_INDENT_2))
+    from utilsim.sim.state import FrameBuilder, local_time
+
+    fb = FrameBuilder(town)
+    day = town.cfg.scenario.date
+    (out / "replay-day.json").write_bytes(orjson.dumps(fb.replay(day, step_minutes=60)))
+    for sc, hour in (("solar_noon", 12.0), ("leak", 8.0), ("substation_outage", 19.0)):
+        (out / f"state-{sc}.json").write_bytes(orjson.dumps(fb.frame(local_time(town, day, hour), scenario=sc)))
+    files["state"] = ["replay-day.json", "state-solar_noon.json", "state-leak.json", "state-substation_outage.json"]
     if geojson:
         gdir = out / "geojson"
         gdir.mkdir(exist_ok=True)

@@ -54,11 +54,12 @@ class FlowModel:
                         nxt.append(c)
                 frontier = nxt
             order = np.array(bfs, dtype=np.int64)
+            levels = [order[depth[order] == d] for d in range(int(depth[order].max()) + 1)] if len(order) else []
             meter = np.array([self.index.get(nd.attrs.get("premiseId"), -1) if nd.kind == "meter" else -1
                               for nd in net.nodes])
             loop_val = np.array([np.nan if e.enabled else 0.0 for e in net.edges if e.loop])
             loop_idx = np.array([k for k, e in enumerate(net.edges) if e.loop], dtype=np.int64)
-            self._topo[u] = (parent, pe, order, meter, src, loop_idx, loop_val)
+            self._topo[u] = (parent, pe, levels, meter, src, loop_idx, loop_val)
 
     def flows(self, hour: float, scenario: str = "normal", target: str | None = None) -> FlowResult:
         prem = self.town.prem
@@ -67,14 +68,12 @@ class FlowModel:
                    self.town.cfg.scenario.leak_m3h)
         source, edge_flows, unit = {}, {}, {}
         for u, net in self.town.networks.items():
-            parent, pe, order, meter, src, loop_idx, loop_val = self._topo[u]
+            parent, pe, levels, meter, src, loop_idx, loop_val = self._topo[u]
             tot = np.zeros(len(net.nodes))
             m = meter >= 0
             tot[m] = d[u][meter[m]]
-            for v in order[::-1]:
-                p = parent[v]
-                if p >= 0:
-                    tot[p] += tot[v]
+            for lvl in reversed(levels[1:]):
+                np.add.at(tot, parent[lvl], tot[lvl])
             ef = np.zeros(len(net.edges))
             ef[pe[pe >= 0]] = tot[np.flatnonzero(pe >= 0)]
             if len(loop_idx):

@@ -53,3 +53,15 @@ def test_errors():
     assert client.get("/api/towns/town-nope").status_code == 404
     assert client.post("/api/towns", json={"preset": "nope"}).status_code == 422
     assert client.post("/api/towns", json={"houses": 5}).status_code == 422
+
+
+def test_state_and_replay_endpoints():
+    tid = _town()
+    snap = client.get(f"/api/towns/{tid}/snapshot.json").json()
+    f = client.get(f"/api/towns/{tid}/state", params={"hour": 12, "scenario": "solar_noon"}).json()
+    assert f["schemaVersion"] == "utility-state/1.0" and f["topologyRevision"] == snap["topologyRevision"]
+    assert f["clock"]["simTime"] == f["simTime"]
+    rp = client.get(f"/api/towns/{tid}/replay", params={"stepMinutes": 30, "hours": 6, "startHour": 6}).json()
+    assert rp["schemaVersion"] == "utility-replay/1.0" and len(rp["frames"]) == 12
+    assert [x["sequence"] for x in rp["frames"]] == list(range(12))
+    assert client.get(f"/api/towns/{tid}/replay", params={"stepMinutes": 1, "hours": 168}).status_code == 422
