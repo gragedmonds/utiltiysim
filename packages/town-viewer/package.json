@@ -1,0 +1,24 @@
+{
+  "name": "@utilsim/town-viewer",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./adapter": {
+      "types": "./dist/adapter.d.ts",
+      "default": "./dist/adapter.js"
+    },
+    "./scene": "./dist/scene.js"
+  },
+  "scripts": {
+    "postinstall": "node scripts/vendor.mjs",
+    "start": "node scripts/serve.mjs",
+    "test": "node --test tests/*.test.mjs"
+  },
+  "dependencies": {
+    "three": "0.186.1"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
