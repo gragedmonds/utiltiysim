@@ -13,7 +13,7 @@ const tick=()=>Math.round(hour*12);
 function toast(message){$('toast').textContent=message;$('toast').classList.add('visible');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').classList.remove('visible'),5000);}
 function download(obj,name,type='application/json'){const url=URL.createObjectURL(new Blob([typeof obj==='string'?obj:JSON.stringify(obj,null,2)],{type})),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
 function quantity(v,unit,u,absolute=false){const d=displayQuantity(v,unit,u);return `${fmt(d.value===null?null:absolute?Math.abs(d.value):d.value,u==='electric'?2:3)} ${d.unit}`;}
-function getState(){return {townId:town?.id,mode,seed:town?.seed,homes:town?.count,scenario:mode==='demo'?scenario:null,simTime:receiver?.frame?.simTime||null,sequence:receiver?.lastSequence??null,selectedPremiseId:selected?.id||null,layers:scene?.layers,validation:town?.validation,profileTab,geometry:scene?.geometryStats()};}
+function getState(){return {townId:town?.id,mode,seed:town?.seed,homes:town?.count,scenario:mode==='demo'?scenario:null,simTime:receiver?.frame?.simTime||null,sequence:receiver?.lastSequence??null,selectedPremiseId:selected?.id||null,layers:scene?.layers,validation:town?.validation,profileTab,geometry:scene?.geometryStats(),performance:scene?.performanceState()};}
 function stop(){playing=false;clearInterval(timer);timer=null;$('play-btn').textContent='▶';$('play-btn').setAttribute('aria-label','Play');$('tick-status').textContent='Paused';}
 function emptyFlow(t){const f={homes:new Map(t.premises.map(h=>[h.id,{electric:null,water:null,gas:null}]))};for(const u of UTILS)f[u]={source:null,unit:t.networks[u].unit,edgeFlows:new Map(),edgeEnabled:new Map()};return f;}
 function refreshMode(){
@@ -35,7 +35,7 @@ function mount(next,nextMode){
  $('integrity-status').textContent=nextMode==='demo'?'Every service connected':'Snapshot structure checked';$('integrity-detail').textContent=nextMode==='demo'?`${fmt(town.validation.networkEdges)} edges · 0 orphaned services`:'Endpoints, terrain and identifiers valid';
  $('runtime-info').textContent=nextMode==='demo'?`Demo generator v${VERSION}`:`${town.id} · topology ${inspection.topologyRevision}`;
  $('search-results').hidden=true;target=town.premises.find(h=>h.occupied)?.id;refreshMode();
- const mesh=scene.geometryStats();$('geometry-count').textContent=`${fmt(mesh.shellTriangles)} house-shell triangles · ${fmt(mesh.propertyTriangles)} with plots & details`;
+ const mesh=scene.geometryStats();$('geometry-count').textContent=`${fmt(mesh.propertyTriangles)} base property triangles; close-up details are added as needed.`;
  if(mode==='demo'){hour=8;scenario='normal';$('scenario').value='normal';updateFlow();updateScenarioNote();}else{flow=receiver.flow||emptyFlow(town);renderFlow();if(receiver.frame)showClock(receiver.frame);else{$('time-label').textContent='—';$('date-label').textContent='AWAITING ENGINE STATE';scene.setClock({sunElevationDeg:45,sunAzimuthDeg:135});$('clock-icon').textContent='◷';$('clock-status').textContent='No state';}}
  return getState();
 }
@@ -94,7 +94,23 @@ function blueprint(){
  $('blueprint-body').innerHTML=`<p class="blueprint-intro">The engine owns the town and every simulated outcome. This viewer renders its snapshots and state frames, with a separate browser fixture mode for design.</p><div class="blueprint-grid"><div class="blueprint-card"><h3>Viewer owns</h3><p>3D terrain, buildings, network layers, signed flow particles, connection inspection, readable units and engine-driven day/night lighting.</p></div><div class="blueprint-card"><h3>Engine owns</h3><p>Generation, topology, physics, time, demand, incidents, crews, meter readings, VEE, billing and invoices. Loaded snapshots are never re-simulated in the browser.</p></div></div><h3 class="blueprint-subtitle">Load the handoff</h3><p class="blueprint-intro">Use Load engine snapshot for a utility-town/2.0 JSON file. Then load state frames as a single utility-state/1.0 frame or a utility-replay/1.0 bundle. Town, topology and index revisions must match. Replay controls move through supplied frames.</p><p class="small-note">No state means no animated flow. Unknown values stay blank. Gas is displayed in CCF; stored data remain SI. Looped network traces show connectivity, not a hydraulic solution. Engine changes to network structure require a new snapshot.</p><h3 class="blueprint-subtitle">Current delivery</h3><p class="small-note">Snapshot, heightmap, frame and loop-trace adapters are implemented. The live engine API, Arrow decoding, crew animations, work queue screens and billing overlays await the engine's corresponding outputs. The browser fixture remains illustrative. Automated model and contract tests do not establish browser FPS.</p><div class="blueprint-actions"><a href="./VIEWER_ENGINE_HANDOFF.md" download>Shared viewer handoff</a><a href="./REQUIREMENTS.md" download>Original town requirements</a></div>`;$('blueprint').showModal();
 }
 async function readJSON(file){if(!file)throw Error('Choose a JSON file.');if(file.size>100*1024*1024)throw Error('File exceeds the 100 MB viewer limit.');return JSON.parse(await file.text());}
+function renderPerformance(p){
+ const live=p.live;$('fps-live').textContent=live?`${fmt(live.fps,0)} FPS`:'Measuring FPS…';$('frame-live').textContent=live?`${fmt(live.meanFrameMs,1)} ms / frame`:'Frame time —';
+ $('render-triangles').textContent=fmt(p.triangles);$('render-calls').textContent=fmt(p.drawCalls);$('detail-homes').textContent=`${fmt(p.detailedHomes||0)} / ${p.detailLimit||192}`;$('frame-p95').textContent=live?`${fmt(live.p95FrameMs,1)} ms`:'—';
+ const running=!!p.benchmark;$('benchmark-btn').disabled=running;$('benchmark-cancel').hidden=!running;$('house-detail').disabled=running;
+ if(running){const phase={town_overview:'Town overview',neighbourhood:'Neighbourhood',street_detail:'House details'}[p.benchmark.phase];$('benchmark-status').textContent=`${phase} · ${Math.round(p.benchmark.progress*30)} / 30 seconds`;$('benchmark-result').hidden=true;$('benchmark-export').hidden=true;}
+}
+function showBenchmark(report){
+ if(report.status!=='completed'){$('benchmark-status').textContent=report.cancelReason||'The test did not complete.';$('benchmark-result').hidden=true;$('benchmark-export').hidden=false;return;}
+ $('benchmark-status').textContent=`Completed on this browser · ${fmt(report.context.homes)} homes · ${report.context.houseDetail} detail`;
+ $('benchmark-result').innerHTML=`<table class="benchmark-table"><thead><tr><th>View</th><th>FPS</th><th>p95 ms</th></tr></thead><tbody>${report.phases.map(p=>`<tr><td>${escape({town_overview:'Town',neighbourhood:'Neighbourhood',street_detail:'Close-up'}[p.phase])}</td><td>${fmt(p.fps,1)}</td><td>${fmt(p.p95FrameMs,1)}</td></tr>`).join('')}</tbody></table><p class="small-note">1% low: ${fmt(report.overall?.onePercentLowFps,1)} FPS. The first two seconds of each view are excluded.</p>`;$('benchmark-result').hidden=false;$('benchmark-export').hidden=false;
+}
 function wire(){
+ scene.onPerformance=renderPerformance;
+ $('house-detail').onchange=e=>scene.setHouseDetail(e.target.value);
+ $('benchmark-btn').onclick=async()=>{stop();try{$('performance-panel').open=true;const report=await scene.startBenchmark({mode,simulationTime:receiver?.frame?.simTime||null,demoHour:mode==='demo'?hour:null,scenario:mode==='demo'?scenario:null,viewerVersion:'0.3.0'});showBenchmark(report);}catch(e){toast(e.message);}};
+ $('benchmark-cancel').onclick=()=>scene.cancelBenchmark();
+ $('benchmark-export').onclick=()=>{if(scene.lastBenchmark)download(scene.lastBenchmark,`${town.id}-benchmark.json`);};
  for(const u of UTILS)$('layer-'+u).onclick=()=>setLayer(u,!scene.layers[u]);$('show-services').onchange=e=>scene.setXray(e.target.checked);
  $('hour').oninput=e=>{try{mode==='demo'?setHour(Number(e.target.value)/12):applyFrame(Number(e.target.value),true);}catch(e){toast(e.message);}};
  $('scenario').onchange=e=>{try{setScenario(e.target.value);}catch(e){toast(e.message);}};$('generate-btn').onclick=()=>generate().then(()=>toast('Demo town regenerated.')).catch(e=>toast(e.message));$('seed').onkeydown=e=>{if(e.key==='Enter')$('generate-btn').click();};$('reset-seed').onclick=()=>{$('seed').value='WHITBY-042';};

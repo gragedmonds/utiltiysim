@@ -31,3 +31,8 @@ Run the tests without installing Three.js if testing only the DOM-free adapter: 
 This is a viewer receiver contract awaiting the engine's first native 2.0 snapshot. It does not claim Python/JS generation parity, pressure/voltage solves, engine API integration, Arrow decoding, crew rendering or processed billing data. Browser visual QA and 10k FPS remain unmeasured. The code rejects unsupported state revisions and nulls remain unknown.
 
 Road data: © OpenStreetMap contributors, ODbL. Utilities, buildings and all fixture values are synthetic. Three.js: MIT.
+
+
+## Performance and house detail
+
+Open the map's FPS panel to run a 30-second camera benchmark and download its report. Automatic detail adds facades only to the nearest visible houses (cap 192); Simple disables those details for comparison. The panel measures the running browser, not a simulated FPS value. Keep viewport, seed, town size and layers fixed between runs. Browser results have not been collected in the authoring environment.

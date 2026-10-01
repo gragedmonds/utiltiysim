@@ -238,3 +238,42 @@ Verification: 13 Node tests pass, including actual Three.js CPU raycasts against
 ### Engine handoff still required
 
 The inspected engine exporter is progressing. Its current heightmap uses nested `values` rows, `count` represents residential homes while `premiseCount` includes other premises, and it does not yet emit the receiver's `topologyRevision` / `indexRevision`. These differences need an explicit versioned compatibility decision before native snapshots load. This customer-profile delivery does not claim end-to-end Python integration or alter the engine exporter.
+
+
+## House details and browser performance (2026-10-01, viewer 0.3)
+
+### Runtime browser measurements
+
+The map now includes a live performance panel and a **Run 30-second FPS test** control. Its values are measured in the user's browser from actual `requestAnimationFrame` intervals. No FPS result has been obtained in this authoring environment: the required managed browser capability is unavailable. Node tests and mock DOM checks are not GPU or browser benchmarks.
+
+The live panel reports a trailing two-second average FPS, mean frame time, 95th-percentile frame time, submitted triangles, draw calls and detailed-house count. `renderer.info.render` counts draw submissions, including shadow passes where enabled; this is not the same as unique triangles in the model. The measurement is refresh-rate limited and reflects CPU, GPU and browser scheduling; it does not claim GPU timing.
+
+The benchmark holds simulation time fixed and runs three ten-second camera paths: town overview, neighbourhood, and street detail. The first two seconds of each view are warm-up and excluded. It reports per-view FPS and p95 frame time, plus a 1% low calculated as the reciprocal of the mean of the slowest 1% of measured frame intervals. It records town/seed, focus premise, viewport, render pixel ratio, shadows, utility visibility, detail mode, simulation context and browser user agent. Reports can be downloaded as `viewer-benchmark/1.0` JSON; they are not sent to a server.
+
+Changing the town, viewport, camera, property selection, simulation state, utility layers or detail setting invalidates the run. Hiding the tab cancels it. Camera position and controls are restored afterwards. Simulation playback stays paused. A run with too few samples returns `insufficient_samples`, not a performance claim.
+
+For a useful 10,000-home comparison: generate the chosen seed at 10,000 homes, keep the browser visible at the same size, select a reference property, run Automatic detail, then Simple detail. Compare per-view p95 as well as average FPS. A 60 FPS target corresponds to a 16.7 ms frame budget; 30 FPS to 33.3 ms. Those are targets, not achieved measurements.
+
+### Detailed houses with bounded rendering cost
+
+`house-details.js` adds six deterministic facade variants (three designs across one/two-storey proportions), with framed and divided windows, doors, porch steps and canopies, garage fronts, chimney caps, eaves and downspouts. Details are visual only: they do not change engine footprints, accounts, meters, loads or topology. No trees are added.
+
+- Base property meshes remain instanced. The former large window-strip boxes are replaced by facade details shown only nearby.
+- Detailed houses must be in the camera frustum and project to at least 18 pixels in height. The nearest 192 qualifying houses are retained. Selection is refreshed at most once per 180 ms; six styles share four instanced material batches each.
+- Simple mode disables facade details for comparison. Automatic mode is the default. Shadows remain disabled above 2,000 homes.
+- Flow particles reuse scalar interpolation instead of allocating vectors inside each particle update.
+
+For `WHITBY-042`, 10,000 homes and 2,439 solar arrays:
+
+| Property geometry | Triangles |
+|---|---:|
+| Walls + roofs | 200,000 |
+| Plots + driveways | 240,000 |
+| Solar arrays | 29,268 |
+| Base total | 469,268 |
+| Maximum additional close-up detail (192 × 318) | 61,056 |
+| Property-geometry upper bound | 530,324 |
+
+This supersedes the earlier 589,268-triangle count. Roads, terrain and utility geometry remain additional. The base uses five non-empty instanced batches, with up to 24 additional facade batches when all variants are in the close-up set. These are source/geometry counts, not measured frame-rate results.
+
+Verification: 16 Node tests pass, including frame statistics, warm-up separation, hidden-tab reset, cancellation, deterministic facade selection, the 192-house cap, far-view removal, unchanged engine records, and previous customer/picking regressions. A mock DOM smoke check exercises panel bindings and report display without WebGL. Actual browser visual QA and a downloaded device benchmark are still required to establish FPS.
