@@ -120,7 +120,7 @@ def build_geography(cfg: SimConfig) -> Geography:
         return Geography(roads, era, _terrain(cfg), center, extent, origin[0], origin[1], source, core, templates)
 
     # Fully synthetic.
-    side = math.sqrt(n * GROSS_M2_PER_HOUSE_SYNTH * 1.2)
+    side = math.sqrt(n * GROSS_M2_PER_HOUSE_SYNTH * 1.2) + 400.0  # room for facilities beyond the edge
     extent = (-side / 2, -side / 2, side / 2, side / 2)
     center = (0.0, 0.0)
     era = build_era_field(seed, center, era_radius, extent, n, t.era_core_year, t.era_span_years,

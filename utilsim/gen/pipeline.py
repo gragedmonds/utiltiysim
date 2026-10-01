@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import time
 
+import numpy as np
+
 from utilsim.config.model import SimConfig
 from utilsim.gen.addresses import assign_addresses
 from utilsim.gen.buildings import assign_households, build_premises
@@ -43,8 +45,10 @@ def generate(cfg: SimConfig, *, with_customers: bool = True) -> Town:
     networks["gas"] = build_gas(ctx)
     mark("gas")
     for net in networks.values():
-        for nd in net.nodes:
-            nd.attrs.setdefault("elevationM", round(float(geo.terrain.elevation(nd.xy[0], nd.xy[1])), 3))
+        xy = np.array([nd.xy for nd in net.nodes])
+        z = geo.terrain.elevation(xy[:, 0], xy[:, 1])
+        for nd, zz in zip(net.nodes, z):
+            nd.attrs.setdefault("elevationM", round(float(zz), 3))
     town = Town(cfg, geo, lu, prem, networks, timings=timings)
     if with_customers:
         from utilsim.customers.generate import build_customers

@@ -23,9 +23,13 @@ class Town:
     customers: object | None = None
     timings: dict[str, float] = field(default_factory=dict)
 
+    _id: str | None = None
+
     @property
     def id(self) -> str:
-        return self.cfg.town_id()
+        if self._id is None:
+            self._id = self.cfg.town_id()
+        return self._id
 
     @property
     def bounds(self):

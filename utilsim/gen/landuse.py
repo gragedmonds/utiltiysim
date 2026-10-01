@@ -206,11 +206,15 @@ def plan_land_use(geo: Geography, cfg: SimConfig) -> LandUse:
     if total_kva_est > cfg.electric.substation_mva:
         wanted.append("substation")
     wanted += ["pump_station", "city_gate", "depot"] + ["industrial"] * t.industrial_lots
-    sites = _circle_crossings(geo.roads, center, r_dev + 95.0)
-    if len(sites) < 2:
-        sites += _circle_crossings(geo.roads, center, r_dev + 95.0, classes=(COLLECTOR,))
-    if not sites:
-        sites = _circle_crossings(geo.roads, center, r_dev + 60.0, classes=(ARTERIAL, COLLECTOR, 2))
+    sites: list[dict] = []
+    for radius in (r_dev + 95.0, r_dev + 45.0, r_dev, r_dev * 0.85):
+        sites = _circle_crossings(geo.roads, center, radius)
+        if len(sites) < 2:
+            sites += _circle_crossings(geo.roads, center, radius, classes=(COLLECTOR,))
+        if not sites:
+            sites = _circle_crossings(geo.roads, center, radius, classes=(ARTERIAL, COLLECTOR, 2))
+        if sites:
+            break
     if not sites:
         raise CapacityError("No road leaves the developed area; cannot site utility facilities.")
     rot = hash_u01(seed, Purpose.FACILITY, 0)

@@ -135,9 +135,10 @@ def build_gas(ctx: NetContext) -> Network:
                      pressureTier="lp" if tier_lp[v] else "mp", customers=int(sub_n[v]),
                      designM3h=round(float(design[v]), 3), roadEdge=int(sg.piece_edge[piece]))
     # Services and meter sets.
+    meter_g = prem.meter_point("gas")
     for k, i in enumerate(served):
         t = int(prem_tap[k])
-        meter_xy = prem.meter_point("gas")[i]
+        meter_xy = meter_g[i]
         mid = net.add_node(meter_node_id("gas", prem.ids[i]), "meter", meter_xy, premiseId=prem.ids[i],
                            servicePointId=service_point_id(prem.ids[i], "gas"),
                            meterClass="250 CFH diaphragm" if loads[i] < 7 else "1000 CFH rotary")

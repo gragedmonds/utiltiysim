@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import hashlib
 from enum import IntEnum
+from functools import lru_cache
 
 import numpy as np
 
@@ -64,11 +65,23 @@ class Purpose(IntEnum):
 
 def normalize_seed(seed: int | str) -> int:
     """Turn a user-facing seed (int or any string such as 'WHITBY-042') into a 64-bit unsigned integer."""
+    if isinstance(seed, str):
+        return _normalize_str(seed)
     if isinstance(seed, bool):
         raise TypeError("seed must be int or str")
     if isinstance(seed, int):
         return seed & 0xFFFFFFFFFFFFFFFF
     s = str(seed).strip()
+    if not s:
+        raise ValueError("seed must not be empty")
+    if s.lstrip("-").isdigit() and len(s) < 19:
+        return int(s) & 0xFFFFFFFFFFFFFFFF
+    return int.from_bytes(hashlib.blake2b(s.encode("utf-8"), digest_size=8).digest(), "little")
+
+
+@lru_cache(maxsize=4096)
+def _normalize_str(seed: str) -> int:
+    s = seed.strip()
     if not s:
         raise ValueError("seed must not be empty")
     if s.lstrip("-").isdigit() and len(s) < 19:

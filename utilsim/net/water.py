@@ -137,9 +137,10 @@ def build_water(ctx: NetContext) -> Network:
                             capacityM3=3785.0)
         _sized_edge(net, "tank_riser", node_of[t], tank, None, 400, "trunk", zone=int(zone[t]))
     # Services and meters.
+    meter_w = prem.meter_point("water")
     for i in range(n_prem):
         t = prem_tap[i]
-        meter_xy = prem.meter_point("water")[i]
+        meter_xy = meter_w[i]
         mid = net.add_node(meter_node_id("water", prem.ids[i]), "meter", meter_xy, premiseId=prem.ids[i],
                            servicePointId=service_point_id(prem.ids[i], "water"))
         peak_lps = avg[i] * 8.0

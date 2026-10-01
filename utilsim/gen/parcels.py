@@ -126,37 +126,54 @@ def candidate_lots(geo: Geography, cfg: SimConfig, frame: tuple[float, float, fl
                 recs.append((e, side, k, cls, p0, p1, n0, n1, nrm, t, mid, depth, cl, center_line))
     if not recs:
         raise ValueError("No lots could be placed along the road network.")
-    # Block assignment and depth limiting.
-    probes = shapely.points(np.array([r[10] + r[8] * 2.5 for r in recs]))
+    # Block assignment and depth limiting (vectorised).
+    R = len(recs)
+    mid = np.array([r[10] for r in recs])
+    nrm_all = np.array([r[8] for r in recs])
+    depth0 = np.array([r[11] for r in recs])
+    probes = shapely.points(mid + nrm_all * 2.5)
     bq = btree.query(probes, predicate="within")
-    block_of = -np.ones(len(recs), dtype=np.int64)
+    block_of = -np.ones(R, dtype=np.int64)
     block_of[bq[0]] = bq[1]
+    ok = np.flatnonzero(block_of >= 0)
+    boundaries = np.array([b.boundary for b in blocks], dtype=object)
+    starts = mid[ok] + nrm_all[ok] * 0.5
+    ends = mid[ok] + nrm_all[ok] * (2 * depth0[ok, None] + 12)
+    rays = shapely.linestrings(np.stack([starts, ends], axis=1))
+    hits = shapely.intersection(rays, boundaries[block_of[ok]])
+    coords, idx = shapely.get_coordinates(hits, return_index=True)
+    depth = depth0.copy()
+    if len(idx):
+        dd = np.hypot(coords[:, 0] - mid[ok][idx, 0], coords[:, 1] - mid[ok][idx, 1])
+        far = dd > 1.0
+        best = np.full(len(ok), np.inf)
+        np.minimum.at(best, idx[far], dd[far])
+        lim = best < 2 * depth0[ok] + 6
+        depth[ok[lim]] = np.minimum(depth0[ok[lim]], best[lim] / 2.0)
+    ok = ok[depth[ok] >= 12]
+    p0 = np.array([recs[i][4] for i in ok])
+    p1 = np.array([recs[i][5] for i in ok])
+    n0 = np.array([recs[i][6] for i in ok])
+    n1 = np.array([recs[i][7] for i in ok])
+    dk = depth[ok][:, None]
+    quads = shapely.polygons(np.stack([p0, p1, p1 + n1 * dk, p0 + n0 * dk, p0], axis=1))
+    bad = ~shapely.is_valid(quads)
+    if bad.any():
+        quads[bad] = shapely.buffer(quads[bad], 0)
+    clipped = shapely.intersection(quads, np.array(blocks, dtype=object)[block_of[ok]])
+    inside_pts = mid[ok] + nrm_all[ok] * 1.0
     polys, keep_rec = [], []
-    for i, r in enumerate(recs):
-        b = block_of[i]
-        if b < 0:
-            continue
-        e, side, k, cls, p0, p1, n0, n1, nrm, t, mid, depth, cl, _ = r
-        blk = blocks[b]
-        ray = LineString([mid + nrm * 0.5, mid + nrm * (2 * depth + 12)])
-        hit = ray.intersection(blk.boundary)
-        if not hit.is_empty:
-            hp = shapely.get_coordinates(hit)
-            dd = np.hypot(hp[:, 0] - mid[0], hp[:, 1] - mid[1])
-            dd = dd[dd > 1.0]
-            if dd.size and dd.min() < 2 * depth + 6:
-                depth = min(depth, dd.min() / 2.0)
-        if depth < 12:
-            continue
-        quad = Polygon([p0, p1, p1 + n1 * depth, p0 + n0 * depth])
-        if not quad.is_valid:
-            quad = quad.buffer(0)
-        clipped = quad.intersection(blk)
-        part = _part_containing(clipped, mid + nrm * 1.0)
-        if part is None:
+    simple = shapely.get_type_id(clipped) == 3  # Polygon
+    for k, i in enumerate(ok):
+        geom = clipped[k]
+        if simple[k]:
+            part = geom if shapely.distance(geom, shapely.Point(inside_pts[k])) < 0.05 else None
+        else:
+            part = _part_containing(geom, inside_pts[k])
+        if part is None or part.is_empty:
             continue
         polys.append(part)
-        keep_rec.append((i, depth))
+        keep_rec.append((int(i), float(depth[i])))
     # De-overlap by priority.
     order = sorted(range(len(polys)), key=lambda j: (CLASS_PRIORITY[recs[keep_rec[j][0]][3]],
                                                      recs[keep_rec[j][0]][0], -recs[keep_rec[j][0]][1],
@@ -177,8 +194,8 @@ def candidate_lots(geo: Geography, cfg: SimConfig, frame: tuple[float, float, fl
         w_nom = r[12]
         if poly.area < 0.55 * w_nom * min(depth, 28.0):
             continue
-        prop_seg = LineString([r[4], r[5]])
-        if prop_seg.intersection(poly.buffer(0.3)).length < 0.7 * w_nom:
+        prop_seg = LineString([r[4] - r[8] * 0.3, r[5] - r[8] * 0.3]).buffer(0.6, cap_style="flat")
+        if poly.intersection(prop_seg).area < 0.7 * w_nom * 0.6 * 0.5:
             continue
         accepted[j] = poly
         out_idx.append((j, i, depth, poly))
@@ -225,6 +242,6 @@ def _part_containing(geom, pt) -> Polygon | None:
     p = Point(pt)
     parts = [g for g in getattr(geom, "geoms", [geom]) if g.geom_type == "Polygon"]
     for g in parts:
-        if g.buffer(0.05).contains(p):
+        if g.distance(p) < 0.05:
             return g
     return None
