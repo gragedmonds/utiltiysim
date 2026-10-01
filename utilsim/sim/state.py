@@ -38,6 +38,13 @@ def simulation_id(town, scenario: str, day: str, target: str | None) -> str:
     return f"run-{scenario}-{day}-{h}"
 
 
+def run_sequence(when: datetime, day: date, tz: ZoneInfo) -> int:
+    """Whole local wall-clock minutes from midnight of ``day`` to ``when``: the same instant gets the same
+    sequence in /state and in a replay, and a reconnecting client resumes from startHour = sequence / 60."""
+    local = when.astimezone(tz).replace(tzinfo=None)
+    return int((local - datetime(day.year, day.month, day.day)).total_seconds() // 60)
+
+
 def _clean(a: np.ndarray, digits: int = 4) -> list:
     return [None if not np.isfinite(v) else round(float(v), digits) for v in a]
 
@@ -57,14 +64,16 @@ class FrameBuilder:
         self.served = {"electric": np.ones(len(town.prem), dtype=bool), "water": np.ones(len(town.prem), dtype=bool),
                        "gas": np.asarray(a["has_gas"], dtype=bool)}
 
-    def frame(self, when: datetime, *, scenario: str = "normal", target: str | None = None, sequence: int = 0,
-              sim_id: str | None = None, include_premises: bool = True) -> dict:
+    def frame(self, when: datetime, *, scenario: str = "normal", target: str | None = None,
+              sequence: int | None = None, sim_id: str | None = None, include_premises: bool = True) -> dict:
         town = self.town
         tz = ZoneInfo(town.cfg.town.timezone)
         local = when.astimezone(tz)
         hour = local.hour + local.minute / 60.0 + local.second / 3600.0
         if scenario == "leak" and target is None:
             target = town.prem.ids[0]
+        if sequence is None:
+            sequence = run_sequence(when, local.date(), tz)
         res = self.fm.flows(hour, scenario, target)
         sim_time = iso_utc(when)
         networks = {}
@@ -105,8 +114,10 @@ class FrameBuilder:
             raise ValueError(f"a replay holds 1–{MAX_REPLAY_FRAMES} frames; {n} requested")
         start = local_time(self.town, day, start_hour)
         sim_id = simulation_id(self.town, scenario, day, target)
-        frames = [self.frame(start + timedelta(minutes=k * step_minutes), scenario=scenario, target=target,
-                             sequence=k, sim_id=sim_id, include_premises=include_premises) for k in range(n)]
+        d, tz = date.fromisoformat(day), ZoneInfo(self.town.cfg.town.timezone)
+        times = [start + timedelta(minutes=k * step_minutes) for k in range(n)]
+        frames = [self.frame(t, scenario=scenario, target=target, sequence=run_sequence(t, d, tz), sim_id=sim_id,
+                             include_premises=include_premises) for t in times]
         return {"schemaVersion": REPLAY_SCHEMA_VERSION, "townId": self.town.id, "simulationId": sim_id,
                 "topologyRevision": self.topology, "indexRevision": self.index, "scenario": scenario,
                 "stepMinutes": step_minutes, "frames": frames}
@@ -115,4 +126,4 @@ class FrameBuilder:
 def initial_frame(town) -> dict:
     sc = town.cfg.scenario
     return FrameBuilder(town).frame(local_time(town, sc.date, sc.hour), scenario=sc.name,
-                                    target=sc.target_premise, sequence=0)
+                                    target=sc.target_premise)

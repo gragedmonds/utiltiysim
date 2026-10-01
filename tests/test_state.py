@@ -67,3 +67,15 @@ def test_receiver_rejects_tampered_frames(town120):
                      "enabled": nets["water"]["enabled"][:-1]}
     with pytest.raises(ContractError):
         validate_frame(snap, {**f, "networks": nets})
+
+
+def test_sequence_is_minutes_since_local_midnight(town120):
+    fb = FrameBuilder(town120)
+    rep = fb.replay("2026-07-15", start_hour=6, hours=3, step_minutes=30, include_premises=False)
+    assert [f["sequence"] for f in rep["frames"]] == [360, 390, 420, 450, 480, 510]
+    one = fb.frame(local_time(town120, "2026-07-15", 7.5), include_premises=False)
+    assert one["sequence"] == 450 and one["simulationId"] == rep["simulationId"]
+    assert one == rep["frames"][3]
+    # A replay past midnight keeps counting from the run day, so sequences stay increasing.
+    late = fb.replay("2026-07-15", start_hour=23, hours=2, step_minutes=60, include_premises=False)
+    assert [f["sequence"] for f in late["frames"]] == [1380, 1440]
