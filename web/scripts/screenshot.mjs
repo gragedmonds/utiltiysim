@@ -12,6 +12,7 @@ const errors = [];
 page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
 page.on('pageerror', e => errors.push(String(e)));
 await page.goto(url);
+if (process.env.SIZE) { await page.waitForFunction(() => document.getElementById('loading')?.hidden === true && document.getElementById('homes-count')?.textContent !== '—', null, {timeout: 120000}); await page.selectOption('#size', process.env.SIZE); await page.click('#generate-btn'); await page.waitForFunction(n => document.getElementById('homes-count')?.textContent === Number(n).toLocaleString('en-CA'), process.env.SIZE, {timeout: 300000}); }
 await page.waitForFunction(() => document.getElementById('loading')?.hidden === true && document.getElementById('homes-count')?.textContent !== '—', null, {timeout: 120000});
 await page.waitForTimeout(2500);
 const select = process.env.SELECT;
