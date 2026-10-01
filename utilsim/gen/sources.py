@@ -119,7 +119,7 @@ def register_preset(extract: Path, *, name: str | None = None, houses: int | Non
         town["timezone"] = timezone
     if units:
         town["units"] = units
-    available = None
+    available, fixed = None, houses is not None
     if houses is None:
         base = deep_merge(SimConfig().model_dump(mode="json"), {"town": town})
         houses, available = natural_houses(base)
@@ -127,10 +127,15 @@ def register_preset(extract: Path, *, name: str | None = None, houses: int | Non
     place = raw.get("place") or {}
     where = place.get("query") or raw.get("label") or extract.stem
     radius = raw.get("radius_m")
+    if fixed:
+        size = f"{int(houses):,} homes"
+    elif available is None:  # the engine's maximum fit first time: the streets hold more
+        size = f"{int(houses):,} homes (the engine maximum; these streets hold more)"
+    else:
+        size = f"{int(houses):,} homes at natural size"
     desc = description or (
         f"{where}: real OSM streets (snapshot {raw.get('snapshot_date', 'unknown')}"
-        + (f", {radius:,.0f} m radius" if radius else "")
-        + f"), {int(houses):,} homes at natural size.")
+        + (f", {radius:,.0f} m radius" if radius else "") + f"), {size}.")
     doc = {"name": name, "description": desc, "town": town}
     text = ("# Registered by `utilsim osm add`. Raise houses with expansion: grow to add synthetic districts.\n"
             + yaml.safe_dump(doc, sort_keys=False, allow_unicode=True))

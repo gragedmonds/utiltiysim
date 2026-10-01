@@ -58,3 +58,15 @@ def test_sources_listing_and_endpoint():
     assert files["data/osm/whitby-roads.json"]["presets"]
     body = TestClient(app).get("/api/sources").json()
     assert {s["file"] for s in body["sources"]} == set(files)
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("name", REAL)
+def test_every_real_town_generates_valid(name):
+    town = generate(load_preset(name))
+    res = validate_town(town)
+    assert res["valid"], res["errors"][:5]
+    # Substation exits carry the whole substation: parallel getaway cables when one is not enough.
+    for e in town.networks["electric"].edges:
+        if e.attrs.get("conductor", "").endswith("duct bank)"):
+            assert e.attrs["parallelCables"] >= 2 and e.attrs["capacityKVA"] >= e.attrs["designKVA"]

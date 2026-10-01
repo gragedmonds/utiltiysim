@@ -224,11 +224,15 @@ def build_electric(ctx: NetContext) -> Network:
         off = off_oh if ttop == "overhead" else off_ug
         node_of[t] = net.add_node(f"electric-J-T{t}", "junction", sg.point_at(int(f.edge), float(f.s), off),
                                   feeder=feeder_name[int(t)])
+        # The exit is the substation's getaway duct bank: parallel cables when one cannot carry its load.
+        cable_kva = conductor_kva(pick_conductor(1e9, ec.primary_kv, 3, "underground"), ec.primary_kv, 3)
+        n_cab = max(1, math.ceil(float(design[t]) / cable_kva - 1e-9))
+        getaway = {"conductor": "1000 kcmil AL 15 kV XLPE (substation exit)"} if n_cab == 1 else \
+            {"conductor": f"{n_cab} × 1000 kcmil AL 15 kV XLPE (substation getaway duct bank)",
+             "parallelCables": n_cab}
         net.add_edge("trunk", station_nodes[k], node_of[t], None, placement=ttop or "underground",
                      tier="primary_main", voltageKV=ec.primary_kv, phases=3, phase="ABC",
-                     feeder=feeder_name[int(t)], conductor="1000 kcmil AL 15 kV XLPE (substation exit)",
-                     capacityKVA=round(conductor_kva(pick_conductor(1e9, ec.primary_kv, 3, "underground"),
-                                                     ec.primary_kv, 3), 1),
+                     feeder=feeder_name[int(t)], **getaway, capacityKVA=round(cable_kva * n_cab, 1),
                      designKVA=round(float(design[t]), 1), customers=int(sub_n[t]))
         net.equipment.append({"id": f"RCL-{feeder_name[int(t)]}", "kind": "recloser", "xy": net.nodes[node_of[t]].xy,
                               "nodeId": net.nodes[node_of[t]].id, "feeder": feeder_name[int(t)]})
