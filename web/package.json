@@ -1,14 +1,12 @@
 {
-  "name": "utilsim-viewer-bridge",
-  "version": "0.1.0",
+  "name": "utilsim-web-host",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
-  "description": "The prototype's Three.js viewer, rendering utility-town/2.0 snapshots from the utilsim engine.",
+  "description": "Serves Astra's viewer (packages/town-viewer) next to engine exports; headless smoke test.",
   "scripts": {
-    "postinstall": "node scripts/vendor.mjs",
-    "start": "node scripts/serve.mjs",
-    "screenshot": "node scripts/screenshot.mjs"
+    "start": "node serve.mjs",
+    "smoke": "node smoke.mjs"
   },
-  "dependencies": { "three": "0.186.1" },
   "engines": { "node": ">=20" }
 }

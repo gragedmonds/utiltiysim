@@ -4,12 +4,28 @@ on:
     branches: ["**"]
   pull_request:
 jobs:
-  test:
+  engine:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
       - run: uv python install 3.11
       - run: uv sync --all-extras
       - run: uv run ruff check .
       - run: uv run pytest -m "not slow"
+  viewer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm ci
+        working-directory: packages/town-viewer
+      - run: npm test
+        working-directory: packages/town-viewer
+      - name: Engine export conforms to the viewer receiver
+        run: node scripts/viewer_conformance.mjs examples/whitby-480-seed42
