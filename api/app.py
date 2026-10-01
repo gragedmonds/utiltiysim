@@ -61,6 +61,17 @@ def health():
     return {"status": "ok", "generatorVersion": GENERATOR_VERSION, "schemaVersion": SCHEMA_VERSION}
 
 
+@app.get("/api/schemas/{name}.json")
+def get_published_schema(name: str):
+    """Published JSON Schemas: utility-town-2.0, utility-state-1.0, utility-replay-1.0, meter-read-1.1,
+    vee-input-fixture-1.1, config, openapi."""
+    from utilsim.io.schemas import NAMES, load
+
+    if name not in NAMES:
+        raise HTTPException(404, f"unknown schema {name}; available: {sorted(NAMES)}")
+    return J(load(name))
+
+
 @app.get("/api/config/schema")
 def get_schema():
     return J(config_schema())

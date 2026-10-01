@@ -57,8 +57,15 @@ def presets():
 
 
 @app.command()
-def schema(out: Path = typer.Option(None, help="Write the SimConfig JSON Schema here.")):
-    """Print or write the configuration JSON Schema (drives the settings page)."""
+def schema(out: Path = typer.Option(None, help="Write the SimConfig JSON Schema here."),
+           all_: bool = typer.Option(False, "--all", help="Regenerate schemas/config.schema.json and openapi.json.")):
+    """Print or write the configuration JSON Schema (drives the settings page); --all refreshes generated schemas."""
+    if all_:
+        from utilsim.io.schemas import write_generated
+
+        for p in write_generated():
+            typer.echo(str(p))
+        return
     data = orjson.dumps(config_schema(), option=orjson.OPT_INDENT_2)
     if out:
         out.write_bytes(data)

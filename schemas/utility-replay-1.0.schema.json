@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:utilsim:utility-replay-1.0",
+  "title": "Replay batch (utility-replay/1.0)",
+  "description": "1-2,000 complete frames of one simulationId with strictly increasing sequence and non-decreasing simTime. Envelope fields other than schemaVersion and frames are informational.",
+  "type": "object",
+  "required": ["schemaVersion", "frames"],
+  "properties": {
+    "schemaVersion": {"const": "utility-replay/1.0"},
+    "townId": {"type": "string"},
+    "simulationId": {"type": "string"},
+    "topologyRevision": {"type": "string"},
+    "indexRevision": {"type": "string"},
+    "scenario": {"type": "string"},
+    "stepMinutes": {"type": "integer", "minimum": 1},
+    "frames": {"type": "array", "minItems": 1, "maxItems": 2000, "items": {"$ref": "urn:utilsim:utility-state-1.0"}}
+  },
+  "additionalProperties": true
+}
