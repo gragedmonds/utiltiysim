@@ -193,3 +193,48 @@ For Claude's next handoff, deliver:
 - A specific `web/` bridge commit ready for frontend ownership transfer.
 
 A successful viewer smoke test should load the native snapshot, retain metre geometry and offsets, select a house, trace a source connection, display a supplied read, show missing values honestly, load a signed-flow frame and reject a frame from a mismatched topology.
+
+
+## Customer-profile delivery (2026-10-01)
+
+The viewer now opens a customer profile when a house, roof, window, solar array, plot or driveway is clicked. The default tab is **Customer**, followed by **Meters & service** and **Billing**. Search accepts customer names, premise IDs and addresses. Gestures distinguish selection from panning, orbiting, cancellation and multitouch. Roof winding is corrected so the outward surfaces render and raycast correctly.
+
+Customer records remain engine-owned. The read-only `customer.js` joins the selected premise to its account, business partner, service points, installations, contracts, meters, registers, routes and tariff assignments. Contract/account validity is evaluated at the selected engine time (snapshot epoch before state arrives). Meter exchanges and previous tenants remain separate records. The first profile pass renders the current account and contract history; it is not a tenancy-editing workflow.
+
+Consumed fields match the engine customer generator inspected at commit `d90a0898a9abac11cd6779e68c53ce664b8e7431`:
+
+| Collection | Display fields / references |
+|---|---|
+| `premises` | `accountId`, `services`, `buildingId`, `address`, occupancy, `billingCycle`, `mruId`, `sequenceNo`, `moveInAt`, `moveOutAt` |
+| `accounts` | `id`, `businessPartnerId`, `currency`, `paymentMethod`, `budgetBilling`, `validFrom`, `validTo`; optional engine-supplied `balance` |
+| `businessPartners` | `id`, `name`, `kind`; contact details only when explicitly supplied |
+| `servicePoints` / `installations` | service / installation IDs, status, commodity, route |
+| `contracts` / `tariffAssignments` | account and installation refs, validity, tariff ID and configuration status |
+| `meters` / `registers` | serial, model, technology, installation/removal dates, communications, multiplier; distinct import/export register IDs and units |
+| `sampleReads` | observation values and independent read / VEE / bill / invoice statuses; null stays missing |
+| `billingDocuments` | `id`, `accountId`, optional `billStatus` / `status`, `periodStart`, `periodEnd`, `totalAmount` / `total`, `currency`, `reversedAt` |
+| `invoices` | `id`, `accountId` or `billingDocumentIds`, optional `invoiceStatus` / `status`, total, currency, due date |
+
+The document display fields above are receiver proposals for M3, not billing calculations. No charges, balances or payment outcomes are manufactured. Account-scoped documents are explicitly labelled as such. Empty arrays produce “No documents supplied,” not a zero balance. The browser demo adds seeded fictional names to its exported `businessPartners` collection; snapshot import never invokes that demo enrichment.
+
+### Geometry measured from the actual renderer
+
+For `WHITBY-042`, 10,000 homes, with 2,439 solar homes:
+
+| House component | Triangles |
+|---|---:|
+| Wall boxes | 120,000 |
+| Gable roofs | 80,000 |
+| Window strips | 120,000 |
+| Solar arrays | 29,268 |
+| Plot slabs | 120,000 |
+| Driveways | 120,000 |
+| **All property geometry** | **589,268** |
+
+Shell only = 200,000 triangles. Building including windows and solar = 349,268. Six shared instanced batches hold the property geometry; this is not 60,000 independent meshes. Roads, terrain, stations and networks are additional. Shadows remain disabled above 2,000 homes. Triangle totals are source/geometry measurements, not an FPS benchmark.
+
+Verification: 13 Node tests pass, including actual Three.js CPU raycasts against roofs/plots/solar instance IDs, gesture exclusions, historical/current account joins and missing billing data. Browser visual QA and FPS remain unverified because the managed browser-preview capability is unavailable.
+
+### Engine handoff still required
+
+The inspected engine exporter is progressing. Its current heightmap uses nested `values` rows, `count` represents residential homes while `premiseCount` includes other premises, and it does not yet emit the receiver's `topologyRevision` / `indexRevision`. These differences need an explicit versioned compatibility decision before native snapshots load. This customer-profile delivery does not claim end-to-end Python integration or alter the engine exporter.
