@@ -2,15 +2,20 @@
 
 ## Prototype `utility-town/1.0` → engine `utility-town/2.0`
 
-2.0 keeps every 1.0 collection, field name and id pattern (verified by `tests/test_acceptance.py`, which validates
-a 2.0 snapshot against the prototype's `DATA-CONTRACT.schema.json` with only the version constant changed).
+2.0 keeps the 1.0 collections, field names and id grammar, but it is its own version: it validates against
+`schemas/utility-town-2.0.schema.json` and the viewer's receiver, not against the 1.0 schema (whose
+`schemaVersion` is a constant and whose read and topology rules differ). No 1.0 projection is produced.
 Differences:
 
 | Area | 1.0 (prototype) | 2.0 (engine) |
 |---|---|---|
-| Road geometry | OSM roads scaled to fit the home count | real metres, never scaled; extra homes come from synthetic districts grown around the OSM core (`expansion: grow`) or tiles (`repeat`) |
+| Road geometry | OSM roads scaled to fit the home count | real metres, never scaled; a real place's preset is sized by its own streets (`expansion: none`); extra homes come from synthetic districts grown around the OSM core (`expansion: grow`) or tiles (`repeat`) |
+| Identity | `id` | `id`, `topologyRevision`, `indexRevision` (shared with every state frame) |
+| Counts | `count` = homes | `count` = `premises.length`; `homes` = residential |
+| Topology | strict tree, parent chain = route | construction forest plus loop edges; `enabled` on every edge; `sourceIds` |
+| State | flows computed in the viewer | complete `utility-state/1.0` frames and `utility-replay/1.0` from the engine; `null` = unavailable |
 | Lots | a home every 23 m along roads | parcels cut per street side (`parcels[]`), houses inside them |
-| Terrain | analytic `terrain(x,z)` in the viewer | `terrain` heightmap in the snapshot; `elevationM` on nodes |
+| Terrain | analytic `terrain(x,z)` in the viewer | flat row-major `terrain` heightmap (`order: row-major-z-positive`); `elevationM` on nodes |
 | Utility offsets | viewer shifts water +2.8 / gas −2.8 in z | geometry already offset (`source.utilityOffsets = "geometry"`) |
 | Sizing | illustrative | engineering step tables (`sizeMm`, `nominalLabel`, `capacityKVA`, `designKVA`, `ratingKVA`, `designM3h`, `designFireLps`) |
 | Electric | one transformer per 8 homes, 69 kV | transformer groups by count/span/kVA, feeders, 1φ laterals with phases, OH/UG by era, poles, ties, reclosers, fuses; 115 kV in, 13.8 kV primary (configurable) |

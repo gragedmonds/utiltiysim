@@ -29,9 +29,12 @@ def F(default: Any, description: str, *, unit: str | None = None, ge: float | No
     return Field(default, description=description, ge=ge, le=le, json_schema_extra=extra or None, **kw)
 
 
-def group(title: str, order: int, description: str) -> ConfigDict:
+def group(title: str, order: int, description: str, applies: str = "town") -> ConfigDict:
+    """``applies``: "town" = part of the town id (changing it generates a new town); "run" = applies to a
+    simulation run of the same town."""
     return ConfigDict(extra="forbid", title=title,
-                      json_schema_extra={"x-group": True, "x-order": order, "description": description})
+                      json_schema_extra={"x-group": True, "x-order": order, "x-applies": applies,
+                                         "description": description})
 
 
 class EraValues(BaseModel):
@@ -377,7 +380,7 @@ class AnomaliesConfig(BaseModel):
 
 
 class ScenarioConfig(BaseModel):
-    model_config = group("Scenario", 13, "Demonstration scenario on the live clock.")
+    model_config = group("Scenario", 13, "Demonstration scenario on the live clock.", applies="run")
     name: Literal["normal", "solar_noon", "leak", "substation_outage"] = F(
         "normal", "Live demonstration scenario.")
     date: str = F("2026-07-15", "Demonstration date (local).")

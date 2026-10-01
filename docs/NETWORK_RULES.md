@@ -4,7 +4,9 @@ All three networks share one construction: split the street graph at every tap (
 facility access), grow a class-weighted shortest-path forest from the sources (arterials 0.5–0.55, collectors
 0.7–0.75, locals 1.0 per metre, so trunks follow main roads), prune to what serves customers, aggregate diversified
 demand bottom-up, size from step tables, then enforce "a parent is never smaller than its child". Loops are added
-after sizing as `closed_tie` edges.
+after sizing as loop edges between existing nodes (`loop: true`, never a parent edge), each with `enabled`:
+water and gas loops enabled, electric feeder ties normally open (`enabled: false`), water ties across a
+pressure-zone boundary closed (`enabled: false`, `boundaryValve: "closed"`).
 
 ## Electric (defaults: 115 kV in, 13.8 kV primary, 120/240 V)
 

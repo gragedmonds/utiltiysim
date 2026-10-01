@@ -19,9 +19,13 @@ Read (observation + truth) → [M3] VEE decision (revision) → Billing document
   `scheduledReadAt`; it is never zero.
 * Edits and VEE decisions (M3) are revisions linked to the original read id; observations are immutable.
 * `readStatus`, `veeStatus`, bill status and invoice status are separate fields; one badge must not conflate them.
+* Read types: `actual` (observed; a physical zero is still `actual`/`received`), `missing` (polling or
+  communication failure, values null, `reasonCode` says why), `estimated` (planned estimate), `adjusted` (M3 VEE
+  revision). The engine never labels plausibility; VEE decides. Full table: `docs/CONTRACT.md` § Reads.
 
 Read schedules: each route belongs to a portion; the portion is the business day of the month on which the route
 is read (Ontario holidays excluded). AMI reads land at 02:00 local, AMR van reads 09:30–14:30, manual reads
-09:00–15:00. Period boundaries are the previous and current scheduled reads, converted from local time to UTC.
+09:00–15:00. Period boundaries are the previous and current scheduled reads, evaluated in the town's timezone and
+stored in UTC; a period that spans a DST change is an hour shorter or longer in UTC and is not corrected.
 
 Field-level mapping to SAP IS-U and to the m2c.vee normalized read: `docs/SCHEMA_MAPPING.md`.

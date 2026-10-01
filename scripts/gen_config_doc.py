@@ -15,9 +15,12 @@ generated from `GET /api/config/schema`, which carries these UI hints on every f
 | `x-advanced` | Hide behind an "Advanced" toggle |
 | `x-effects` | What changes downstream when this value changes (show as a tooltip / "affects" chips) |
 | `x-group`, `x-order` | Group cards and their order on the page |
+| `x-applies` (on a group) | `town`: part of the town id, so changing it generates a new town (new `townId`, revisions and ids); `run`: applies to a simulation run of the same town (no regeneration) |
 
 Presets (`GET /api/config/presets`) are YAML overrides deep-merged on the defaults. The town id is a hash of the
-generation-relevant config plus the generator version, so every combination is reproducible.
+generation-relevant config plus the generator version, so every combination is reproducible. Only `scenario` is
+run-scoped today; weather, incidents, operations, process and anomalies become run-scoped when the M2/M3 clock
+uses them (their groups will then say `x-applies: run`).
 
 ## Knock-on chains worth demonstrating
 
@@ -33,6 +36,7 @@ generation-relevant config plus the generator version, so every combination is r
 | `ami.ami_route_share` ↓ | More AMR van and manual walker routes; more estimated reads (M3) |
 | `customers_billing.mru_target_meters` ↓ | More, smaller meter reading routes |
 | `town.houses` ↑ beyond the OSM extract | Synthetic districts grown around the Whitby core; second substation; more feeders |
+| A real-place preset (`ayr`, `elora`, `cobourg`, `whitby_wide`) | The place's own streets at their natural size; set `expansion: grow` and more `houses` to add synthetic districts around it |
 
 """
 

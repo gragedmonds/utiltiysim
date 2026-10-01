@@ -3,8 +3,10 @@
 ## Clock
 
 5-minute ticks (configurable) in the town's timezone; hourly flow solves with event-driven re-solves when topology
-changes (a valve closes, a switch opens). The clock endpoint returns local time, `isDay`, sun elevation/azimuth
-and moon phase for the sun/moon widget and scene lighting.
+changes (a valve closes, a switch opens). Every state frame already carries `clock` (local time, `isDay`, sun
+elevation/azimuth from the NOAA solar position at the town's origin, moon phase) for the sun/moon widget and scene
+lighting. Labels such as "nightly AMI collection" come from `ami.poll_start_hour`–`poll_end_hour` (local), not the
+word "night": the window can fall in daylight.
 
 ## Field fleet (config group `operations`)
 
@@ -40,9 +42,12 @@ disables random hazards for scripted demos; `POST /api/sim/{id}/incidents` injec
 The prior Activity Sequence Simulator becomes this layer, anchored to the map: every event references a premise,
 device or asset and has a position. Exceptions always go through a work queue (no same-day human resolution;
 RPA same/next day), costs are labour/system/CX plus carrying cost per day to invoice. Weather changes volumes and
-magnitudes, never sequence structure. Physical state forces sequence selection (an outage produces ZERO_USAGE for
-every premise downstream; a cold snap raises COMM_FAIL on old AMR batteries). The event envelope:
+magnitudes and modulates incident hazards, so it can change a run's event graph (reproducibly for a seed); it never
+changes geography or customer identities. Physical state forces sequence selection (an outage produces zero usage
+for every premise downstream, a physical state rather than an anomaly; a cold snap raises COMM_FAIL on old AMR
+batteries). The event envelope:
 
 `eventId, simulationId, sequence, occurredAt, effectiveAt, eventType, schemaVersion, correlationId, causationId,
-entityType, entityId, payload` (`causationId` is the causal parent; rationale, cost and edge type ride in
-`payload`).
+entityType, entityId, payload`. `causationId` is the primary causal parent; further causes are listed in
+`payload.relatedEventIds`, so the record is a graph. Rationale, cost and edge type ride in `payload`. Events that
+share a timestamp are ordered by `sequence`.

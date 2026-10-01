@@ -113,6 +113,7 @@
       },
       "title": "Metering & AMI",
       "type": "object",
+      "x-applies": "town",
       "x-group": true,
       "x-order": 6
     },
@@ -209,6 +210,7 @@
       },
       "title": "Meter & read anomalies",
       "type": "object",
+      "x-applies": "town",
       "x-group": true,
       "x-order": 12
     },
@@ -384,6 +386,7 @@
       },
       "title": "Customers & billing",
       "type": "object",
+      "x-applies": "town",
       "x-group": true,
       "x-order": 10
     },
@@ -604,6 +607,7 @@
       },
       "title": "Electric distribution",
       "type": "object",
+      "x-applies": "town",
       "x-group": true,
       "x-order": 3
     },
@@ -779,6 +783,7 @@
       },
       "title": "Natural gas",
       "type": "object",
+      "x-applies": "town",
       "x-group": true,
       "x-order": 4
     },
@@ -983,6 +988,7 @@
       },
       "title": "Housing & households",
       "type": "object",
+      "x-applies": "town",
       "x-group": true,
       "x-order": 2
     },
@@ -1056,6 +1062,7 @@
       },
       "title": "Incidents & hazards",
       "type": "object",
+      "x-applies": "town",
       "x-group": true,
       "x-order": 8
     },
@@ -1204,6 +1211,7 @@
       },
       "title": "Field operations",
       "type": "object",
+      "x-applies": "town",
       "x-group": true,
       "x-order": 9
     },
@@ -1267,6 +1275,7 @@
       },
       "title": "Meter-to-cash process",
       "type": "object",
+      "x-applies": "town",
       "x-group": true,
       "x-order": 11
     },
@@ -1361,6 +1370,7 @@
       },
       "title": "Scenario",
       "type": "object",
+      "x-applies": "run",
       "x-group": true,
       "x-order": 13
     },
@@ -1479,6 +1489,7 @@
       },
       "title": "Seeds",
       "type": "object",
+      "x-applies": "town",
       "x-group": true,
       "x-order": 0
     },
@@ -1716,6 +1727,7 @@
       },
       "title": "Town & geography",
       "type": "object",
+      "x-applies": "town",
       "x-group": true,
       "x-order": 1
     },
@@ -1918,6 +1930,7 @@
       },
       "title": "Water distribution",
       "type": "object",
+      "x-applies": "town",
       "x-group": true,
       "x-order": 5
     },
@@ -2009,6 +2022,7 @@
       },
       "title": "Weather",
       "type": "object",
+      "x-applies": "town",
       "x-group": true,
       "x-order": 7
     }

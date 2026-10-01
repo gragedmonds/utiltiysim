@@ -8,7 +8,8 @@ Status: **Done** (M1, tested), **Next** (designed, M2/M3), **Later** (M4).
 |---|---|---|
 | G1 | Same seed + config + generator version reproduce the town byte for byte | Done (`test_byte_identical_regeneration_and_seed_sensitivity`) |
 | G2 | Towns of 20–10,000 homes; 10,000 generate in < 60 s (target 30 s) | Done (~27 s on the reference container) |
-| G3 | OSM-inspired streets: a frozen extract (default Whitby, SHA-verified) or fully synthetic; never claims to be real | Done |
+| G3 | OSM-inspired streets: a frozen extract (default Whitby, SHA-verified) or fully synthetic; buildings, customers and assets never claim to be real | Done |
+| G3a | Real places as seeds: `utilsim osm fetch --place …` freezes a place's streets; its preset is sized by the homes those streets hold (Ayr, Elora, Cobourg, wider Whitby) | Done (`test_real_towns.py`) |
 | G4 | Towns larger than the extract grow era-appropriate synthetic districts around it | Done (`expansion: grow`) |
 | G5 | Coherent eras: pre-war grid core, post-war loops, modern cul-de-sac courts, with matching lot sizes | Done |
 | G6 | Houses sit on parcels; buildings carry footprint, height, storeys, roof, rotation for 3D | Done |
@@ -45,8 +46,8 @@ Status: **Done** (M1, tested), **Next** (designed, M2/M3), **Later** (M4).
 
 | ID | Requirement | Status |
 |---|---|---|
-| S1 | Live clock with day/night (sun/moon), 5-minute ticks, scenario presets | Partly (scenarios + flows done; clock/astro in M2) |
-| S2 | Weather series drives magnitudes, never process structure | Next (M2) |
+| S1 | Live clock with day/night (sun/moon), 5-minute ticks, scenario presets | Partly (scenarios, complete state frames, replays, sun/moon in `clock` done; ticking clock in M2) |
+| S2 | Weather series drives magnitudes; geography and customer identities never change; weather-modulated incidents may change a run's event graph (reproducibly per seed) | Next (M2) |
 | S3 | Nightly AMI collection; AMR vans and manual walkers moving along routes | Next (M2) |
 | S4 | Incidents (gas leak, lightning, main break, transformer failure, collector outage) with crews, OMS, isolation and restoration visible on the map | Next (M3) |
 | S5 | Causal event graph: every event has an initiating event, rationale and cost | Next (M3) |
@@ -55,6 +56,6 @@ Status: **Done** (M1, tested), **Next** (designed, M2/M3), **Later** (M4).
 
 | ID | Requirement | Status |
 |---|---|---|
-| X1 | Snapshot is a superset of the prototype's `utility-town/1.0` | Done (schema test) |
+| X1 | Snapshot keeps the prototype's 1.0 field names and id grammar, validates against its own `utility-town/2.0` schema and is accepted by the viewer's receiver (no 1.0 compatibility claim) | Done (`test_schemas.py`, `test_viewer_contract.py`, `viewer_conformance.mjs` in CI) |
 | X2 | Viewer snapshot ≤ ~10 MB gzipped at 10,000 homes | Done (≈ 6 MB `viewer`, ≈ 10 MB `full`) |
-| X3 | Test suite runs in CI on every push | Done |
+| X3 | Test suite runs in CI on every push, including the viewer package's tests and conformance of the engine's example against its receiver | Done |

@@ -49,3 +49,16 @@ def test_schema_has_ui_hints():
     assert town["properties"]["houses"]["maximum"] == 10_000
     assert "x-effects" in town["properties"]["houses"]
     assert defs["ElectricConfig"]["properties"]["primary_kv"]["x-unit"] == "kV"
+
+
+def test_groups_say_whether_a_change_regenerates_the_town():
+    from utilsim.config import SimConfig
+
+    defs = config_schema()["$defs"]
+    applies = {k: v["x-applies"] for k, v in defs.items() if v.get("x-group")}
+    assert applies["ScenarioConfig"] == "run" and applies["TownConfig"] == "town"
+    assert set(applies.values()) == {"town", "run"}
+    # "run" groups must really be outside the town id.
+    base = SimConfig()
+    assert base.model_copy(update={"scenario": base.scenario.model_copy(update={"hour": 19.0})}).town_id() == \
+        base.town_id()
