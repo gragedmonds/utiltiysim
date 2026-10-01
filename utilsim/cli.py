@@ -1,4 +1,4 @@
-"""utilsim command line: gen | render | schema | validate | serve."""
+"""utilsim command line: gen | render | schema | validate | serve | osm (fetch | add | list)."""
 
 from __future__ import annotations
 
@@ -83,6 +83,60 @@ def validate(preset: str = "whitby_small", seed: str = typer.Option(None), house
     res = validate_town(town)
     typer.echo(json.dumps({k: v for k, v in res.items() if k != "errors"} | {"errors": res["errors"][:20]}, indent=2))
     raise typer.Exit(0 if res["valid"] else 1)
+
+
+osm_app = typer.Typer(add_completion=False, help="Freeze real places' streets from OpenStreetMap and make presets.")
+app.add_typer(osm_app, name="osm")
+
+
+@osm_app.command("fetch")
+def osm_fetch(place: str = typer.Option(..., help='Place to geocode, e.g. "Ayr, Ontario".'),
+              radius_m: float = typer.Option(2000.0, help="Half-width of the square fetched around the place."),
+              out: Path = typer.Option(None, help="Output file (default data/osm/<place-slug>.json)."),
+              name: str = typer.Option(None, help="Preset name (default from the file name)."),
+              register: bool = typer.Option(True, help="Register a preset sized to the streets' natural capacity."),
+              timezone: str = typer.Option(None, help="IANA timezone for the preset (default America/Toronto)."),
+              units: str = typer.Option(None, help="Unit profile for the preset: ontario | us | uk."),
+              overwrite: bool = typer.Option(False, help="Replace an existing file/preset.")):
+    """Geocode (Nominatim), fetch streets (Overpass), write a frozen extract, register a preset."""
+    from utilsim.gen.roads.fetch import fetch_extract, slugify, write_extract
+    from utilsim.gen.sources import DATA_DIR, register_preset
+
+    out = out or DATA_DIR / f"{slugify(place)}.json"
+    if out.exists() and not overwrite:
+        raise typer.BadParameter(f"{out} exists; pass --overwrite to replace it.")
+    doc = fetch_extract(place, radius_m)
+    sha = write_extract(doc, out)
+    res = {"file": str(out), "sha256": sha, "snapshotDate": doc["snapshot_date"], "place": doc["place"],
+           "ways": sum(1 for e in doc["elements"] if e["type"] == "way")}
+    if register:
+        res["preset"] = register_preset(out, name=name, timezone=timezone, units=units, overwrite=overwrite)
+    typer.echo(json.dumps(res, indent=2, ensure_ascii=False))
+
+
+@osm_app.command("add")
+def osm_add(extract: Path = typer.Argument(..., help="OSM API 0.6 / Overpass JSON extract."),
+            name: str = typer.Option(None, help="Preset name (default from the file name)."),
+            houses: int = typer.Option(None, help="Fixed size instead of the natural capacity."),
+            description: str = typer.Option(None),
+            timezone: str = typer.Option(None), units: str = typer.Option(None),
+            overwrite: bool = typer.Option(False)):
+    """Register a preset for an extract already on disk."""
+    from utilsim.gen.sources import register_preset
+
+    res = register_preset(extract, name=name, houses=houses, description=description, timezone=timezone,
+                          units=units, overwrite=overwrite)
+    typer.echo(json.dumps(res, indent=2))
+
+
+@osm_app.command("list")
+def osm_list():
+    """Frozen extracts and the presets that use them."""
+    from utilsim.gen.sources import list_sources
+
+    for s in list_sources():
+        presets = ", ".join(f"{p['preset']} ({p['houses']:,})" for p in s["presets"]) or "-"
+        typer.echo(f"{s['file']:<34} {s['snapshotDate'] or '':<11} {s['ways']:>6} ways  {presets}")
 
 
 @app.command()

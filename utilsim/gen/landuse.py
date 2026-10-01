@@ -33,7 +33,9 @@ FACILITY_LABEL = {
 
 
 class CapacityError(ValueError):
-    pass
+    def __init__(self, message: str, available: int | None = None):
+        super().__init__(message)
+        self.available = available  # residential lots that do fit, when known
 
 
 @dataclass
@@ -153,7 +155,7 @@ def plan_land_use(geo: Geography, cfg: SimConfig) -> LandUse:
         idx = np.flatnonzero(mask)
         if len(idx) < n_houses:
             raise CapacityError(f"Only {len(idx)} residential lots fit this road skeleton; {n_houses} requested. "
-                                "Use town.expansion='grow' or a larger extract.")
+                                "Use town.expansion='grow' or a larger extract.", available=len(idx))
         order = idx[np.argsort(score[idx], kind="stable")]
         return float(np.max(dist[order[:n_houses]]))
 
@@ -260,7 +262,7 @@ def plan_land_use(geo: Geography, cfg: SimConfig) -> LandUse:
     idx = np.flatnonzero(avail)
     if len(idx) < n_houses:
         raise CapacityError(f"Only {len(idx)} residential lots remain after reserving facilities; {n_houses} "
-                            "requested.")
+                            "requested.", available=len(idx))
     chosen_idx = np.sort(idx[np.argsort(score[idx], kind="stable")[:n_houses]])
     com_idx = np.flatnonzero(commercial)
     r_dev = float(np.max(dist[chosen_idx]))

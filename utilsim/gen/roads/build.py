@@ -12,7 +12,7 @@ from shapely.geometry import LineString, box
 from utilsim.config.model import SimConfig
 from utilsim.core.geom import polyline_length
 from utilsim.gen.roads.model import ARTERIAL, LOCAL, RoadLine, RoadNetwork
-from utilsim.gen.roads.osm import OsmError, OsmExtract, load_osm, parse_osm
+from utilsim.gen.roads.osm import OsmExtract, load_osm, parse_osm
 from utilsim.gen.roads.planarize import planarize
 from utilsim.gen.roads.synthetic import growth_connectors, synthetic_skeleton
 from utilsim.gen.terrain import Terrain
@@ -90,9 +90,7 @@ def build_geography(cfg: SimConfig) -> Geography:
         source["coreLotCapacityEstimate"] = cap
         core = ex.bbox_xy
         if n <= cap * 0.8 or t.expansion == "none":
-            if t.expansion == "none" and n > cap:
-                raise OsmError(f"The OSM extract fronts about {cap} lots; {n} houses need expansion 'grow' or "
-                               "'repeat'.")
+            # Land use reports the exact shortfall (CapacityError) if the real streets cannot hold n houses.
             extent = core
             era = build_era_field(seed, center, era_radius, extent, n, t.era_core_year, t.era_span_years,
                                   t.era_noise_years, cfg.gas.all_electric_district_share)

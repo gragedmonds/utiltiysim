@@ -260,6 +260,23 @@
         "summary": "Get Published Schema"
       }
     },
+    "/api/sources": {
+      "get": {
+        "description": "Frozen street extracts (real places) with attribution and the presets built on them.",
+        "operationId": "get_sources_api_sources_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Sources"
+      }
+    },
     "/api/towns": {
       "post": {
         "operationId": "create_town_api_towns_post",

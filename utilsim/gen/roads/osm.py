@@ -180,7 +180,8 @@ def parse_osm(raw: dict, sha256: str = "") -> OsmExtract:
                    float(allp[:, 1].max()))
     return OsmExtract(
         lines=lines, origin_lat=olat, origin_lon=olon, bbox_xy=bbox_xy, sha256=sha256,
-        label="Whitby street snapshot" if raw.get("source") == "OpenStreetMap API 0.6" else "Imported OSM streets",
+        label=str(raw.get("label") or ("Whitby street snapshot" if raw.get("source") == "OpenStreetMap API 0.6"
+                                       else "Imported OSM streets")),
         snapshot_date=str(raw.get("snapshot_date") or "user supplied"),
         attribution=str(raw.get("attribution") or "© OpenStreetMap contributors"),
         license=str(raw.get("license") or "https://opendatacommons.org/licenses/odbl/1-0/"),
