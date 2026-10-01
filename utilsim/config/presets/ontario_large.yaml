@@ -1,0 +1,8 @@
+name: ontario_large
+description: Fully synthetic Southern Ontario town, 10,000 homes with hilly terrain (two water pressure zones).
+seeds:
+  master: "42"
+town:
+  houses: 10000
+  skeleton: synthetic
+  terrain_relief_m: 45

@@ -53,6 +53,13 @@ class Purpose(IntEnum):
     MOVE = 23
     SOLAR = 24
     DISTRICT_STYLE = 25
+    TERRAIN = 26
+    ROADS = 27
+    LOT_SELECT = 28
+    FACILITY = 29
+    FEEDER = 30
+    ROUTE = 31
+    CUSTOMER = 32
 
 
 def normalize_seed(seed: int | str) -> int:

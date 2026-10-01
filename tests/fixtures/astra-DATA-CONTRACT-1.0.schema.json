@@ -1,0 +1,710 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Utility Town v1 handoff",
+  "description": "Prototype contract. A VEE adapter must exclude physical truth and map fields to the actual VEE v5 backend schema.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/town"
+    },
+    {
+      "$ref": "#/$defs/fixture"
+    }
+  ],
+  "$defs": {
+    "point": {
+      "type": "object",
+      "required": [
+        "x",
+        "z"
+      ],
+      "properties": {
+        "x": {
+          "type": "number"
+        },
+        "z": {
+          "type": "number"
+        }
+      },
+      "additionalProperties": true
+    },
+    "node": {
+      "type": "object",
+      "required": [
+        "id",
+        "kind",
+        "x",
+        "z",
+        "elevationM"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "type": "string"
+        },
+        "x": {
+          "type": "number"
+        },
+        "z": {
+          "type": "number"
+        },
+        "elevationM": {
+          "type": "number"
+        },
+        "premiseId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "servicePointId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": true
+    },
+    "edge": {
+      "type": "object",
+      "required": [
+        "id",
+        "commodity",
+        "from",
+        "to",
+        "kind",
+        "points",
+        "lengthM",
+        "placement"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "commodity": {
+          "enum": [
+            "electric",
+            "water",
+            "gas"
+          ]
+        },
+        "from": {
+          "type": "string",
+          "minLength": 1
+        },
+        "to": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "type": "string"
+        },
+        "points": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/point"
+          }
+        },
+        "lengthM": {
+          "type": "number",
+          "minimum": 0
+        },
+        "placement": {
+          "enum": [
+            "overhead",
+            "underground"
+          ]
+        },
+        "diameterIn": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "voltageKV": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      },
+      "additionalProperties": true
+    },
+    "network": {
+      "type": "object",
+      "required": [
+        "commodity",
+        "sourceId",
+        "stationId",
+        "nodes",
+        "edges",
+        "unit"
+      ],
+      "properties": {
+        "commodity": {
+          "enum": [
+            "electric",
+            "water",
+            "gas"
+          ]
+        },
+        "sourceId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "stationId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "nodes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/node"
+          }
+        },
+        "edges": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/edge"
+          }
+        },
+        "unit": {
+          "enum": [
+            "kW",
+            "m3/h"
+          ]
+        }
+      },
+      "additionalProperties": true
+    },
+    "premise": {
+      "type": "object",
+      "required": [
+        "id",
+        "buildingId",
+        "accountId",
+        "address",
+        "x",
+        "z",
+        "occupied",
+        "solar",
+        "services"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "buildingId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "accountId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "address": {
+          "type": "string"
+        },
+        "x": {
+          "type": "number"
+        },
+        "z": {
+          "type": "number"
+        },
+        "occupied": {
+          "type": "boolean"
+        },
+        "solar": {
+          "type": "boolean"
+        },
+        "services": {
+          "type": "object",
+          "required": [
+            "electric",
+            "water"
+          ],
+          "properties": {
+            "electric": {
+              "type": "string",
+              "minLength": 1
+            },
+            "water": {
+              "type": "string",
+              "minLength": 1
+            },
+            "gas": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
+    },
+    "servicePoint": {
+      "type": "object",
+      "required": [
+        "id",
+        "premiseId",
+        "commodity",
+        "meterId",
+        "installationId",
+        "validFrom",
+        "validTo"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "premiseId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "commodity": {
+          "enum": [
+            "electric",
+            "water",
+            "gas"
+          ]
+        },
+        "meterId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "installationId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "validFrom": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "validTo": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        }
+      },
+      "additionalProperties": true
+    },
+    "meter": {
+      "type": "object",
+      "required": [
+        "id",
+        "servicePointId",
+        "registerIds",
+        "multiplier"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "servicePointId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "registerIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "multiplier": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      },
+      "additionalProperties": true
+    },
+    "register": {
+      "type": "object",
+      "required": [
+        "id",
+        "meterId",
+        "direction",
+        "unit"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "meterId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "direction": {
+          "enum": [
+            "import",
+            "export"
+          ]
+        },
+        "unit": {
+          "enum": [
+            "kWh",
+            "m3"
+          ]
+        }
+      },
+      "additionalProperties": true
+    },
+    "record": {
+      "type": "object",
+      "required": [
+        "id"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": true
+    },
+    "read": {
+      "type": "object",
+      "required": [
+        "id",
+        "simulationId",
+        "premiseId",
+        "servicePointId",
+        "installationId",
+        "meterId",
+        "registerId",
+        "contractId",
+        "accountId",
+        "idempotencyKey",
+        "schemaVersion",
+        "commodity",
+        "direction",
+        "unit",
+        "previousRegisterValue",
+        "registerValue",
+        "consumption",
+        "periodStart",
+        "periodEnd",
+        "readAt",
+        "readType",
+        "readStatus",
+        "source",
+        "multiplier",
+        "veeStatus",
+        "billingDocumentId",
+        "invoiceId",
+        "truth"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "simulationId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "premiseId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "servicePointId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "installationId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "meterId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "registerId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "contractId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "accountId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "idempotencyKey": {
+          "type": "string",
+          "minLength": 1
+        },
+        "schemaVersion": {
+          "const": "meter-read/1.0"
+        },
+        "commodity": {
+          "enum": [
+            "electric",
+            "water",
+            "gas"
+          ]
+        },
+        "direction": {
+          "enum": [
+            "import",
+            "export"
+          ]
+        },
+        "unit": {
+          "enum": [
+            "kWh",
+            "m3"
+          ]
+        },
+        "previousRegisterValue": {
+          "type": "number",
+          "minimum": 0
+        },
+        "registerValue": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "consumption": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "periodStart": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "periodEnd": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "readAt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "readType": {
+          "enum": [
+            "actual",
+            "missing",
+            "estimated",
+            "adjusted"
+          ]
+        },
+        "readStatus": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "multiplier": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "veeStatus": {
+          "const": "not_processed"
+        },
+        "billingDocumentId": {
+          "type": "null"
+        },
+        "invoiceId": {
+          "type": "null"
+        },
+        "truth": {
+          "type": "object",
+          "required": [
+            "registerValue",
+            "consumption"
+          ],
+          "properties": {
+            "registerValue": {
+              "type": "number"
+            },
+            "consumption": {
+              "type": "number"
+            }
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
+    },
+    "town": {
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "generatorVersion",
+        "id",
+        "seed",
+        "count",
+        "source",
+        "sourceSnapshot",
+        "premises",
+        "networks",
+        "buildings",
+        "accounts",
+        "servicePoints",
+        "meters",
+        "registers",
+        "installations",
+        "contracts",
+        "sampleReads",
+        "billingDocuments",
+        "invoices"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "utility-town/1.0"
+        },
+        "generatorVersion": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "seed": {
+          "type": "string",
+          "minLength": 1
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 20,
+          "maximum": 10000
+        },
+        "source": {
+          "type": "object"
+        },
+        "sourceSnapshot": {
+          "type": "object",
+          "required": [
+            "nodes",
+            "roads",
+            "sourceHash"
+          ],
+          "properties": {
+            "nodes": {
+              "type": "array"
+            },
+            "roads": {
+              "type": "array"
+            },
+            "sourceHash": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": true
+        },
+        "premises": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/premise"
+          }
+        },
+        "networks": {
+          "type": "object",
+          "required": [
+            "electric",
+            "water",
+            "gas"
+          ],
+          "properties": {
+            "electric": {
+              "$ref": "#/$defs/network"
+            },
+            "water": {
+              "$ref": "#/$defs/network"
+            },
+            "gas": {
+              "$ref": "#/$defs/network"
+            }
+          },
+          "additionalProperties": false
+        },
+        "buildings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/record"
+          }
+        },
+        "accounts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/record"
+          }
+        },
+        "servicePoints": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/servicePoint"
+          }
+        },
+        "meters": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/meter"
+          }
+        },
+        "registers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/register"
+          }
+        },
+        "installations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/record"
+          }
+        },
+        "contracts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/record"
+          }
+        },
+        "sampleReads": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/read"
+          }
+        },
+        "billingDocuments": {
+          "type": "array",
+          "maxItems": 0
+        },
+        "invoices": {
+          "type": "array",
+          "maxItems": 0
+        }
+      },
+      "additionalProperties": true
+    },
+    "fixture": {
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "reads"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "vee-input-fixture/1.0"
+        },
+        "reads": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/read"
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}
