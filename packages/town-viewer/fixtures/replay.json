@@ -1,0 +1,227 @@
+{
+  "schemaVersion": "utility-replay/1.0",
+  "frames": [
+    {
+      "schemaVersion": "utility-state/1.0",
+      "townId": "town-test",
+      "simulationId": "run-a",
+      "topologyRevision": "top-1",
+      "indexRevision": "idx-1",
+      "sequence": 0,
+      "simTime": "2026-07-15T12:00:00Z",
+      "complete": true,
+      "networks": {
+        "electric": {
+          "unit": "kW",
+          "edgeIds": [
+            "sa",
+            "ab",
+            "sb",
+            "am1",
+            "bm2"
+          ],
+          "flows": [
+            -1,
+            2,
+            -3,
+            0,
+            null
+          ],
+          "sourceFlow": -4,
+          "enabled": [
+            true,
+            true,
+            true,
+            true,
+            true
+          ]
+        },
+        "water": {
+          "unit": "m3/h",
+          "edgeIds": [
+            "sa",
+            "ab",
+            "sb",
+            "am1",
+            "bm2"
+          ],
+          "flows": [
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "sourceFlow": 6,
+          "enabled": [
+            true,
+            true,
+            true,
+            true,
+            true
+          ]
+        },
+        "gas": {
+          "unit": "m3/h",
+          "edgeIds": [
+            "sa",
+            "ab",
+            "sb",
+            "am1",
+            "bm2"
+          ],
+          "flows": [
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "sourceFlow": 6,
+          "enabled": [
+            true,
+            true,
+            true,
+            true,
+            true
+          ]
+        }
+      },
+      "premises": {
+        "ids": [
+          "P-2",
+          "P-1"
+        ],
+        "electric": [
+          -3,
+          0
+        ],
+        "water": [
+          null,
+          1
+        ],
+        "gas": [
+          0.2,
+          0.1
+        ]
+      },
+      "clock": {
+        "simTime": "2026-07-15T12:00:00Z",
+        "timezone": "America/Toronto",
+        "sunElevationDeg": 40,
+        "sunAzimuthDeg": 140
+      }
+    },
+    {
+      "schemaVersion": "utility-state/1.0",
+      "townId": "town-test",
+      "simulationId": "run-a",
+      "topologyRevision": "top-1",
+      "indexRevision": "idx-1",
+      "sequence": 1,
+      "simTime": "2026-07-16T02:00:00Z",
+      "complete": true,
+      "networks": {
+        "electric": {
+          "unit": "kW",
+          "edgeIds": [
+            "sa",
+            "ab",
+            "sb",
+            "am1",
+            "bm2"
+          ],
+          "flows": [
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "sourceFlow": 0,
+          "enabled": [
+            true,
+            true,
+            true,
+            true,
+            true
+          ]
+        },
+        "water": {
+          "unit": "m3/h",
+          "edgeIds": [
+            "sa",
+            "ab",
+            "sb",
+            "am1",
+            "bm2"
+          ],
+          "flows": [
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "sourceFlow": 6,
+          "enabled": [
+            true,
+            true,
+            true,
+            true,
+            true
+          ]
+        },
+        "gas": {
+          "unit": "m3/h",
+          "edgeIds": [
+            "sa",
+            "ab",
+            "sb",
+            "am1",
+            "bm2"
+          ],
+          "flows": [
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "sourceFlow": 6,
+          "enabled": [
+            true,
+            true,
+            true,
+            true,
+            true
+          ]
+        }
+      },
+      "premises": {
+        "ids": [
+          "P-2",
+          "P-1"
+        ],
+        "electric": [
+          0,
+          0
+        ],
+        "water": [
+          null,
+          1
+        ],
+        "gas": [
+          0.2,
+          0.1
+        ]
+      },
+      "clock": {
+        "simTime": "2026-07-16T02:00:00Z",
+        "timezone": "America/Toronto",
+        "sunElevationDeg": -10,
+        "sunAzimuthDeg": 260
+      }
+    }
+  ]
+}
