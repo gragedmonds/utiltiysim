@@ -1,0 +1,14 @@
+{
+  "name": "utilsim-viewer-bridge",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The prototype's Three.js viewer, rendering utility-town/2.0 snapshots from the utilsim engine.",
+  "scripts": {
+    "postinstall": "node scripts/vendor.mjs",
+    "start": "node scripts/serve.mjs",
+    "screenshot": "node scripts/screenshot.mjs"
+  },
+  "dependencies": { "three": "0.186.1" },
+  "engines": { "node": ">=20" }
+}
