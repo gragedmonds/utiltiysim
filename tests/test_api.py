@@ -63,5 +63,6 @@ def test_state_and_replay_endpoints():
     assert f["clock"]["simTime"] == f["simTime"]
     rp = client.get(f"/api/towns/{tid}/replay", params={"stepMinutes": 30, "hours": 6, "startHour": 6}).json()
     assert rp["schemaVersion"] == "utility-replay/1.0" and len(rp["frames"]) == 12
-    assert [x["sequence"] for x in rp["frames"]] == list(range(12))
+    assert [x["sequence"] for x in rp["frames"]] == [360 + 30 * k for k in range(12)]  # minutes since midnight
+    assert f["sequence"] == 720
     assert client.get(f"/api/towns/{tid}/replay", params={"stepMinutes": 1, "hours": 168}).status_code == 422
