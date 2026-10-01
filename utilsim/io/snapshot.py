@@ -1,5 +1,8 @@
-"""``utility-town/2.0`` snapshot: a strict superset of the prototype's ``utility-town/1.0`` (same collections, field
-names and id grammar), in the viewer frame (local metres, x east, **z south**, y up). Extensions are additive."""
+"""``utility-town/2.0`` snapshot in the viewer frame (local metres, x east, **z south**, y up).
+
+Native 2.0, validated against ``schemas/utility-town-2.0.schema.json`` and the viewer receiver
+(``packages/town-viewer``). It keeps the prototype's collection and field names and id grammar, but it is not a
+1.0 document. The engine's north-positive y is flipped to z exactly once, here."""
 
 from __future__ import annotations
 
@@ -13,11 +16,14 @@ from shapely.geometry import MultiPoint, box
 from utilsim.core.units import get_profile
 from utilsim.gen.roads.model import CLASS_NAMES, OSM_TAG_FOR_CLASS, PAVEMENT_WIDTH, ROW_WIDTH
 from utilsim.gen.zoning import ERA_NAMES, era_bucket
+from utilsim.io.revisions import index_revision, topology_revision
 from utilsim.sim.demand import july_daily
 from utilsim.validate import validate_town
 from utilsim.version import GENERATOR_VERSION, SCHEMA_VERSION
 
 PTYPE = ("residential", "commercial", "institutional", "industrial", "utility")
+# Marker hints the viewer understands (render-only; ``kind`` stays authoritative).
+SUBKIND = {"elevated_tank": "tank", "district_regulator": "regulator"}
 EPOCH = "2026-07-15T04:00:00Z"
 
 
@@ -91,7 +97,7 @@ def build_snapshot(town, *, include_reads: bool = True, units: str | None = None
         fx, fy = prem.front_xy[i]
         rd = int(prem.edge[i])
         premises.append({
-            "id": pid, "buildingId": f"B-{pid}", "accountId": ex.get("accountId") or f"CA-{pid}",
+            "id": pid, "uid": prem.uid[i], "buildingId": f"B-{pid}", "accountId": ex.get("accountId") or f"CA-{pid}",
             "businessPartnerId": (ex.get("accountId") or f"CA-{pid}").replace("CA-", "BP-", 1),
             "address": f"{int(prem.number[i])} {prem.street[i]}", "street": prem.street[i],
             "houseNumber": int(prem.number[i]), "x": _r(prem.xy[i, 0]), "z": _r(-prem.xy[i, 1]),
@@ -130,6 +136,8 @@ def build_snapshot(town, *, include_reads: bool = True, units: str | None = None
         nodes = []
         for nd in net.nodes:
             rec = {"id": nd.id, "kind": nd.kind, "x": _r(nd.xy[0]), "z": _r(-nd.xy[1])}
+            if nd.kind in SUBKIND:
+                rec["subkind"] = SUBKIND[nd.kind]
             if nd.parent_edge >= 0:
                 rec["parentEdgeId"] = net.edges[nd.parent_edge].id
             rec.update({k: _clean(v) for k, v in nd.attrs.items()})
@@ -137,7 +145,12 @@ def build_snapshot(town, *, include_reads: bool = True, units: str | None = None
         edges = []
         for e in net.edges:
             rec = {"id": e.id, "commodity": u, "from": net.nodes[e.a].id, "to": net.nodes[e.b].id, "kind": e.kind,
-                   "points": _pts(e.points), "lengthM": _r(e.length), "placement": e.placement, "tier": e.tier}
+                   "points": _pts(e.points), "lengthM": _r(e.length), "placement": e.placement, "tier": e.tier,
+                   "enabled": bool(e.enabled)}
+            if e.loop:
+                rec["loop"] = True
+            if e.normally_open:
+                rec["normallyOpen"] = True
             if e.size_mm:
                 rec["sizeMm"] = int(e.size_mm)
                 if u != "electric":
@@ -148,9 +161,11 @@ def build_snapshot(town, *, include_reads: bool = True, units: str | None = None
             edges.append(rec)
         equipment = [{**{k: _clean(v) for k, v in q.items() if k != "xy"}, "x": _r(q["xy"][0]),
                       "z": _r(-q["xy"][1])} for q in net.equipment]
-        networks[u] = {"commodity": u, "sourceId": net.source_id, "stationId": net.station_id, "nodes": nodes,
+        networks[u] = {"commodity": u, "sourceId": net.source_id,
+                       "sourceIds": [nd.id for nd in net.nodes if nd.kind == "external_supply"],
+                       "stationId": net.station_id, "nodes": nodes,
                        "edges": edges, "unit": net.unit, "equipment": equipment, "meta": _clean(net.meta),
-                       "topology": "radial tree with loop closures as closed_tie nodes",
+                       "topology": "construction forest (parentEdgeId) plus loop edges; connectivity = enabled edges",
                        "assumptions": {"losses": "excluded in M1 flows", "sizing": "engineering step tables",
                                        "pressureVoltageSolution": "M2"}}
 
@@ -178,8 +193,8 @@ def build_snapshot(town, *, include_reads: bool = True, units: str | None = None
                           "polygon": _poly(poly) if poly is not None and not poly.is_empty else []})
     hm = geo.terrain.heightmap(minx, miny, maxx, maxy)
     terrain = {"cols": hm["cols"], "rows": hm["rows"], "cellSizeM": hm["cellSizeM"], "originX": hm["originX"],
-               "originZ": round(-hm["originY"], 3), "rowAxis": "+z (north to south)", "colAxis": "+x",
-               "values": [[round(float(v), 2) for v in row] for row in hm["values"]],
+               "originZ": round(-hm["originY"], 3), "order": "row-major-z-positive",
+               "values": [round(float(v), 2) for v in np.asarray(hm["values"]).ravel()],
                "reliefM": cfg.town.terrain_relief_m, "synthetic": True}
     src = dict(geo.source)
     source = {**src, "coordinateSystem": "local metres; x east, z south", "origin": {"lat": geo.origin_lat,
@@ -190,9 +205,11 @@ def build_snapshot(town, *, include_reads: bool = True, units: str | None = None
               "license": src.get("license", "generated")}
     c = cust
     snap = {
-        "schemaVersion": SCHEMA_VERSION, "compatibleWith": ["utility-town/1.0"],
-        "generatorVersion": GENERATOR_VERSION, "engine": "utilsim", "id": town.id, "seed": cfg.seeds.master,
-        "count": int(prem.residential.sum()), "premiseCount": len(prem), "units": profile.name,
+        "schemaVersion": SCHEMA_VERSION,
+        "generatorVersion": GENERATOR_VERSION, "engine": "utilsim", "id": town.id,
+        "topologyRevision": topology_revision(town), "indexRevision": index_revision(town),
+        "seed": cfg.seeds.master, "count": len(prem), "homes": int(prem.residential.sum()),
+        "premiseCount": len(prem), "units": profile.name,
         "config": cfg.model_dump(mode="json"), "configHash": cfg.content_hash(),
         "source": source,
         "sourceSnapshot": {"type": src.get("type"), "nodes": [], "roads": [],

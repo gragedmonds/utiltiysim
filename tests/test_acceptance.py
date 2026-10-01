@@ -1,10 +1,8 @@
 """Acceptance gates ported from the prototype's model.test.mjs, plus engine invariants."""
 
 import hashlib
-import json
 from pathlib import Path
 
-import jsonschema
 import numpy as np
 import orjson
 import pytest
@@ -50,7 +48,7 @@ def test_flows_and_reads_do_not_mutate_town(town120):
 def test_counts_validity_and_references(houses, town120, town480):
     town = town120 if houses == 120 else town480
     snap = build_snapshot(town)
-    assert snap["count"] == houses
+    assert snap["homes"] == houses and snap["count"] == len(snap["premises"])
     assert sum(p["premiseType"] == "residential" for p in snap["premises"]) == houses
     assert snap["validation"]["valid"], snap["validation"]["errors"][:5]
     prem_ids = {p["id"] for p in snap["premises"]}
@@ -68,14 +66,23 @@ def test_counts_validity_and_references(houses, town120, town480):
     assert len(all_ids) == len(set(all_ids))
 
 
-def test_networks_are_trees_with_valid_endpoints(town480):
+def test_networks_are_forests_plus_loops_with_valid_endpoints(town480):
     snap = build_snapshot(town480)
     for u, net in snap["networks"].items():
         ids = {n["id"] for n in net["nodes"]}
         assert len(ids) == len(net["nodes"])
-        assert len({e["to"] for e in net["edges"]}) == len(net["nodes"]) - 1, u
+        forest = [e for e in net["edges"] if not e.get("loop")]
+        loops = [e for e in net["edges"] if e.get("loop")]
+        assert len({e["to"] for e in forest}) == len(forest) == len(net["nodes"]) - len(net["sourceIds"]), u
+        parent_edges = {n.get("parentEdgeId") for n in net["nodes"]}
         for e in net["edges"]:
-            assert e["from"] in ids and e["to"] in ids and e["lengthM"] >= 0
+            assert e["from"] in ids and e["to"] in ids and e["lengthM"] >= 0 and isinstance(e["enabled"], bool)
+        for e in loops:
+            assert e["id"] not in parent_edges and e["from"] != e["to"]
+        if u == "electric":
+            assert all(e.get("normallyOpen") and not e["enabled"] for e in loops)
+        assert not any(n["kind"] == "closed_tie" for n in net["nodes"])
+    assert any(e.get("loop") for e in snap["networks"]["water"]["edges"])
 
 
 def test_gas_only_where_mains_exist_and_gas_heat_always_served(town480):
@@ -119,6 +126,9 @@ def _conservation(town, res):
         out_of = np.zeros(len(net.nodes))
         into = np.zeros(len(net.nodes))
         for k, e in enumerate(net.edges):
+            if e.loop:
+                assert np.isnan(ef[k]) if e.enabled else ef[k] == 0
+                continue
             out_of[e.a] += ef[k]
             into[e.b] += ef[k]
         own = np.zeros(len(net.nodes))
@@ -156,9 +166,11 @@ def test_leak_raises_only_the_target_path(town480):
     path = {e.id for e in _trace(town480.networks["water"], f"water-N-{target}")}
     delta = leak.edge_flows["water"] - base.edge_flows["water"]
     for k, e in enumerate(town480.networks["water"].edges):
+        if e.loop:
+            continue
         assert delta[k] == pytest.approx(0.65 if e.id in path else 0.0, abs=1e-9)
     for u in ("electric", "gas"):
-        assert np.allclose(leak.edge_flows[u], base.edge_flows[u])
+        assert np.allclose(leak.edge_flows[u], base.edge_flows[u], equal_nan=True)
 
 
 def test_monthly_reads_reconcile(town480):
@@ -178,14 +190,17 @@ def test_monthly_reads_reconcile(town480):
     assert exports == {p for p in solar}
 
 
-def test_snapshot_matches_prototype_contract(town120):
-    schema = json.loads((FIX / "astra-DATA-CONTRACT-1.0.schema.json").read_text())
-    town_def = schema["$defs"]["town"]
-    town_def["properties"]["schemaVersion"] = {"const": "utility-town/2.0"}
-    town_def["properties"]["count"]["minimum"] = 20
-    schema["$defs"]["read"]["properties"]["schemaVersion"] = {"const": "meter-read/1.0"}
-    snap = orjson.loads(orjson.dumps(build_snapshot(town120)))
-    jsonschema.validate(snap, {"$schema": schema["$schema"], "$defs": schema["$defs"], "$ref": "#/$defs/town"})
+def test_demand_shapes_integrate_to_daily_totals(town120):
+    fm = FlowModel(town120)
+    hours = (np.arange(288) + 0.5) / 12.0
+    occ = town120.prem.attrs["occupied"]
+    tot = {"electric": 0.0, "water": 0.0}
+    for h in hours:
+        d = fm.flows(h).homes
+        tot["electric"] += d["loadKW"][occ].sum() / 12.0
+        tot["water"] += d["water"][occ].sum() / 12.0
+    assert tot["electric"] == pytest.approx(fm.daily["dailyKWh"][occ].sum(), rel=1e-9)
+    assert tot["water"] == pytest.approx(fm.daily["dailyWaterM3"][occ].sum(), rel=1e-9)
 
 
 def test_invalid_inputs_fail_loudly():

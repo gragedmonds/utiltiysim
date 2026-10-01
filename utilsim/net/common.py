@@ -270,9 +270,8 @@ def road_path(roads: RoadNetwork, a_xy: np.ndarray, b_xy: np.ndarray | None = No
     return np.asarray(out)
 
 
-def add_closed_tie(net: Network, a: int, b: int, points: np.ndarray, state: str, **attrs) -> int:
-    """Loop closure: an edge from ``a`` to a new closed_tie node coincident with ``b``."""
-    k = sum(1 for nd in net.nodes if nd.kind == "closed_tie")
-    tie = net.add_node(f"{net.commodity}-L-{k}", "closed_tie", net.nodes[b].xy, tieTo=net.nodes[b].id,
-                       state=state)
-    return net.add_edge("distribution", a, tie, points, loop=True, **attrs)
+def add_loop_edge(net: Network, a: int, b: int, points: np.ndarray, *, enabled: bool = True,
+                  normally_open: bool = False, **attrs) -> int:
+    """Loop closure between two existing nodes. It is never a parent edge; ``enabled`` says whether it connects."""
+    return net.add_edge("distribution", a, b, points, loop=True, enabled=enabled, normally_open=normally_open,
+                        **attrs)

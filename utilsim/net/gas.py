@@ -12,7 +12,7 @@ from utilsim.model.network import Network
 from utilsim.net.common import (
     OFFSETS,
     SplitGraph,
-    add_closed_tie,
+    add_loop_edge,
     facility_path,
     grow,
     loop_pieces,
@@ -161,7 +161,7 @@ def build_gas(ctx: NetContext) -> Network:
         pa = pipe_of.get(a) or pipe_of.get(b)
         pb = pipe_of.get(b) or pa
         pipe = pa if pa.nominal_mm <= pb.nominal_mm else pb
-        add_closed_tie(net, node_of[a], node_of[b], piece_points(sg, int(k), off, a), "connected",
+        add_loop_edge(net, node_of[a], node_of[b], piece_points(sg, int(k), off, a),
                        placement="underground", tier="distribution", size_mm=pipe.nominal_mm,
                        diameterIn=round(pipe.nominal_mm / 25.4, 1), nominalLabel=pipe.label, material=pipe.material,
                        depthM=1.0, pressureTier="lp" if tier_lp[a] else "mp")

@@ -15,7 +15,7 @@ from utilsim.model.network import Network
 from utilsim.net.common import (
     OFFSETS,
     SplitGraph,
-    add_closed_tie,
+    add_loop_edge,
     densify_polyline,
     facility_path,
     grow,
@@ -314,7 +314,8 @@ def build_electric(ctx: NetContext) -> Network:
         a, b = int(sg.piece_a[k]), int(sg.piece_b[k])
         oh = placement.get(a, placement.get(b, "underground")) == "overhead"
         pts = piece_points(sg, k, off_oh if oh else off_ug, a, densify=spacing if oh else None)
-        ei = add_closed_tie(net, node_of[a], node_of[b], pts, "normally_open", placement="overhead" if oh else
+        ei = add_loop_edge(net, node_of[a], node_of[b], pts, enabled=False, normally_open=True,
+                           placement="overhead" if oh else
                             "underground", tier="primary_main", voltageKV=ec.primary_kv, phases=3, phase="ABC",
                             switch="tie", feeders=list(key))
         net.equipment.append({"id": f"TIE-{key[0]}-{key[1]}", "kind": "tie_switch", "xy": pts[len(pts) // 2],

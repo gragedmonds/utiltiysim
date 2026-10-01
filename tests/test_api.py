@@ -44,7 +44,7 @@ def test_town_lifecycle_and_endpoints():
     pq = client.get(f"/api/towns/{tid}/tables/sampleReads.parquet")
     assert pq.status_code == 200 and pq.content[:4] == b"PAR1"
     fx = client.get(f"/api/towns/{tid}/fixtures/vee/{pid}/electric.json", params={"variant": "missing"}).json()
-    assert fx["schemaVersion"] == "vee-input-fixture/1.0"
+    assert fx["schemaVersion"] == "vee-input-fixture/1.1" and fx["truthIncluded"] is False
     assert fx["reads"][0]["registerValue"] is None and "truth" not in fx["reads"][0]
     assert client.get(f"/api/towns/{tid}/render.png").content[:4] == b"\x89PNG"
 

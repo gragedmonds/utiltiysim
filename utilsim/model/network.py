@@ -1,6 +1,10 @@
-"""Utility network container: a rooted tree of nodes and edges (from = parent side, to = child side), plus loop
-closures represented as edges to ``closed_tie`` nodes (coincident with another node) so the tree contract that the
-prototype viewer relies on (``edges = nodes - 1``, one parent edge per node) holds."""
+"""Utility network container.
+
+Nodes and edges form a rooted *construction forest* (``from`` = supply side, ``to`` = customer side; every non-source
+node has exactly one parent edge, exposed as ``parentEdgeId``) plus **loop edges** between existing nodes
+(``loop=True``, never a parent edge). Every edge carries ``enabled`` (connected / in service for any commodity);
+electric ties are ``normally_open`` and disabled; pressure-zone boundary valves are disabled. Connectivity is the
+graph of enabled edges; the parent forest is for layout, sizing and radial aggregation."""
 
 from __future__ import annotations
 
@@ -32,6 +36,9 @@ class Edge:
     tier: str = "distribution"
     size_mm: float = 0.0
     attrs: dict[str, Any] = field(default_factory=dict)
+    loop: bool = False
+    enabled: bool = True
+    normally_open: bool = False
 
     @property
     def length(self) -> float:
@@ -58,17 +65,20 @@ class Network:
         self._index[id] = len(self.nodes) - 1
         return len(self.nodes) - 1
 
-    def add_edge(self, kind: str, a: int, b: int, points=None, **kw) -> int:
-        if self.nodes[b].parent_edge >= 0:
+    def add_edge(self, kind: str, a: int, b: int, points=None, *, loop: bool = False, enabled: bool = True,
+                 normally_open: bool = False, **kw) -> int:
+        if not loop and self.nodes[b].parent_edge >= 0:
             raise ValueError(f"node {self.nodes[b].id} already has a parent edge")
         pts = np.asarray(points if points is not None else [self.nodes[a].xy, self.nodes[b].xy], dtype=np.float64)
         pts[0], pts[-1] = self.nodes[a].xy, self.nodes[b].xy
         attrs = kw.pop("attrs", {})
         known = {k: kw.pop(k) for k in ("placement", "tier", "size_mm") if k in kw}
         attrs.update(kw)
-        e = Edge(f"{self.commodity}-E{len(self.edges)}", kind, a, b, pts, attrs=attrs, **known)
+        e = Edge(f"{self.commodity}-E{len(self.edges)}", kind, a, b, pts, attrs=attrs, loop=loop, enabled=enabled,
+                 normally_open=normally_open, **known)
         self.edges.append(e)
-        self.nodes[b].parent_edge = len(self.edges) - 1
+        if not loop:
+            self.nodes[b].parent_edge = len(self.edges) - 1
         return len(self.edges) - 1
 
     def index(self, id: str) -> int:
@@ -79,6 +89,8 @@ class Network:
         parent = np.full(n, -1, dtype=np.int64)
         pe = np.full(n, -1, dtype=np.int64)
         for i, e in enumerate(self.edges):
+            if e.loop:
+                continue
             parent[e.b] = e.a
             pe[e.b] = i
         return Tree.from_parents(parent, pe)

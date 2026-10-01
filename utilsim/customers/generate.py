@@ -328,7 +328,7 @@ def build_customers(town) -> Customers:
                 read_at = to_utc_iso(this_d, read_hour, tz)
                 rid = f"READ-{town.id}-{reg}-{this_d.isoformat()}"
                 cust.sample_reads.append({
-                    "id": rid, "schemaVersion": "meter-read/1.0", "schemaRevision": READ_SCHEMA_VERSION,
+                    "id": rid, "schemaVersion": READ_SCHEMA_VERSION,
                     "simulationId": town.id, "premiseId": pid, "servicePointId": sp, "installationId": inst,
                     "meterId": mid, "registerId": reg, "contractId": active_ctr, "accountId": active_ca,
                     "commodity": c, "direction": d, "unit": UNIT[c],

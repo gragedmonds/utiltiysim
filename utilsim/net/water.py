@@ -14,7 +14,7 @@ from utilsim.net.common import (
     OFFSETS,
     Forest,
     SplitGraph,
-    add_closed_tie,
+    add_loop_edge,
     facility_path,
     grow,
     loop_pieces,
@@ -160,9 +160,11 @@ def build_water(ctx: NetContext) -> Network:
             continue
         mm = int(min(size[a] if forest.parent[a] >= 0 else size[b], size[b] if forest.parent[b] >= 0 else size[a]))
         mm = max(mm, w.min_main_mm)
-        state = "connected" if zone[a] == zone[b] else "closed_valve"
+        same_zone = bool(zone[a] == zone[b])
         pts = piece_points(sg, int(k), off, a)
-        add_closed_tie(net, node_of[a], node_of[b], pts, state, placement="underground", tier="distribution",
+        boundary = {} if same_zone else {"boundaryValve": "closed"}
+        add_loop_edge(net, node_of[a], node_of[b], pts, enabled=same_zone, **boundary, placement="underground",
+                       tier="distribution",
                        size_mm=mm, diameterIn=round(mm / 25.4, 1), nominalLabel=MAIN_BY_MM[mm].label,
                        material=MAIN_BY_MM[mm].material, depthM=1.8, zone=int(zone[a]))
     _hydrants_and_valves(net, ctx, prem)

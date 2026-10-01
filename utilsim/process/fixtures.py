@@ -1,13 +1,16 @@
-"""VEE input fixtures in the prototype's ``vee-input-fixture/1.0`` shape.
+"""VEE input fixtures (``vee-input-fixture/1.1``).
 
 Variants match the prototype inspector: ``actual`` (baseline), ``stuck`` (register stopped), ``missing``
 (telemetry failure: null register/consumption/readAt, never zero; the expected date stays in scheduledReadAt) and
-``spike`` (8× reported consumption). ``truth`` always keeps the physical baseline and is removed for the
-production adapter so the VEE engine cannot see the answer."""
+``spike`` (8× reported consumption). ``truth`` always keeps the physical baseline; it is removed by default so a VEE
+engine cannot see the answer, and is included only for scoring (``include_truth``). 1.1 differs from the
+prototype's 1.0 in that ``truth`` is optional and reads are ``meter-read/1.1``."""
 
 from __future__ import annotations
 
 import copy
+
+from utilsim.version import VEE_FIXTURE_VERSION
 
 VARIANTS = ("actual", "stuck", "missing", "spike")
 
@@ -38,5 +41,5 @@ def strip_truth(read: dict) -> dict:
 
 
 def fixture(reads: list[dict], include_truth: bool = False) -> dict:
-    return {"schemaVersion": "vee-input-fixture/1.0",
+    return {"schemaVersion": VEE_FIXTURE_VERSION, "truthIncluded": bool(include_truth),
             "reads": [r if include_truth else strip_truth(r) for r in reads]}

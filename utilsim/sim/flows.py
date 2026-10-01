@@ -1,8 +1,9 @@
 """Instantaneous flows on the radial networks (the prototype's semantics, vectorised).
 
-Each meter node carries its premise's demand; every edge carries the signed sum of everything downstream of it
-(positive = toward customers). Loop closures (closed_tie nodes) carry no flow in this radial approximation; the
-looped hydraulic and power-flow solves arrive in M2 behind the same interface."""
+Each meter node carries its premise's demand; every parent-forest edge carries the signed sum of everything
+downstream of it (positive = from → to). Loop edges are not solved by this radial aggregation: an enabled loop edge
+reports NaN (exported as ``null`` = unavailable) and a disabled one reports 0. The looped hydraulic and power-flow
+solves arrive in M2 behind the same interface."""
 
 from __future__ import annotations
 
@@ -32,10 +33,11 @@ class FlowModel:
             parent = np.full(n, -1, dtype=np.int64)
             pe = np.full(n, -1, dtype=np.int64)
             for k, e in enumerate(net.edges):
+                if e.loop:
+                    continue
                 parent[e.b] = e.a
                 pe[e.b] = k
             depth = np.zeros(n, dtype=np.int64)
-            order = np.argsort(parent, kind="stable")  # placeholder; real order below
             # BFS order from the source.
             children: dict[int, list[int]] = {}
             for v in range(n):
@@ -54,7 +56,9 @@ class FlowModel:
             order = np.array(bfs, dtype=np.int64)
             meter = np.array([self.index.get(nd.attrs.get("premiseId"), -1) if nd.kind == "meter" else -1
                               for nd in net.nodes])
-            self._topo[u] = (parent, pe, order, meter, src)
+            loop_val = np.array([np.nan if e.enabled else 0.0 for e in net.edges if e.loop])
+            loop_idx = np.array([k for k, e in enumerate(net.edges) if e.loop], dtype=np.int64)
+            self._topo[u] = (parent, pe, order, meter, src, loop_idx, loop_val)
 
     def flows(self, hour: float, scenario: str = "normal", target: str | None = None) -> FlowResult:
         prem = self.town.prem
@@ -63,7 +67,7 @@ class FlowModel:
                    self.town.cfg.scenario.leak_m3h)
         source, edge_flows, unit = {}, {}, {}
         for u, net in self.town.networks.items():
-            parent, pe, order, meter, src = self._topo[u]
+            parent, pe, order, meter, src, loop_idx, loop_val = self._topo[u]
             tot = np.zeros(len(net.nodes))
             m = meter >= 0
             tot[m] = d[u][meter[m]]
@@ -73,6 +77,8 @@ class FlowModel:
                     tot[p] += tot[v]
             ef = np.zeros(len(net.edges))
             ef[pe[pe >= 0]] = tot[np.flatnonzero(pe >= 0)]
+            if len(loop_idx):
+                ef[loop_idx] = loop_val
             source[u] = float(tot[src])
             edge_flows[u] = ef
             unit[u] = net.unit
