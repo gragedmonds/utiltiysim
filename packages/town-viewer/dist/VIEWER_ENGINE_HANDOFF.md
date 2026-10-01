@@ -277,3 +277,42 @@ For `WHITBY-042`, 10,000 homes and 2,439 solar arrays:
 This supersedes the earlier 589,268-triangle count. Roads, terrain and utility geometry remain additional. The base uses five non-empty instanced batches, with up to 24 additional facade batches when all variants are in the close-up set. These are source/geometry counts, not measured frame-rate results.
 
 Verification: 16 Node tests pass, including frame statistics, warm-up separation, hidden-tab reset, cancellation, deterministic facade selection, the 192-house cap, far-view removal, unchanged engine records, and previous customer/picking regressions. A mock DOM smoke check exercises panel bindings and report display without WebGL. Actual browser visual QA and a downloaded device benchmark are still required to establish FPS.
+
+## Low-poly streetscape and focus workspace (2026-10-01, viewer 0.4)
+
+This section supersedes the earlier geometry totals and six-facade description. Current delivery includes four seeded roof silhouettes (gable, hip, cross-gable, flat), palette variation, eight short/tall facade groups, greener ground and plots, three very low-poly tree shapes, stop signs with one shared text texture, traffic lights, and three civic demo landmarks: an apartment complex, a school and a church. Geometry is authored in `lowpoly.js` / `town-dressing.js`; instances share geometry/materials. The facade cap remains 192 nearby visible houses with up to 318 additional triangles each. The base house uses eight non-empty instanced batches at 10,000 homes; facade detail can use up to 32 material batches.
+
+### Deterministic visual placement, separate from customer generation
+
+- Tree/sign counts are capped at 800 trees, 140 stop signs, and 48 traffic lights. Trees and demo civic sites use spatially indexed road/house/station clearance checks; street furniture is placed by road intersections. These props are decorative, not a traffic control simulator.
+- The browser demo reserves up to three free civic sites without moving or deleting premises. Each landmark is explicitly labelled as visual demo scenery. Clicking its map label shows that customer accounts, installations, meters and demand are pending engine records. These are not secretly added to the simulated customer count.
+- Native snapshots honour a supplied roof style. Native mode does not create fictional civic sites. Optional unlinked `facilities` with `kind`, `x`, `z`, `widthM`, `depthM`, `heightM` and `angle` can use these meshes; facilities already linked to a premise are skipped to avoid rendering duplicates. Mapping multi-unit buildings and civic premises to authoritative engine footprints remains a handoff task. Viewer-only dimensions are presentation hints, not a change to engine asset geometry or consumption.
+- Ground/streetscape rendering does not rewrite IDs, utility topology, capacities, reads or billing. The layer drawer has a Trees, signs & landmarks toggle. Prop shadows are off; house shadows are still off above 2,000 homes.
+
+For seed `WHITBY-042`, 10,000 homes (2,439 solar):
+
+| Geometry | Triangles |
+|---|---:|
+| Walls + four roof styles | 230,004 |
+| Plots + driveways | 240,000 |
+| Solar arrays | 29,268 |
+| **Base properties** | **499,272** |
+| Trees, signs, signals and three landmarks, including STOP text quads | 26,410 |
+| Maximum close-up facade detail | 61,056 |
+| **Properties + streetscape + maximum detail** | **586,738** |
+
+Roads, terrain, stations and utility networks are additional. Scenery has eight non-empty geometry batches plus one browser-only text batch. The Node geometry test counts 26,130 scenery triangles and explicitly adds 280 for the 140 text quads created when a browser canvas is available. Geometry counts are not an FPS claim. The existing on-device 30-second benchmark now records streetscape visibility/counts; changing that visibility or opening Settings cancels an active benchmark.
+
+### Fullscreen workspace
+
+The map fills the viewport. A left icon toolbar opens Layers & landmarks and Quick scenarios. Top-right icons open customer search, town files and Settings. Every icon has an accessible name and a tooltip. The customer inspector remains a pop-out overlay; the time slider stays at the bottom. No permanent sidebar consumes map width. Layout rules accommodate smaller screens.
+
+Settings is a separate hash-addressed view (`#/settings/town`, `#/settings/scenarios`, `#/settings/data`) with back navigation. Opening it pauses playback and suspends WebGL rendering. Seed, house count, generation and OSM import operate in browser demo mode; snapshot mode explains why local regeneration is unavailable. Data import/replay remain functional. Demo scenario presets operate immediately; incident frequency fields are visibly disabled until the engine's schema/command API is connected. Supplied configuration is displayed read-only. The viewer does not fabricate incident-rate defaults or claim a local control changed engine state.
+
+Configuration handoff: Claude supplies `GET /api/config/schema` with units/bounds/UI hints, the authoritative current config and revision, supported update endpoint, validation errors, and per-field semantics (immediate effect vs new run vs regenerated town). Viewer then builds the editable form and handles regeneration/replay boundaries. Existing snapshot import alone does not authorize or implement live engine mutations.
+
+### Roads and corridors
+
+See [CORRIDOR_ROUTING_REQUIREMENTS.md](CORRIDOR_ROUTING_REQUIREMENTS.md). The renderer distinguishes arterial/main, collector and local street widths; imported OSM primary/secondary/tertiary classifications map to those display widths. Unrecognized road classes still render as local streets. Utility routing and engineering sizing are unchanged in this delivery. Continuous electric corridor extraction/routing, branch attachment and pipe sizing are engine responsibilities; continuous corridor highlighting awaits the agreed corridor fields.
+
+Verification: 19 Node tests pass, including actual Three.js CPU raycasts on all four roof silhouettes, placement repeatability, clearance from homes/roads, unchanged engine records, the 10,000-home scenery budget, customer joins and state contracts. A mock DOM smoke check covers app startup, customer/meters/billing/search, FPS-panel wiring, drawers, Settings/back navigation, render suspension and disabled frequency placeholders. It is not a browser rendering test. The required managed preview/browser capability is unavailable in this authoring environment, so visual QA and actual device FPS remain unverified.
