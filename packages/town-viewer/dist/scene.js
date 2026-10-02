@@ -9,6 +9,7 @@ import {TownDressing,civicKind} from './town-dressing.js';
 import {GeometryBuilder} from './lowpoly.js';
 import {NightLights} from './night-lights.js';
 import {OutageMarks} from './outage-marks.js';
+import {LensMarks} from './lens-marks.js';
 import {OperationsView} from './operations-view.js';
 import {streetWidth} from './roads.js';
 import {PROFILES} from './quality.js';
@@ -33,7 +34,7 @@ export class TownScene{
  }
  useLite(){if(this.quality.name==='lite')return false;this.quality=PROFILES.lite;this.renderer.setPixelRatio(Math.min(globalThis.devicePixelRatio||1,this.quality.maxPixelRatio));this.renderer.shadowMap.enabled=false;this.setDressing(false);this.setHouseDetail('simple');this.resize();return true;}
  resize(){if(this.benchmark)this.cancelBenchmark('Viewport changed during the test.');const w=this.el.clientWidth,h=this.el.clientHeight;if(!w||!h)return;this.renderer.setSize(w,h);this.camera.aspect=w/h;this.camera.updateProjectionMatrix();}
- clear(){this.cancelBenchmark?.('Town changed during the test.');this.townDressing?.texture?.dispose();this.townDressing=null;this.houseDetails=null;this.nightLights=null;this.outageMarks=null;this.operationsView=null;this.operations=null;this.followJobId=null;this.performanceMonitor?.reset();this.root.traverse(o=>{if(o.geometry)o.geometry.dispose();if(o.material)(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>m.dispose());});this.root.clear();this.markers.forEach(m=>m.el.remove());this.markers=[];this.selected=null;this.selection=null;this.pickMeshes=[];}
+ clear(){this.cancelBenchmark?.('Town changed during the test.');this.townDressing?.texture?.dispose();this.townDressing=null;this.houseDetails=null;this.nightLights=null;this.outageMarks=null;this.lensMarks=null;this.operationsView=null;this.operations=null;this.followJobId=null;this.performanceMonitor?.reset();this.root.traverse(o=>{if(o.geometry)o.geometry.dispose();if(o.material)(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>m.dispose());});this.root.clear();this.markers.forEach(m=>m.el.remove());this.markers=[];this.selected=null;this.selection=null;this.pickMeshes=[];}
  box(w,h,d,color,x,y,z,group=this.root){const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),material(color));m.position.set(x,y,z);m.castShadow=true;m.receiveShadow=true;group.add(m);return m;}
  instances(geometry,mat,count){const m=new THREE.InstancedMesh(geometry,mat,count);m.castShadow=true;m.receiveShadow=true;this.root.add(m);return m;}
  setInst(mesh,i,x,y,z,sx,sy,sz,rotation=0,color){dummy.position.set(x,y,z);dummy.rotation.set(0,rotation,0);dummy.scale.set(sx,sy,sz);dummy.updateMatrix();mesh.setMatrixAt(i,dummy.matrix);if(color)mesh.setColorAt(i,new THREE.Color(color));}
@@ -45,7 +46,7 @@ export class TownScene{
   this.drawHouses(town);
   this.networkGroups={};this.serviceGroups={};this.lineGroups={};this.particleGroups={};this.pathData={};
   for(const u of UTILS)this.drawNetwork(u);
-  this.drawStations();this.drawEquipment();this.drawPoles();this.nightLights=new NightLights(this.root,town,this.poleAssets,this.heightAt,{demo});this.outageMarks=new OutageMarks(this.root,town,this.heightAt,COLORS);this.townDressing=new TownDressing(this.root,town,this.heightAt,{demo});this.pickMeshes.push(...(this.townDressing.pickMeshes||[]));this.townDressing.setVisible(this.dressingVisible);this.drawLandmarkLabels();this.setLayers(this.layers);this.home();this.resize();
+  this.drawStations();this.drawEquipment();this.drawPoles();this.nightLights=new NightLights(this.root,town,this.poleAssets,this.heightAt,{demo});this.outageMarks=new OutageMarks(this.root,town,this.heightAt,COLORS);this.lensMarks=new LensMarks(this.root,town,this.heightAt);this.townDressing=new TownDressing(this.root,town,this.heightAt,{demo});this.pickMeshes.push(...(this.townDressing.pickMeshes||[]));this.townDressing.setVisible(this.dressingVisible);this.drawLandmarkLabels();this.setLayers(this.layers);this.home();this.resize();
  }
  drawPoles(){
   const equipment=this.town.networks.electric.equipment?.filter(n=>n.kind==='pole')||[];

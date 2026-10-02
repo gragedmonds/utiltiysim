@@ -328,3 +328,16 @@
 .studio-card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
 .studio-pill{background:#f0ecfc;color:#684bc5;font-size:12px;font-weight:650;border-radius:6px;padding:5px 9px;white-space:nowrap}
 @media (max-width:600px){.studio-config-tabs{gap:14px;overflow-x:auto}.studio-config-tabs button{font-size:13px;white-space:nowrap}}
+/* Map lenses: one analytic view at a time, with its legend. */
+.lens-panel{position:absolute;right:16px;top:64px;z-index:12;background:#ffffffee;border:1px solid #dde2da;border-radius:9px;box-shadow:0 3px 15px #18231c12;padding:5px;min-width:0;max-width:300px}
+.lens-tabs{display:flex;gap:2px}
+.lens-tabs button{border:0;background:none;padding:7px 10px;border-radius:6px;font-size:12.5px;color:#56645a;cursor:pointer}
+.lens-tabs button[aria-pressed="true"]{background:#efeafd;color:#5d43b8;font-weight:650}
+.lens-legend{font-size:12px;color:#4d5b51;padding:2px 6px 4px}
+.lens-legend:empty{display:none}
+.lens-legend .lens-row{display:flex;align-items:center;gap:7px;padding:2px 0}
+.lens-legend .lens-swatch{width:11px;height:11px;border-radius:50%;flex:none}
+.lens-legend .lens-swatch.ring{background:none!important;border:3px solid currentColor;width:7px;height:7px}
+.lens-legend .lens-count{margin-left:auto;color:#7a877d;font-variant-numeric:tabular-nums}
+.lens-legend .lens-note{color:#7a877d;margin-top:3px;line-height:1.35}
+@media (max-width:600px){.lens-panel{top:58px;right:8px;left:auto;max-width:calc(100% - 70px)}.lens-tabs button{padding:6px 7px;font-size:12px}}
