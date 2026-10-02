@@ -212,6 +212,11 @@ What the engine does:
   reassigned; a job waits (`workorder.queued`) when none is free. Routes are the fastest by travel time on the road
   graph at the configured class speeds, in the right-hand lane, with a timestamp at every vertex.
 
+`GET /api/sim/settings` returns the operations defaults. `GET /api/sim/settings/schema` returns the same settings as
+JSON Schema, with titles, units, bounds and effects. Groups marked `x-flat` hold top-level keys; the others are the
+nested per-utility or per-incident settings. A timeline or frame request's `settings` overrides only what it names;
+the viewer's Configuration → Scenario tab sends them.
+
 `utility-timeline/1.0`: `simulationId` (the same as the town's frames for that day), `incidents` (with protective
 device, detection, isolation and restoration times, unsupplied counts), `jobs` (Astra's job shape: `startAt`,
 `arrivalAt`, `workSeconds`, `returnStartAt`, `endAt`, `route` + `routeTimes`, `returnRoute` + `returnTimes`,

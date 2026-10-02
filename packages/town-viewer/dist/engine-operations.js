@@ -13,14 +13,23 @@ function interpolate(points,times,t){
  return seg(points,lo,(t-times[lo])/Math.max(1e-6,times[hi]-times[lo]));
 }
 function seg(points,i,f=0){const a=points[i],b=points[Math.min(i+1,points.length-1)],len=Math.hypot(b.x-a.x,b.z-a.z)||1;return {x:a.x+(b.x-a.x)*f,z:a.z+(b.z-a.z)*f,dx:(b.x-a.x)/len,dz:(b.z-a.z)/len};}
+const OPS_KEY='utility-town-ops-settings:';
+// Schema-form overrides ({group:{key:value}}) ↔ timeline settings: groups marked x-flat hold top-level keys.
+export function toOpsSettings(overrides,schema){const out={};for(const [g,vals] of Object.entries(overrides||{})){if(schema?.properties?.[g]?.['x-flat'])Object.assign(out,vals);else out[g]={...(out[g]||{}),...vals};}return out;}
+export function opsFormValues(settings,schema){const out={};for(const [g,gs] of Object.entries(schema?.properties||{})){out[g]={};for(const k of Object.keys(gs.properties||{})){const v=gs['x-flat']?settings?.[k]:settings?.[g]?.[k];if(v!==undefined)out[g][k]=v;}}return out;}
 export class EngineOperations{
- constructor(town,{api='/api',townRef,date=null,onChange=()=>{},m2c=()=>null}={}){
+ constructor(town,{api='/api',townRef,date=null,onChange=()=>{},m2c=()=>null,storage=globalThis.localStorage}={}){
   this.engine=true;this.town=town;this.api=api;this.townRef=townRef||town.id;this.date=date;this.onChange=onChange;this.m2c=m2c;
   this.commands=[];this.jobs=[];this.incidents=[];this.events=[];this.reads=[];this.stateChanges=[];this.time=8*3600;this.sequence=0;this.request=0;this.applied=0;this.error=null;
   const depot=(town.facilities||[]).find(f=>f.kind==='depot');this.depot=depot?{x:depot.x,z:depot.z}:{x:0,z:0};
+  this.storage=storage;try{this.settings=JSON.parse(storage?.getItem(OPS_KEY+town.id)||'null');}catch{this.settings=null;}
  }
+ // Operations settings from Configuration (crews, response times, back-feed limits); only what differs from the
+ // engine defaults is sent, so the engine's defaults stay authoritative.
+ setSettings(s){this.settings=s&&Object.keys(s).length?s:null;try{this.storage?.setItem(OPS_KEY+this.town.id,JSON.stringify(this.settings));}catch{}return this.refresh();}
+ async schema(){if(!this._schema){const r=await fetch(this.api+'/sim/settings/schema');if(!r.ok)throw Error('Engine '+r.status);this._schema=await r.json();}return this._schema;}
  // The meter-to-cash run (settings, actions) rides along so the day's field orders arrive as crew jobs.
- body(extra={}){const m2c=this.m2c();return JSON.stringify({town:this.townRef,date:this.date,commands:this.commands,...(m2c?{m2c}:{}),...extra});}
+ body(extra={}){const m2c=this.m2c();return JSON.stringify({town:this.townRef,date:this.date,commands:this.commands,...(this.settings?{settings:this.settings}:{}),...(m2c?{m2c}:{}),...extra});}
  async post(path,extra){const r=await fetch(this.api+path,{method:'POST',headers:{'Content-Type':'application/json'},body:this.body(extra)});if(!r.ok){let detail='';try{detail=(await r.json()).detail;}catch{}throw Error(`Engine ${r.status}${detail?': '+(typeof detail==='string'?detail:JSON.stringify(detail)):''}`);}return r.json();}
  // Commands are appended at the current sim time (never earlier than the last one), then the timeline is refreshed.
  command(type,payload){const at=Math.max(this.time,this.commands.at(-1)?.at??0);const cmd={id:'CMD-'+(++this.sequence),at:Math.round(at*1000)/1000,type,payload};this.commands.push(cmd);return this.refresh().then(()=>cmd);}

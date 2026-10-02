@@ -316,3 +316,15 @@
 .studio-workspace .ws-empty{padding:40px;text-align:center}
 .studio-workspace .ws-tests{margin:8px 0 4px;max-width:900px}
 .studio-workspace .ws-record{white-space:pre-wrap;font-size:11px;background:#fff;border:1px solid #c9d6e2;padding:10px;max-height:60vh;overflow:auto}
+/* Configuration (the cog): Astra's tabbed form, cards on a pale ground. */
+.studio-page-config,.focus-layout #settings-page{background:#f7f7fa}
+#settings-page .studio-config-head{display:block;max-width:1030px;margin:0 auto 18px;padding:0;border:0;background:none}
+.studio-config-tabs{display:flex;gap:26px;border-bottom:1px solid #dfdfe9}
+.studio-config-tabs button{background:none;border:0;border-bottom:3px solid transparent;padding:12px 2px;font-size:14px;color:#777187;font-weight:600;cursor:pointer;border-radius:0}
+.studio-config-tabs button[aria-current="page"]{color:#684bc5;border-bottom-color:#7357d8}
+#settings-page .settings-layout{display:block;max-width:1030px;margin:0 auto}
+#settings-page .settings-content h2{font-size:21px;letter-spacing:-.3px}
+#settings-page .settings-card{background:#fff;border:1px solid #e4e2ee;border-radius:10px;box-shadow:0 1px 3px #20183a0a}
+.studio-card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.studio-pill{background:#f0ecfc;color:#684bc5;font-size:12px;font-weight:650;border-radius:6px;padding:5px 9px;white-space:nowrap}
+@media (max-width:600px){.studio-config-tabs{gap:14px;overflow-x:auto}.studio-config-tabs button{font-size:13px;white-space:nowrap}}

@@ -116,6 +116,15 @@ def get_settings():
     return J(DEFAULTS)
 
 
+@router.get("/api/sim/settings/schema")
+def get_settings_schema():
+    """Operations settings as JSON Schema (titles, units, bounds, effects) with their defaults, for the viewer's
+    Configuration. Send overrides as a timeline or frame request's ``settings``."""
+    from utilsim.ops.settings_schema import settings_schema
+
+    return J({"schema": settings_schema(), "defaults": DEFAULTS})
+
+
 @router.post("/api/sim/timeline")
 def post_timeline(req: TimelineRequest):
     """``utility-timeline/1.0``: incidents, crew jobs with road routes, events, state changes and field-visit reads

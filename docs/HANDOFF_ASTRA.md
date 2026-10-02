@@ -153,3 +153,21 @@ Design passes welcome:
 - walker and van models for readers;
 - a lighter ring style;
 - how a gas relight sweep reads at town scale.
+
+## 9. Utility Studio in the viewer
+
+Your Utility Studio (`prototypes/utility-studio`) is now the viewer's shell. The production map keeps its renderer,
+phone quality profiles and WebGL recovery.
+- Header: Map and Workspace are the primary navigation, and Configuration is the cog. Routes are `#/town`,
+  `#/workspace/...` and `#/config/<tab>`; `#/settings` still works.
+- Workspace (`workspace.js`, `studio.css` with your SAP styles):
+  - your four transactions run on engine records through `EngineM2C`;
+  - categories come from the engine's queues and exception types (`categoryOf`), and categories with no engine
+    meaning stay empty;
+  - Display Billing and Display Meter Reading Results keep the blank query, the explicit Execute, and F4 that only
+    selects.
+- Configuration has your tabs: Town & meters, Process & costs (the meter-to-cash schema), Scenario (operations
+  settings from `/api/sim/settings/schema`) and Engine & data.
+- Field service orders (draft, release, dispatch, complete), notes, ownership, invoice holds and the billing and read
+  lookups are being added to the engine. Until then their buttons say so.
+

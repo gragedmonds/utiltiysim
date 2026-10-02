@@ -1508,6 +1508,23 @@
         "summary": "Get Settings"
       }
     },
+    "/api/sim/settings/schema": {
+      "get": {
+        "description": "Operations settings as JSON Schema (titles, units, bounds, effects) with their defaults, for the viewer's\nConfiguration. Send overrides as a timeline or frame request's ``settings``.",
+        "operationId": "get_settings_schema_api_sim_settings_schema_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Settings Schema"
+      }
+    },
     "/api/sim/timeline": {
       "post": {
         "description": "``utility-timeline/1.0``: incidents, crew jobs with road routes, events, state changes and field-visit reads\nfor a run's command list. Appending a command never changes what earlier commands produced.",
