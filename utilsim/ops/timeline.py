@@ -98,7 +98,7 @@ class _Interval:
 class Run:
     def __init__(self, ops, commands: list[dict], *, day: str | None = None, settings: dict | None = None,
                  scenario: str = "normal", field_orders: list[dict] | None = None,
-                 read_outcomes: dict[str, dict] | None = None):
+                 read_outcomes: dict[str, dict] | None = None, m2c_cycle: dict | None = None):
         self.ops = ops
         self.day = day or ops.scenario_date
         self.scenario = scenario
@@ -124,6 +124,7 @@ class Run:
         self.warnings: list[str] = []
         self._routes: dict[tuple, Route] = {}
         self.read_outcomes = read_outcomes  # premise id -> the meter-to-cash read on this day (when linked)
+        self.m2c_cycle = m2c_cycle  # the linked run's day: AMI collection, VEE batch, bills, invoices
         # Scheduled work first (fixed for the day, own crews), so appending a command never changes it.
         self._schedule(field_orders or [])
         for cmd in self.commands:
@@ -635,7 +636,7 @@ class Run:
                 "commands": [{k: v for k, v in c.items() if k != "_k"} for c in self.commands],
                 "incidents": [clean(i) for i in self.incidents], "jobs": [clean(j) for j in self.jobs],
                 "events": self.events, "stateChanges": changes, "interruptions": interruptions, "reads": self.reads,
-                "warnings": self.warnings}
+                **({"meterToCash": self.m2c_cycle} if self.m2c_cycle is not None else {}), "warnings": self.warnings}
 
     def frame(self, at: float, *, include_premises: bool = True) -> dict:
         """Complete ``utility-state/1.0`` frame at ``at`` (seconds since local midnight of the run day)."""

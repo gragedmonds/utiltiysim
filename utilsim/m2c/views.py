@@ -460,6 +460,40 @@ def case_view(run: M2CRun, case_id: str, *, as_of: str | None = None, truth: boo
             **({"truth": {"class": case.truth}} if truth else {})}
 
 
+# ---- the run's day on the map -------------------------------------------------------------------------------------
+def day_cycle(run: M2CRun, d: int) -> dict:
+    """What meter-to-cash does on day ``d``, for the map: the overnight AMI collection (premises read and missed),
+    the 18:00 VEE batch (premises with new exceptions), and the evening's bills and invoices. Times are seconds since
+    local midnight."""
+    tw, bk = run.town, run.books
+    out: dict = {}
+
+    def ids(prem) -> list[str]:
+        return [tw.premise_ids[p] for p in sorted(set(prem))]
+
+    hit = run.batches.get(d)
+    if hit is not None:
+        m, rows = hit
+        ami = rows[tw.tech[rows] == "AMI"]
+        if len(ami):
+            missed = set(tw.prem[ami[np.isnan(run.obs[ami, m])]].tolist())
+            out["ami"] = {"at": round(float(tw.hour[ami].min()) * 3600), "read": ids(set(tw.prem[ami].tolist()) - missed),
+                          "missed": ids(missed)}
+    flagged = [int(tw.prem[c.r]) for c in run.cases if int(c.created) == d and c.doc < 0
+               and c.type not in cat.MISSING_TYPES]
+    if hit is not None or flagged:
+        out["vee"] = {"at": 18 * 3600, "flagged": ids(flagged)}
+    docs = [doc for doc in bk.docs if int(doc["created"]) == d]
+    if docs:
+        out["bills"] = {"at": round((docs[0]["created"] - d) * 86400), "premiseIds":
+                        ids(int(tw.prem[bk.main[doc["inst"]]]) for doc in docs)}
+    invs = [inv for inv in bk.invoices if int(inv["created"]) == d]
+    if invs:
+        out["invoices"] = {"at": 20 * 3600, "premiseIds": ids(int(tw.prem[bk.main[bk.docs[k]["inst"]]])
+                                                               for inv in invs for k in inv["docs"])}
+    return out
+
+
 # ---- VEE scorecard ------------------------------------------------------------------------------------------------
 ANOMALIES = ("stuck_meter", "slow_meter", "tamper", "exchange_registration_failure", "transposed_digits", "misread",
              "leak", "vacant_consuming")

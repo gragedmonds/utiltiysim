@@ -92,14 +92,14 @@ class FrameRequest(TimelineRequest):
 
 def _run(req: TimelineRequest, *, with_m2c: bool = False) -> Run:
     ops = resolve(req.town)
-    orders = outcomes = None
+    orders = outcomes = cycle = None
     if with_m2c and req.m2c is not None:
         from api._m2c import m2c_day  # the meter-to-cash run behind the day's field work and reading rounds
 
-        orders, outcomes = m2c_day(req.town, req.date or ops.scenario_date, req.m2c)
+        orders, outcomes, cycle = m2c_day(req.town, req.date or ops.scenario_date, req.m2c)
     try:
         return Run(ops, [c.model_dump() for c in req.commands], day=req.date, settings=req.settings,
-                   field_orders=orders, read_outcomes=outcomes)
+                   field_orders=orders, read_outcomes=outcomes, m2c_cycle=cycle)
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
 

@@ -235,6 +235,20 @@ def test_reading_rounds_show_the_meter_to_cash_outcome_of_each_read(ayr):
             assert any(np.isnan(run.obs[x, m]) for x in r) and s["reason"]
         if s["outcome"] == "flagged":
             assert s["exception"] and run.case_index[s["caseId"]].type == s["exception"]
+    # The day's cycle: the overnight AMI collection, the VEE batch, the evening's bills and invoices.
+    cyc = tl["meterToCash"]
+    assert "ami" not in cyc or not (tw.tech[rows] == "AMI").any()  # this portion is walked: no AMI step
+    ami_day = next(d for d, (_, rr) in sorted(run.batches.items()) if (tw.tech[rr] == "AMI").any())
+    ma, ra = run.batches[ami_day]
+    ami = ra[tw.tech[ra] == "AMI"]
+    got = TestClient(app).post("/api/sim/timeline", json={"town": "ayr", "date": date_of(ami_day).isoformat(),
+                                                           "m2c": {}}).json()["meterToCash"]["ami"]
+    assert got["at"] == 7200 and len(got["read"]) + len(got["missed"]) == len(set(tw.prem[ami].tolist()))
+    assert set(got["missed"]) == {tw.premise_ids[tw.prem[r]] for r in ami if np.isnan(run.obs[r, ma])}
+    assert cyc["vee"]["at"] == 18 * 3600 and set(cyc["vee"]["flagged"]) <= {s["premiseId"] for s in stops} | {
+        tw.premise_ids[tw.prem[c.r]] for c in run.cases if int(c.created) == day}
+    billed = {d["inst"] for d in run.books.docs if int(d["created"]) == day}
+    assert len(cyc.get("bills", {}).get("premiseIds", [])) == len({int(tw.prem[run.books.main[i]]) for i in billed})
 
 
 def test_m2c_field_orders_become_crew_jobs_and_field_visits_settle_cases(ayr):

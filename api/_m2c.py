@@ -199,8 +199,9 @@ def post_vee_export(req: MonthRequest):
     return _view(views.vee_export, run_for(req), req.month, req.portion, as_of=req.asOf)
 
 
-def m2c_day(town: str, day: str, m2c: dict) -> tuple[list[dict], dict[str, dict]]:
-    """What the meter-to-cash run puts on an operations day: its field orders and its walked/drive-by read outcomes.
+def m2c_day(town: str, day: str, m2c: dict) -> tuple[list[dict], dict[str, dict], dict]:
+    """What the meter-to-cash run puts on an operations day: its field orders, its walked/drive-by read outcomes and
+    the day's cycle (AMI collection, VEE batch, bills, invoices).
 
     Outages from ``day`` itself or later are left out: they come from this operations run, and the morning's work
     orders cannot depend on what happens later that day."""
@@ -213,7 +214,7 @@ def m2c_day(town: str, day: str, m2c: dict) -> tuple[list[dict], dict[str, dict]
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
     run = run_for(req)
-    return _field_orders(run, d), read_outcomes(run, d)
+    return _field_orders(run, d), read_outcomes(run, d), views.day_cycle(run, d)
 
 
 RANK = {"read": 0, "flagged": 1, "missed": 2}

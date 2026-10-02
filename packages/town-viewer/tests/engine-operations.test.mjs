@@ -46,3 +46,10 @@ test('the run day is part of the request; a new day starts an empty command list
  assert.equal(await ops.setDate('2026-03-04'),true);assert.equal(ops.commands.length,0);assert.equal(log.at(-1).body.date,'2026-03-04');
  assert.equal(await ops.setDate('2026-03-04'),false);
 });
+
+test('the linked meter-to-cash day becomes ring groups at their times',async()=>{
+ const {cycleGroups,CYCLE_COLOR}=await import('../dist/operations-view.js');
+ assert.deepEqual(cycleGroups(null),[]);
+ const g=cycleGroups({ami:{at:7200,read:['P1','P2'],missed:['P3']},vee:{at:64800,flagged:[]},bills:{at:70200,premiseIds:['P1']},invoices:{at:72000,premiseIds:['P1']}});
+ assert.deepEqual(g.map(x=>[x[0],x[1].length,x[2]]),[[7200,2,CYCLE_COLOR.ami],[7200,1,CYCLE_COLOR.amiMissed],[70200,1,CYCLE_COLOR.bills],[72000,1,CYCLE_COLOR.invoices]]);
+});

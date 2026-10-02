@@ -195,6 +195,14 @@ commands and on their own crews:
     VEE `exception` and `caseId`) or `missed` (with the `reason`, e.g. `SIM_NO_ACCESS`). The map paints a disc at
     each house as the reader passes it, and the round's card counts them. The read's own `readAt` in meter-to-cash
     keeps its scheduled hour, not the walker's arrival.
+- **The run's day:** with the run linked, the timeline also carries `meterToCash`, which is what meter-to-cash does
+  that day. Each step has an `at` (seconds since local midnight):
+  - `ami`: the 02:00 collection, with `read` and `missed` premise ids;
+  - `vee`: the 18:00 batch, with `flagged` premises (new value exceptions);
+  - `bills`: the 19:30 billing documents;
+  - `invoices`: the 20:00 invoices.
+
+  The map shows a ring over each house at each step, and the operations panel lists the day.
 - **Field orders:** when the request carries the meter-to-cash run (`m2c: {settings, actions}`), that run's truck
   rolls on the day become `field_order` jobs (`FIELD-n` crews, 45 min for an exchange, 20 for a special read).
 
