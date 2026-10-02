@@ -48,13 +48,22 @@ export class EngineM2C{
  async schema(){if(!this._schema){const r=await this.fetch(this.api+'/m2c/settings?town='+encodeURIComponent(this.townRef));if(!r.ok)throw Error('Engine '+r.status);this._schema=await r.json();}return this._schema;}
  lastActionDay(){return this.actions.at(-1)?.day||null;}
  canAct(){const last=this.lastActionDay();return !last||!this.asOf||this.asOf>=last;}
- // Appends a decision on the current view date and checks it with the engine; a refused action is removed again.
+ // The map's commands (break an asset, send a crew) change that day's outages, which feed this run: on a day before
+ // your last action they would rewrite history under it. Returns that last action day, or null when the day is open.
+ lockedBefore(day){const last=this.lastActionDay();return last&&day&&day<last?last:null;}
+ // Appends a decision on the current view date and checks it with the engine; a refused action is removed again:
+ // HTTP 422, or an engine that skips it with a warning ("ACT-n: …"), which is a refusal too. One at a time: while the
+ // engine records one (`pending`), another is refused, so a double click cannot record it twice.
  async act(type,caseId,value=null,extra={}){
+  if(this.pending)throw Error('The engine is still recording your previous action.');
   if(!this.asOf)throw Error('Pick a view date first.');
   if(!this.canAct())throw Error(`Actions are append-only: move the date to ${this.lastActionDay()} or later.`);
   const a={id:'ACT-'+(this.actions.length+1),day:this.asOf,type,...(caseId?{caseId}:{}),...extra};if(value!=null&&value!=='')a.value=Number(value);
-  this.actions.push(a);
-  try{await this.summary();}catch(e){if(!e.superseded){this.actions.pop();throw e;}}
+  this.actions.push(a);this.pending=a;
+  try{const res=await this.summary(),skipped=(res?.warnings||[]).find(w=>String(w).startsWith(a.id+':'));
+   if(skipped){const e=Error(String(skipped).slice(a.id.length+1).replace(/ \(skipped\)$/,'').trim());e.status=422;e.detail=e.message;throw e;}}
+  catch(e){if(!e.superseded){if(this.actions.at(-1)===a)this.actions.pop();throw e;}}
+  finally{this.pending=null;}
   this.save();return a;
  }
  setAsOf(day){this.asOf=day||null;this.save();}
@@ -66,3 +75,15 @@ export class EngineM2C{
  context(){const o=this.outageList();return {settings:this.settings||undefined,...(this.seed?{seed:this.seed}:{}),actions:this.actions,...(o.length?{outages:o}:{})};}
  export(){return {schemaVersion:'viewer-m2c-run/1.0',townId:this.townId,town:this.townRef,settings:this.settings,seed:this.seed,actions:this.actions,outages:this.outageList(),asOf:this.asOf};}
 }
+
+// Premises whose electric meter is AMI (from the town snapshot): those meters need mains power to answer the head end.
+export function mainsAmiPremises(town){const tech=new Map((town?.meters||[]).map(m=>[m.id,m.technology]));return new Set((town?.servicePoints||[]).filter(s=>s.commodity==='electric'&&tech.get(s.meterId)==='AMI').map(s=>s.premiseId));}
+// The map's "Meter-to-cash today" card with the day's own interruptions applied. The operations timeline builds the
+// day's cycle from the run without that day's outages (its field orders cannot depend on later events), so an AMI
+// collection during a morning outage would still count as read while the Workspace (whose run has them) shows the
+// misses. The run's rule: an electric AMI meter without power, or any AMI meter behind a down collector, misses its read
+// at the collection hour (water and gas endpoints run on batteries). Idempotent once the engine applies them itself.
+export function cycleWithOutages(cycle,interruptions,mainsAmi){const ami=cycle?.ami;if(!ami||!interruptions?.length)return cycle;const dark=new Set();
+ for(const o of interruptions){const end=o.end??o.start+86400;if(!(o.start<=ami.at&&ami.at<end))continue;for(const p of o.premiseIds||[])if(o.utility==='ami'||(o.utility==='electric'&&mainsAmi?.has(p)))dark.add(p);}
+ const hit=(ami.read||[]).filter(p=>dark.has(p));if(!hit.length)return cycle;
+ return {...cycle,ami:{...ami,read:ami.read.filter(p=>!dark.has(p)),missed:[...(ami.missed||[]),...hit],dark:hit.length}};}

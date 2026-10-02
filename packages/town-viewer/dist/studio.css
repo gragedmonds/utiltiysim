@@ -424,3 +424,29 @@ details.schema-group>.schema-field:last-child{margin-bottom:10px}
 .run-identity dt{color:#777187}.run-identity dd{margin:0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;overflow-wrap:anywhere;min-width:0}
 .run-seed-card{margin-bottom:16px}.run-seed-card h3 label{font:inherit;color:inherit}
 @media (max-width:600px){details.schema-group>summary{padding:13px 14px}#settings-page details.schema-group>:not(summary){margin-left:14px;margin-right:14px}.schema-count{display:none}.town-config-bar{padding:10px 12px}.town-config-bar-row .bar-gap{display:none}.town-config-bar .primary-btn,.town-config-bar .outline-btn{flex:1 1 140px;justify-content:center}.run-identity{grid-template-columns:minmax(0,1fr);gap:0}.run-identity dd{margin-bottom:6px}}
+/* Workspace: not-yet-workable rows, busy state, decision data and the read history chart. */
+.vee-new,.clarification-table td.new-cell{color:#2a6f9a;font-weight:600}
+.vee-waiting .vee-main-row{opacity:.72}.vee-wait>div{color:#8a5a12}.vee-drop{color:#b23e3b;font-weight:600}
+.sap-square.amber{background:#d79a1e;animation:ws-pulse 1s ease-in-out infinite alternate}@keyframes ws-pulse{to{opacity:.35}}
+.ws-recording{cursor:progress!important;font-style:italic}[aria-busy] button:disabled{cursor:progress}
+.ws-more{display:flex;justify-content:center;padding:10px 0 14px}.ws-more button{font:12px Arial,sans-serif;color:#2d5674;background:#fff;border:1px solid #a8c3d6;border-radius:2px;padding:5px 14px}
+.gui-value.gui-alert{color:#a42c2c;font-weight:700;background:#fbe9e7}.ws-drop{color:#8d2b23}.ws-cause{color:#24445c}.ws-wait{color:#8a5a12;align-self:center}
+.ws-chart{display:block;height:120px;max-width:760px;margin:2px 0 4px;background:#f3f8fb;border:1px solid #c5d6e3;border-radius:2px}.ws-chart rect.miss{fill:#9aa9b4}.ws-chart rect.neg{fill:#a42c2c}
+.ws-chart-legend{display:flex;flex-wrap:wrap;gap:4px 12px;margin:2px 0 6px;font-size:11px;color:#48647a}.ws-chart-legend span{display:inline-block;width:10px;height:10px;margin-right:4px;vertical-align:-1px;border-radius:2px}
+.ws-chart-legend .ok{background:#8fac83}.ws-chart-legend .flag{background:#c96f4a}.ws-chart-legend .est{background:#d9b56a}.ws-chart-legend .adj{background:#7aa7b5}.ws-chart-legend .miss{background:#9aa9b4}.ws-chart-legend .exp{height:2px;background:#263c36;vertical-align:3px}
+.ws-periods summary{cursor:pointer;font-size:12px;color:#2d5674;margin:2px 0 6px}.ws-table-wrap{max-width:100%;overflow-x:auto}
+.ws-category-pick{display:none}
+/* Phones: categories become a drop-down; case fields, tables and actions wrap instead of clipping. */
+@media(max-width:720px){
+ .clarification-sidebar{display:none}.clarification-layout{padding:8px 6px 6px}
+ .ws-category-pick{display:flex;align-items:center;gap:8px;margin:0 0 6px;font:13px Arial,sans-serif;color:#315d7d}.ws-category-pick select{flex:1;min-width:0;font:13px Arial,sans-serif;padding:6px;border:1px solid #a8c3d6;border-radius:2px;background:#fff;color:#24445c}
+ .gui-case-content{min-width:0;padding:6px 6px 16px}
+ .gui-case-header,.gui-master-grid,.gui-status-grid{grid-template-columns:minmax(0,1fr)!important;gap:2px!important;max-width:100%}
+ .gui-field{flex-wrap:wrap;white-space:normal;row-gap:2px;max-width:100%}.gui-field>span:first-child{width:118px!important;flex:0 0 118px!important}
+ .gui-value,.gui-status-fields>.gui-field>.gui-value,.gui-status-right>.gui-field>.gui-value,.gui-case-header>div:last-child .gui-value{min-width:0!important;width:auto!important;max-width:100%!important;flex:1 1 150px;overflow-wrap:anywhere;word-break:break-word}
+ .gui-reason-text{padding-left:0;flex:1 1 100%}.gui-reason-description{margin-left:0}
+ .gui-primary-actions .gui-yellow{min-width:0;flex:1 1 140px}.gui-inline-actions .gui-yellow{flex:1 1 140px}.gui-status-right>.gui-yellow{margin-left:0}
+ .gui-case-shell .gui-history-table{width:100%;table-layout:auto}.gui-history-table td,.gui-history-table th{overflow-wrap:break-word}
+ .ws-tests th:first-child{width:auto}.ws-tests th,.ws-tests td:nth-child(2),.ws-tests td:nth-child(3){white-space:nowrap}.ws-tests td,.ws-tests th{padding:4px 5px}
+ .vee-line{flex-wrap:wrap;gap:2px 10px}.vee-line>span{min-width:0;text-align:left}
+}

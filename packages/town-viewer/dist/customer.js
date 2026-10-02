@@ -11,6 +11,10 @@ export function customerIndex(town){return {
  readsByPremise:group(rows(town,'sampleReads'),'premiseId'),billsByAccount:group(rows(town,'billingDocuments'),'accountId'),invoicesByAccount:group(rows(town,'invoices'),'accountId'),
  mrus:byId(rows(town,'mrus')),schedulesByMru:group(rows(town,'readSchedules'),'mruId')
 };}
+// An invoice as the billing tab shows it: its period from its billing documents (earliest start to latest end) and
+// whether any of them was billed on an estimate; its payments and dunning steps stay as the engine sent them.
+export function invoiceDetails(invoices,docs){const byId=new Map((docs||[]).map(d=>[d.id,d]));return (invoices||[]).map(v=>{const ds=(v.billingDocumentIds||[]).map(id=>byId.get(id)).filter(Boolean),starts=ds.map(d=>d.periodStart).filter(Boolean).sort(),ends=ds.map(d=>d.periodEnd).filter(Boolean).sort();
+ return {...v,periodStart:v.periodStart??starts[0]??null,periodEnd:v.periodEnd??ends.at(-1)??null,estimated:v.estimated??(ds.length?ds.some(d=>d.estimated===true):null)};});}
 export function customerProfile(town,index,home,at){
  const services=Object.entries(home.services).filter(([,id])=>!!id).map(([commodity,id])=>{
   const service=index.services.get(id)||null,installation=index.installations.get(service?.installationId)||null;
