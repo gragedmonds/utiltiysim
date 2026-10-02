@@ -1,0 +1,19 @@
+# python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+/dist/
+/build/
+.pytest_cache/
+.ruff_cache/
+# engine caches and scratch output
+.utilsim_cache/
+out/
+# node
+node_modules/
+# os
+.DS_Store
+viewer*.png
+# static site build (scripts/build_site.mjs)
+/public/

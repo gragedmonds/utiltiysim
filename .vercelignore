@@ -1,0 +1,10 @@
+# Vercel deployment input. The site is built by scripts/build_site.mjs (viewer + packs/).
+# The full local API (generation, LRU store) is not deployed; the hosted engine is api/index.py (phase 1).
+/api/app.py
+/api/store.py
+/out
+/.utilsim_cache
+/.venv
+/examples
+/tests
+/web

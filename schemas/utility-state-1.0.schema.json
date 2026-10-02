@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:utilsim:utility-state-1.0",
+  "title": "Complete state frame (utility-state/1.0)",
+  "description": "Every edge of every network is listed once with an explicit id (any order). flows: > 0 from->to, < 0 to->from, 0 calculated zero, null unavailable. enabled: connected/in service for any commodity; a disabled edge has 0 or null flow. Units are transport units (kW, m3/h); unit profiles only change presentation. sequence increases strictly within one simulationId. clock.simTime is string-identical to simTime.",
+  "type": "object",
+  "required": ["schemaVersion", "townId", "simulationId", "topologyRevision", "indexRevision", "sequence", "simTime",
+               "complete", "networks"],
+  "properties": {
+    "schemaVersion": {"const": "utility-state/1.0"},
+    "townId": {"type": "string", "minLength": 1},
+    "simulationId": {"type": "string", "minLength": 1},
+    "topologyRevision": {"type": "string", "minLength": 1},
+    "indexRevision": {"type": "string", "minLength": 1},
+    "sequence": {"type": "integer", "minimum": 0},
+    "simTime": {"$ref": "#/$defs/time"},
+    "complete": {"const": true},
+    "scenario": {"enum": ["normal", "solar_noon", "leak", "substation_outage"]},
+    "scenarioTarget": {"type": "string"},
+    "networks": {
+      "type": "object",
+      "required": ["electric", "water", "gas"],
+      "properties": {
+        "electric": {"$ref": "#/$defs/network", "properties": {"unit": {"const": "kW"}}},
+        "water": {"$ref": "#/$defs/network", "properties": {"unit": {"const": "m3/h"}}},
+        "gas": {"$ref": "#/$defs/network", "properties": {"unit": {"const": "m3/h"}}}
+      },
+      "additionalProperties": false
+    },
+    "premises": {
+      "type": "object",
+      "description": "If present, lists every premise; null where the commodity is not served.",
+      "required": ["ids", "electric", "water", "gas"],
+      "properties": {
+        "ids": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+        "electric": {"$ref": "#/$defs/nullableNumbers"},
+        "water": {"$ref": "#/$defs/nullableNumbers"},
+        "gas": {"$ref": "#/$defs/nullableNumbers"}
+      }
+    },
+    "clock": {
+      "type": "object",
+      "required": ["simTime", "timezone"],
+      "properties": {
+        "simTime": {"$ref": "#/$defs/time"},
+        "timezone": {"type": "string", "minLength": 1},
+        "localTime": {"type": "string"},
+        "sunElevationDeg": {"type": "number", "minimum": -90, "maximum": 90},
+        "sunAzimuthDeg": {"type": "number", "minimum": 0, "maximum": 360},
+        "moonPhase": {"type": "number", "minimum": 0, "maximum": 1},
+        "isDay": {"type": "boolean"}
+      }
+    }
+  },
+  "$defs": {
+    "time": {"type": "string", "format": "date-time", "pattern": "T.*(Z|[+-][0-9]{2}:[0-9]{2})$"},
+    "nullableNumbers": {"type": "array", "items": {"type": ["number", "null"]}},
+    "network": {
+      "type": "object",
+      "required": ["unit", "edgeIds", "flows", "sourceFlow", "enabled"],
+      "properties": {
+        "unit": {"enum": ["kW", "m3/h"]},
+        "edgeIds": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+        "flows": {"$ref": "#/$defs/nullableNumbers"},
+        "sourceFlow": {"type": ["number", "null"]},
+        "enabled": {"type": "array", "items": {"type": "boolean"}}
+      }
+    }
+  },
+  "additionalProperties": true
+}

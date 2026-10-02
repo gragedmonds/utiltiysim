@@ -1,0 +1,64 @@
+[project]
+name = "utilsim"
+version = "0.1.0"
+description = "Seeded utility-town digital twin: geography, utility networks, customers, simulation and meter-to-cash engine"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+dependencies = [
+  "numpy>=2.0,<3",
+  "scipy>=1.13,<2",
+  "shapely>=2.0.4,<3",
+  "pydantic>=2.7,<3",
+  "pyyaml>=6.0",
+  "typer>=0.12",
+  "orjson>=3.10",
+  "jsonschema>=4.22",
+  "pyarrow>=16.0",
+  "matplotlib>=3.9",
+  "fastapi>=0.111",
+  "uvicorn[standard]>=0.30",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.2",
+  "pytest-timeout>=2.3",
+  "ruff>=0.5",
+  "networkx>=3.3",
+  "httpx>=0.27",
+]
+
+[project.scripts]
+utilsim = "utilsim.cli:app"
+
+[build-system]
+requires = ["hatchling>=1.24"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["utilsim", "api"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "NPY"]
+ignore = ["E501", "B008", "B905"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["tests"]
+addopts = "-q -ra"
+timeout = 600
+markers = ["slow: long-running benchmarks (deselect with -m 'not slow')"]
+
+[tool.uv]
+dev-dependencies = [
+  "pytest>=8.2",
+  "pytest-timeout>=2.3",
+  "ruff>=0.5",
+  "networkx>=3.3",
+  "httpx>=0.27",
+]

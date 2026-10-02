@@ -1,0 +1,529 @@
+{
+  "schemaVersion": "utility-town/2.0",
+  "id": "town-test",
+  "topologyRevision": "top-1",
+  "indexRevision": "idx-1",
+  "count": 2,
+  "premises": [
+    {
+      "id": "P-1",
+      "address": "1 Test Street",
+      "x": 10,
+      "z": 10,
+      "width": 8,
+      "depth": 12,
+      "height": 6,
+      "angle": 0,
+      "side": 1,
+      "roofTone": 0.5,
+      "solarKW": 6,
+      "solar": true,
+      "occupied": true,
+      "occupants": 2,
+      "services": {
+        "electric": "SP-1-electric",
+        "water": "SP-1-water",
+        "gas": "SP-1-gas"
+      }
+    },
+    {
+      "id": "P-2",
+      "address": "2 Test Street",
+      "x": 20,
+      "z": 10,
+      "width": 8,
+      "depth": 12,
+      "height": 6,
+      "angle": 0,
+      "side": 1,
+      "roofTone": 0.5,
+      "solarKW": 6,
+      "solar": true,
+      "occupied": true,
+      "occupants": 2,
+      "services": {
+        "electric": "SP-2-electric",
+        "water": "SP-2-water",
+        "gas": "SP-2-gas"
+      }
+    }
+  ],
+  "roads": [
+    {
+      "points": [
+        {
+          "x": 0,
+          "z": 0
+        },
+        {
+          "x": 30,
+          "z": 0
+        }
+      ]
+    }
+  ],
+  "bounds": {
+    "minX": 0,
+    "maxX": 30,
+    "minZ": 0,
+    "maxZ": 30
+  },
+  "source": {
+    "utilityOffsets": "geometry"
+  },
+  "networks": {
+    "electric": {
+      "sourceId": "s",
+      "stationId": "a",
+      "unit": "kW",
+      "nodes": [
+        {
+          "id": "s",
+          "x": 0,
+          "z": 0,
+          "kind": "external_supply",
+          "elevationM": 20
+        },
+        {
+          "id": "a",
+          "x": 10,
+          "z": 0,
+          "kind": "junction",
+          "elevationM": 21
+        },
+        {
+          "id": "b",
+          "x": 20,
+          "z": 0,
+          "kind": "junction",
+          "elevationM": 22
+        },
+        {
+          "id": "m1",
+          "x": 10,
+          "z": 10,
+          "kind": "meter",
+          "premiseId": "P-1",
+          "elevationM": 23
+        },
+        {
+          "id": "m2",
+          "x": 20,
+          "z": 10,
+          "kind": "meter",
+          "premiseId": "P-2",
+          "elevationM": 23
+        }
+      ],
+      "edges": [
+        {
+          "id": "sa",
+          "from": "s",
+          "to": "a",
+          "kind": "distribution",
+          "enabled": true,
+          "lengthM": 10,
+          "placement": "underground",
+          "points": [
+            {
+              "x": 0,
+              "z": 0
+            },
+            {
+              "x": 10,
+              "z": 0
+            }
+          ]
+        },
+        {
+          "id": "ab",
+          "from": "a",
+          "to": "b",
+          "kind": "distribution",
+          "enabled": true,
+          "lengthM": 10,
+          "placement": "underground",
+          "points": [
+            {
+              "x": 10,
+              "z": 0
+            },
+            {
+              "x": 20,
+              "z": 0
+            }
+          ]
+        },
+        {
+          "id": "sb",
+          "from": "s",
+          "to": "b",
+          "kind": "distribution",
+          "enabled": true,
+          "lengthM": 10,
+          "placement": "underground",
+          "points": [
+            {
+              "x": 0,
+              "z": 0
+            },
+            {
+              "x": 20,
+              "z": 0
+            }
+          ]
+        },
+        {
+          "id": "am1",
+          "from": "a",
+          "to": "m1",
+          "kind": "distribution",
+          "enabled": true,
+          "lengthM": 10,
+          "placement": "underground",
+          "points": [
+            {
+              "x": 10,
+              "z": 0
+            },
+            {
+              "x": 10,
+              "z": 10
+            }
+          ]
+        },
+        {
+          "id": "bm2",
+          "from": "b",
+          "to": "m2",
+          "kind": "distribution",
+          "enabled": true,
+          "lengthM": 10,
+          "placement": "underground",
+          "points": [
+            {
+              "x": 20,
+              "z": 0
+            },
+            {
+              "x": 20,
+              "z": 10
+            }
+          ]
+        }
+      ]
+    },
+    "water": {
+      "sourceId": "s",
+      "stationId": "a",
+      "unit": "m3/h",
+      "nodes": [
+        {
+          "id": "s",
+          "x": 0,
+          "z": 0,
+          "kind": "external_supply",
+          "elevationM": 20
+        },
+        {
+          "id": "a",
+          "x": 10,
+          "z": 0,
+          "kind": "junction",
+          "elevationM": 21
+        },
+        {
+          "id": "b",
+          "x": 20,
+          "z": 0,
+          "kind": "junction",
+          "elevationM": 22
+        },
+        {
+          "id": "m1",
+          "x": 10,
+          "z": 10,
+          "kind": "meter",
+          "premiseId": "P-1",
+          "elevationM": 23
+        },
+        {
+          "id": "m2",
+          "x": 20,
+          "z": 10,
+          "kind": "meter",
+          "premiseId": "P-2",
+          "elevationM": 23
+        }
+      ],
+      "edges": [
+        {
+          "id": "sa",
+          "from": "s",
+          "to": "a",
+          "kind": "distribution",
+          "enabled": true,
+          "lengthM": 10,
+          "placement": "underground",
+          "points": [
+            {
+              "x": 0,
+              "z": 0
+            },
+            {
+              "x": 10,
+              "z": 0
+            }
+          ]
+        },
+        {
+          "id": "ab",
+          "from": "a",
+          "to": "b",
+          "kind": "distribution",
+          "enabled": true,
+          "lengthM": 10,
+          "placement": "underground",
+          "points": [
+            {
+              "x": 10,
+              "z": 0
+            },
+            {
+              "x": 20,
+              "z": 0
+            }
+          ]
+        },
+        {
+          "id": "sb",
+          "from": "s",
+          "to": "b",
+          "kind": "distribution",
+          "enabled": true,
+          "lengthM": 10,
+          "placement": "underground",
+          "points": [
+            {
+              "x": 0,
+              "z": 0
+            },
+            {
+              "x": 20,
+              "z": 0
+            }
+          ]
+        },
+        {
+          "id": "am1",
+          "from": "a",
+          "to": "m1",
+          "kind": "distribution",
+          "enabled": true,
+          "lengthM": 10,
+          "placement": "underground",
+          "points": [
+            {
+              "x": 10,
+              "z": 0
+            },
+            {
+              "x": 10,
+              "z": 10
+            }
+          ]
+        },
+        {
+          "id": "bm2",
+          "from": "b",
+          "to": "m2",
+          "kind": "distribution",
+          "enabled": true,
+          "lengthM": 10,
+          "placement": "underground",
+          "points": [
+            {
+              "x": 20,
+              "z": 0
+            },
+            {
+              "x": 20,
+              "z": 10
+            }
+          ]
+        }
+      ]
+    },
+    "gas": {
+      "sourceId": "s",
+      "stationId": "a",
+      "unit": "m3/h",
+      "nodes": [
+        {
+          "id": "s",
+          "x": 0,
+          "z": 0,
+          "kind": "external_supply",
+          "elevationM": 20
+        },
+        {
+          "id": "a",
+          "x": 10,
+          "z": 0,
+          "kind": "junction",
+          "elevationM": 21
+        },
+        {
+          "id": "b",
+          "x": 20,
+          "z": 0,
+          "kind": "junction",
+          "elevationM": 22
+        },
+        {
+          "id": "m1",
+          "x": 10,
+          "z": 10,
+          "kind": "meter",
+          "premiseId": "P-1",
+          "elevationM": 23
+        },
+        {
+          "id": "m2",
+          "x": 20,
+          "z": 10,
+          "kind": "meter",
+          "premiseId": "P-2",
+          "elevationM": 23
+        }
+      ],
+      "edges": [
+        {
+          "id": "sa",
+          "from": "s",
+          "to": "a",
+          "kind": "distribution",
+          "enabled": true,
+          "lengthM": 10,
+          "placement": "underground",
+          "points": [
+            {
+              "x": 0,
+              "z": 0
+            },
+            {
+              "x": 10,
+              "z": 0
+            }
+          ]
+        },
+        {
+          "id": "ab",
+          "from": "a",
+          "to": "b",
+          "kind": "distribution",
+          "enabled": true,
+          "lengthM": 10,
+          "placement": "underground",
+          "points": [
+            {
+              "x": 10,
+              "z": 0
+            },
+            {
+              "x": 20,
+              "z": 0
+            }
+          ]
+        },
+        {
+          "id": "sb",
+          "from": "s",
+          "to": "b",
+          "kind": "distribution",
+          "enabled": true,
+          "lengthM": 10,
+          "placement": "underground",
+          "points": [
+            {
+              "x": 0,
+              "z": 0
+            },
+            {
+              "x": 20,
+              "z": 0
+            }
+          ]
+        },
+        {
+          "id": "am1",
+          "from": "a",
+          "to": "m1",
+          "kind": "distribution",
+          "enabled": true,
+          "lengthM": 10,
+          "placement": "underground",
+          "points": [
+            {
+              "x": 10,
+              "z": 0
+            },
+            {
+              "x": 10,
+              "z": 10
+            }
+          ]
+        },
+        {
+          "id": "bm2",
+          "from": "b",
+          "to": "m2",
+          "kind": "distribution",
+          "enabled": true,
+          "lengthM": 10,
+          "placement": "underground",
+          "points": [
+            {
+              "x": 20,
+              "z": 0
+            },
+            {
+              "x": 20,
+              "z": 10
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "terrain": {
+    "cols": 2,
+    "rows": 2,
+    "cellSizeM": 30,
+    "originX": 0,
+    "originZ": 0,
+    "order": "row-major-z-positive",
+    "values": [
+      10,
+      40,
+      70,
+      100
+    ]
+  },
+  "name": "Viewer contract fixture (not engine output)",
+  "generatorVersion": "viewer-conformance-fixture/1.0",
+  "seed": "fixture-only",
+  "accounts": [],
+  "servicePoints": [],
+  "meters": [],
+  "registers": [],
+  "installations": [],
+  "contracts": [],
+  "sampleReads": [],
+  "billingDocuments": [],
+  "invoices": [],
+  "validation": {
+    "valid": true,
+    "scope": "viewer consumer only; not engineering validation"
+  }
+}

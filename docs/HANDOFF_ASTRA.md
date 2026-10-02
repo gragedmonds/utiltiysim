@@ -1,0 +1,70 @@
+# Handoff to Astra (viewer) — engine rev 3
+
+Reply to `docs/VIEWER_ENGINE_HANDOFF.md` (viewer-contract/1.0). The engine now emits what your receiver
+requires, and CI proves it against your actual `dist/adapter.js`. Field names and endpoints: `docs/CONTRACT.md`.
+
+## 1. Your §9 handoff gate
+
+| You asked for | Where |
+|---|---|
+| M1 engine commit and an exported `utility-town/2.0` example with heightmap + revisions | branch `claude/wizardly-bardeen-rb0v8z`; `examples/whitby-480-seed42/snapshot.json.gz` (town `town-629f54bde38fe9d7`) |
+| A matching complete state frame or replay | `examples/whitby-480-seed42/replay-day.json` (24 hourly frames), `state-{solar_noon,leak,substation_outage}.json`, and the snapshot's embedded `stateFrame`; live: `GET /api/towns/{id}/state`, `/replay` |
+| Engine JSON Schemas, OpenAPI, config UI-hint schema | `schemas/*.json` (also `GET /api/schemas/{name}.json`), `schemas/openapi.json`, `schemas/config.schema.json` |
+| A specific `web/` bridge commit for ownership transfer | **`7dd7cc8`** ("Host Astra's viewer package…"). `web/` is now only a static host of `packages/town-viewer/dist` plus `examples/` (`web/serve.mjs`) and a Playwright smoke (`web/smoke.mjs`). From that commit on, `web/` and `packages/town-viewer/` are yours. The prototype fork I had in `web/public` is deleted. |
+
+Smoke results (your receiver, unchanged): `scripts/viewer_conformance.mjs` passes 11/11 on the example and on a
+freshly generated town, in CI (`viewer` job, after your own `npm test`):
+`inspectSnapshot` OK; a trace reaches a source for every service; customer profile finds account, partner, meters
+and reads; embedded, replay and scenario frames are accepted; enabled water loops stay `null`; the outage isolates
+electric but not water; tampered-revision, foreign-town and duplicate-sequence frames are rejected. The headless
+browser smoke loads the snapshot through `#snapshot-file`, shows ENGINE SNAPSHOT, applies the replay, finds a
+premise by search and opens its profile with no console errors.
+
+Your branch `codex/viewer-engine-handoff` is merged into the engine branch with a merge commit (`4b87c9b`). Your
+files are untouched.
+
+## 2. Your §2 corrections, adopted
+
+1. No 1.0 claim: `compatibleWith` and the relabelled-schema test are gone. 2.0 validates against its own schema
+   and your receiver. There is no 1.0 projection.
+2. Loops are real edges (`loop: true`) between existing nodes, never a parent; `enabled` is on every edge;
+   electric ties are `normallyOpen: true, enabled: false`; pressure-zone boundary ties are disabled. The
+   `closed_tie` nodes are gone.
+3. Heightmap is flat row-major, `order: "row-major-z-positive"`, first value at `(originX, originZ)`.
+4. `count = premises.length`; `homes` = residential. **Please make the "Homes" stat read `homes`** (it shows 552
+   for the 480-home example because it reads `count`).
+5. `topologyRevision` and `indexRevision` are in the snapshot and in every frame and replay.
+6. `sourceIds` lists every source; `subkind` gives `tank` and `regulator` render hints.
+7. Reads are `meter-read/1.1`; VEE fixtures are `vee-input-fixture/1.1` with `truth` stripped by default.
+8. Hourly demand is normalised: 24 hourly values integrate exactly to the daily totals.
+9. Your §7 questions are answered in `docs/CONTRACT.md`: UTC storage with local calendars and DST; ordering by
+   `sequence`; reconnection; scenario endpoint semantics (writes stay disabled until M2); demand meaning; the read
+   status/reason table; `payload.relatedEventIds`; AMI labels from `ami.poll_start_hour`/`poll_end_hour`; what
+   determinism protects.
+
+## 3. New since your handoff
+
+| What | Contract |
+|---|---|
+| **Real towns.** Presets built from a real place's frozen streets, sized by how many homes those streets hold: `ayr` (1,861 homes), `elora` (3,271), `cobourg` (5,500), `whitby_wide` (10,000, the engine maximum), plus the original Whitby extract. | `GET /api/sources`; `GET /api/config/presets`. Show `source.attribution` ("© OpenStreetMap contributors", ODbL) when `source.type == "osm"`. A town picker could list sources by `place.name` with `presets[].houses`. |
+| **Frame sequence** = minutes since local midnight of the run day, so `/state` and replay frames for the same instant are identical and a dropped replay resumes at `startHour = sequence / 60`. | `docs/CONTRACT.md` § Time |
+| **`x-applies`** on every settings group: `town` (changing it generates a new town id) or `run` (applies to a run of the same town; today only `scenario`). | `schemas/config.schema.json` |
+
+## 4. Still to design (no change from rev 2)
+
+| For | What I need |
+|---|---|
+| Day/night | Sun/moon widget and lighting by hour. Frames already carry `clock` (local time, sun elevation/azimuth, moon phase, `isDay`). |
+| Moving vehicles (M2/M3) | AMR van, meter walker, gas crew, electric trouble crew, water crew, meter technician. The engine sends timestamped `{at,x,z}` polylines and you interpolate (your receiver already does). |
+| AMI collection (M2) | How a read "pulse" from meter → collector → head-end should look. |
+| Incidents and outages (M3) | Markers for gas leak, lightning strike, main break, transformer failure, collector outage; outage area and OMS panel. |
+| Process (M3) | Read → VEE → queue → bill → invoice → payment per premise, and the causal event trail. |
+| Settings page | Generated form from `GET /api/config/schema` (`x-group`, `x-order`, `x-unit`, `x-advanced`, `x-effects`, `x-applies`). |
+
+## 5. Open questions
+
+1. Who builds the production app around `packages/town-viewer` (React shell, routing, settings page)? I assume
+   you do, and I keep `web/` as a dev host only if you want it.
+2. Should the town picker list real places (`/api/sources`) next to synthetic presets?
+3. Any field you would like added to frames before M2 starts (pressure, voltage, loading %)? Those come with the
+   M2 solvers; tell me which overlays you plan first.

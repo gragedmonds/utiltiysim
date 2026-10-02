@@ -1,0 +1,12 @@
+{
+  "name": "utilsim-web-host",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "Serves Astra's viewer (packages/town-viewer) next to engine exports; headless smoke test.",
+  "scripts": {
+    "start": "node serve.mjs",
+    "smoke": "node smoke.mjs"
+  },
+  "engines": { "node": ">=20" }
+}

@@ -1,0 +1,98 @@
+{
+  "schemaVersion": "utility-town/2.0",
+  "generatorVersion": "0.2.0",
+  "id": "town-629f54bde38fe9d7",
+  "seed": "WHITBY-042",
+  "count": 552,
+  "premiseCount": 552,
+  "bounds": {
+    "minX": -825.18,
+    "maxX": 1065.46,
+    "minZ": -181.99,
+    "maxZ": 1009.88
+  },
+  "source": {
+    "type": "osm",
+    "label": "Whitby street snapshot",
+    "path": "data/osm/whitby-roads.json",
+    "sha256": "4c4bb0d8c88e4b53e89f5cfae2dc1778f1c446ba93b9b587ee423a91005706d8",
+    "snapshotDate": "2026-10-02",
+    "attribution": "© OpenStreetMap contributors",
+    "license": "https://opendatacommons.org/licenses/odbl/1-0/",
+    "omittedNodes": 31,
+    "counts": {
+      "elements": 1391,
+      "ways_used": 296,
+      "lines": 260,
+      "length_km": 30.989
+    },
+    "coreLotCapacityEstimate": 1780,
+    "expansion": "none",
+    "coordinateSystem": "local metres; x east, z south",
+    "origin": {
+      "lat": 43.87299386589769,
+      "lon": -78.93746032016047
+    },
+    "scale": 1.0,
+    "districtTiles": 1,
+    "syntheticUtilities": true,
+    "syntheticBuildings": true,
+    "utilityOffsets": "geometry"
+  },
+  "stats": {
+    "houses": 480,
+    "premises": 552,
+    "commercial": 68,
+    "solarHomes": 80,
+    "evHomes": 44,
+    "gasServices": 479,
+    "vacant": 23,
+    "roadKm": 16.01,
+    "mainsKm": {
+      "electric": 10.48,
+      "water": 11.977,
+      "gas": 11.46
+    },
+    "transformers": 138,
+    "feeders": 1,
+    "substations": 1,
+    "hydrants": 52,
+    "poles": 157,
+    "districtRegulators": 2,
+    "waterZones": 1,
+    "mrus": 21,
+    "amiCollectors": 2,
+    "timingsS": {
+      "roads": 0.031,
+      "land_use": 1.259,
+      "buildings": 0.181,
+      "electric": 0.133,
+      "water": 0.188,
+      "gas": 0.093,
+      "customers": 0.116,
+      "total": 2.001
+    }
+  },
+  "validation": {
+    "valid": true,
+    "errors": [],
+    "errorCount": 0,
+    "connectedServices": 1583,
+    "networkEdges": 3121,
+    "checks": [
+      "Unique identifiers",
+      "Valid edge endpoints",
+      "Construction forest (one parent edge per non-source node)",
+      "Loop edges join existing nodes and are never parent edges",
+      "Every node reachable from a source",
+      "Every active service reachable through enabled edges",
+      "Meters resolve by premiseId or servicePointId",
+      "Sizes non-increasing away from source",
+      "Capacity covers design load",
+      "Electric voltage stages",
+      "No gas service without gas mains in the district",
+      "Referential integrity"
+    ]
+  },
+  "configHash": "3c2d68190ecba5f36f0f643178beaf067d522ec4c16a606a38c6232ac23105b0"
+}

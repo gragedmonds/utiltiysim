@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:utilsim:vee-input-fixture-1.1",
+  "title": "VEE input fixture (vee-input-fixture/1.1)",
+  "description": "Reads handed to a VEE engine. truth is absent unless truthIncluded is true (scoring only).",
+  "type": "object",
+  "required": ["schemaVersion", "truthIncluded", "reads"],
+  "properties": {
+    "schemaVersion": {"const": "vee-input-fixture/1.1"},
+    "truthIncluded": {"type": "boolean"},
+    "reads": {"type": "array", "items": {"$ref": "urn:utilsim:meter-read-1.1"}}
+  },
+  "if": {"properties": {"truthIncluded": {"const": false}}},
+  "then": {"properties": {"reads": {"items": {"not": {"required": ["truth"]}}}}},
+  "additionalProperties": false
+}
