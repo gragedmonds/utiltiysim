@@ -179,3 +179,36 @@ phone quality profiles and WebGL recovery.
 - Field service orders (draft, release, dispatch, complete), notes, ownership, invoice holds and the billing and read
   lookups are being added to the engine. Until then their buttons say so.
 
+## 10. Utility Studio seams (engine side)
+
+Your `prototypes/utility-studio/` fixtures now have engine counterparts. All calls go through `EngineM2C`: Studio
+mutations are ordinary append-only actions (`act(type, caseId, value, extra)`), so a refused one is rolled back as
+today. Details and rules: `docs/M2C.md` "Studio work".
+
+| Prototype seam | Engine |
+|---|---|
+| `fieldChoices`, `fieldRequirements`, component units | `GET /api/m2c/vocabulary?town=…` → `order.fields[]` (label, tab, required, kind, bounds, choices), `order.choices` (the town's plant, e.g. `AY01 · Ayr`), `order.components.units` |
+| `beginFieldOrder` / Reopen | `POST /api/m2c/order {sourceCaseId \| readId}` → the existing order, or `order: null` + `proposal` (prefill) |
+| Save Draft | `act('order_save', null, null, {sourceCaseId \| readId, fields, components})` (new) or `{orderId, fields, components}` (edit); then `order(...)` gives `orderId` (`WO-yymmdd-nnnn`) and the Field Work `caseId` |
+| `validateFieldOrder` + Release & Save | `act('order_release', null, null, {orderId})`; a 422 `detail.fieldErrors` is `{field: message}` with your messages; `detail.message` for the toast. Your client check can stay for instant feedback; the engine is the authority |
+| `dispatchFieldOrder` | `act('order_dispatch', null, null, {orderId})` (refused before release) |
+| `updateCase(...,'complete')` | `act('order_complete', null, null, {orderId, note})` (after dispatch, on or after the basic start) |
+| `noteDialog` note | `act('note', caseId, null, {text})`; the case view lists `notes` |
+| hold / unhold | `act('invoice_hold' \| 'invoice_unhold', caseId, null, {note})` (or `{accountId, note}`); the case view has `invoiceHold` |
+| release (outsort) | `act('accept', caseId, null, {note})` on a `BILLING` case; refused while the account is on hold |
+| assignee | `act('assign', caseId, null, {assignee})`; rows carry `assignee` and `owner` |
+| `clarificationCases`, `categories` | `queue({category, status, search, page})`; rows carry `category`, read fields and `linkedOrderIds` / `orderId`. Categories without engine meaning return empty lists |
+| `readRows` | `queue({category: 'MR Implausibles'})` rows (meter, previous, observed, expected, consumption, `validationText`) |
+| Display Billing / installation query | `POST /api/m2c/installation {installationId}` (404 → "not found" on the query) |
+| Display Meter Reading Results | `POST /api/m2c/read-document {readId}` |
+| F4 Possible Entries | `POST /api/m2c/possible-entries {kind, query, page}` → `{id, text}`; selecting must still require Execute |
+
+`EngineM2C` needs only thin wrappers for the four new POSTs (`post('/m2c/order', {...}, 'order')` and so on) and a
+GET for the vocabulary; I did not touch `packages/town-viewer/`. One small change there would help: `post()` folds
+the 422 `detail` into the Error message as JSON; keeping it as `e.detail` lets the order form put `fieldErrors` on
+its fields and switch to the first failing tab. Case view: `actions` are the decisions it accepts
+now, `studioActions` the Studio actions (`order_save`, `order_release`, `note`, `invoice_hold`, …) — drive button
+enablement from them. Identities are the engine's everywhere (premise, installation, account, meter, read, case,
+order), so the map and the Workspace share them; the fixture ids (`7100000318`, `MR-2026-0276`, `100004201`) go away.
+The Studio's "Schedule visit" maps to the order's basic start (save before release); there is no separate schedule
+action. A dispatched order shows on the map on its start date as a `field_order` job with `orderId`.
