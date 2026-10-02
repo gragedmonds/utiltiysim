@@ -22,11 +22,11 @@
       "timezone": "America/Toronto",
       "files": {
         "snapshot": {
-          "path": "whitby_small/town-629f54bde38fe9d7.snapshot.json.gz",
-          "bytes": 632672
+          "path": "whitby_small/town-629f54bde38fe9d7.9acc25c007.snapshot.json.gz",
+          "bytes": 632747
         },
         "replay": {
-          "path": "whitby_small/town-629f54bde38fe9d7.replay-day.json.gz",
+          "path": "whitby_small/town-629f54bde38fe9d7.c8a0b89006.replay-day.json.gz",
           "bytes": 503860
         }
       }
@@ -54,11 +54,11 @@
       "timezone": "America/Toronto",
       "files": {
         "snapshot": {
-          "path": "ayr/town-575a4a6a94146f73.snapshot.json.gz",
-          "bytes": 2028627
+          "path": "ayr/town-575a4a6a94146f73.834690a704.snapshot.json.gz",
+          "bytes": 2028682
         },
         "replay": {
-          "path": "ayr/town-575a4a6a94146f73.replay-day.json.gz",
+          "path": "ayr/town-575a4a6a94146f73.9c2b470a5d.replay-day.json.gz",
           "bytes": 1618942
         }
       }
@@ -86,11 +86,11 @@
       "timezone": "America/Toronto",
       "files": {
         "snapshot": {
-          "path": "elora/town-a68fbab9722a72f5.snapshot.json.gz",
-          "bytes": 3342198
+          "path": "elora/town-a68fbab9722a72f5.0e6e802b24.snapshot.json.gz",
+          "bytes": 3342283
         },
         "replay": {
-          "path": "elora/town-a68fbab9722a72f5.replay-day.json.gz",
+          "path": "elora/town-a68fbab9722a72f5.1482e0c973.replay-day.json.gz",
           "bytes": 2637104
         }
       }
@@ -118,11 +118,11 @@
       "timezone": "America/Toronto",
       "files": {
         "snapshot": {
-          "path": "cobourg/town-d886fea19364fc01.snapshot.json.gz",
-          "bytes": 5515219
+          "path": "cobourg/town-d886fea19364fc01.929c196b84.snapshot.json.gz",
+          "bytes": 5515333
         },
         "replay": {
-          "path": "cobourg/town-d886fea19364fc01.replay-day.json.gz",
+          "path": "cobourg/town-d886fea19364fc01.1c9d53d206.replay-day.json.gz",
           "bytes": 4161121
         }
       }

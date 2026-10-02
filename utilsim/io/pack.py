@@ -1,14 +1,15 @@
 """Town packs: prebuilt, immutable town data for static hosting (Vercel) and the stateless sim runtime.
 
 ``packs/index.json`` lists one entry per preset. Each pack holds the full ``utility-town/2.0`` snapshot and a
-24-hour ``utility-replay/1.0``, gzipped deterministically (``mtime=0``) and named by town id, so a file name
-never changes meaning and can be cached forever. A pack is stale when its town id differs from the preset's
+24-hour ``utility-replay/1.0``, gzipped deterministically (``mtime=0``) and named by town id plus a content hash,
+so a file name never changes meaning and can be cached forever. A pack is stale when its town id differs from the preset's
 current ``town_id()`` (tests check this).
 """
 
 from __future__ import annotations
 
 import gzip
+import hashlib
 from pathlib import Path
 
 import orjson
@@ -35,15 +36,17 @@ def write_pack(preset: str, out: Path) -> dict:
     replay = FrameBuilder(town).replay(cfg.scenario.date, step_minutes=60)
     folder = out / preset
     folder.mkdir(parents=True, exist_ok=True)
-    for old in folder.glob("town-*.json.gz"):
-        if not old.name.startswith(town.id + "."):
-            old.unlink()
     files = {}
     for kind, doc in (("snapshot", snap), ("replay", replay)):
-        name = f"{town.id}.{'snapshot' if kind == 'snapshot' else 'replay-day'}.json.gz"
         data = _gz(orjson.dumps(doc))
+        # Content hash in the name: files are served as immutable, so any change must get a new URL.
+        name = f"{town.id}.{hashlib.sha256(data).hexdigest()[:10]}.{'snapshot' if kind == 'snapshot' else 'replay-day'}.json.gz"
         (folder / name).write_bytes(data)
         files[kind] = {"path": f"{preset}/{name}", "bytes": len(data)}
+    keep = {Path(f["path"]).name for f in files.values()}
+    for stale in folder.iterdir():
+        if stale.name not in keep:
+            stale.unlink()
     src = snap["source"]
     return {
         "preset": preset,

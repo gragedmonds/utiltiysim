@@ -170,8 +170,10 @@ def build_snapshot(town, *, include_reads: bool = True, units: str | None = None
                        "assumptions": {"losses": "excluded in M1 flows", "sizing": "engineering step tables",
                                        "pressureVoltageSolution": "M2"}}
 
+    # roadId/t: where the site meets the street (crews leave the depot there), like premises' roadId/t.
     facilities = [{"id": f.id, "kind": f.kind, "label": f.label, "x": _r(f.xy[0]), "z": _r(-f.xy[1]),
-                   "polygon": _poly(f.poly), "premiseId": f.attrs.get("premise_id")} for f in lu.facilities]
+                   "polygon": _poly(f.poly), "premiseId": f.attrs.get("premise_id"), "roadId": f"R-{int(f.edge)}",
+                   "t": round(float(f.s / max(g.length[int(f.edge)], 1e-9)), 5)} for f in lu.facilities]
     district_ids = sorted(set(int(d) for d in prem.district))
     dxy = geo.era.district_xy
     vor = shapely.voronoi_polygons(MultiPoint([tuple(p) for p in dxy]), extend_to=box(minx, miny, maxx, maxy))
