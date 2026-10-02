@@ -425,9 +425,9 @@ class M2CRun:
             expected=expected, unit=tw.unit[rows], export=tw.direction[rows] == "export",
             occupied=tw.occupied[prem], moved=moved, consec=self.consec[rows], prior_cases=prior,
             manual=tech == "MANUAL", price=self.price[rows]), c.vee)
-        self.risk[rows, m] = res.risk
-        self.code[rows, m] = res.code
-        self.ratio[rows, m] = res.ratio
+        self.risk[rows, m] = np.where(missed[:, None], 0.0, res.risk)  # no read, nothing validated
+        self.code[rows, m] = np.where(missed, -1, res.code)
+        self.ratio[rows, m] = np.where(missed, np.nan, res.ratio)
         self.conf[rows, m] = np.where(missed, np.nan, res.confidence)
         self.disp[rows, m] = np.where(missed, -1, res.disposition)
         self.reason[rows, m] = np.where(missed, [("NO_READ" if nodoc_of[x] else cat.REASON[str(tw.meter_tech[x])])
