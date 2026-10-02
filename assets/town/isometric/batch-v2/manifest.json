@@ -1,0 +1,2246 @@
+{
+  "schema": "utility-asset-studies/1.0",
+  "status": "review_assets_not_production_atlas",
+  "mode": "built-in image_gen",
+  "layout": {
+    "columns": 3,
+    "rows": 2,
+    "cell_width": 512,
+    "cell_height": 512,
+    "view_order": [
+      "front-right",
+      "front-left",
+      "rear-left",
+      "rear-right",
+      "overhead",
+      "empty"
+    ],
+    "order_is_intended_not_guaranteed": true
+  },
+  "integration": "Illustration selectors only; not connected to the utility engine or billing.",
+  "families": [
+    {
+      "id": "01-industrial-plant",
+      "name": "Industrial plant",
+      "file": "01-industrial-plant.png",
+      "category": "Facilities",
+      "description": "Brick industrial building with a loading bay, rooftop equipment, CT cabinet and a small transformer pad.",
+      "bindings": [
+        "buildings[].buildingType: industrial",
+        "premises[].services",
+        "meters[] electric service",
+        "electric transformer node: mount pad"
+      ],
+      "futureStates": [
+        "selected",
+        "hover",
+        "unsupplied by utility",
+        "night lighting"
+      ],
+      "sizeGuidance": "A larger building footprint than a house. Scale CT cabinet and pad separately; a transformer must stay much smaller than the building.",
+      "selectedVersion": "initial",
+      "reviewNote": "Initial selected because correction introduced visible background haze and altered rear-left window count. Four distinct quarter views are present, but right facade has two windows in front-right and three in rear-right; identity is not fully locked. Fifth view is high-angle oblique: front doors/wall and vertical equipment depth remain visible. Thresholded alpha bounds touch a cell boundary; inspect cropping before atlas slicing.",
+      "reviewStatus": "needs_review",
+      "duplicateViews": "none_obvious",
+      "overheadStatus": "front_facade_visible",
+      "image": {
+        "width": 1536,
+        "height": 1024,
+        "mode": "RGBA",
+        "has_alpha": true,
+        "alpha": {
+          "extrema": [
+            0,
+            254
+          ],
+          "fully_transparent_fraction": 0.640198,
+          "at_least_240_fraction": 0.334001,
+          "visible_haze_threshold": 16,
+          "negligible_noise_maximum": 1,
+          "threshold_for_bounds": 16,
+          "empty_cell_extrema": [
+            0,
+            1
+          ],
+          "empty_cell_fraction_above_16": 0.0,
+          "empty_cell_clean_above_16": true
+        },
+        "cells": [
+          {
+            "index": 0,
+            "intended_view": "front-right",
+            "cell_rect": [
+              0,
+              0,
+              512,
+              512
+            ],
+            "alpha_bounds_local": [
+              30,
+              78,
+              512,
+              445
+            ],
+            "alpha_bounds_sheet": [
+              30,
+              78,
+              512,
+              445
+            ],
+            "visible_pixel_count": 111155,
+            "touches_cell_edge": true
+          },
+          {
+            "index": 1,
+            "intended_view": "front-left",
+            "cell_rect": [
+              512,
+              0,
+              1024,
+              512
+            ],
+            "alpha_bounds_local": [
+              0,
+              75,
+              478,
+              445
+            ],
+            "alpha_bounds_sheet": [
+              512,
+              75,
+              990,
+              445
+            ],
+            "visible_pixel_count": 103439,
+            "touches_cell_edge": true
+          },
+          {
+            "index": 2,
+            "intended_view": "rear-left",
+            "cell_rect": [
+              1024,
+              0,
+              1536,
+              512
+            ],
+            "alpha_bounds_local": [
+              16,
+              85,
+              483,
+              445
+            ],
+            "alpha_bounds_sheet": [
+              1040,
+              85,
+              1507,
+              445
+            ],
+            "visible_pixel_count": 104416,
+            "touches_cell_edge": false
+          },
+          {
+            "index": 3,
+            "intended_view": "rear-right",
+            "cell_rect": [
+              0,
+              512,
+              512,
+              1024
+            ],
+            "alpha_bounds_local": [
+              55,
+              35,
+              490,
+              437
+            ],
+            "alpha_bounds_sheet": [
+              55,
+              547,
+              490,
+              949
+            ],
+            "visible_pixel_count": 115057,
+            "touches_cell_edge": false
+          },
+          {
+            "index": 4,
+            "intended_view": "overhead",
+            "cell_rect": [
+              512,
+              512,
+              1024,
+              1024
+            ],
+            "alpha_bounds_local": [
+              97,
+              70,
+              451,
+              413
+            ],
+            "alpha_bounds_sheet": [
+              609,
+              582,
+              963,
+              925
+            ],
+            "visible_pixel_count": 103509,
+            "touches_cell_edge": false
+          },
+          {
+            "index": 5,
+            "intended_view": "empty",
+            "cell_rect": [
+              1024,
+              512,
+              1536,
+              1024
+            ],
+            "alpha_bounds_local": null,
+            "alpha_bounds_sheet": null,
+            "visible_pixel_count": 0,
+            "touches_cell_edge": false
+          }
+        ]
+      },
+      "sha256": "1fdfaa8c3de6f39c44fdba1e4fe48861dcede6be53927f71063147b174792ccb"
+    },
+    {
+      "id": "02-utility-depot",
+      "name": "Utility depot",
+      "file": "02-utility-depot.png",
+      "category": "Facilities",
+      "description": "Two-bay utility depot with a rear crew yard and an AMI communications mast.",
+      "bindings": [
+        "facilities kind: depot",
+        "amiNetwork.headend"
+      ],
+      "futureStates": [
+        "selected",
+        "hover",
+        "night lighting",
+        "yard occupied by crew vehicles"
+      ],
+      "sizeGuidance": "Use the facility footprint. Yard vehicles are separate job-linked assets; do not enlarge or shrink them with the lot polygon.",
+      "selectedVersion": "initial",
+      "reviewNote": "Initial selected because correction introduced visible background haze. Four distinct views retain two bays, fenced yard, bins and mast. Fence/gate topology and HVAC position are not geometrically verified. Fifth view shows the front facade, garage doors, upright mast and HVAC front grille; not strict overhead. Thresholded alpha bounds touch a cell boundary; inspect cropping before atlas slicing.",
+      "reviewStatus": "needs_review",
+      "duplicateViews": "none_obvious",
+      "overheadStatus": "front_facade_and_vertical_equipment_visible",
+      "image": {
+        "width": 1536,
+        "height": 1024,
+        "mode": "RGBA",
+        "has_alpha": true,
+        "alpha": {
+          "extrema": [
+            0,
+            254
+          ],
+          "fully_transparent_fraction": 0.612366,
+          "at_least_240_fraction": 0.342749,
+          "visible_haze_threshold": 16,
+          "negligible_noise_maximum": 1,
+          "threshold_for_bounds": 16,
+          "empty_cell_extrema": [
+            0,
+            1
+          ],
+          "empty_cell_fraction_above_16": 0.0,
+          "empty_cell_clean_above_16": true
+        },
+        "cells": [
+          {
+            "index": 0,
+            "intended_view": "front-right",
+            "cell_rect": [
+              0,
+              0,
+              512,
+              512
+            ],
+            "alpha_bounds_local": [
+              26,
+              25,
+              496,
+              466
+            ],
+            "alpha_bounds_sheet": [
+              26,
+              25,
+              496,
+              466
+            ],
+            "visible_pixel_count": 112155,
+            "touches_cell_edge": false
+          },
+          {
+            "index": 1,
+            "intended_view": "front-left",
+            "cell_rect": [
+              512,
+              0,
+              1024,
+              512
+            ],
+            "alpha_bounds_local": [
+              29,
+              21,
+              478,
+              474
+            ],
+            "alpha_bounds_sheet": [
+              541,
+              21,
+              990,
+              474
+            ],
+            "visible_pixel_count": 101684,
+            "touches_cell_edge": false
+          },
+          {
+            "index": 2,
+            "intended_view": "rear-left",
+            "cell_rect": [
+              1024,
+              0,
+              1536,
+              512
+            ],
+            "alpha_bounds_local": [
+              17,
+              70,
+              487,
+              462
+            ],
+            "alpha_bounds_sheet": [
+              1041,
+              70,
+              1511,
+              462
+            ],
+            "visible_pixel_count": 116842,
+            "touches_cell_edge": false
+          },
+          {
+            "index": 3,
+            "intended_view": "rear-right",
+            "cell_rect": [
+              0,
+              512,
+              512,
+              1024
+            ],
+            "alpha_bounds_local": [
+              26,
+              47,
+              512,
+              437
+            ],
+            "alpha_bounds_sheet": [
+              26,
+              559,
+              512,
+              949
+            ],
+            "visible_pixel_count": 118586,
+            "touches_cell_edge": true
+          },
+          {
+            "index": 4,
+            "intended_view": "overhead",
+            "cell_rect": [
+              512,
+              512,
+              1024,
+              1024
+            ],
+            "alpha_bounds_local": [
+              0,
+              20,
+              410,
+              463
+            ],
+            "alpha_bounds_sheet": [
+              512,
+              532,
+              922,
+              975
+            ],
+            "visible_pixel_count": 126033,
+            "touches_cell_edge": true
+          },
+          {
+            "index": 5,
+            "intended_view": "empty",
+            "cell_rect": [
+              1024,
+              512,
+              1536,
+              1024
+            ],
+            "alpha_bounds_local": null,
+            "alpha_bounds_sheet": null,
+            "visible_pixel_count": 0,
+            "touches_cell_edge": false
+          }
+        ]
+      },
+      "sha256": "429922580c48a960e6000dbd6b5689cfac187025cd07d295effca94b0cb05cc5"
+    },
+    {
+      "id": "03-electric-substation",
+      "name": "Electric substation",
+      "file": "03-electric-substation.png",
+      "category": "Facilities",
+      "description": "Fenced substation yard with a power transformer, switchgear and a control cabinet.",
+      "bindings": [
+        "electric node kind: substation",
+        "facilities substation",
+        "electric supply and trunk edges"
+      ],
+      "futureStates": [
+        "selected",
+        "hover",
+        "feeder out",
+        "de-energized"
+      ],
+      "sizeGuidance": "Calibrate against the fenced facility footprint and explicit supply/feeder connection anchors.",
+      "selectedVersion": "initial",
+      "reviewNote": "Initial selected because correction expanded sprites across cell boundaries without fixing strict overhead. Four distinct views retain the main transformer and general breaker layout; exact busbar topology is not verified. Fifth view retains upright bushing shafts, transformer radiator front, pedestal fronts and fence height; not strict overhead.",
+      "reviewStatus": "needs_review",
+      "duplicateViews": "none_obvious",
+      "overheadStatus": "vertical_equipment_faces_visible",
+      "image": {
+        "width": 1536,
+        "height": 1024,
+        "mode": "RGBA",
+        "has_alpha": true,
+        "alpha": {
+          "extrema": [
+            0,
+            254
+          ],
+          "fully_transparent_fraction": 0.586983,
+          "at_least_240_fraction": 0.358726,
+          "visible_haze_threshold": 16,
+          "negligible_noise_maximum": 1,
+          "threshold_for_bounds": 16,
+          "empty_cell_extrema": [
+            0,
+            1
+          ],
+          "empty_cell_fraction_above_16": 0.0,
+          "empty_cell_clean_above_16": true
+        },
+        "cells": [
+          {
+            "index": 0,
+            "intended_view": "front-right",
+            "cell_rect": [
+              0,
+              0,
+              512,
+              512
+            ],
+            "alpha_bounds_local": [
+              21,
+              49,
+              508,
+              439
+            ],
+            "alpha_bounds_sheet": [
+              21,
+              49,
+              508,
+              439
+            ],
+            "visible_pixel_count": 116860,
+            "touches_cell_edge": false
+          },
+          {
+            "index": 1,
+            "intended_view": "front-left",
+            "cell_rect": [
+              512,
+              0,
+              1024,
+              512
+            ],
+            "alpha_bounds_local": [
+              23,
+              58,
+              498,
+              452
+            ],
+            "alpha_bounds_sheet": [
+              535,
+              58,
+              1010,
+              452
+            ],
+            "visible_pixel_count": 114933,
+            "touches_cell_edge": false
+          },
+          {
+            "index": 2,
+            "intended_view": "rear-left",
+            "cell_rect": [
+              1024,
+              0,
+              1536,
+              512
+            ],
+            "alpha_bounds_local": [
+              19,
+              77,
+              492,
+              436
+            ],
+            "alpha_bounds_sheet": [
+              1043,
+              77,
+              1516,
+              436
+            ],
+            "visible_pixel_count": 106411,
+            "touches_cell_edge": false
+          },
+          {
+            "index": 3,
+            "intended_view": "rear-right",
+            "cell_rect": [
+              0,
+              512,
+              512,
+              1024
+            ],
+            "alpha_bounds_local": [
+              21,
+              63,
+              510,
+              453
+            ],
+            "alpha_bounds_sheet": [
+              21,
+              575,
+              510,
+              965
+            ],
+            "visible_pixel_count": 115315,
+            "touches_cell_edge": false
+          },
+          {
+            "index": 4,
+            "intended_view": "overhead",
+            "cell_rect": [
+              512,
+              512,
+              1024,
+              1024
+            ],
+            "alpha_bounds_local": [
+              62,
+              31,
+              456,
+              446
+            ],
+            "alpha_bounds_sheet": [
+              574,
+              543,
+              968,
+              958
+            ],
+            "visible_pixel_count": 161454,
+            "touches_cell_edge": false
+          },
+          {
+            "index": 5,
+            "intended_view": "empty",
+            "cell_rect": [
+              1024,
+              512,
+              1536,
+              1024
+            ],
+            "alpha_bounds_local": null,
+            "alpha_bounds_sheet": null,
+            "visible_pixel_count": 0,
+            "touches_cell_edge": false
+          }
+        ]
+      },
+      "sha256": "3624db40d95699014ac301cd674732bd95f83136d1a6832b429c0f8d9ee9a971"
+    },
+    {
+      "id": "04-water-pump-station",
+      "name": "Water pump station",
+      "file": "04-water-pump-station.png",
+      "category": "Facilities",
+      "description": "Compact water pump station with rooftop vents and exposed utility pipework.",
+      "bindings": [
+        "water node kind: pump_station",
+        "facilities pump station: pumps"
+      ],
+      "futureStates": [
+        "selected",
+        "hover",
+        "running",
+        "out"
+      ],
+      "sizeGuidance": "Scale from the facility footprint, with pipe inlet/outlet anchors kept independent of decorative crop bounds.",
+      "selectedVersion": "initial",
+      "reviewNote": "Initial selected because correction introduced visible background haze. Four distinct facade views preserve front doors, left windows, right pipe loop and rear service equipment reasonably well. Fifth view shows front gable wall and service doors below the roof, plus vent shaft depth; not strict overhead.",
+      "reviewStatus": "needs_review",
+      "duplicateViews": "none_obvious",
+      "overheadStatus": "front_facade_visible",
+      "image": {
+        "width": 1536,
+        "height": 1024,
+        "mode": "RGBA",
+        "has_alpha": true,
+        "alpha": {
+          "extrema": [
+            0,
+            254
+          ],
+          "fully_transparent_fraction": 0.603253,
+          "at_least_240_fraction": 0.360323,
+          "visible_haze_threshold": 16,
+          "negligible_noise_maximum": 1,
+          "threshold_for_bounds": 16,
+          "empty_cell_extrema": [
+            0,
+            1
+          ],
+          "empty_cell_fraction_above_16": 0.0,
+          "empty_cell_clean_above_16": true
+        },
+        "cells": [
+          {
+            "index": 0,
+            "intended_view": "front-right",
+            "cell_rect": [
+              0,
+              0,
+              512,
+              512
+            ],
+            "alpha_bounds_local": [
+              52,
+              42,
+              463,
+              476
+            ],
+            "alpha_bounds_sheet": [
+              52,
+              42,
+              463,
+              476
+            ],
+            "visible_pixel_count": 116575,
+            "touches_cell_edge": false
+          },
+          {
+            "index": 1,
+            "intended_view": "front-left",
+            "cell_rect": [
+              512,
+              0,
+              1024,
+              512
+            ],
+            "alpha_bounds_local": [
+              61,
+              47,
+              467,
+              476
+            ],
+            "alpha_bounds_sheet": [
+              573,
+              47,
+              979,
+              476
+            ],
+            "visible_pixel_count": 114422,
+            "touches_cell_edge": false
+          },
+          {
+            "index": 2,
+            "intended_view": "rear-left",
+            "cell_rect": [
+              1024,
+              0,
+              1536,
+              512
+            ],
+            "alpha_bounds_local": [
+              53,
+              54,
+              463,
+              476
+            ],
+            "alpha_bounds_sheet": [
+              1077,
+              54,
+              1487,
+              476
+            ],
+            "visible_pixel_count": 117125,
+            "touches_cell_edge": false
+          },
+          {
+            "index": 3,
+            "intended_view": "rear-right",
+            "cell_rect": [
+              0,
+              512,
+              512,
+              1024
+            ],
+            "alpha_bounds_local": [
+              69,
+              35,
+              476,
+              452
+            ],
+            "alpha_bounds_sheet": [
+              69,
+              547,
+              476,
+              964
+            ],
+            "visible_pixel_count": 114803,
+            "touches_cell_edge": false
+          },
+          {
+            "index": 4,
+            "intended_view": "overhead",
+            "cell_rect": [
+              512,
+              512,
+              1024,
+              1024
+            ],
+            "alpha_bounds_local": [
+              109,
+              41,
+              428,
+              444
+            ],
+            "alpha_bounds_sheet": [
+              621,
+              553,
+              940,
+              956
+            ],
+            "visible_pixel_count": 119068,
+            "touches_cell_edge": false
+          },
+          {
+            "index": 5,
+            "intended_view": "empty",
+            "cell_rect": [
+              1024,
+              512,
+              1536,
+              1024
+            ],
+            "alpha_bounds_local": null,
+            "alpha_bounds_sheet": null,
+            "visible_pixel_count": 0,
+            "touches_cell_edge": false
+          }
+        ]
+      },
+      "sha256": "3c0c10d8c7f3f9fac5602477d749bd811447ffab7f1a2af5cd60d2c64920db23"
+    },
+    {
+      "id": "05-elevated-water-tower",
+      "name": "Elevated water tower",
+      "file": "05-elevated-water-tower.png",
+      "category": "Facilities",
+      "description": "Elevated water tank on four legs, with a service ladder and central riser.",
+      "bindings": [
+        "water node kind: elevated_tank",
+        "capacityM3",
+        "overflowElevationM",
+        "water edge kind: tank_riser"
+      ],
+      "futureStates": [
+        "selected",
+        "hover",
+        "feeding",
+        "standby",
+        "level when supplied by engine"
+      ],
+      "sizeGuidance": "Calibrate the leg footprint and tank elevation separately. The overhead footprint must not inherit the tall isometric sprite height.",
+      "selectedVersion": "initial",
+      "reviewNote": "Initial selected because correction introduced visible background haze. First two views are near duplicates rather than genuine opposite front quadrants. Rear views differ in hatch/ladder visibility. Four structural legs are recognizable, with an extra small riser footing in some views. The circular fifth view reads as overhead, but hatch/ladder placement and scale need review.",
+      "reviewStatus": "needs_review",
+      "duplicateViews": "front_right_and_front_left_near_duplicate",
+      "overheadStatus": "plausible_overhead_not_geometrically_validated",
+      "image": {
+        "width": 1536,
+        "height": 1024,
+        "mode": "RGBA",
+        "has_alpha": true,
+        "alpha": {
+          "extrema": [
+            0,
+            254
+          ],
+          "fully_transparent_fraction": 0.729029,
+          "at_least_240_fraction": 0.182423,
+          "visible_haze_threshold": 16,
+          "negligible_noise_maximum": 1,
+          "threshold_for_bounds": 16,
+          "empty_cell_extrema": [
+            0,
+            1
+          ],
+          "empty_cell_fraction_above_16": 0.0,
+          "empty_cell_clean_above_16": true
+        },
+        "cells": [
+          {
+            "index": 0,
+            "intended_view": "front-right",
+            "cell_rect": [
+              0,
+              0,
+              512,
+              512
+            ],
+            "alpha_bounds_local": [
+              176,
+              32,
+              433,
+              497
+            ],
+            "alpha_bounds_sheet": [
+              176,
+              32,
+              433,
+              497
+            ],
+            "visible_pixel_count": 70975,
+            "touches_cell_edge": false
+          },
+          {
+            "index": 1,
+            "intended_view": "front-left",
+            "cell_rect": [
+              512,
+              0,
+              1024,
+              512
+            ],
+            "alpha_bounds_local": [
+              125,
+              33,
+              381,
+              497
+            ],
+            "alpha_bounds_sheet": [
+              637,
+              33,
+              893,
+              497
+            ],
+            "visible_pixel_count": 67065,
+            "touches_cell_edge": false
+          },
+          {
+            "index": 2,
+            "intended_view": "rear-left",
+            "cell_rect": [
+              1024,
+              0,
+              1536,
+              512
+            ],
+            "alpha_bounds_local": [
+              80,
+              34,
+              341,
+              497
+            ],
+            "alpha_bounds_sheet": [
+              1104,
+              34,
+              1365,
+              497
+            ],
+            "visible_pixel_count": 67011,
+            "touches_cell_edge": false
+          },
+          {
+            "index": 3,
+            "intended_view": "rear-right",
+            "cell_rect": [
+              0,
+              512,
+              512,
+              1024
+            ],
+            "alpha_bounds_local": [
+              173,
+              16,
+              432,
+              479
+            ],
+            "alpha_bounds_sheet": [
+              173,
+              528,
+              432,
+              991
+            ],
+            "visible_pixel_count": 70263,
+            "touches_cell_edge": false
+          },
+          {
+            "index": 4,
+            "intended_view": "overhead",
+            "cell_rect": [
+              512,
+              512,
+              1024,
+              1024
+            ],
+            "alpha_bounds_local": [
+              116,
+              85,
+              397,
+              423
+            ],
+            "alpha_bounds_sheet": [
+              628,
+              597,
+              909,
+              935
+            ],
+            "visible_pixel_count": 72451,
+            "touches_cell_edge": false
+          },
+          {
+            "index": 5,
+            "intended_view": "empty",
+            "cell_rect": [
+              1024,
+              512,
+              1536,
+              1024
+            ],
+            "alpha_bounds_local": null,
+            "alpha_bounds_sheet": null,
+            "visible_pixel_count": 0,
+            "touches_cell_edge": false
+          }
+        ]
+      },
+      "sha256": "2b5bdba8f17b028d90cd9c42b7c62bf9378295a62b910211284cae952475be5d"
+    },
+    {
+      "id": "06-gas-city-gate",
+      "name": "Gas city gate and regulator station",
+      "file": "06-gas-city-gate.png",
+      "category": "Facilities",
+      "description": "Fenced gas receiving and regulating station with control cabinets and parallel pipe trains.",
+      "bindings": [
+        "gas node kind: city_gate_regulator",
+        "facilities city gate: inletKPa, outletKPa"
+      ],
+      "futureStates": [
+        "selected",
+        "hover",
+        "pressure lens overlay"
+      ],
+      "sizeGuidance": "Use the fenced station footprint with transmission inlet and distribution outlet anchors. Do not automatically reuse as a smaller district regulator station.",
+      "selectedVersion": "initial",
+      "reviewNote": "Initial selected because correction introduced visible background haze and duplicated its rear quadrants. First two views repeat nearly the same front angle, and lower-left is another front view rather than rear-right. A reliable four-direction set is missing. Cabinet placement/height and pipe visibility drift. Fifth view shows cabinet fronts, upright gauges and equipment depth; not strict overhead.",
+      "reviewStatus": "needs_review",
+      "duplicateViews": "repeated_front_views_missing_rear_right",
+      "overheadStatus": "vertical_faces_and_gauges_visible",
+      "image": {
+        "width": 1536,
+        "height": 1024,
+        "mode": "RGBA",
+        "has_alpha": true,
+        "alpha": {
+          "extrema": [
+            0,
+            254
+          ],
+          "fully_transparent_fraction": 0.638849,
+          "at_least_240_fraction": 0.315647,
+          "visible_haze_threshold": 16,
+          "negligible_noise_maximum": 1,
+          "threshold_for_bounds": 16,
+          "empty_cell_extrema": [
+            0,
+            1
+          ],
+          "empty_cell_fraction_above_16": 0.0,
+          "empty_cell_clean_above_16": true
+        },
+        "cells": [
+          {
+            "index": 0,
+            "intended_view": "front-right",
+            "cell_rect": [
+              0,
+              0,
+              512,
+              512
+            ],
+            "alpha_bounds_local": [
+              20,
+              79,
+              502,
+              491
+            ],
+            "alpha_bounds_sheet": [
+              20,
+              79,
+              502,
+              491
+            ],
+            "visible_pixel_count": 111505,
+            "touches_cell_edge": false
+          },
+          {
+            "index": 1,
+            "intended_view": "front-left",
+            "cell_rect": [
+              512,
+              0,
+              1024,
+              512
+            ],
+            "alpha_bounds_local": [
+              28,
+              93,
+              489,
+              492
+            ],
+            "alpha_bounds_sheet": [
+              540,
+              93,
+              1001,
+              492
+            ],
+            "visible_pixel_count": 109201,
+            "touches_cell_edge": false
+          },
+          {
+            "index": 2,
+            "intended_view": "rear-left",
+            "cell_rect": [
+              1024,
+              0,
+              1536,
+              512
+            ],
+            "alpha_bounds_local": [
+              23,
+              162,
+              495,
+              449
+            ],
+            "alpha_bounds_sheet": [
+              1047,
+              162,
+              1519,
+              449
+            ],
+            "visible_pixel_count": 79796,
+            "touches_cell_edge": false
+          },
+          {
+            "index": 3,
+            "intended_view": "rear-right",
+            "cell_rect": [
+              0,
+              512,
+              512,
+              1024
+            ],
+            "alpha_bounds_local": [
+              41,
+              73,
+              503,
+              449
+            ],
+            "alpha_bounds_sheet": [
+              41,
+              585,
+              503,
+              961
+            ],
+            "visible_pixel_count": 101671,
+            "touches_cell_edge": false
+          },
+          {
+            "index": 4,
+            "intended_view": "overhead",
+            "cell_rect": [
+              512,
+              512,
+              1024,
+              1024
+            ],
+            "alpha_bounds_local": [
+              35,
+              63,
+              493,
+              427
+            ],
+            "alpha_bounds_sheet": [
+              547,
+              575,
+              1005,
+              939
+            ],
+            "visible_pixel_count": 132518,
+            "touches_cell_edge": false
+          },
+          {
+            "index": 5,
+            "intended_view": "empty",
+            "cell_rect": [
+              1024,
+              512,
+              1536,
+              1024
+            ],
+            "alpha_bounds_local": null,
+            "alpha_bounds_sheet": null,
+            "visible_pixel_count": 0,
+            "touches_cell_edge": false
+          }
+        ]
+      },
+      "sha256": "8193491f3c60c3c71222b0459c1bf3fc208ed880d2b38921383f864275daacc2"
+    },
+    {
+      "id": "07-bucket-line-truck",
+      "name": "Bucket line truck",
+      "file": "07-bucket-line-truck.png",
+      "category": "Crews",
+      "description": "Electric line truck with a stowed bucket boom, side ladder and cable reel.",
+      "bindings": [
+        "operations jobs[].crewKind: electric",
+        "jobs[].route",
+        "jobs[].returnRoute",
+        "jobs[].visitPoint"
+      ],
+      "futureStates": [
+        "driving",
+        "parked",
+        "working with raised bucket",
+        "returning",
+        "selected",
+        "hover"
+      ],
+      "sizeGuidance": "Share road scale with other crew vehicles. Calibrate tire contact and wheelbase, keeping a truck clearly smaller than a house footprint.",
+      "selectedVersion": "initial",
+      "reviewNote": "Initial selected because correction introduced visible background haze. Four isometric views show distinct front/rear quadrants and recognizable ladder-versus-reel sides; exact intrinsic handedness and hinge placement are not fully verified. Fifth view shows grille, headlight and bumper depth. It is high-angle oblique, not strict overhead.",
+      "reviewStatus": "needs_review",
+      "duplicateViews": "none_obvious",
+      "overheadStatus": "front_grille_and_bumper_depth",
+      "image": {
+        "width": 1536,
+        "height": 1024,
+        "mode": "RGBA",
+        "has_alpha": true,
+        "alpha": {
+          "extrema": [
+            0,
+            254
+          ],
+          "fully_transparent_fraction": 0.663719,
+          "at_least_240_fraction": 0.297658,
+          "visible_haze_threshold": 16,
+          "negligible_noise_maximum": 1,
+          "threshold_for_bounds": 16,
+          "empty_cell_extrema": [
+            0,
+            1
+          ],
+          "empty_cell_fraction_above_16": 0.0,
+          "empty_cell_clean_above_16": true
+        },
+        "cells": [
+          {
+            "index": 0,
+            "intended_view": "front-right",
+            "cell_rect": [
+              0,
+              0,
+              512,
+              512
+            ],
+            "alpha_bounds_local": [
+              36,
+              65,
+              478,
+              467
+            ],
+            "alpha_bounds_sheet": [
+              36,
+              65,
+              478,
+              467
+            ],
+            "visible_pixel_count": 104105,
+            "touches_cell_edge": false
+          },
+          {
+            "index": 1,
+            "intended_view": "front-left",
+            "cell_rect": [
+              512,
+              0,
+              1024,
+              512
+            ],
+            "alpha_bounds_local": [
+              49,
+              58,
+              483,
+              455
+            ],
+            "alpha_bounds_sheet": [
+              561,
+              58,
+              995,
+              455
+            ],
+            "visible_pixel_count": 101465,
+            "touches_cell_edge": false
+          },
+          {
+            "index": 2,
+            "intended_view": "rear-left",
+            "cell_rect": [
+              1024,
+              0,
+              1536,
+              512
+            ],
+            "alpha_bounds_local": [
+              56,
+              45,
+              493,
+              429
+            ],
+            "alpha_bounds_sheet": [
+              1080,
+              45,
+              1517,
+              429
+            ],
+            "visible_pixel_count": 98267,
+            "touches_cell_edge": false
+          },
+          {
+            "index": 3,
+            "intended_view": "rear-right",
+            "cell_rect": [
+              0,
+              512,
+              512,
+              1024
+            ],
+            "alpha_bounds_local": [
+              35,
+              48,
+              483,
+              431
+            ],
+            "alpha_bounds_sheet": [
+              35,
+              560,
+              483,
+              943
+            ],
+            "visible_pixel_count": 98293,
+            "touches_cell_edge": false
+          },
+          {
+            "index": 4,
+            "intended_view": "overhead",
+            "cell_rect": [
+              512,
+              512,
+              1024,
+              1024
+            ],
+            "alpha_bounds_local": [
+              143,
+              7,
+              371,
+              487
+            ],
+            "alpha_bounds_sheet": [
+              655,
+              519,
+              883,
+              999
+            ],
+            "visible_pixel_count": 82594,
+            "touches_cell_edge": false
+          },
+          {
+            "index": 5,
+            "intended_view": "empty",
+            "cell_rect": [
+              1024,
+              512,
+              1536,
+              1024
+            ],
+            "alpha_bounds_local": null,
+            "alpha_bounds_sheet": null,
+            "visible_pixel_count": 0,
+            "touches_cell_edge": false
+          }
+        ]
+      },
+      "sha256": "9e6652b4632c1239c3349c40d78e2544a58a0277bb6a63ca84273645173a1064"
+    },
+    {
+      "id": "08-water-crew-truck-excavator",
+      "name": "Water crew truck and excavator",
+      "file": "08-water-crew-truck-excavator.png",
+      "category": "Crews",
+      "description": "Water crew service truck and a compact excavator in a parked working-site arrangement.",
+      "bindings": [
+        "operations jobs[].crewKind: water",
+        "jobs[].visitPoint",
+        "water_main_break repair in progress"
+      ],
+      "futureStates": [
+        "parked",
+        "working",
+        "dig site",
+        "selected",
+        "hover"
+      ],
+      "sizeGuidance": "This is a composite parked study. Separate the truck and excavator before routing or animating either one; do not drive the whole paired sheet down a road.",
+      "selectedVersion": "initial",
+      "reviewNote": "Initial selected because correction created duplicated rear views and additional accessory drift. First two initial views are near duplicates rather than opposite front quadrants. Excavator remains prominently visible in both rear views, implying side/occlusion drift; ladder/toolbox placement changes. Fifth view has grille and vertical depth. Not a reliable rigid two-vehicle rotation set.",
+      "reviewStatus": "needs_review",
+      "duplicateViews": "front_right_and_front_left_near_duplicate",
+      "overheadStatus": "front_grille_and_equipment_depth",
+      "image": {
+        "width": 1536,
+        "height": 1024,
+        "mode": "RGBA",
+        "has_alpha": true,
+        "alpha": {
+          "extrema": [
+            0,
+            254
+          ],
+          "fully_transparent_fraction": 0.659637,
+          "at_least_240_fraction": 0.30045,
+          "visible_haze_threshold": 16,
+          "negligible_noise_maximum": 1,
+          "threshold_for_bounds": 16,
+          "empty_cell_extrema": [
+            0,
+            1
+          ],
+          "empty_cell_fraction_above_16": 0.0,
+          "empty_cell_clean_above_16": true
+        },
+        "cells": [
+          {
+            "index": 0,
+            "intended_view": "front-right",
+            "cell_rect": [
+              0,
+              0,
+              512,
+              512
+            ],
+            "alpha_bounds_local": [
+              35,
+              104,
+              508,
+              421
+            ],
+            "alpha_bounds_sheet": [
+              35,
+              104,
+              508,
+              421
+            ],
+            "visible_pixel_count": 93877,
+            "touches_cell_edge": false
+          },
+          {
+            "index": 1,
+            "intended_view": "front-left",
+            "cell_rect": [
+              512,
+              0,
+              1024,
+              512
+            ],
+            "alpha_bounds_local": [
+              39,
+              89,
+              497,
+              426
+            ],
+            "alpha_bounds_sheet": [
+              551,
+              89,
+              1009,
+              426
+            ],
+            "visible_pixel_count": 100176,
+            "touches_cell_edge": false
+          },
+          {
+            "index": 2,
+            "intended_view": "rear-left",
+            "cell_rect": [
+              1024,
+              0,
+              1536,
+              512
+            ],
+            "alpha_bounds_local": [
+              50,
+              140,
+              473,
+              438
+            ],
+            "alpha_bounds_sheet": [
+              1074,
+              140,
+              1497,
+              438
+            ],
+            "visible_pixel_count": 91900,
+            "touches_cell_edge": false
+          },
+          {
+            "index": 3,
+            "intended_view": "rear-right",
+            "cell_rect": [
+              0,
+              512,
+              512,
+              1024
+            ],
+            "alpha_bounds_local": [
+              55,
+              92,
+              487,
+              423
+            ],
+            "alpha_bounds_sheet": [
+              55,
+              604,
+              487,
+              935
+            ],
+            "visible_pixel_count": 99840,
+            "touches_cell_edge": false
+          },
+          {
+            "index": 4,
+            "intended_view": "overhead",
+            "cell_rect": [
+              512,
+              512,
+              1024,
+              1024
+            ],
+            "alpha_bounds_local": [
+              94,
+              10,
+              414,
+              448
+            ],
+            "alpha_bounds_sheet": [
+              606,
+              522,
+              926,
+              960
+            ],
+            "visible_pixel_count": 105025,
+            "touches_cell_edge": false
+          },
+          {
+            "index": 5,
+            "intended_view": "empty",
+            "cell_rect": [
+              1024,
+              512,
+              1536,
+              1024
+            ],
+            "alpha_bounds_local": null,
+            "alpha_bounds_sheet": null,
+            "visible_pixel_count": 0,
+            "touches_cell_edge": false
+          }
+        ]
+      },
+      "sha256": "d5b4241b55ec8b616fe43ef169676007be041b683e3ccacce63d7fb2b35f9fd5"
+    },
+    {
+      "id": "09-gas-service-truck",
+      "name": "Gas service truck",
+      "file": "09-gas-service-truck.png",
+      "category": "Crews",
+      "description": "Gas service truck with fixed tool lockers, pipe storage and safety equipment.",
+      "bindings": [
+        "operations jobs[].crewKind: gas",
+        "jobs[].route",
+        "jobs[].returnRoute",
+        "jobs[].visitPoint"
+      ],
+      "futureStates": [
+        "driving",
+        "parked",
+        "working",
+        "returning",
+        "selected",
+        "hover"
+      ],
+      "sizeGuidance": "Use the same vehicle scale and tire-contact convention as the electric line truck and meter van.",
+      "selectedVersion": "initial",
+      "reviewNote": "Initial selected because correction introduced visible background haze. Rear-left and rear-right are near-duplicate camera quadrants. Pipe rack, hose reel and toolbox placement vary or disappear across views. Fifth view retains grille/bumper depth and accessory handedness needs review. Not a validated four-direction rotation set.",
+      "reviewStatus": "needs_review",
+      "duplicateViews": "rear_left_and_rear_right_near_duplicate",
+      "overheadStatus": "front_grille_and_bumper_depth",
+      "image": {
+        "width": 1536,
+        "height": 1024,
+        "mode": "RGBA",
+        "has_alpha": true,
+        "alpha": {
+          "extrema": [
+            0,
+            254
+          ],
+          "fully_transparent_fraction": 0.699795,
+          "at_least_240_fraction": 0.271605,
+          "visible_haze_threshold": 16,
+          "negligible_noise_maximum": 1,
+          "threshold_for_bounds": 16,
+          "empty_cell_extrema": [
+            0,
+            1
+          ],
+          "empty_cell_fraction_above_16": 0.0,
+          "empty_cell_clean_above_16": true
+        },
+        "cells": [
+          {
+            "index": 0,
+            "intended_view": "front-right",
+            "cell_rect": [
+              0,
+              0,
+              512,
+              512
+            ],
+            "alpha_bounds_local": [
+              31,
+              69,
+              474,
+              434
+            ],
+            "alpha_bounds_sheet": [
+              31,
+              69,
+              474,
+              434
+            ],
+            "visible_pixel_count": 90636,
+            "touches_cell_edge": false
+          },
+          {
+            "index": 1,
+            "intended_view": "front-left",
+            "cell_rect": [
+              512,
+              0,
+              1024,
+              512
+            ],
+            "alpha_bounds_local": [
+              26,
+              59,
+              479,
+              434
+            ],
+            "alpha_bounds_sheet": [
+              538,
+              59,
+              991,
+              434
+            ],
+            "visible_pixel_count": 95948,
+            "touches_cell_edge": false
+          },
+          {
+            "index": 2,
+            "intended_view": "rear-left",
+            "cell_rect": [
+              1024,
+              0,
+              1536,
+              512
+            ],
+            "alpha_bounds_local": [
+              42,
+              104,
+              482,
+              417
+            ],
+            "alpha_bounds_sheet": [
+              1066,
+              104,
+              1506,
+              417
+            ],
+            "visible_pixel_count": 87066,
+            "touches_cell_edge": false
+          },
+          {
+            "index": 3,
+            "intended_view": "rear-right",
+            "cell_rect": [
+              0,
+              512,
+              512,
+              1024
+            ],
+            "alpha_bounds_local": [
+              33,
+              95,
+              479,
+              382
+            ],
+            "alpha_bounds_sheet": [
+              33,
+              607,
+              479,
+              894
+            ],
+            "visible_pixel_count": 86529,
+            "touches_cell_edge": false
+          },
+          {
+            "index": 4,
+            "intended_view": "overhead",
+            "cell_rect": [
+              512,
+              512,
+              1024,
+              1024
+            ],
+            "alpha_bounds_local": [
+              148,
+              23,
+              374,
+              464
+            ],
+            "alpha_bounds_sheet": [
+              660,
+              535,
+              886,
+              976
+            ],
+            "visible_pixel_count": 80328,
+            "touches_cell_edge": false
+          },
+          {
+            "index": 5,
+            "intended_view": "empty",
+            "cell_rect": [
+              1024,
+              512,
+              1536,
+              1024
+            ],
+            "alpha_bounds_local": null,
+            "alpha_bounds_sheet": null,
+            "visible_pixel_count": 0,
+            "touches_cell_edge": false
+          }
+        ]
+      },
+      "sha256": "90d92d4ce2d4ad0ba4ec72660447b511f5fc8bb2a585590b97797f77ff44273e"
+    },
+    {
+      "id": "10-meter-technician-van",
+      "name": "Meter technician van",
+      "file": "10-meter-technician-van.png",
+      "category": "Crews",
+      "description": "Compact meter service van with a roof ladder and a consistent sliding-door side.",
+      "bindings": [
+        "operations jobs[].crewKind: meter",
+        "jobs[].route",
+        "jobs[].returnRoute",
+        "jobs[].visitPoint"
+      ],
+      "futureStates": [
+        "driving",
+        "parked",
+        "working at meter",
+        "returning",
+        "selected",
+        "hover"
+      ],
+      "sizeGuidance": "Smaller than the heavy utility trucks. Field, relight and drive-by AMR roles require explicit job bindings and distinct role markings if this design is reused.",
+      "selectedVersion": "corrected",
+      "reviewNote": "Four distinct isometric views preserve windowed versus blank cargo sides and rear double doors. Roof ladder stays visually similar, but strict intrinsic left-side placement relative to overhead requires review. Plan retains grille/headlight faces and bumper depth; strict overhead projection fails.",
+      "reviewStatus": "needs_review",
+      "duplicateViews": "none_obvious",
+      "overheadStatus": "front_grille_and_bumper_depth",
+      "image": {
+        "width": 1536,
+        "height": 1024,
+        "mode": "RGBA",
+        "has_alpha": true,
+        "alpha": {
+          "extrema": [
+            0,
+            254
+          ],
+          "fully_transparent_fraction": 0.663787,
+          "at_least_240_fraction": 0.29723,
+          "visible_haze_threshold": 16,
+          "negligible_noise_maximum": 1,
+          "threshold_for_bounds": 16,
+          "empty_cell_extrema": [
+            0,
+            1
+          ],
+          "empty_cell_fraction_above_16": 0.0,
+          "empty_cell_clean_above_16": true
+        },
+        "cells": [
+          {
+            "index": 0,
+            "intended_view": "front-right",
+            "cell_rect": [
+              0,
+              0,
+              512,
+              512
+            ],
+            "alpha_bounds_local": [
+              32,
+              72,
+              445,
+              452
+            ],
+            "alpha_bounds_sheet": [
+              32,
+              72,
+              445,
+              452
+            ],
+            "visible_pixel_count": 99928,
+            "touches_cell_edge": false
+          },
+          {
+            "index": 1,
+            "intended_view": "front-left",
+            "cell_rect": [
+              512,
+              0,
+              1024,
+              512
+            ],
+            "alpha_bounds_local": [
+              65,
+              71,
+              480,
+              454
+            ],
+            "alpha_bounds_sheet": [
+              577,
+              71,
+              992,
+              454
+            ],
+            "visible_pixel_count": 99615,
+            "touches_cell_edge": false
+          },
+          {
+            "index": 2,
+            "intended_view": "rear-left",
+            "cell_rect": [
+              1024,
+              0,
+              1536,
+              512
+            ],
+            "alpha_bounds_local": [
+              48,
+              99,
+              479,
+              431
+            ],
+            "alpha_bounds_sheet": [
+              1072,
+              99,
+              1503,
+              431
+            ],
+            "visible_pixel_count": 98451,
+            "touches_cell_edge": false
+          },
+          {
+            "index": 3,
+            "intended_view": "rear-right",
+            "cell_rect": [
+              0,
+              512,
+              512,
+              1024
+            ],
+            "alpha_bounds_local": [
+              50,
+              75,
+              479,
+              409
+            ],
+            "alpha_bounds_sheet": [
+              50,
+              587,
+              479,
+              921
+            ],
+            "visible_pixel_count": 96962,
+            "touches_cell_edge": false
+          },
+          {
+            "index": 4,
+            "intended_view": "overhead",
+            "cell_rect": [
+              512,
+              512,
+              1024,
+              1024
+            ],
+            "alpha_bounds_local": [
+              128,
+              13,
+              383,
+              446
+            ],
+            "alpha_bounds_sheet": [
+              640,
+              525,
+              895,
+              958
+            ],
+            "visible_pixel_count": 84239,
+            "touches_cell_edge": false
+          },
+          {
+            "index": 5,
+            "intended_view": "empty",
+            "cell_rect": [
+              1024,
+              512,
+              1536,
+              1024
+            ],
+            "alpha_bounds_local": null,
+            "alpha_bounds_sheet": null,
+            "visible_pixel_count": 0,
+            "touches_cell_edge": false
+          }
+        ]
+      },
+      "sha256": "38a72b3be2331e37a420373ba04f76aa348baa365a06550fb905d4e71c47d209"
+    },
+    {
+      "id": "11-residential-electric-ami-meter",
+      "name": "Residential electric AMI meter module",
+      "file": "11-residential-electric-ami-meter.png",
+      "category": "Meters",
+      "description": "Residential electric AMI meter and weatherproof wall cabinet, drawn as a mountable assembly.",
+      "bindings": [
+        "meters[] electric",
+        "premises[].meterTechnology: AMI",
+        "premises[].services",
+        "service points and registers linked to meter ID"
+      ],
+      "futureStates": [
+        "selected",
+        "hover",
+        "read",
+        "VEE flagged",
+        "missed",
+        "estimated",
+        "last gasp"
+      ],
+      "sizeGuidance": "A small wall attachment. Scale from its mounting face and make it legible through close zoom or a detail panel; never use house-sized sheet scaling.",
+      "selectedVersion": "corrected",
+      "reviewNote": "Four distinct views correctly keep the reading face on the front and a plain mounting plate at the rear. Cabinet latch/port detail is broadly consistent; mounting-tab and hinge details vary slightly. Correction removed the display from the fifth view, but circular cover front ellipse and upright mounting tab remain visible. Not a strict top projection.",
+      "reviewStatus": "needs_review",
+      "duplicateViews": "none_obvious",
+      "overheadStatus": "meter_front_ellipse_and_mounting_tab_visible",
+      "image": {
+        "width": 1536,
+        "height": 1024,
+        "mode": "RGBA",
+        "has_alpha": true,
+        "alpha": {
+          "extrema": [
+            0,
+            254
+          ],
+          "fully_transparent_fraction": 0.719548,
+          "at_least_240_fraction": 0.256805,
+          "visible_haze_threshold": 16,
+          "negligible_noise_maximum": 1,
+          "threshold_for_bounds": 16,
+          "empty_cell_extrema": [
+            0,
+            1
+          ],
+          "empty_cell_fraction_above_16": 0.0,
+          "empty_cell_clean_above_16": true
+        },
+        "cells": [
+          {
+            "index": 0,
+            "intended_view": "front-right",
+            "cell_rect": [
+              0,
+              0,
+              512,
+              512
+            ],
+            "alpha_bounds_local": [
+              197,
+              30,
+              460,
+              488
+            ],
+            "alpha_bounds_sheet": [
+              197,
+              30,
+              460,
+              488
+            ],
+            "visible_pixel_count": 91938,
+            "touches_cell_edge": false
+          },
+          {
+            "index": 1,
+            "intended_view": "front-left",
+            "cell_rect": [
+              512,
+              0,
+              1024,
+              512
+            ],
+            "alpha_bounds_local": [
+              138,
+              28,
+              396,
+              492
+            ],
+            "alpha_bounds_sheet": [
+              650,
+              28,
+              908,
+              492
+            ],
+            "visible_pixel_count": 91721,
+            "touches_cell_edge": false
+          },
+          {
+            "index": 2,
+            "intended_view": "rear-left",
+            "cell_rect": [
+              1024,
+              0,
+              1536,
+              512
+            ],
+            "alpha_bounds_local": [
+              81,
+              48,
+              337,
+              497
+            ],
+            "alpha_bounds_sheet": [
+              1105,
+              48,
+              1361,
+              497
+            ],
+            "visible_pixel_count": 86305,
+            "touches_cell_edge": false
+          },
+          {
+            "index": 3,
+            "intended_view": "rear-right",
+            "cell_rect": [
+              0,
+              512,
+              512,
+              1024
+            ],
+            "alpha_bounds_local": [
+              175,
+              17,
+              431,
+              466
+            ],
+            "alpha_bounds_sheet": [
+              175,
+              529,
+              431,
+              978
+            ],
+            "visible_pixel_count": 85538,
+            "touches_cell_edge": false
+          },
+          {
+            "index": 4,
+            "intended_view": "overhead",
+            "cell_rect": [
+              512,
+              512,
+              1024,
+              1024
+            ],
+            "alpha_bounds_local": [
+              119,
+              121,
+              395,
+              382
+            ],
+            "alpha_bounds_sheet": [
+              631,
+              633,
+              907,
+              894
+            ],
+            "visible_pixel_count": 59181,
+            "touches_cell_edge": false
+          },
+          {
+            "index": 5,
+            "intended_view": "empty",
+            "cell_rect": [
+              1024,
+              512,
+              1536,
+              1024
+            ],
+            "alpha_bounds_local": null,
+            "alpha_bounds_sheet": null,
+            "visible_pixel_count": 0,
+            "touches_cell_edge": false
+          }
+        ]
+      },
+      "sha256": "f08bcf00be17534d709cc6a7ae0cb385569987ae7570c76948e2419af26cee76"
+    },
+    {
+      "id": "12-residential-diaphragm-gas-meter",
+      "name": "Residential diaphragm gas meter module",
+      "file": "12-residential-diaphragm-gas-meter.png",
+      "category": "Meters",
+      "description": "Residential diaphragm gas meter with a service regulator and connected pipe assembly.",
+      "bindings": [
+        "gas meter node meterClass: 250 CFH diaphragm",
+        "gas service regulator",
+        "gas service pressureTier",
+        "premises[].services"
+      ],
+      "futureStates": [
+        "selected",
+        "hover",
+        "in service",
+        "shut off awaiting relight",
+        "meter status badge"
+      ],
+      "sizeGuidance": "A small house-side assembly with explicit inlet/outlet ports and a wall-side orientation. Commercial rotary sets require a separate asset family.",
+      "selectedVersion": "corrected",
+      "reviewNote": "Correction made the two rear views distinct while retaining a plain meter back. Asymmetric inlet regulator and outlet remain recognizable, but elbow orientation and back fasteners vary. Fifth view still shows front reading-window housing, vertical face bolts and regulator front profile; strict overhead projection fails.",
+      "reviewStatus": "needs_review",
+      "duplicateViews": "none_obvious_after_correction",
+      "overheadStatus": "meter_front_panel_and_regulator_profile_visible",
+      "image": {
+        "width": 1536,
+        "height": 1024,
+        "mode": "RGBA",
+        "has_alpha": true,
+        "alpha": {
+          "extrema": [
+            0,
+            254
+          ],
+          "fully_transparent_fraction": 0.723516,
+          "at_least_240_fraction": 0.218516,
+          "visible_haze_threshold": 16,
+          "negligible_noise_maximum": 1,
+          "threshold_for_bounds": 16,
+          "empty_cell_extrema": [
+            0,
+            1
+          ],
+          "empty_cell_fraction_above_16": 0.0,
+          "empty_cell_clean_above_16": true
+        },
+        "cells": [
+          {
+            "index": 0,
+            "intended_view": "front-right",
+            "cell_rect": [
+              0,
+              0,
+              512,
+              512
+            ],
+            "alpha_bounds_local": [
+              135,
+              32,
+              401,
+              504
+            ],
+            "alpha_bounds_sheet": [
+              135,
+              32,
+              401,
+              504
+            ],
+            "visible_pixel_count": 72125,
+            "touches_cell_edge": false
+          },
+          {
+            "index": 1,
+            "intended_view": "front-left",
+            "cell_rect": [
+              512,
+              0,
+              1024,
+              512
+            ],
+            "alpha_bounds_local": [
+              125,
+              91,
+              406,
+              500
+            ],
+            "alpha_bounds_sheet": [
+              637,
+              91,
+              918,
+              500
+            ],
+            "visible_pixel_count": 71767,
+            "touches_cell_edge": false
+          },
+          {
+            "index": 2,
+            "intended_view": "rear-left",
+            "cell_rect": [
+              1024,
+              0,
+              1536,
+              512
+            ],
+            "alpha_bounds_local": [
+              106,
+              65,
+              403,
+              509
+            ],
+            "alpha_bounds_sheet": [
+              1130,
+              65,
+              1427,
+              509
+            ],
+            "visible_pixel_count": 75109,
+            "touches_cell_edge": false
+          },
+          {
+            "index": 3,
+            "intended_view": "rear-right",
+            "cell_rect": [
+              0,
+              512,
+              512,
+              1024
+            ],
+            "alpha_bounds_local": [
+              116,
+              33,
+              429,
+              470
+            ],
+            "alpha_bounds_sheet": [
+              116,
+              545,
+              429,
+              982
+            ],
+            "visible_pixel_count": 81940,
+            "touches_cell_edge": false
+          },
+          {
+            "index": 4,
+            "intended_view": "overhead",
+            "cell_rect": [
+              512,
+              512,
+              1024,
+              1024
+            ],
+            "alpha_bounds_local": [
+              74,
+              151,
+              417,
+              392
+            ],
+            "alpha_bounds_sheet": [
+              586,
+              663,
+              929,
+              904
+            ],
+            "visible_pixel_count": 61931,
+            "touches_cell_edge": false
+          },
+          {
+            "index": 5,
+            "intended_view": "empty",
+            "cell_rect": [
+              1024,
+              512,
+              1536,
+              1024
+            ],
+            "alpha_bounds_local": null,
+            "alpha_bounds_sheet": null,
+            "visible_pixel_count": 0,
+            "touches_cell_edge": false
+          }
+        ]
+      },
+      "sha256": "8cc1f33bbb3ba195bedec4e77e1d8a0c3ad2fec779dfed629318dcb92ec7ff09"
+    }
+  ]
+}
