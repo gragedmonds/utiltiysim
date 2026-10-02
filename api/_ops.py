@@ -48,15 +48,25 @@ def _pack_snapshot(town: str) -> dict | None:
     return orjson.loads(gzip.decompress((PACKS / entry["files"]["snapshot"]["path"]).read_bytes()))
 
 
-def resolve(town: str) -> OpsTown:
-    entry = _pack_entry(town)  # a warm instance reuses a pack town without re-reading its snapshot
-    if entry is not None and (hit := cached_ops_town(entry["townId"])) is not None:
-        return hit
+def town_key(town: str) -> str:
+    """The town id behind a pack preset (or the reference itself), for warm-instance caches."""
+    entry = _pack_entry(town)
+    return entry["townId"] if entry is not None else town
+
+
+def load_snapshot(town: str) -> dict:
     for source in (*SNAPSHOT_SOURCES, _pack_snapshot):
         snap = source(town)
         if snap is not None:
-            return ops_town(snap)
-    raise HTTPException(404, f"unknown town {town!r}: use a pack preset ({', '.join(t['preset'] for t in pack_index()['towns'])}) or a town id")
+            return snap
+    presets = ", ".join(t["preset"] for t in pack_index()["towns"])
+    raise HTTPException(404, f"unknown town {town!r}: use a pack preset ({presets}) or a town id")
+
+
+def resolve(town: str) -> OpsTown:
+    # A warm instance reuses a pack town without re-reading its snapshot.
+    hit = cached_ops_town(town_key(town))
+    return hit if hit is not None else ops_town(load_snapshot(town))
 
 
 class Command(BaseModel):

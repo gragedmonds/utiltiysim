@@ -14,6 +14,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
+from api._m2c import router as m2c_router
 from api._ops import SNAPSHOT_SOURCES, pack_index
 from api._ops import router as ops_router
 from api.store import store
@@ -31,6 +32,7 @@ app.add_middleware(GZipMiddleware, minimum_size=2048)
 app.add_middleware(CORSMiddleware, allow_origins=os.environ.get("CORS_ORIGINS", "*").split(","),
                    allow_methods=["*"], allow_headers=["*"])
 app.include_router(ops_router)  # operations (also the hosted engine's API, api/index.py)
+app.include_router(m2c_router)  # meter-to-cash: reads, VEE, work queues
 SNAPSHOT_SOURCES.append(lambda tid: store.snapshot(tid) if store.status(tid) == "ready" else None)
 
 
