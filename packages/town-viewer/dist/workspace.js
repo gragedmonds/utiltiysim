@@ -68,7 +68,7 @@ const btn=(label,act,extra='')=>`<button type="button" data-ws="${act}" ${extra}
 const field=(label,value,extra='')=>`<div class="gui-field"><span>${e(label)}</span><span class="gui-value ${extra}" title="${value==null?'':e(String(value))}">${value==null||value===''?'—':e(String(value))}</span></div>`;
 const group=(title,body,extra='')=>`<fieldset class="gui-group ${extra}"><legend>${e(title)}</legend>${body}</fieldset>`;
 
-export function installWorkspace({getClient,toast=()=>{},onShowPremise=()=>{},onProcess=()=>{},onWatch=()=>{},root=document.getElementById('workspace-root')}){
+export function installWorkspace({getClient,toast=()=>{},onShowPremise=()=>{},onProcess=()=>{},onWatch=()=>{},onDate=null,root=document.getElementById('workspace-root')}){
  const client=()=>getClient();
  const ui={route:{tx:'exceptions'},category:'My Assigned Cases',status:'Open',query:'',sort:'age',compact:false,veeStatus:'open',veeUtility:'all',veeQuery:'',filters:false,selected:new Set(),historyOpen:false,queries:{installation:'',read:''},queryError:'',context:{installation:null,read:null},rows:[],veeRows:[],caseView:null,record:null,busy:0,message:'',order:null,orderReturn:null,vocab:null,readOrigin:null};
  // Query context: a record page opens only for the record you executed in this session.
@@ -78,7 +78,7 @@ export function installWorkspace({getClient,toast=()=>{},onShowPremise=()=>{},on
   const groups=[...new Set(TRANSACTIONS.map(t=>t[0]))],current=title||TRANSACTIONS.find(t=>t[1]===tx)?.[2]||'';
   return `<header class="sap-transaction-header ${title?'sap-transaction-classic':''}"><span class="sap-emblem">SAP</span><select id="ws-transaction" aria-label="SAP transaction">${title?`<option value="" selected disabled>${e(title)}</option>`:''}${groups.map(g=>`<optgroup label="${g}">${TRANSACTIONS.filter(t=>t[0]===g).map(([,id,label])=>`<option value="${id}" ${!title&&id===tx?'selected':''}>${label}</option>`).join('')}</optgroup>`).join('')}</select><span class="spacer"></span><small>100</small></header>`;
  }
- function statusbar(text){const m=client();return `<footer class="fiori-status"><span class="sap-square green"></span><span>${e(text)}</span><span class="spacer"></span><label class="ws-asof">Run date <input type="date" id="ws-asof" min="2026-01-01" max="2026-12-31" value="${e(m?.asOf||ui.asOf||'')}"></label><span>Engine data</span></footer>`;}
+ function statusbar(text){const m=client();return `<footer class="fiori-status"><span class="sap-square green"></span><span>${e(text)}</span><span class="spacer"></span><label class="ws-asof">Run date <input type="date" id="ws-asof" min="2026-01-01" max="2026-12-31" value="${e(m?.asOf||ui.asOf||'')}"></label>${btn('+1 day','next-day','class="ws-next-day" title="Fast-forward the run one day"')}<span>Engine data</span></footer>`;}
  function empty(text){return `<section class="fiori-shell">${header(ui.route.tx)}<div class="fiori-empty ws-empty">${text}</div>${statusbar('Workspace')}</section>`;}
 
  // ---- Clarification Case List ----------------------------------------------------------------------------------
@@ -233,6 +233,10 @@ export function installWorkspace({getClient,toast=()=>{},onShowPremise=()=>{},on
   else html=casesPage();
   root.innerHTML=html;
  }
+ // The run date is shared with the map (onDate moves the operations day too); every page reloads for the new day.
+ async function setRunDate(day){const m=client();if(!m||!day)return;if(onDate)await onDate(day);if(m.asOf!==day)m.setAsOf(day);if(ui.route.tx==='field-order'&&ui.order?.orderId)loadOrder(ui.order.orderId,ui.order.tab);open(location.hash);}
+ const addDays=(day,n)=>new Date(Date.parse(day+'T12:00:00Z')+n*86400000).toISOString().slice(0,10);
+ async function reloadRecord(kind,id){const m=client();try{if(kind==='installation')ui.bill=await m.installation(id);else ui.readDoc=await m.readDocument(id);ui.asOf=m.asOf;render();}catch(err){if(err.superseded)return;ui.queries[kind]=id;ui.queryError=err.status===404?`${kind==='installation'?'Installation':'Meter reading document'} ${id} does not exist on ${m.asOf}.`:err.message;go({tx:kind==='installation'?'billing-query':'read-query'});}}
  function open(hash){const r=parseWorkspaceRoute(hash);ui.message='';
   // Record pages need the matching executed query in this session; otherwise return to the query.
   if(r.tx==='billing'&&!has('installation',r.record)){go({tx:'billing-query'});return;}
@@ -241,6 +245,9 @@ export function installWorkspace({getClient,toast=()=>{},onShowPremise=()=>{},on
   if(r.tx==='field-order'&&r.record==='new'&&(!ui.order||ui.order.orderId)){go({tx:'exceptions'});return;}
   if(r.tx==='field-order'&&r.record!=='new'&&ui.order?.orderId!==r.record){ui.order=null;loadOrder(r.record);}
   ui.route=r;render();
+  const asOf=client()?.asOf;
+  if(r.tx==='billing'&&asOf&&ui.bill&&ui.bill.asOf!==asOf)reloadRecord('installation',r.record);
+  if(r.tx==='reads'&&asOf&&ui.readDoc&&ui.readDoc.asOf!==asOf)reloadRecord('read',r.record);
   if(r.caseId)loadCase(r.caseId);else if(r.tx==='vee')loadVee();else if(r.tx==='statistics')loadSummary();else if(r.tx==='exceptions'){loadCases();loadCounts();}
  }
  root?.addEventListener('change',ev=>{const t=ev.target;
@@ -250,7 +257,7 @@ export function installWorkspace({getClient,toast=()=>{},onShowPremise=()=>{},on
   else if(t.id==='ws-vee-utility'){ui.veeUtility=t.value;render();}
   else if(t.dataset.readSelect){if(t.checked)ui.selected.add(t.dataset.readSelect);else ui.selected.delete(t.dataset.readSelect);render();}
   else if(t.id==='ws-select-all'){const open=veeRows().filter(r=>!r.resolvedAt);if(t.checked)open.forEach(r=>ui.selected.add(r.caseId));else ui.selected.clear();render();}
-  else if(t.id==='ws-asof'&&t.value){const m=client();m.setAsOf(t.value);toast(`Run date ${t.value}: actions are recorded on this day.`);if(ui.route.tx==='field-order'&&ui.order?.orderId)loadOrder(ui.order.orderId,ui.order.tab);open(location.hash);}
+  else if(t.id==='ws-asof'&&t.value){setRunDate(t.value).then(()=>toast(`Run date ${t.value}: actions are recorded on this day.`));}
   else if(t.dataset.foField||t.dataset.foComponent!=null)captureOrder(t);
  });
  function captureOrder(t){const d=ui.order;if(!d?.editable)return;if(t.dataset.foField){d.fields[t.dataset.foField]=t.type==='checkbox'?t.checked:t.value;delete d.errors[t.dataset.foField];}else{const c=d.components[Number(t.dataset.foComponent)];if(c&&['description','quantity','unit'].includes(t.dataset.foKey)){c[t.dataset.foKey]=t.value;delete d.errors.components;}}}
@@ -263,6 +270,7 @@ export function installWorkspace({getClient,toast=()=>{},onShowPremise=()=>{},on
   const tab=ev.target.closest('[data-fo-tab]');if(tab&&ui.order){ui.order.tab=tab.dataset.foTab;render();return;}
   const b=ev.target.closest('[data-ws]');if(!b||b.disabled)return;const act=b.dataset.ws,m=client(),c=ui.route.caseId?ui.caseView:null;
   if(act==='layout'){ui.compact=!ui.compact;render();}
+  else if(act==='next-day'){const from=m?.asOf||ui.asOf;if(!from)return;const day=addDays(from,1);if(day>'2026-12-31'){toast('The simulated year ends on 31 December 2026.');return;}await setRunDate(day);toast(`Run date ${day}.`);}
   else if(act==='refresh'){loadCases();loadCounts();}
   else if(act==='statistics')go({tx:'statistics'});
   else if(act==='scorecard'){if(ui.scorecard){ui.scorecard=null;render();return;}ui.scorecard=true;render();try{ui.scorecard=await m.scorecard();}catch(err){ui.scorecard=null;if(!err.superseded)toast('Engine: '+err.message);}render();}

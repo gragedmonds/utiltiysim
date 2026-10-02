@@ -373,3 +373,7 @@
 .ws-dialog .small{font-size:11px;color:#7991a2;margin:10px 0 0}
 /* Phones: the order header wraps instead of scrolling the description out of view */
 @media(max-width:700px){.fo-order-line{min-width:0;flex-wrap:wrap}.fo-order-line .fo-field:last-child{flex:1 1 100%}.fo-order-line .fo-field:last-child input{min-width:0}}
+/* Fast-forward a day (map time bar and the Workspace status bar) */
+#next-day{min-height:34px;padding:6px 10px;font:600 12px Inter,ui-sans-serif,sans-serif;flex-shrink:0;border:1px solid #d1dcc9;background:#fff;border-radius:7px;color:#2f4a3d;white-space:nowrap;cursor:pointer}
+#next-day:hover{background:#eef3e7}
+.studio-workspace .fiori-status .ws-next-day{min-height:24px;padding:2px 8px;font-size:12px;margin-left:4px}
