@@ -23,9 +23,11 @@ Done:
 - **Field movement:** walker and drive-by reading rounds on the operations day, with trajectories.
 - **Radial power flow:** voltage, loading, losses and solar reverse flow in every frame. Back-feed only closes a tie
   the receiving feeder can carry.
+- **Radial hydraulics:** water service pressure (Hazen-Williams from the tank grade) and two-tier gas pressure
+  (Weymouth and Spitzglass) in every frame.
 
 Next:
-- looped hydraulics: water (HGL, pressure) and gas (P²), to fill today's `null` loop flows;
+- looped hydraulics, to fill today's `null` loop flows; elevated tanks as sources; leak rates from pressure;
 - tank and pump control;
 - nightly AMI collection visualised;
 - frames over WebSocket.

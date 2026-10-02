@@ -145,6 +145,7 @@ The routes are a table in `focus-ui.js` (`PAGES`). Opening a pack keeps a deep-l
   - `attachPowerFlow` keeps `premises.voltage`, the electric `loading` and `lossesKW` from each frame (`flow.voltage`, `flow.loading`, `flow.lossesKW`, `flow.lowVoltage`).
   - The electric service tab shows a "Power quality" section: service voltage against ANSI Range A, the transformer's loading, and network losses.
   - `OutageMarks` adds a small violet ring at premises outside 114–126 V.
+  - The water and gas service tabs show a "Pressure" section from `premises.pressure` (kPa and psi, or inches of water column for low-pressure gas).
 - `timeline.meterToCash` (the linked run's day) shows as expanding rings for 30 sim-minutes at each step (`cycleGroups`, `CYCLE_COLOR`): 02:00 AMI collection (blue, or red when missed), 18:00 VEE flags (amber), 19:30 bills (green), 20:00 invoices (violet). The "Meter-to-cash today" card lists them.
 - `clock.tempC` shows by the clock status.
 

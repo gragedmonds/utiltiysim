@@ -14,6 +14,7 @@ import numpy as np
 
 from utilsim.config.model import SimConfig
 from utilsim.sim.flows import FlowInputs, FlowModel, NetInputs
+from utilsim.sim.hydraulics import HydParams
 from utilsim.sim.state import FrameBuilder, FrameContext
 from utilsim.sim.usage import UsageInputs, monthly_daily
 from utilsim.sim.voltage import ElecParams
@@ -99,7 +100,9 @@ class OpsTown:
             leak_m3h=float(cfg["scenario"]["leak_m3h"]),
             monthly=monthly_daily(UsageInputs.from_snapshot(snap), self.sim_config),
             elec=ElecParams.from_edges(snap["networks"]["electric"]["edges"],
-                                       [nd["kind"] for nd in snap["networks"]["electric"]["nodes"]]))
+                                       [nd["kind"] for nd in snap["networks"]["electric"]["nodes"]]),
+            hyd={u: HydParams.from_network(u, snap["networks"][u]["edges"], snap["networks"][u]["nodes"])
+                 for u in ("water", "gas")})
         self.context = FrameContext(
             id=self.id, topology=snap["topologyRevision"], index=snap["indexRevision"], timezone=self.timezone,
             origin_lat=float(origin["lat"]), origin_lon=float(origin["lon"]), premise_ids=self.premise_ids,

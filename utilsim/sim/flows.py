@@ -19,6 +19,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from utilsim.sim.hydraulics import HydParams
+from utilsim.sim.hydraulics import solve as solve_pressure
 from utilsim.sim.shapes import hourly
 from utilsim.sim.voltage import ElecParams, VoltageResult, solve
 
@@ -47,6 +49,7 @@ class FlowInputs:
     leak_m3h: float
     monthly: dict[str, np.ndarray] | None = None  # the same per month (12, n), from the weather year
     elec: ElecParams | None = None  # impedances and ratings for the electric power flow (sim.voltage)
+    hyd: dict[str, HydParams] | None = None  # water and gas pressures (sim.hydraulics)
 
     @classmethod
     def from_town(cls, town) -> FlowInputs:
@@ -68,11 +71,25 @@ class FlowInputs:
                 unit=net.unit)
         monthly = monthly_daily(UsageInputs.from_premises(town.prem), town.cfg)
         el = town.networks["electric"]
-        elec = ElecParams.from_edges([{**e.attrs, "kind": e.kind, "lengthM": e.length} for e in el.edges],
-                                     [nd.kind for nd in el.nodes])
+        elec = ElecParams.from_edges([_edge_dict(e, el) for e in el.edges], [nd.kind for nd in el.nodes])
+        hyd = {u: HydParams.from_network(u, [_edge_dict(e, town.networks[u]) for e in town.networks[u].edges],
+                                         [_node_dict(nd) for nd in town.networks[u].nodes]) for u in ("water", "gas")}
         return cls(nets, {k: v[6] for k, v in monthly.items()}, np.asarray(town.prem.attrs["occupied"], dtype=bool),
                    np.asarray(town.prem.attrs["has_gas"], dtype=bool), list(town.prem.ids), town.cfg.scenario.leak_m3h,
-                   monthly, elec)
+                   monthly, elec, hyd)
+
+
+def _edge_dict(e, net) -> dict:
+    """A generated edge in the snapshot's shape (what ``sim.voltage`` and ``sim.hydraulics`` read)."""
+    d = {**e.attrs, "kind": e.kind, "lengthM": e.length, "id": e.id, "from": net.nodes[e.a].id,
+         "to": net.nodes[e.b].id}
+    if e.size_mm and "sizeMm" not in d:
+        d["sizeMm"] = e.size_mm
+    return d
+
+
+def _node_dict(nd) -> dict:
+    return {**nd.attrs, "id": nd.id, "kind": nd.kind}
 
 
 @dataclass
@@ -83,6 +100,7 @@ class FlowResult:
     unit: dict[str, str]
     unsupplied: dict[str, np.ndarray] | None = None  # per commodity, bool per premise (no source reaches its meter)
     voltage: VoltageResult | None = None  # electric power flow: voltages, loading, losses
+    pressure: dict[str, np.ndarray] | None = None  # water and gas: kPa per premise (sim.hydraulics)
 
 
 @dataclass
@@ -185,7 +203,7 @@ class FlowModel:
         d = hourly(daily, inp.occupied, inp.has_gas, hour, scenario, ti, inp.leak_m3h)
         source, edge_flows, unit, unsupplied = {}, {}, {}, {}
         homes = dict(d)
-        voltage = None
+        voltage, pressure = None, {}
         for u, net in inp.nets.items():
             dis = None if disabled is None else disabled.get(u)
             cl = None if closed is None else closed.get(u)
@@ -225,4 +243,6 @@ class FlowModel:
                 for lvl in reversed(f.levels[1:]):
                     np.add.at(load, f.parent[lvl], load[lvl])
                 voltage = solve(inp.elec, f, tot, load, net.meter, len(inp.premise_ids))
-        return FlowResult(source, edge_flows, homes, unit, unsupplied, voltage)
+            if inp.hyd is not None and u in inp.hyd:
+                pressure[u] = solve_pressure(inp.hyd[u], f, tot, net.meter, len(inp.premise_ids))
+        return FlowResult(source, edge_flows, homes, unit, unsupplied, voltage, pressure or None)

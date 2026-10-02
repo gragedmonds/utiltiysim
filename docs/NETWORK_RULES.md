@@ -50,6 +50,25 @@ corridor share, severe turns (≥ 60°) and corridor changes per trunk km, hiera
 transitions along trunk continuations, express km, feeders, ties, corridor components (`disconnectedCorridorComponents`
 counts arterial/collector islands beyond the first). The same numbers are reported for all primary (`primary`).
 
+**Hydraulics** (`utilsim/sim/hydraulics.py`, every frame): radial, on the same forest as the flows.
+
+Water:
+- Hazen-Williams head loss, with C 150 for PVC, 140 for copper, 130 for ductile iron and 120 for concrete.
+- The grade starts at the zone tank's overflow, held there by the pump station. It resets to another zone's tank
+  where a pipe enters that zone.
+- Service pressure is grade minus elevation. On Ayr it is about 410–570 kPa (59–83 psi) and follows the ground.
+
+Gas:
+- Medium-pressure pipes use Weymouth P², starting from the city gate outlet.
+- Low-pressure pipes use Spitzglass, starting from a district regulator's outlet.
+- Low-pressure services stay between 1.5 and 1.74 kPa at a January peak.
+
+Known limits:
+- Loops carry no flow in the radial model, so looped areas read a little low.
+- The elevated tank is not a source. Isolating the main at the pump station cuts off the town, though in reality
+  the tank would carry it for hours.
+- A main break's leak is a fixed 40 m³/h, too small to move pressure on mains sized for fire flow.
+
 ## Gas (defaults: 414 kPa / 60 psig MP, 1.74 kPa / 7" w.c. LP)
 
 | Rule | Value |

@@ -153,6 +153,8 @@ class FrameBuilder:
                 prem[u] = _clean(v, 5)
             if res.voltage is not None and scenario != "substation_outage":
                 prem["voltage"] = _clean(res.voltage.premise_v, 1)  # service voltage on a 120 V base
+            if res.pressure:  # service pressure, kPa gauge (sim.hydraulics)
+                prem["pressure"] = {u: _clean(np.where(ctx.served[u], v, np.nan), 2) for u, v in res.pressure.items()}
             lost = {u: [ctx.premise_ids[i] for i in np.flatnonzero(m & ctx.served[u])]
                     for u, m in (res.unsupplied or {}).items() if (m & ctx.served[u]).any()}
             if lost:

@@ -223,6 +223,8 @@ null if still out at the end of the day; the meter-to-cash run's `outages`), `re
 Frames from `/api/sim/frame` add `premises.unsupplied` (`{electric: [premiseId…], …}`) when anyone is without supply.
 Every frame also carries the radial power flow: `networks.electric.loading` per edge (apparent power over capacity),
 `networks.electric.lossesKW`, and `premises.voltage` (service voltage on a 120 V base, null when unsupplied).
+They also carry `premises.pressure.water` and `premises.pressure.gas`: service pressure in kPa gauge from the radial
+hydraulics. It is null when the premise is unsupplied or not served.
 
 Back-feed closes a tie only if the feeder picking up the load stays within `tieMaxLoading` (1.3, the emergency
 rating) and every customer keeps at least `tieMinVoltage` (110 V), checked hourly across the repair. Otherwise the
