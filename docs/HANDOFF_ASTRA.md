@@ -240,6 +240,36 @@ order), so the map and the Workspace share them; the fixture ids (`7100000318`, 
 The Studio's "Schedule visit" maps to the order's basic start (save before release); there is no separate schedule
 action. A dispatched order shows on the map on its start date as a `field_order` job with `orderId`.
 
+## 10b. Collections, outage follow-up and AMI collectors (Workspace)
+
+New engine contracts, all with the run identity body (`EngineM2C.body()`); details in `docs/M2C.md` "Collections"
+and what drives each page in `docs/STUDIO_BILLING.md`:
+
+| Page | Engine | `EngineM2C` |
+|---|---|---|
+| Collections worklists (disconnection notices, winter moratorium holds, rejected payments, overdue accounts) | `POST /api/m2c/collections {list, status, sort, page, pageSize, search, commodity}` → `m2c-collections/1.0` rows with `actions` and `flags`, plus `counts` for the nav | `collections(params)` |
+| Collections account | `POST /api/m2c/collections/account {accountId}` → `m2c-collections-account/1.0` | `collectionsAccount(id)` |
+| Outage follow-up | `POST /api/m2c/outage-followup {utility, kind, status, outageId, search, page}` → `m2c-outage-followup/1.0` | `outageFollowup(params)` |
+| Missed reads by AMI collector | `POST /api/m2c/collector-groups {status, collector, minCases, page}`; a group's cases: `queue({collector, createdOn})` | `collectorGroups(params)` |
+| Run statistics for a period | `POST /api/m2c/summary {since}` adds `window` | `summary(since)` |
+
+- **Actions** (append-only, 09:00 on the run date, through `act(type, null, null, extra)`): `payment_arrangement
+  {accountId, instalments, note?}`, `extend_due {invoiceId, days, note?}`, `dunning_hold {accountId, days, note}`,
+  `low_income_referral {accountId, note?}`, `budget_billing {accountId, note?}`, `waive_fee {invoiceId, fee,
+  note?}`, `disconnect_approve {invoiceId, note?}`, `disconnect_cancel {invoiceId, note}`. Show a button only when the
+  row's (or account's, or invoice's) `actions` lists it; `waive_fee:late_fee` / `waive_fee:nsf_fee` name the fee.
+- **Categories:** Low Income Process and Budget Bill Cases now have engine cases (`LOW_INCOME`, `BUDGET_BILL`, queue
+  `COLLECTIONS`): the call centre opens some at the run's rates and your referrals and enrolments add to them. Their
+  case view has `collections` (the account's overdue, referral outcome or plan) and `studioActions` note and assign
+  only.
+- **Rows and case views** carry `collectorId` and `collectorCases` (missed reads on the same collector that day); a
+  case view adds `network {collectorId, mountedOn, mountId, day, cases, relatedCases[]}`.
+- **Production viewer:** `workspace-collections.js` holds these pages, mounted by `workspace.js` (sidebar
+  "Collections" and "Meter Reading" sections, a "Collections" group in the transaction picker, a collector strip on
+  Meter Read Follow-Up, the AMI Network and Account Collections groups on a case, and a period selector on Run
+  statistics). Routes: `#/workspace/collections/<list>`, `#/workspace/account/<id>`, `#/workspace/outages`,
+  `#/workspace/collector/<id>/<day>`.
+
 ## 11. The isometric map (your pixel art)
 
 The map tab now draws your sprite sheets: `iso-scene.js` (Canvas 2D, same calls as `TownScene`) and `iso-art.js`
