@@ -14,7 +14,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
-from api._ops import SNAPSHOT_SOURCES
+from api._ops import SNAPSHOT_SOURCES, pack_index
 from api._ops import router as ops_router
 from api.store import store
 from utilsim.config import SCENARIOS, SimConfig, config_schema, list_presets, load_preset
@@ -62,7 +62,8 @@ def _town(tid: str):
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "generatorVersion": GENERATOR_VERSION, "schemaVersion": SCHEMA_VERSION}
+    return {"status": "ok", "generatorVersion": GENERATOR_VERSION, "schemaVersion": SCHEMA_VERSION,
+            "towns": [t["preset"] for t in pack_index()["towns"]]}
 
 
 @app.get("/api/schemas/{name}.json")
