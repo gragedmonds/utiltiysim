@@ -353,3 +353,21 @@
 .studio-workspace .ws-count{float:right;background:#dfe9f3;color:#2d4a63;border-radius:8px;padding:0 6px;font-size:11px;line-height:17px;margin-left:6px}
 .studio-workspace .ws-stats{margin-bottom:6px}
 .studio-workspace .ws-scorecard{background:#fff;border:1px solid #c9d6e2;padding:12px;margin-top:10px}
+/* Workspace record screens (Display Billing / Display Meter Reading Results) fill the page under the transaction header */
+.studio-workspace .ws-sap{flex:1;min-height:0;display:flex;flex-direction:column;border:0;box-shadow:none}
+.studio-workspace .ws-sap .sap-toolbar,.studio-workspace .ws-sap .sap-tabs{flex-shrink:0}
+.studio-workspace .ws-sap .sap-body{flex:1;min-height:0;overflow:auto;padding-bottom:18px}
+.studio-workspace .ws-sap .sap-section-title{font-size:14px;font-weight:400;margin:18px 0 8px;color:#193b53}
+.studio-workspace .ws-sap .sap-explain{margin-top:10px;padding:8px 10px;font-size:12px;color:#486a82;background:#f3f8fc;border:1px solid #d6e4ef}
+.studio-workspace .ws-sap .sap-link{font:inherit;color:#1d63a8;background:none;border:0;padding:0;text-decoration:underline;cursor:pointer;min-height:0}
+.studio-workspace .ws-sap .sap-field .sap-input{max-width:340px;overflow:hidden;text-overflow:ellipsis}
+.studio-workspace .fo-tabs .fo-tab-error{color:#b3261e;font-weight:700;margin:0 6px 0 -4px;align-self:center}
+/* Case notes, holds, releases and field outcomes */
+.ws-dialog{border:1px solid #849aaa;padding:0 12px 12px;width:min(520px,calc(100vw - 32px));background:#f5f9fc;box-shadow:0 12px 40px #0b1d2c40}
+.ws-dialog::backdrop{background:#0b1d2c55}
+.ws-dialog .dialog-head{display:flex;align-items:center;justify-content:space-between;gap:10px;background:linear-gradient(#dbe8f1,#aec5d8);margin:0 -12px 6px;padding:5px 10px;border-bottom:1px solid #9bafbf;min-height:34px}
+.ws-dialog .dialog-head h2{font:bold italic 16px Arial,sans-serif;margin:0;color:#111820}
+.ws-dialog .dialog-head button{border:1px solid #849aaa;background:#d9e8f2;color:#37556f;width:22px;height:22px;font-size:18px;line-height:16px;padding:0}
+.ws-dialog .read-review-actions{display:flex;gap:8px}
+.ws-dialog .read-review-actions button{border:1px solid #9bb3c6;background:#e9f1f7;color:#23506f;padding:6px 12px;font:13px Arial,sans-serif}
+.ws-dialog .small{font-size:11px;color:#7991a2;margin:10px 0 0}

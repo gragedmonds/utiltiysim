@@ -176,8 +176,23 @@ phone quality profiles and WebGL recovery.
     follows the van from the depot.
 - Configuration has your tabs: Town & meters, Process & costs (the meter-to-cash schema), Scenario (operations
   settings from `/api/sim/settings/schema`) and Engine & data.
-- Field service orders (draft, release, dispatch, complete), notes, ownership, invoice holds and the billing and read
-  lookups are being added to the engine. Until then their buttons say so.
+- Engine-backed record screens (section 10 has the engine side):
+  - **Display Billing** shows Bil. Order, Bil.Time and Documents tabs. From the billing record you can reach the
+    contract (with the account ledger), the installation, a device, a billing document with its line items, a print
+    document with its payments and dunning, and the meter-reading results.
+  - **Display Meter Reading Results** shows the reading, its VEE tests, its clarification case and order, and the
+    register's history. Opening a reading from the billing record keeps the "‹ Back" to billing. Opening the
+    installation from a standalone reading returns to the installation query, filled in but not executed.
+- **Field service order form:** HeaderData, Operations, Components and Partner tabs, with Release & Save, Save Draft,
+  Dispatch, Complete, "Watch the truck roll" and "‹ Back to source".
+  - It opens from a clarification case, or from exactly one selected open reading.
+  - Reopening from the same source reuses the order.
+  - The form checks the release rules before sending them. The engine checks them again, and field errors from
+    either one mark the fields and their tabs.
+  - Labels, choices, required fields and units come from `GET /api/m2c/vocabulary`.
+- **Case work:** Take ownership, Add note, Do Not Invoice Account, Remove Invoice Hold, and Release billing / invoice
+  outsort (which takes a reason). Each button appears only when the engine lists the action for that case on the
+  run date. While an invoice hold is on, the release is not offered.
 
 ## 10. Utility Studio seams (engine side)
 
