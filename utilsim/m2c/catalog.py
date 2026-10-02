@@ -15,6 +15,7 @@ EVENTS: dict[str, tuple[str, str, str, float, float, float]] = {
     "VACANT_CONSUMING": ("Vacant but consuming", "🏚️", "vee", 0, 0.25, 0),
     "PERIOD_LENGTH": ("Odd read period", "📅", "vee", 0, 0.25, 0),
     "ERRATIC": ("Erratic pattern", "〰️", "vee", 0, 0.25, 0),
+    "PERSISTENT_LOW": ("Persistent low use", "🐢", "vee", 0, 0.25, 0),
     "CONSECUTIVE_ESTIMATES": ("Consecutive estimates", "🔁", "vee", 0, 0.25, 0),
     # Work management (must appear on every exception path).
     "EXCEPTION_QUEUED": ("Exception queued", "📥", "wm", 0, 0.10, 0),
@@ -61,8 +62,8 @@ EDGE_TYPES = ("caused_by", "triggered", "resulted_in", "blocked_by", "resolved_b
 
 # Exception types in the order an RPA programme automates them (process.rpa_coverage picks the first share).
 EXCEPTIONS = ("COMM_FAIL", "NO_ACCESS", "NO_READ", "ZERO_USAGE", "BILL_CREDIT", "LOW_USAGE", "PERIOD_LENGTH",
-              "ERRATIC", "HIGH_USAGE", "VACANT_CONSUMING", "REGISTER_REGRESSION", "CONSECUTIVE_ESTIMATES",
-              "RATE_CLASS", "HIGH_BILL")
+              "ERRATIC", "HIGH_USAGE", "VACANT_CONSUMING", "REGISTER_REGRESSION", "PERSISTENT_LOW",
+              "CONSECUTIVE_ESTIMATES", "RATE_CLASS", "HIGH_BILL")
 BILL_TYPES = ("HIGH_BILL", "BILL_CREDIT", "RATE_CLASS")
 MISSING_TYPES = ("COMM_FAIL", "NO_ACCESS", "NO_READ", "CONSECUTIVE_ESTIMATES")
 

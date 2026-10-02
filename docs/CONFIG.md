@@ -347,6 +347,8 @@ Validation, estimation and editing: the five-test battery, confidence and dispos
 | `accept_confidence` | `0.75` | 0–1 |  | Auto-accept at or above this confidence. *Affects: auto-accept rate, billing errors.* |
 | `reject_confidence` | `0.35` | 0–1 |  | Reject below this confidence. |
 | `escalate_impact` | `150.0` | 0–10000 | $ | Escalate a doubtful read when its bill impact exceeds this. *Affects: supervisor workload.* |
+| `trend_ratio` | `0.8` | 0.3–1.0 |  | Persistent low use: flag reads below this share of expected … *Affects: slow and tampered meters found.* |
+| `trend_periods` | `3` | 2–12 |  | … for this many periods in a row. |
 | `estimation` | `prior_year` |  |  | Estimation method for missing or rejected reads. |
 | `history_noise` | `0.1` | 0–0.5 |  | (advanced) Spread of prior-year history around this year's normal usage. |
 

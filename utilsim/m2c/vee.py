@@ -33,6 +33,7 @@ class Batch:
     moved: np.ndarray  # move-in or move-out inside the period
     consec: np.ndarray  # estimates in a row before this read
     prior_cases: np.ndarray  # implausible-value cases on this register in the last 180 days
+    low_streak: np.ndarray  # released reads in a row below trend_ratio of expected (before this one)
     manual: np.ndarray
     price: np.ndarray  # $ per unit incl. tax (bill impact)
 
@@ -80,6 +81,9 @@ def run(b: Batch, vee) -> Result:
     # 3. Consistency (erratic band, recent estimates).
     erratic = big & ((ratio > 1.6) | (ratio < 0.55)) & ~b.export
     risk[:, 2] = np.where(erratic, np.where(b.consec > 0, 0.12, 0.08), np.where(b.consec > 0, 0.03, 0.0))
+    # Persistent under-registration: this read and the previous ones all below trend_ratio of expected.
+    trend = big & ~b.export & (ratio < vee.trend_ratio) & (b.low_streak + 1 >= vee.trend_periods)
+    risk[:, 2] = np.where(trend, np.maximum(risk[:, 2], 0.16), risk[:, 2])
     # 4. Process corroboration (repeat exceptions on the device).
     risk[:, 3] = np.minimum(0.25, 0.06 * b.prior_cases)
     # 5. Context signals (vacancy, technology).
@@ -94,6 +98,7 @@ def run(b: Batch, vee) -> Result:
     disp = np.where(b.regression, 3, disp)
     exc = np.full(n, "", dtype=object)
     exc = np.where(risk[:, 2] > 0, "ERRATIC", exc)
+    exc = np.where(trend, "PERSISTENT_LOW", exc)
     exc = np.where(risk[:, 1] > 0, "PERIOD_LENGTH", exc)
     exc = np.where(low, "LOW_USAGE", exc)
     exc = np.where(high, "HIGH_USAGE", exc)
@@ -124,6 +129,8 @@ def explain(test: int, risk: float, *, code: str | None, ratio: float, days: flo
         return f"{days:.0f}-day period is outside {vee.min_period_days}–{vee.max_period_days} days."
     if test == 2:
         parts = []
+        if risk >= 0.16 and ratio < vee.trend_ratio:
+            parts.append(f"use has stayed below {vee.trend_ratio:.0%} of expected for {vee.trend_periods}+ periods")
         if risk and (ratio > 1.6 or ratio < 0.55):
             parts.append(f"use is erratic against history ({ratio:.2f}×)")
         if consec:

@@ -232,6 +232,7 @@ class M2CRun:
         self.prev_t = self.read_t[:, 0].copy()
         self.prev_normal = adv.copy()
         self.consec = np.zeros(R, dtype=np.int64)
+        self.low_streak = np.zeros(R, dtype=np.int64)  # released actual reads in a row below trend_ratio
         self.open_case = np.full(R, -1, dtype=np.int64)
         self.case_days: dict[int, list[float]] = {}
         self.cases: list[Case] = []
@@ -456,7 +457,11 @@ class M2CRun:
             cons=np.where(missed, 0.0, cons), regression=regression & ~missed, days=t - self.prev_t[rows],
             expected=expected, unit=tw.unit[rows], export=tw.direction[rows] == "export",
             occupied=tw.occupied[prem], moved=moved, consec=self.consec[rows], prior_cases=prior,
-            manual=tech == "MANUAL", price=self.price[rows]), c.vee)
+            manual=tech == "MANUAL", price=self.price[rows], low_streak=self.low_streak[rows]), c.vee)
+        # Trend memory for the next period: actual reads below the trend ratio extend the streak, others end it.
+        low = ~missed & (res.ratio < c.vee.trend_ratio) & (expected >= np.array([vee_mod.MIN_EXPECTED.get(u, 1.0)
+                                                                                  for u in tw.unit[rows]]))
+        self.low_streak[rows] = np.where(missed, self.low_streak[rows], np.where(low, self.low_streak[rows] + 1, 0))
         self.risk[rows, m] = np.where(missed[:, None], 0.0, res.risk)  # no read, nothing validated
         self.code[rows, m] = np.where(missed, -1, res.code)
         self.ratio[rows, m] = np.where(missed, np.nan, res.ratio)

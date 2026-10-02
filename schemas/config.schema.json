@@ -2186,6 +2186,25 @@
           "title": "Reject Confidence",
           "type": "number"
         },
+        "trend_periods": {
+          "default": 3,
+          "description": "… for this many periods in a row.",
+          "maximum": 12,
+          "minimum": 2,
+          "title": "Trend Periods",
+          "type": "integer"
+        },
+        "trend_ratio": {
+          "default": 0.8,
+          "description": "Persistent low use: flag reads below this share of expected …",
+          "maximum": 1.0,
+          "minimum": 0.3,
+          "title": "Trend Ratio",
+          "type": "number",
+          "x-effects": [
+            "slow and tampered meters found"
+          ]
+        },
         "zero_at_occupied": {
           "default": true,
           "description": "Flag zero consumption at an occupied premise.",
