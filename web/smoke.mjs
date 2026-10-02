@@ -22,7 +22,8 @@ await page.waitForFunction(() => document.getElementById('loading')?.hidden === 
 await page.setInputFiles('#snapshot-file', snapFile);
 await page.waitForFunction(() => document.getElementById('source-badge')?.textContent === 'ENGINE SNAPSHOT', null, {timeout: 120000});
 await page.setInputFiles('#state-file', path.join(dir, 'replay-day.json'));
-await page.waitForFunction(() => /Frame/.test(document.getElementById('state-status')?.textContent || ''), null, {timeout: 60000});
+await page.waitForFunction(() => /run-/.test(document.getElementById('state-status')?.textContent || ''), null, {timeout: 60000});
+if (await page.isHidden('#search-input')) await page.click('#search-toggle');  // search lives in a pop-out
 await page.fill('#search-input', pick);
 await page.press('#search-input', 'Enter');
 await page.click('#search-results button');
