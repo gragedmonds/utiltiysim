@@ -1,35 +1,35 @@
 {
-  "generatorVersion": "0.2.0",
+  "generatorVersion": "0.3.0",
   "cases": {
     "whitby-120-T120": {
       "roads": "350fd790f7b9a4a6",
-      "premises": "4c900dfc99ccb081",
+      "premises": "4c19e45a6382e383",
       "buildings": "536e20cc732ff9b0",
       "parcels": "a47f40ebb5af6b1e",
       "facilities": "2c14ce11c246f1ff",
       "networks": "4afdc8a706a683d5",
       "accounts": "df378d6850faab23",
       "contracts": "c5e30fde26f65d00",
-      "meters": "edf232bba2ab76a2",
+      "meters": "279102952ebc4a83",
       "registers": "ace94ea090b792a9",
       "mrus": "699dc9d52d654f53",
-      "sampleReads": "9dfac120e2c8f119",
-      "townId": "town-a59a932446878a34"
+      "sampleReads": "5ebd410aaada2836",
+      "townId": "town-f02eff61dc4491d5"
     },
     "synthetic-600-42": {
       "roads": "1652ee8787b24e9d",
-      "premises": "75c6d846233ed84b",
+      "premises": "0226f7ba6982ef73",
       "buildings": "6aa427a03b747002",
       "parcels": "5833c6f8603fa4c6",
       "facilities": "b39f20cc131a7f5d",
       "networks": "1d48f120fe0c6fc6",
       "accounts": "6057776e4402fb6e",
       "contracts": "3ab12418c76a0e7a",
-      "meters": "1aa6862a82f8ab8c",
+      "meters": "6c339c8241b55484",
       "registers": "a7baceaf2e002e32",
       "mrus": "06761a57828f9cca",
-      "sampleReads": "0d1501afeb6706f3",
-      "townId": "town-7455c25eb857790a"
+      "sampleReads": "04bdf8c3c3c6beef",
+      "townId": "town-06489ce1a2a97d53"
     }
   }
 }

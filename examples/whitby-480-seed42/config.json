@@ -257,7 +257,17 @@
     "analyst_queue_days_min": 1,
     "analyst_queue_days_max": 3,
     "carry_rate_per_day": 1.25,
-    "receivable_carry_ratio": 0.4
+    "receivable_carry_ratio": 0.4,
+    "analysts": 2,
+    "analyst_hours_per_day": 6.0,
+    "review_minutes_min": 15.0,
+    "review_minutes_max": 30.0,
+    "supervisors": 1,
+    "supervisor_hours_per_day": 2.0,
+    "supervisor_minutes": 40.0,
+    "field_orders_per_day": 6,
+    "field_days_min": 1,
+    "analyst_accuracy": 0.95
   },
   "anomalies": {
     "enabled": true,
@@ -279,5 +289,27 @@
     "target_premise": null,
     "leak_m3h": 0.65,
     "tick_minutes": 5
+  },
+  "reading": {
+    "ami_missed_read": 0.012,
+    "amr_missed_read": 0.03,
+    "manual_no_access": 0.06,
+    "no_access_repeat": 0.4,
+    "read_cost_ami": 0.1,
+    "read_cost_amr": 0.35,
+    "read_cost_manual": 1.2
+  },
+  "vee": {
+    "high_ratio": 2.0,
+    "low_ratio": 0.35,
+    "zero_at_occupied": true,
+    "max_consecutive_estimates": 2,
+    "min_period_days": 25,
+    "max_period_days": 38,
+    "accept_confidence": 0.75,
+    "reject_confidence": 0.35,
+    "escalate_impact": 150.0,
+    "estimation": "prior_year",
+    "history_noise": 0.1
   }
 }

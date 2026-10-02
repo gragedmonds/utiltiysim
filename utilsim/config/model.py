@@ -349,7 +349,8 @@ class CustomersBillingConfig(BaseModel):
 
 
 class ProcessConfig(BaseModel):
-    model_config = group("Meter-to-cash process", 11, "Work queues, automation, costs and carrying cost.")
+    model_config = group("Meter-to-cash process", 11, "Work queues, automation, workforce, costs and carrying cost.",
+                         applies="run")
     sequences: str = F("builtin", "Activity sequence library: 'builtin' or a path to a YAML file.")
     rpa_coverage: float = F(0.35, "Share of exception types with an RPA/auto-resolve rule.", ge=0, le=1,
                             effects=["analyst workload", "days to invoice", "carrying cost"])
@@ -359,11 +360,28 @@ class ProcessConfig(BaseModel):
                                   le=20)
     receivable_carry_ratio: float = F(0.4, "Receivable carry as a share of the billing carry rate.", ge=0, le=1,
                                       advanced=True)
+    analysts: int = F(2, "Billing analysts working the exception queues.", ge=0, le=200,
+                      effects=["queue backlog", "days to bill", "carrying cost"])
+    analyst_hours_per_day: float = F(6.0, "Productive queue hours per analyst per business day.", unit="h", ge=0.5,
+                                     le=10)
+    review_minutes_min: float = F(15.0, "Shortest analyst review.", unit="min", ge=1, le=240, advanced=True)
+    review_minutes_max: float = F(30.0, "Longest analyst review.", unit="min", ge=1, le=480, advanced=True)
+    supervisors: int = F(1, "Supervisors approving escalations.", ge=0, le=50, effects=["escalation backlog"])
+    supervisor_hours_per_day: float = F(2.0, "Supervisor hours on escalations per business day.", unit="h", ge=0.25,
+                                        le=10, advanced=True)
+    supervisor_minutes: float = F(40.0, "Supervisor review time per escalation.", unit="min", ge=5, le=240,
+                                  advanced=True)
+    field_orders_per_day: int = F(6, "Meter investigations, re-reads and exchanges completed per business day.",
+                                  ge=0, le=500, effects=["field order backlog", "estimates"])
+    field_days_min: int = F(1, "Earliest a field order is worked after it is raised.", unit="d", ge=0, le=20,
+                            advanced=True)
+    analyst_accuracy: float = F(0.95, "Share of reviews where the analyst finds the true cause.", ge=0.5, le=1,
+                                advanced=True, effects=["billing errors", "wasted truck rolls"])
 
 
 class AnomaliesConfig(BaseModel):
     model_config = group("Meter & read anomalies", 12, "Injected faults with ground truth. Rates per 1,000 meters "
-                         "per year.")
+                         "per year.", applies="run")
     enabled: bool = F(True, "Inject anomalies into observed reads (truth is always kept separately).")
     leak: float = F(8.0, "Continuous post-meter water leaks.", ge=0, le=200)
     stuck_meter: float = F(5.0, "Registers that stop advancing.", ge=0, le=200)
@@ -377,6 +395,43 @@ class AnomaliesConfig(BaseModel):
                                              le=100)
     vacant_consuming: float = F(3.0, "Vacant premises that still consume.", ge=0, le=100)
     tamper: float = F(1.0, "Bypass/tamper (50–90% under-registration).", ge=0, le=50)
+
+
+class ReadingConfig(BaseModel):
+    model_config = group("Meter reading", 14, "How periodic billing reads succeed or fail, by meter technology.",
+                         applies="run")
+    ami_missed_read: float = F(0.012, "AMI billing reads still missing after the head-end retry window.", ge=0, le=0.5,
+                               effects=["comm-fail exceptions", "estimates"])
+    amr_missed_read: float = F(0.03, "Drive-by reads missed (no signal, street skipped).", ge=0, le=0.5)
+    manual_no_access: float = F(0.06, "Manual reads with no access (locked gate, dog, meter inside).", ge=0, le=0.8,
+                                effects=["no-access exceptions", "consecutive estimates"])
+    no_access_repeat: float = F(0.4, "Chance a missed manual read is missed again the next month.", ge=0, le=1,
+                                advanced=True)
+    read_cost_ami: float = F(0.10, "Cost of one AMI read.", unit="$", ge=0, le=20, advanced=True)
+    read_cost_amr: float = F(0.35, "Cost of one drive-by read.", unit="$", ge=0, le=20, advanced=True)
+    read_cost_manual: float = F(1.20, "Cost of one walked read.", unit="$", ge=0, le=50, advanced=True)
+
+
+class VeeConfig(BaseModel):
+    model_config = group("VEE rules", 15, "Validation, estimation and editing: the five-test battery, confidence "
+                         "and disposition (VEE v5 shape).", applies="run")
+    high_ratio: float = F(2.0, "Flag consumption above this multiple of expected (tolerance high).", ge=1.1, le=10,
+                          effects=["flagged reads", "analyst workload"])
+    low_ratio: float = F(0.35, "Flag consumption below this share of expected (tolerance low).", ge=0, le=0.95)
+    zero_at_occupied: bool = F(True, "Flag zero consumption at an occupied premise.")
+    max_consecutive_estimates: int = F(2, "Estimates in a row before a field read is ordered.", ge=1, le=12,
+                                       effects=["field orders"])
+    min_period_days: int = F(25, "Shortest plausible read period.", unit="d", ge=1, le=40, advanced=True)
+    max_period_days: int = F(38, "Longest plausible read period.", unit="d", ge=20, le=120, advanced=True)
+    accept_confidence: float = F(0.75, "Auto-accept at or above this confidence.", ge=0, le=1,
+                                 effects=["auto-accept rate", "billing errors"])
+    reject_confidence: float = F(0.35, "Reject below this confidence.", ge=0, le=1)
+    escalate_impact: float = F(150.0, "Escalate a doubtful read when its bill impact exceeds this.", unit="$", ge=0,
+                               le=10000, effects=["supervisor workload"])
+    estimation: Literal["prior_year", "recent_average"] = F("prior_year", "Estimation method for missing or "
+                                                            "rejected reads.")
+    history_noise: float = F(0.10, "Spread of prior-year history around this year's normal usage.", ge=0, le=0.5,
+                             advanced=True)
 
 
 class ScenarioConfig(BaseModel):
@@ -410,6 +465,8 @@ class SimConfig(BaseModel):
     process: ProcessConfig = Field(default_factory=ProcessConfig)
     anomalies: AnomaliesConfig = Field(default_factory=AnomaliesConfig)
     scenario: ScenarioConfig = Field(default_factory=ScenarioConfig)
+    reading: ReadingConfig = Field(default_factory=ReadingConfig)
+    vee: VeeConfig = Field(default_factory=VeeConfig)
 
     @model_validator(mode="after")
     def _check(self) -> SimConfig:
@@ -424,6 +481,12 @@ class SimConfig(BaseModel):
             raise ValueError("on-time + late payer shares must not exceed 1")
         if self.process.analyst_queue_days_max < self.process.analyst_queue_days_min:
             raise ValueError("process.analyst_queue_days_max must be >= min")
+        if self.process.review_minutes_max < self.process.review_minutes_min:
+            raise ValueError("process.review_minutes_max must be >= min")
+        if self.vee.reject_confidence > self.vee.accept_confidence:
+            raise ValueError("vee.reject_confidence must not exceed vee.accept_confidence")
+        if self.vee.max_period_days < self.vee.min_period_days:
+            raise ValueError("vee.max_period_days must be >= min_period_days")
         if sorted(self.electric.transformer_kva_steps) != list(self.electric.transformer_kva_steps):
             raise ValueError("electric.transformer_kva_steps must be ascending")
         return self
@@ -432,7 +495,7 @@ class SimConfig(BaseModel):
     def generation_dict(self) -> dict[str, Any]:
         """The part of the config that determines the generated town and its fixtures."""
         d = self.model_dump(mode="json")
-        for k in ("name", "description", "scenario"):
+        for k in ("name", "description", *RUN_GROUPS):
             d.pop(k, None)
         return d
 
@@ -445,6 +508,11 @@ class SimConfig(BaseModel):
 
     def content_hash(self) -> str:
         return hashlib.sha256(self.canonical_json() + b"|" + GENERATOR_VERSION.encode()).hexdigest()
+
+
+RUN_GROUPS = tuple(k for k, f in SimConfig.model_fields.items()
+                   if (getattr(f.annotation, "model_config", None) or {}).get("json_schema_extra", {}).get("x-applies")
+                   == "run")
 
 
 def config_schema() -> dict[str, Any]:

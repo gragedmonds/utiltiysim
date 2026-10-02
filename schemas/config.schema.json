@@ -210,7 +210,7 @@
       },
       "title": "Meter & read anomalies",
       "type": "object",
-      "x-applies": "town",
+      "x-applies": "run",
       "x-group": true,
       "x-order": 12
     },
@@ -1217,8 +1217,30 @@
     },
     "ProcessConfig": {
       "additionalProperties": false,
-      "description": "Work queues, automation, costs and carrying cost.",
+      "description": "Work queues, automation, workforce, costs and carrying cost.",
       "properties": {
+        "analyst_accuracy": {
+          "default": 0.95,
+          "description": "Share of reviews where the analyst finds the true cause.",
+          "maximum": 1,
+          "minimum": 0.5,
+          "title": "Analyst Accuracy",
+          "type": "number",
+          "x-advanced": true,
+          "x-effects": [
+            "billing errors",
+            "wasted truck rolls"
+          ]
+        },
+        "analyst_hours_per_day": {
+          "default": 6.0,
+          "description": "Productive queue hours per analyst per business day.",
+          "maximum": 10,
+          "minimum": 0.5,
+          "title": "Analyst Hours Per Day",
+          "type": "number",
+          "x-unit": "h"
+        },
         "analyst_queue_days_max": {
           "default": 3,
           "description": "Maximum queue wait.",
@@ -1235,6 +1257,19 @@
           "title": "Analyst Queue Days Min",
           "type": "integer"
         },
+        "analysts": {
+          "default": 2,
+          "description": "Billing analysts working the exception queues.",
+          "maximum": 200,
+          "minimum": 0,
+          "title": "Analysts",
+          "type": "integer",
+          "x-effects": [
+            "queue backlog",
+            "days to bill",
+            "carrying cost"
+          ]
+        },
         "carry_rate_per_day": {
           "default": 1.25,
           "description": "Carrying cost per account per day before invoicing.",
@@ -1244,6 +1279,28 @@
           "type": "number",
           "x-unit": "$"
         },
+        "field_days_min": {
+          "default": 1,
+          "description": "Earliest a field order is worked after it is raised.",
+          "maximum": 20,
+          "minimum": 0,
+          "title": "Field Days Min",
+          "type": "integer",
+          "x-advanced": true,
+          "x-unit": "d"
+        },
+        "field_orders_per_day": {
+          "default": 6,
+          "description": "Meter investigations, re-reads and exchanges completed per business day.",
+          "maximum": 500,
+          "minimum": 0,
+          "title": "Field Orders Per Day",
+          "type": "integer",
+          "x-effects": [
+            "field order backlog",
+            "estimates"
+          ]
+        },
         "receivable_carry_ratio": {
           "default": 0.4,
           "description": "Receivable carry as a share of the billing carry rate.",
@@ -1252,6 +1309,26 @@
           "title": "Receivable Carry Ratio",
           "type": "number",
           "x-advanced": true
+        },
+        "review_minutes_max": {
+          "default": 30.0,
+          "description": "Longest analyst review.",
+          "maximum": 480,
+          "minimum": 1,
+          "title": "Review Minutes Max",
+          "type": "number",
+          "x-advanced": true,
+          "x-unit": "min"
+        },
+        "review_minutes_min": {
+          "default": 15.0,
+          "description": "Shortest analyst review.",
+          "maximum": 240,
+          "minimum": 1,
+          "title": "Review Minutes Min",
+          "type": "number",
+          "x-advanced": true,
+          "x-unit": "min"
         },
         "rpa_coverage": {
           "default": 0.35,
@@ -1271,11 +1348,42 @@
           "description": "Activity sequence library: 'builtin' or a path to a YAML file.",
           "title": "Sequences",
           "type": "string"
+        },
+        "supervisor_hours_per_day": {
+          "default": 2.0,
+          "description": "Supervisor hours on escalations per business day.",
+          "maximum": 10,
+          "minimum": 0.25,
+          "title": "Supervisor Hours Per Day",
+          "type": "number",
+          "x-advanced": true,
+          "x-unit": "h"
+        },
+        "supervisor_minutes": {
+          "default": 40.0,
+          "description": "Supervisor review time per escalation.",
+          "maximum": 240,
+          "minimum": 5,
+          "title": "Supervisor Minutes",
+          "type": "number",
+          "x-advanced": true,
+          "x-unit": "min"
+        },
+        "supervisors": {
+          "default": 1,
+          "description": "Supervisors approving escalations.",
+          "maximum": 50,
+          "minimum": 0,
+          "title": "Supervisors",
+          "type": "integer",
+          "x-effects": [
+            "escalation backlog"
+          ]
         }
       },
       "title": "Meter-to-cash process",
       "type": "object",
-      "x-applies": "town",
+      "x-applies": "run",
       "x-group": true,
       "x-order": 11
     },
@@ -1304,6 +1412,88 @@
       ],
       "title": "RateBlock",
       "type": "object"
+    },
+    "ReadingConfig": {
+      "additionalProperties": false,
+      "description": "How periodic billing reads succeed or fail, by meter technology.",
+      "properties": {
+        "ami_missed_read": {
+          "default": 0.012,
+          "description": "AMI billing reads still missing after the head-end retry window.",
+          "maximum": 0.5,
+          "minimum": 0,
+          "title": "Ami Missed Read",
+          "type": "number",
+          "x-effects": [
+            "comm-fail exceptions",
+            "estimates"
+          ]
+        },
+        "amr_missed_read": {
+          "default": 0.03,
+          "description": "Drive-by reads missed (no signal, street skipped).",
+          "maximum": 0.5,
+          "minimum": 0,
+          "title": "Amr Missed Read",
+          "type": "number"
+        },
+        "manual_no_access": {
+          "default": 0.06,
+          "description": "Manual reads with no access (locked gate, dog, meter inside).",
+          "maximum": 0.8,
+          "minimum": 0,
+          "title": "Manual No Access",
+          "type": "number",
+          "x-effects": [
+            "no-access exceptions",
+            "consecutive estimates"
+          ]
+        },
+        "no_access_repeat": {
+          "default": 0.4,
+          "description": "Chance a missed manual read is missed again the next month.",
+          "maximum": 1,
+          "minimum": 0,
+          "title": "No Access Repeat",
+          "type": "number",
+          "x-advanced": true
+        },
+        "read_cost_ami": {
+          "default": 0.1,
+          "description": "Cost of one AMI read.",
+          "maximum": 20,
+          "minimum": 0,
+          "title": "Read Cost Ami",
+          "type": "number",
+          "x-advanced": true,
+          "x-unit": "$"
+        },
+        "read_cost_amr": {
+          "default": 0.35,
+          "description": "Cost of one drive-by read.",
+          "maximum": 20,
+          "minimum": 0,
+          "title": "Read Cost Amr",
+          "type": "number",
+          "x-advanced": true,
+          "x-unit": "$"
+        },
+        "read_cost_manual": {
+          "default": 1.2,
+          "description": "Cost of one walked read.",
+          "maximum": 50,
+          "minimum": 0,
+          "title": "Read Cost Manual",
+          "type": "number",
+          "x-advanced": true,
+          "x-unit": "$"
+        }
+      },
+      "title": "Meter reading",
+      "type": "object",
+      "x-applies": "run",
+      "x-group": true,
+      "x-order": 14
     },
     "ScenarioConfig": {
       "additionalProperties": false,
@@ -1731,6 +1921,125 @@
       "x-group": true,
       "x-order": 1
     },
+    "VeeConfig": {
+      "additionalProperties": false,
+      "description": "Validation, estimation and editing: the five-test battery, confidence and disposition (VEE v5 shape).",
+      "properties": {
+        "accept_confidence": {
+          "default": 0.75,
+          "description": "Auto-accept at or above this confidence.",
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Accept Confidence",
+          "type": "number",
+          "x-effects": [
+            "auto-accept rate",
+            "billing errors"
+          ]
+        },
+        "escalate_impact": {
+          "default": 150.0,
+          "description": "Escalate a doubtful read when its bill impact exceeds this.",
+          "maximum": 10000,
+          "minimum": 0,
+          "title": "Escalate Impact",
+          "type": "number",
+          "x-effects": [
+            "supervisor workload"
+          ],
+          "x-unit": "$"
+        },
+        "estimation": {
+          "default": "prior_year",
+          "description": "Estimation method for missing or rejected reads.",
+          "enum": [
+            "prior_year",
+            "recent_average"
+          ],
+          "title": "Estimation",
+          "type": "string"
+        },
+        "high_ratio": {
+          "default": 2.0,
+          "description": "Flag consumption above this multiple of expected (tolerance high).",
+          "maximum": 10,
+          "minimum": 1.1,
+          "title": "High Ratio",
+          "type": "number",
+          "x-effects": [
+            "flagged reads",
+            "analyst workload"
+          ]
+        },
+        "history_noise": {
+          "default": 0.1,
+          "description": "Spread of prior-year history around this year's normal usage.",
+          "maximum": 0.5,
+          "minimum": 0,
+          "title": "History Noise",
+          "type": "number",
+          "x-advanced": true
+        },
+        "low_ratio": {
+          "default": 0.35,
+          "description": "Flag consumption below this share of expected (tolerance low).",
+          "maximum": 0.95,
+          "minimum": 0,
+          "title": "Low Ratio",
+          "type": "number"
+        },
+        "max_consecutive_estimates": {
+          "default": 2,
+          "description": "Estimates in a row before a field read is ordered.",
+          "maximum": 12,
+          "minimum": 1,
+          "title": "Max Consecutive Estimates",
+          "type": "integer",
+          "x-effects": [
+            "field orders"
+          ]
+        },
+        "max_period_days": {
+          "default": 38,
+          "description": "Longest plausible read period.",
+          "maximum": 120,
+          "minimum": 20,
+          "title": "Max Period Days",
+          "type": "integer",
+          "x-advanced": true,
+          "x-unit": "d"
+        },
+        "min_period_days": {
+          "default": 25,
+          "description": "Shortest plausible read period.",
+          "maximum": 40,
+          "minimum": 1,
+          "title": "Min Period Days",
+          "type": "integer",
+          "x-advanced": true,
+          "x-unit": "d"
+        },
+        "reject_confidence": {
+          "default": 0.35,
+          "description": "Reject below this confidence.",
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Reject Confidence",
+          "type": "number"
+        },
+        "zero_at_occupied": {
+          "default": true,
+          "description": "Flag zero consumption at an occupied premise.",
+          "title": "Zero At Occupied",
+          "type": "boolean"
+        }
+      },
+      "title": "VEE rules",
+      "type": "object",
+      "x-applies": "run",
+      "x-group": true,
+      "x-order": 15
+    },
     "WaterConfig": {
       "additionalProperties": false,
       "description": "Supply, pumping, storage, mains, hydrants and services.",
@@ -2069,6 +2378,9 @@
     "process": {
       "$ref": "#/$defs/ProcessConfig"
     },
+    "reading": {
+      "$ref": "#/$defs/ReadingConfig"
+    },
     "scenario": {
       "$ref": "#/$defs/ScenarioConfig"
     },
@@ -2077,6 +2389,9 @@
     },
     "town": {
       "$ref": "#/$defs/TownConfig"
+    },
+    "vee": {
+      "$ref": "#/$defs/VeeConfig"
     },
     "water": {
       "$ref": "#/$defs/WaterConfig"
@@ -2087,5 +2402,5 @@
   },
   "title": "SimConfig",
   "type": "object",
-  "x-generator-version": "0.2.0"
+  "x-generator-version": "0.3.0"
 }

@@ -266,7 +266,7 @@ Accounts, reading routes, calendars and tariffs.
 
 ## Meter-to-cash process
 
-Work queues, automation, costs and carrying cost.
+Work queues, automation, workforce, costs and carrying cost.
 
 | Field | Default | Range | Unit | Description |
 |---|---|---|---|---|
@@ -276,6 +276,16 @@ Work queues, automation, costs and carrying cost.
 | `analyst_queue_days_max` | `3` | 1–20 |  | Maximum queue wait. |
 | `carry_rate_per_day` | `1.25` | 0–20 | $ | Carrying cost per account per day before invoicing. |
 | `receivable_carry_ratio` | `0.4` | 0–1 |  | (advanced) Receivable carry as a share of the billing carry rate. |
+| `analysts` | `2` | 0–200 |  | Billing analysts working the exception queues. *Affects: queue backlog, days to bill, carrying cost.* |
+| `analyst_hours_per_day` | `6.0` | 0.5–10 | h | Productive queue hours per analyst per business day. |
+| `review_minutes_min` | `15.0` | 1–240 | min | (advanced) Shortest analyst review. |
+| `review_minutes_max` | `30.0` | 1–480 | min | (advanced) Longest analyst review. |
+| `supervisors` | `1` | 0–50 |  | Supervisors approving escalations. *Affects: escalation backlog.* |
+| `supervisor_hours_per_day` | `2.0` | 0.25–10 | h | (advanced) Supervisor hours on escalations per business day. |
+| `supervisor_minutes` | `40.0` | 5–240 | min | (advanced) Supervisor review time per escalation. |
+| `field_orders_per_day` | `6` | 0–500 |  | Meter investigations, re-reads and exchanges completed per business day. *Affects: field order backlog, estimates.* |
+| `field_days_min` | `1` | 0–20 | d | (advanced) Earliest a field order is worked after it is raised. |
+| `analyst_accuracy` | `0.95` | 0.5–1 |  | (advanced) Share of reviews where the analyst finds the true cause. *Affects: billing errors, wasted truck rolls.* |
 
 ## Meter & read anomalies
 
@@ -307,3 +317,35 @@ Demonstration scenario on the live clock.
 | `target_premise` | `None` |  |  | Premise targeted by the leak scenario (default: first premise). |
 | `leak_m3h` | `0.65` | 0–50 | m3/h | Leak rate added to the target premise's water demand. |
 | `tick_minutes` | `5` | 1–60 | min | Live clock step. |
+
+## Meter reading
+
+How periodic billing reads succeed or fail, by meter technology.
+
+| Field | Default | Range | Unit | Description |
+|---|---|---|---|---|
+| `ami_missed_read` | `0.012` | 0–0.5 |  | AMI billing reads still missing after the head-end retry window. *Affects: comm-fail exceptions, estimates.* |
+| `amr_missed_read` | `0.03` | 0–0.5 |  | Drive-by reads missed (no signal, street skipped). |
+| `manual_no_access` | `0.06` | 0–0.8 |  | Manual reads with no access (locked gate, dog, meter inside). *Affects: no-access exceptions, consecutive estimates.* |
+| `no_access_repeat` | `0.4` | 0–1 |  | (advanced) Chance a missed manual read is missed again the next month. |
+| `read_cost_ami` | `0.1` | 0–20 | $ | (advanced) Cost of one AMI read. |
+| `read_cost_amr` | `0.35` | 0–20 | $ | (advanced) Cost of one drive-by read. |
+| `read_cost_manual` | `1.2` | 0–50 | $ | (advanced) Cost of one walked read. |
+
+## VEE rules
+
+Validation, estimation and editing: the five-test battery, confidence and disposition (VEE v5 shape).
+
+| Field | Default | Range | Unit | Description |
+|---|---|---|---|---|
+| `high_ratio` | `2.0` | 1.1–10 |  | Flag consumption above this multiple of expected (tolerance high). *Affects: flagged reads, analyst workload.* |
+| `low_ratio` | `0.35` | 0–0.95 |  | Flag consumption below this share of expected (tolerance low). |
+| `zero_at_occupied` | `True` |  |  | Flag zero consumption at an occupied premise. |
+| `max_consecutive_estimates` | `2` | 1–12 |  | Estimates in a row before a field read is ordered. *Affects: field orders.* |
+| `min_period_days` | `25` | 1–40 | d | (advanced) Shortest plausible read period. |
+| `max_period_days` | `38` | 20–120 | d | (advanced) Longest plausible read period. |
+| `accept_confidence` | `0.75` | 0–1 |  | Auto-accept at or above this confidence. *Affects: auto-accept rate, billing errors.* |
+| `reject_confidence` | `0.35` | 0–1 |  | Reject below this confidence. |
+| `escalate_impact` | `150.0` | 0–10000 | $ | Escalate a doubtful read when its bill impact exceeds this. *Affects: supervisor workload.* |
+| `estimation` | `prior_year` |  |  | Estimation method for missing or rejected reads. |
+| `history_noise` | `0.1` | 0–0.5 |  | (advanced) Spread of prior-year history around this year's normal usage. |

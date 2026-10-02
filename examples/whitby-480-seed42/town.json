@@ -1,7 +1,7 @@
 {
   "schemaVersion": "utility-town/2.0",
-  "generatorVersion": "0.2.0",
-  "id": "town-629f54bde38fe9d7",
+  "generatorVersion": "0.3.0",
+  "id": "town-8457c81b21029171",
   "seed": "WHITBY-042",
   "count": 552,
   "premiseCount": 552,
@@ -63,14 +63,14 @@
     "mrus": 21,
     "amiCollectors": 2,
     "timingsS": {
-      "roads": 0.031,
-      "land_use": 1.259,
-      "buildings": 0.181,
-      "electric": 0.133,
-      "water": 0.188,
-      "gas": 0.093,
-      "customers": 0.116,
-      "total": 2.001
+      "roads": 0.045,
+      "land_use": 1.233,
+      "buildings": 0.199,
+      "electric": 0.085,
+      "water": 0.145,
+      "gas": 0.088,
+      "customers": 0.228,
+      "total": 2.023
     }
   },
   "validation": {
@@ -94,5 +94,5 @@
       "Referential integrity"
     ]
   },
-  "configHash": "3c2d68190ecba5f36f0f643178beaf067d522ec4c16a606a38c6232ac23105b0"
+  "configHash": "e8a2c615aa8e35593371b94a346094ac7bb22b95f70139e9a2585728d0ea133d"
 }
