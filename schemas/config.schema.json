@@ -2235,6 +2235,15 @@
           "x-advanced": true,
           "x-unit": "d"
         },
+        "oms_events": {
+          "default": true,
+          "description": "Use outage events (OMS, AMI last gasps) from operations: hours without service lower the expected use.",
+          "title": "Oms Events",
+          "type": "boolean",
+          "x-effects": [
+            "low-usage flags after outages"
+          ]
+        },
         "reject_confidence": {
           "default": 0.35,
           "description": "Reject below this confidence.",

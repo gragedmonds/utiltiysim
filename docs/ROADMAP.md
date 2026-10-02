@@ -48,11 +48,11 @@ Next:
 **Linked:**
 - the operations day schedules that day's reading rounds and meter-to-cash field orders as crew jobs;
 - a field visit on the map settles the premise's open read cases;
-- the map and the worklists share one run day.
+- the map and the worklists share one run day;
+- outages on the map reach meter-to-cash: lost use, AMI last gasps and missed reads, outage-aware VEE, SAIDI.
 
 Next:
 - a two-way connector with the real m2c.vee engine (import dispositions);
-- outage-driven exceptions (AMI last gasps, zero use);
 - budget billing and payment arrangements.
 
 ## M4: product (in progress)

@@ -111,7 +111,8 @@ def run(b: Batch, vee) -> Result:
 
 
 def explain(test: int, risk: float, *, code: str | None, ratio: float, days: float, expected: float, unit: str,
-            consec: int, prior_cases: int, occupied: bool, moved: bool, manual: bool, vee) -> str:
+            consec: int, prior_cases: int, occupied: bool, moved: bool, manual: bool, vee,
+            outage_h: float = 0.0) -> str:
     """One-line rationale for a test outcome (built when a decision is viewed)."""
     if test == 0:
         if code is None:
@@ -146,4 +147,6 @@ def explain(test: int, risk: float, *, code: str | None, ratio: float, days: flo
         parts.append("walked read (keyed by hand)")
     if moved:
         parts.append("move inside the period")
+    if outage_h > 0 and vee.oms_events:
+        parts.append(f"{outage_h:.1f} h without service in the period (outage events lowered the expected use)")
     return ("No context concerns." if not parts else "; ".join(parts).capitalize() + ".")

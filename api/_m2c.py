@@ -19,7 +19,7 @@ from utilsim.config.model import SimConfig
 from utilsim.m2c import catalog as cat
 from utilsim.m2c import views
 from utilsim.m2c.base import M2CTown, cached_m2c_town, m2c_town
-from utilsim.m2c.run import M2C_GROUPS, M2CRun, parse_day, settings_schema
+from utilsim.m2c.run import M2C_GROUPS, YEAR_DAYS, M2CRun, parse_day, settings_schema
 
 router = APIRouter()
 _RUNS: OrderedDict[bytes, M2CRun] = OrderedDict()
@@ -36,11 +36,24 @@ class Action(BaseModel):
     value: float | None = Field(None, ge=0, description="Register value for an override.")
 
 
+class Outage(BaseModel):
+    id: str | None = None
+    day: str = Field(..., description="Local date the interruption began (YYYY-MM-DD), in 2026.")
+    utility: Literal["electric", "water", "gas"]
+    start: float = Field(..., ge=0, lt=86400, description="Seconds since local midnight of ``day``.")
+    end: float = Field(..., gt=0, description="Seconds since local midnight of ``day`` (may pass midnight).")
+    premiseIds: list[str] = Field(..., min_length=1, max_length=20000)
+
+
 class RunRequest(BaseModel):
     town: str = Field(..., description="Pack preset (e.g. 'ayr') or town id.")
     settings: dict[str, dict[str, Any]] | None = Field(
         None, description=f"Overrides for the run-scoped groups ({', '.join(M2C_GROUPS)}); see GET /api/m2c/settings.")
     actions: list[Action] = Field(default_factory=list, max_length=2000)
+    outages: list[Outage] = Field(
+        default_factory=list, max_length=500,
+        description="Service interruptions from the operations simulator (a timeline's ``interruptions``): "
+                    "consumption stops, AMI meters without power miss their reads, and VEE sees the outage.")
     asOf: str | None = Field(None, description="View date (YYYY-MM-DD); default: the town's scenario date.")
 
 
@@ -82,13 +95,14 @@ def _town(ref: str) -> M2CTown:
 def run_for(req: RunRequest) -> M2CRun:
     town = _town(req.town)
     actions = [a.model_dump(exclude_none=True) for a in req.actions]
-    key = orjson.dumps([town.id, req.settings, actions], option=orjson.OPT_SORT_KEYS)
+    outages = [o.model_dump(exclude_none=True) for o in req.outages]
+    key = orjson.dumps([town.id, req.settings, actions, outages], option=orjson.OPT_SORT_KEYS)
     hit = _RUNS.get(key)
     if hit is not None:
         _RUNS.move_to_end(key)
         return hit
     try:
-        run = M2CRun(town, req.settings, actions)
+        run = M2CRun(town, req.settings, actions, outages)
     except ValidationError as exc:
         raise HTTPException(422, orjson.loads(exc.json(include_url=False))) from exc
     except ValueError as exc:
@@ -178,13 +192,19 @@ def post_vee_export(req: MonthRequest):
 
 
 def field_orders_for(town: str, day: str, m2c: dict) -> list[dict]:
-    """The meter-to-cash run's truck rolls on ``day`` as operations work: premise, start time, activity, duration."""
-    req = RunRequest(town=town, settings=m2c.get("settings"), actions=m2c.get("actions") or [])
-    run = run_for(req)
+    """The meter-to-cash run's truck rolls on ``day`` as operations work: premise, start time, activity, duration.
+
+    Outages from ``day`` itself or later are left out: they come from this operations run, and the morning's work
+    orders cannot depend on what happens later that day."""
     try:
         d = parse_day(day, -1)
+        req = RunRequest(town=town, settings=m2c.get("settings"), actions=m2c.get("actions") or [],
+                         outages=[o for o in m2c.get("outages") or [] if parse_day(o.get("day"), YEAR_DAYS) < d])
+    except ValidationError as exc:
+        raise HTTPException(422, orjson.loads(exc.json(include_url=False))) from exc
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
+    run = run_for(req)
     tw, out = run.town, []
     for case in run.cases:
         for k, (t, kind, _, _) in enumerate(case.events):

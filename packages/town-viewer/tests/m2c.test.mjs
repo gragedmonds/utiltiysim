@@ -55,3 +55,18 @@ test('settings form fields come from the engine schema and only changes are sent
  assert.deepEqual(parseField(f[0],'0.5'),{ok:false,error:'At least 1.1.'});assert.deepEqual(parseField(f[1],'2.5'),{ok:false,error:'Enter a whole number.'});assert.deepEqual(parseField(f[0],'3'),{ok:true,value:3});
  assert.deepEqual(overridesFrom(f,{vee:{high_ratio:2,max_consecutive_estimates:4,zero_at_occupied:false}}),{vee:{max_consecutive_estimates:4,zero_at_occupied:false}});
 });
+
+test('outages from the map ride every request, per operations day, and replace that day when it reruns',async()=>{
+ const store=memory(),log=[],m=new EngineM2C({townRef:'ayr',townId:'town-1',storage:store,fetchImpl:fakeEngine(log)});
+ const cut={utility:'electric',start:3600,end:12040.2,premiseIds:['P1','P2']};
+ assert.equal(m.setOutages('2026-03-11',[cut,{utility:'gas',start:10,end:null,premiseIds:['P3']}]),true);
+ assert.equal(m.setOutages('2026-03-11',[cut,{utility:'gas',start:10,end:null,premiseIds:['P3']}]),false);
+ m.setOutages('2026-02-02',[{...cut,premiseIds:['P9']},{utility:'water',start:5,end:9,premiseIds:[]}]);
+ await m.summary();
+ assert.deepEqual(log[0].body.outages,[{day:'2026-02-02',utility:'electric',start:3600,end:12040.2,premiseIds:['P9']},
+  {day:'2026-03-11',...cut},{day:'2026-03-11',utility:'gas',start:10,end:86410,premiseIds:['P3']}]);
+ assert.equal(m.context().outages.length,3);
+ const k=m.outageKey();assert.equal(m.setOutages('2026-03-11',[]),true);assert.notEqual(m.outageKey(),k);
+ assert.equal(new EngineM2C({townRef:'ayr',townId:'town-1',storage:store}).outageList().length,1);
+ assert.equal(new EngineM2C({townRef:'ayr',townId:'town-9',storage:memory()}).context().outages,undefined);
+});

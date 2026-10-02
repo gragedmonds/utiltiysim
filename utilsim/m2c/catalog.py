@@ -17,6 +17,8 @@ EVENTS: dict[str, tuple[str, str, str, float, float, float]] = {
     "ERRATIC": ("Erratic pattern", "〰️", "vee", 0, 0.25, 0),
     "PERSISTENT_LOW": ("Persistent low use", "🐢", "vee", 0, 0.25, 0),
     "CONSECUTIVE_ESTIMATES": ("Consecutive estimates", "🔁", "vee", 0, 0.25, 0),
+    # Upstream signals from operations (they explain an exception rather than raise one).
+    "AMI_LAST_GASP": ("AMI last gasp (power lost)", "🪫", "ami", 0, 0.02, 0),
     # Work management (must appear on every exception path).
     "EXCEPTION_QUEUED": ("Exception queued", "📥", "wm", 0, 0.10, 0),
     "ANALYST_ASSIGNED": ("Analyst assigned", "👤", "wm", 2, 0, 0),

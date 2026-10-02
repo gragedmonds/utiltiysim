@@ -217,7 +217,8 @@ device, detection, isolation and restoration times, unsupplied counts), `jobs` (
 `arrivalAt`, `workSeconds`, `returnStartAt`, `endAt`, `route` + `routeTimes`, `returnRoute` + `returnTimes`,
 `roadPoint`, `visitPoint`, `crewId`), `events` (`event/1.0` envelope, `eventId = <correlation>:<n>`, sequence by
 time), `stateChanges` (times where supply changes, with unsupplied premise ids, disabled edges and leaks per utility),
-`reads`, `warnings`.
+`interruptions` (who lost which service and when: `{utility, start, end, premiseIds}` grouped by identical spans, `end`
+null if still out at the end of the day; the meter-to-cash run's `outages`), `reads`, `warnings`.
 
 Frames from `/api/sim/frame` add `premises.unsupplied` (`{electric: [premiseId…], …}`) when anyone is without supply.
 

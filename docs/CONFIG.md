@@ -354,6 +354,7 @@ Validation, estimation and editing: the five-test battery, confidence and dispos
 | `escalate_impact` | `150.0` | 0–10000 | $ | Escalate a doubtful read when its bill impact exceeds this. *Affects: supervisor workload.* |
 | `trend_ratio` | `0.8` | 0.3–1.0 |  | Persistent low use: flag reads below this share of expected … *Affects: slow and tampered meters found.* |
 | `trend_periods` | `3` | 2–12 |  | … for this many periods in a row. |
+| `oms_events` | `True` |  |  | Use outage events (OMS, AMI last gasps) from operations: hours without service lower the expected use. *Affects: low-usage flags after outages.* |
 | `estimation` | `prior_year` |  |  | Estimation method for missing or rejected reads. |
 | `history_noise` | `0.1` | 0–0.5 |  | (advanced) Spread of prior-year history around this year's normal usage. |
 

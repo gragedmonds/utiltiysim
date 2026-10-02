@@ -116,6 +116,15 @@
             "title": "Caseid",
             "type": "string"
           },
+          "outages": {
+            "description": "Service interruptions from the operations simulator (a timeline's ``interruptions``): consumption stops, AMI meters without power miss their reads, and VEE sees the outage.",
+            "items": {
+              "$ref": "#/components/schemas/Outage"
+            },
+            "maxItems": 500,
+            "title": "Outages",
+            "type": "array"
+          },
           "settings": {
             "anyOf": [
               {
@@ -208,6 +217,15 @@
             ],
             "description": "View date (YYYY-MM-DD); default: the town's scenario date.",
             "title": "Asof"
+          },
+          "outages": {
+            "description": "Service interruptions from the operations simulator (a timeline's ``interruptions``): consumption stops, AMI meters without power miss their reads, and VEE sees the outage.",
+            "items": {
+              "$ref": "#/components/schemas/Outage"
+            },
+            "maxItems": 500,
+            "title": "Outages",
+            "type": "array"
           },
           "readId": {
             "title": "Readid",
@@ -334,6 +352,15 @@
             "title": "Decisions",
             "type": "array"
           },
+          "outages": {
+            "description": "Service interruptions from the operations simulator (a timeline's ``interruptions``): consumption stops, AMI meters without power miss their reads, and VEE sees the outage.",
+            "items": {
+              "$ref": "#/components/schemas/Outage"
+            },
+            "maxItems": 500,
+            "title": "Outages",
+            "type": "array"
+          },
           "settings": {
             "anyOf": [
               {
@@ -400,7 +427,7 @@
                 "type": "null"
               }
             ],
-            "description": "The meter-to-cash run ({settings, actions}) whose field orders for this day become crew jobs (see /api/m2c/*).",
+            "description": "The meter-to-cash run ({settings, actions, outages}) whose field orders for this day become crew jobs (see /api/m2c/*).",
             "title": "M2C"
           },
           "premises": {
@@ -475,6 +502,15 @@
             "title": "Month",
             "type": "integer"
           },
+          "outages": {
+            "description": "Service interruptions from the operations simulator (a timeline's ``interruptions``): consumption stops, AMI meters without power miss their reads, and VEE sees the outage.",
+            "items": {
+              "$ref": "#/components/schemas/Outage"
+            },
+            "maxItems": 500,
+            "title": "Outages",
+            "type": "array"
+          },
           "portion": {
             "anyOf": [
               {
@@ -518,6 +554,66 @@
         "title": "MonthRequest",
         "type": "object"
       },
+      "Outage": {
+        "properties": {
+          "day": {
+            "description": "Local date the interruption began (YYYY-MM-DD), in 2026.",
+            "title": "Day",
+            "type": "string"
+          },
+          "end": {
+            "description": "Seconds since local midnight of ``day`` (may pass midnight).",
+            "exclusiveMinimum": 0.0,
+            "title": "End",
+            "type": "number"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "premiseIds": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 20000,
+            "minItems": 1,
+            "title": "Premiseids",
+            "type": "array"
+          },
+          "start": {
+            "description": "Seconds since local midnight of ``day``.",
+            "exclusiveMaximum": 86400.0,
+            "minimum": 0.0,
+            "title": "Start",
+            "type": "number"
+          },
+          "utility": {
+            "enum": [
+              "electric",
+              "water",
+              "gas"
+            ],
+            "title": "Utility",
+            "type": "string"
+          }
+        },
+        "required": [
+          "day",
+          "utility",
+          "start",
+          "end",
+          "premiseIds"
+        ],
+        "title": "Outage",
+        "type": "object"
+      },
       "PremiseRequest": {
         "properties": {
           "actions": {
@@ -539,6 +635,15 @@
             ],
             "description": "View date (YYYY-MM-DD); default: the town's scenario date.",
             "title": "Asof"
+          },
+          "outages": {
+            "description": "Service interruptions from the operations simulator (a timeline's ``interruptions``): consumption stops, AMI meters without power miss their reads, and VEE sees the outage.",
+            "items": {
+              "$ref": "#/components/schemas/Outage"
+            },
+            "maxItems": 500,
+            "title": "Outages",
+            "type": "array"
           },
           "premiseId": {
             "title": "Premiseid",
@@ -616,6 +721,15 @@
               }
             ],
             "title": "Commodity"
+          },
+          "outages": {
+            "description": "Service interruptions from the operations simulator (a timeline's ``interruptions``): consumption stops, AMI meters without power miss their reads, and VEE sees the outage.",
+            "items": {
+              "$ref": "#/components/schemas/Outage"
+            },
+            "maxItems": 500,
+            "title": "Outages",
+            "type": "array"
           },
           "page": {
             "default": 1,
@@ -741,6 +855,15 @@
             "description": "View date (YYYY-MM-DD); default: the town's scenario date.",
             "title": "Asof"
           },
+          "outages": {
+            "description": "Service interruptions from the operations simulator (a timeline's ``interruptions``): consumption stops, AMI meters without power miss their reads, and VEE sees the outage.",
+            "items": {
+              "$ref": "#/components/schemas/Outage"
+            },
+            "maxItems": 500,
+            "title": "Outages",
+            "type": "array"
+          },
           "settings": {
             "anyOf": [
               {
@@ -801,7 +924,7 @@
                 "type": "null"
               }
             ],
-            "description": "The meter-to-cash run ({settings, actions}) whose field orders for this day become crew jobs (see /api/m2c/*).",
+            "description": "The meter-to-cash run ({settings, actions, outages}) whose field orders for this day become crew jobs (see /api/m2c/*).",
             "title": "M2C"
           },
           "settings": {

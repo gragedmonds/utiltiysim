@@ -594,10 +594,18 @@ class Run:
                     if not k.startswith("_")}
 
         changes = []
+        live: dict[str, dict[int, float]] = {u: {} for u in UTILITIES}  # premise without service -> since
+        spans: dict[tuple, list[int]] = {}
         for t in self.change_times():
             disabled, leaks, off, closed = self.state_at(t)
             out = {u: self.ops.unsupplied(u, disabled[u], closed[u] if closed[u].any() else None)
                    for u in UTILITIES if disabled[u].any()}
+            for u in UTILITIES:
+                now = {self.ops.premise_index[p] for p in out.get(u, ())} | set(np.flatnonzero(off[u]).tolist())
+                for p in [p for p in live[u] if p not in now]:
+                    spans.setdefault((u, live[u].pop(p), t), []).append(p)
+                for p in now - live[u].keys():
+                    live[u][p] = t
             changes.append({
                 "at": round(t, 3), "sequence": run_sequence(self._when(t), date.fromisoformat(self.day), self.tz),
                 "unsupplied": out,
@@ -606,13 +614,21 @@ class Run:
                                     for u in UTILITIES if disabled[u].any()},
                 "leaks": {u: [{"nodeId": self.ops.nets[u].node_ids[n], "m3h": q} for n, q in lk.items()]
                           for u, lk in leaks.items() if lk}})
+        for u in UTILITIES:
+            for p, t0 in live[u].items():
+                spans.setdefault((u, t0, math.inf), []).append(p)
+        # Who lost which service and when: the meter-to-cash run's ``outages`` (see /api/m2c/*).
+        interruptions = [{"utility": u, "start": round(t0, 3), "end": round(t1, 3) if math.isfinite(t1) else None,
+                          "premiseIds": [self.ops.premise_ids[p] for p in sorted(ps)]}
+                         for (u, t0, t1), ps in sorted(spans.items(), key=lambda kv: (kv[0][1], kv[0][2], kv[0][0]))]
         return {"schemaVersion": TIMELINE_VERSION, "townId": self.ops.id, "simulationId": self.simulation_id,
                 "topologyRevision": self.ops.context.topology, "indexRevision": self.ops.context.index,
                 "date": self.day, "timezone": self.ops.timezone, "settings": self.settings,
                 "depot": {"id": self.ops.depot["id"], "x": self.ops.depot["x"], "z": self.ops.depot["z"]},
                 "commands": [{k: v for k, v in c.items() if k != "_k"} for c in self.commands],
                 "incidents": [clean(i) for i in self.incidents], "jobs": [clean(j) for j in self.jobs],
-                "events": self.events, "stateChanges": changes, "reads": self.reads, "warnings": self.warnings}
+                "events": self.events, "stateChanges": changes, "interruptions": interruptions, "reads": self.reads,
+                "warnings": self.warnings}
 
     def frame(self, at: float, *, include_premises: bool = True) -> dict:
         """Complete ``utility-state/1.0`` frame at ``at`` (seconds since local midnight of the run day)."""

@@ -132,6 +132,11 @@ The routes are a table in `focus-ui.js` (`PAGES`). Opening a pack keeps a deep-l
 **Linking actions**
 - "Watch the truck roll" on a field-order case moves the map to that day and follows the van.
 - A field visit sent on the map is reported to meter-to-cash as a `field_read` action, which settles that premise's open read cases.
+- Outages flow the other way. `EngineM2C.setOutages(day, timeline.interruptions)` keeps each operations day's interruptions; requests send them as `outages`.
+  - `syncOutages()` in `app.js` runs after each timeline refresh with commands; "Reset engine run" clears the day.
+  - The worklists show an "Outages from the map" KPI (customer-minutes, SAIDI, last gasps).
+  - The Billing tab lists the premise's "Service interruptions".
+  - A last-gasp `COMM_FAIL` case shows `AMI_LAST_GASP` at the head of its trace.
 
 **Visual cues**
 - `outage-marks.js`: daytime rings in the utility colour for premises in `premises.unsupplied`, for the visible layers.

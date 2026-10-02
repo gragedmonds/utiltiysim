@@ -451,6 +451,8 @@ class VeeConfig(BaseModel):
     trend_ratio: float = F(0.8, "Persistent low use: flag reads below this share of expected …", ge=0.3, le=1.0,
                            effects=["slow and tampered meters found"])
     trend_periods: int = F(3, "… for this many periods in a row.", ge=2, le=12)
+    oms_events: bool = F(True, "Use outage events (OMS, AMI last gasps) from operations: hours without service "
+                         "lower the expected use.", effects=["low-usage flags after outages"])
     estimation: Literal["prior_year", "recent_average"] = F("prior_year", "Estimation method for missing or "
                                                             "rejected reads.")
     history_noise: float = F(0.10, "Spread of prior-year history around this year's normal usage.", ge=0, le=0.5,

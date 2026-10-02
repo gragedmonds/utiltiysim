@@ -265,3 +265,53 @@ def test_gas_main_break_relights_every_shut_premise(ayr, ayr_snapshot):
     assert still and still == {p for p, t in relit.items() if t > middle + 1}
     assert "unsupplied" not in run.frame(max(relit.values()) + 60)["premises"]
     assert any(e["eventType"] == "relight.completed" for e in tl["events"])
+
+
+def test_outages_from_operations_reach_meter_to_cash(ayr):
+    """A broken pole's interruptions feed the meter-to-cash run: use stops, AMI meters without power miss their
+    reads (a last gasp explains the comm fail), and the summary reports customer-minutes."""
+    from fastapi.testclient import TestClient
+
+    from api._m2c import RunRequest, run_for
+    from api.index import app
+    from utilsim.m2c import views
+    from utilsim.m2c.base import date_of
+    from utilsim.m2c.run import parse_day
+
+    pole = fused_pole(ayr)
+    base = run_for(RunRequest(town="ayr"))
+    tw = base.town
+    probe = Run(ayr, [break_pole(pole, 3600)]).timeline()
+    hit = {p for i in probe["interruptions"] for p in i["premiseIds"]}
+    ami = next(r for r in range(tw.n_registers) if tw.premise_ids[tw.prem[r]] in hit and tw.tech[r] == "AMI"
+               and tw.commodity[r] == "electric")
+    day = date_of(int(tw.read_day[ami, 3])).isoformat()  # an AMI read night inside the outage (reads at 02:00)
+    tl = Run(ayr, [break_pole(pole, 3600)], day=day).timeline()
+    inc = tl["incidents"][0]
+    assert {p for i in tl["interruptions"] for p in i["premiseIds"]} == hit
+    assert sum(len(i["premiseIds"]) for i in tl["interruptions"]) == inc["unsupplied"]["atFault"]
+    assert all(i["utility"] == "electric" and i["start"] == pytest.approx(inc["createdAt"], abs=1)
+               and i["end"] <= inc["restoredAt"] + 1 for i in tl["interruptions"])
+    outages = [{"day": day, **{k: i[k] for k in ("utility", "start", "end", "premiseIds")}} for i in tl["interruptions"]]
+    run = run_for(RunRequest(town="ayr", outages=outages))
+    before = tw.read_day[:, 1:] < parse_day(day, 0)  # nothing changes before the outage
+    assert np.array_equal(np.where(before, run.truth[:, 1:], 0), np.where(before, base.truth[:, 1:], 0))
+    p = tw.premise_index[tw.premise_ids[tw.prem[ami]]]
+    rows = np.flatnonzero((tw.prem == p) & (tw.commodity == "electric") & (tw.direction == "import"))
+    assert (run.truth[rows, 12] < base.truth[rows, 12]).all()  # the outage's use never flowed
+    gasps = [c for c in run.cases if c.events[0][1] == "AMI_LAST_GASP"]
+    assert gasps and all(c.type == "COMM_FAIL" and c.events[1][3] == 0 for c in gasps)
+    assert all(run.reason[c.r, c.month] == "SIM_POWER_OUTAGE" for c in gasps)
+    assert not any(c.events[0][1] == "AMI_LAST_GASP" for c in base.cases)
+    rel = views.summary(run, "2026-12-31")["reliability"]["electric"]
+    assert rel["customersInterrupted"] == len(hit) and rel["customerMinutes"] > 0 and rel["lost"] > 0
+    assert rel["lastGasps"] > 0 and "reliability" in views.summary(base, "2026-12-31")
+    pv = views.premise(run, tw.premise_ids[p], as_of="2026-12-31")
+    assert pv["outages"] and pv["outages"][0]["lastGasp"] and pv["outages"][0]["lost"] > 0
+    # The morning's field orders never depend on that day's own outages.
+    client = TestClient(app)
+    plain = client.post("/api/sim/timeline", json={"town": "ayr", "date": day, "m2c": {}}).json()
+    linked = client.post("/api/sim/timeline", json={"town": "ayr", "date": day, "m2c": {"outages": outages}}).json()
+    assert [j["requestedAt"] for j in plain["jobs"]] == [j["requestedAt"] for j in linked["jobs"]]
+    assert client.post("/api/m2c/summary", json={"town": "ayr", "outages": [{**outages[0], "end": -1}]}
+                       ).status_code == 422

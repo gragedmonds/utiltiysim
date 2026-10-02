@@ -26,7 +26,7 @@ from utilsim.process.fixtures import fixture
 from utilsim.version import EVENT_SCHEMA_VERSION, READ_SCHEMA_VERSION
 
 PREMISE_STATUS = ("clean", "estimated", "open case", "escalated", "field order")
-EDGE_FOR = {"EXCEPTION_QUEUED": "triggered", "READ_HELD": "blocked_by", "ANALYST_ESCALATE": "escalated_to",
+EDGE_FOR = {"COMM_FAIL": "caused_by", "EXCEPTION_QUEUED": "triggered", "READ_HELD": "blocked_by", "ANALYST_ESCALATE": "escalated_to",
             "SUPERVISOR_REVIEW": "escalated_to", "FIELD_ORDER": "escalated_to", "TRUCK_ROLL": "required_for",
             "ESTIMATE_CREATED": "resolved_by", "READ_ADJUSTED": "resolved_by", "METER_EXCHANGE": "resolved_by",
             "SPECIAL_READ": "resolved_by", "READ_RELEASED": "resulted_in", "CX_CALLBACK": "resulted_in"}
@@ -125,6 +125,7 @@ def summary(run: M2CRun, as_of: str | None = None) -> dict:
                     "recall": round(tp / (tp + fn), 3) if tp + fn else None},
         },
         "billing": billing,
+        "reliability": reliability(run, T),
         "weather": {"tempC": run.temp(day), "series": [round(run.temp(d), 1) for d in range(day + 1)],
                     "coldDays": sum(1 for d in range(day + 1) if run.temp(d) <= -15.0)},
         "queues": queues,
@@ -133,6 +134,55 @@ def summary(run: M2CRun, as_of: str | None = None) -> dict:
         "rpaTypes": [k for k in cat.EXCEPTIONS if k in run.rpa_types],
         "premises": {"ids": tw.premise_ids, "status": premise_status(run, T).tolist(), "legend": list(PREMISE_STATUS)},
     }
+
+
+def reliability(run: M2CRun, T: float) -> dict:
+    """Service interruptions from operations up to ``T``: customers and customer-minutes (SAIDI) per utility, the
+    consumption that never flowed, and AMI last gasps."""
+    tw = run.town
+    out = {}
+    for u in ("electric", "water", "gas"):
+        logs = [o for o in run.outage_log if o["utility"] == u and o["t0"] <= T]
+        if not logs:
+            continue
+        served = len(np.unique(tw.prem[tw.commodity == u]))
+        hit: set[int] = set()
+        minutes = 0.0
+        gasps = 0
+        for o in logs:
+            hit.update(o["prem"].tolist())
+            minutes += len(o["prem"]) * (min(o["t1"], T) - o["t0"]) * 1440.0
+            if u == "electric":
+                gasps += len(np.unique(tw.meter_of[o["rows"][tw.tech[o["rows"]] == "AMI"]])) if len(o["rows"]) else 0
+        rows = np.unique(np.concatenate([o["rows"] for o in logs]))
+        rows = rows[tw.direction[rows] == "import"]
+        lost = float(run._outage_loss(rows, np.full(len(rows), T))[0].sum()) if len(rows) else 0.0
+        out[u] = {"interruptions": len(logs), "customersInterrupted": len(hit), "customerMinutes": round(minutes),
+                  "saidiMinutes": round(minutes / served, 2) if served else None,
+                  "lost": round(lost, 1), "unit": "kWh" if u == "electric" else "m3",
+                  **({"lastGasps": gasps} if u == "electric" else {})}
+    return out
+
+
+def premise_outages(run: M2CRun, p: int, T: float) -> list[dict]:
+    tw = run.town
+    out = []
+    for o in run.outage_log:
+        if o["t0"] > T or not (o["prem"] == p).any():
+            continue
+        rows = o["rows"][(tw.prem[o["rows"]] == p) & (tw.direction[o["rows"]] == "import")]
+        end = min(o["t1"], T)
+        lost = 0.0
+        if len(rows):
+            d0, d1 = np.full(len(rows), int(o["t0"])), np.full(len(rows), int(end))
+            lost = float((tw.true_advance(rows, d1, np.full(len(rows), (end - int(end)) * 24.0)) -
+                          tw.true_advance(rows, d0, np.full(len(rows), (o["t0"] - int(o["t0"])) * 24.0))).sum())
+        ami = bool(len(rows)) and o["utility"] == "electric" and bool((tw.tech[rows] == "AMI").any())
+        out.append({"id": o["id"], "utility": o["utility"], "start": run.iso(o["t0"]), "end": run.iso(o["t1"]),
+                    "ongoing": o["t1"] > T, "minutes": round((end - o["t0"]) * 1440.0, 1),
+                    "lost": round(lost, 3), "unit": "kWh" if o["utility"] == "electric" else "m3",
+                    "lastGasp": ami})
+    return out
 
 
 def premise_status(run: M2CRun, T: float) -> np.ndarray:
@@ -314,7 +364,8 @@ def decision(run: M2CRun, r: int, m: int) -> dict:
                           ratio=float(run.ratio[r, m]), days=float(run.read_t[r, m] - run.prev_t_at_read[r, m]),
                           expected=float(run.expected[r, m]), unit=str(tw.unit[r]), consec=int(run.consec_at[r, m]),
                           prior_cases=int(run.prior_at[r, m]), occupied=bool(tw.occupied[tw.prem[r]]),
-                          moved=code == cat.CODE_LIST.index("SIM-L01"), manual=str(tw.tech[r]) == "MANUAL", vee=v)})
+                          moved=code == cat.CODE_LIST.index("SIM-L01"), manual=str(tw.tech[r]) == "MANUAL", vee=v,
+                          outage_h=float(run.outage_h[r, m]))})
     d = int(run.disp[r, m])
     return {"schemaVersion": DECISION_VERSION, "decisionId": f"VEE-{rid}", "readId": rid,
             "ruleSet": "sim-vee-v5", "ruleSetVersion": run.settings_hash, "tests": tests,
@@ -343,7 +394,7 @@ def premise(run: M2CRun, premise_id: str, *, as_of: str | None = None, truth: bo
                            "commodity": str(tw.commodity[r]), "direction": str(tw.direction[r]),
                            "unit": str(tw.unit[r]), "technology": str(tw.tech[r]), "mruId": tw.mru[r],
                            "portion": int(tw.portion[r])} for r in rows],
-            "reads": reads, "cases": cases, **_premise_billing(run, p, T, truth)}
+            "reads": reads, "cases": cases, "outages": premise_outages(run, p, T), **_premise_billing(run, p, T, truth)}
 
 
 def _premise_billing(run: M2CRun, p: int, T: float, truth: bool) -> dict:
