@@ -690,7 +690,8 @@ def case_view(run: M2CRun, case_id: str, *, as_of: str | None = None, truth: boo
             # Truck rolls as local day and seconds, so the map can show the visit.
             "fieldVisits": [{"day": date_of(int(t)).isoformat(), "seconds": round((t - int(t)) * 86400.0, 1)}
                             for t, kind, _, _ in case.events if kind == "TRUCK_ROLL"],
-            "history": history, "events": events, "edges": edges,
+            "history": history if case.work not in ("low_income", "budget_bill") else [], "events": events,
+            "edges": edges,
             "actions": list(decisions),
             # Utility Studio: notes, linked orders, the account's invoice hold, and the Studio actions open now.
             "notes": case_notes(run, case, T), "orders": [order_brief(run, o, T) for o in linked],

@@ -167,7 +167,7 @@ def test_low_income_and_budget_categories_fill_at_the_run_rates(base):
     assert done and {r["outcome"] for r in done} <= {"approved", "declined"}
     c = views.case_view(base, done[0]["caseId"], as_of="2026-12-31")
     assert c["collections"]["referral"]["outcome"] == done[0]["outcome"] and c["decision"] is None
-    assert c["studioActions"] == [] and c["readHistory"] == []
+    assert c["studioActions"] == [] and c["readHistory"] == [] and c["history"] == []
     open_ = views.worklist(base, None, as_of=DAY, category="Low Income Process")
     assert all(r["status"] != "resolved" for r in open_["rows"])
     off = run_for(RunRequest(town="ayr", settings={"billing": {"low_income_referral_rate": 0,
