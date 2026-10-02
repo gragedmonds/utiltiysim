@@ -295,14 +295,15 @@ class Run:
                         label=p.get("address") or pid, premise=pid)
         work = 60 * float(self.settings["visitMinutes"])
         read_at = job["arrivalAt"] + work * 0.6
-        reads = self._interim_reads(pid, read_at, job["id"])
+        reads = self._interim_reads(pid, read_at, job["id"], scheduled=request)
         self.reads.extend(reads)
         self._event(read_at, "read.taken", "premise", pid, job, job["id"],
                     {"readIds": [r["id"] for r in reads], "count": len(reads)})
         self._event(job["arrivalAt"] + work, "visit.completed", "premise", pid, job, job["id"], {"activity": "special_read"})
         self._finish_job(job, work)
 
-    def _interim_reads(self, pid: str, at: float, job_id: str) -> list[dict]:
+    def _interim_reads(self, pid: str, at: float, job_id: str, *, scheduled: float) -> list[dict]:
+        """Special reads on a field visit; scheduledReadAt is when the visit was ordered."""
         ops = self.ops
         i = ops.premise_index[pid]
         p = ops.premises[i]
@@ -321,7 +322,8 @@ class Run:
             out.append({**{k: v for k, v in last.items() if k != "truth"},
                         "id": f"READ-{ops.id}-{last['registerId']}-{stamp}-{job_id}",
                         "schemaVersion": READ_SCHEMA_VERSION, "simulationId": self.simulation_id,
-                        "periodStart": last["readAt"], "periodEnd": read_at, "scheduledReadAt": None, "readAt": read_at,
+                        "periodStart": last["readAt"], "periodEnd": read_at,
+                        "scheduledReadAt": self._iso(scheduled), "readAt": read_at,
                         "previousReadAt": last["readAt"], "previousRegisterValue": last["registerValue"],
                         "registerValue": value, "consumption": use,
                         "rolloverFlag": value < float(last["registerValue"]), "readType": "actual",

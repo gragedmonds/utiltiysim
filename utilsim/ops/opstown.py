@@ -202,6 +202,10 @@ class OpsTown:
 _CACHE: dict[str, OpsTown] = {}
 
 
+def cached_ops_town(town_id: str) -> OpsTown | None:
+    return _CACHE.get(town_id)
+
+
 def ops_town(snap: dict) -> OpsTown:
     """Cached per town id (a warm function instance reuses it across requests)."""
     hit = _CACHE.get(snap["id"])

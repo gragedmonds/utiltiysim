@@ -18,7 +18,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
-from utilsim.ops.opstown import OpsTown, ops_town
+from utilsim.ops.opstown import OpsTown, cached_ops_town, ops_town
 from utilsim.ops.timeline import DEFAULTS, Run
 
 PACKS = Path(__file__).resolve().parents[1] / "packs"
@@ -37,14 +37,21 @@ def pack_index() -> dict:
     return orjson.loads(path.read_bytes()) if path.exists() else {"towns": []}
 
 
+def _pack_entry(town: str) -> dict | None:
+    return next((t for t in pack_index()["towns"] if town in (t["preset"], t["townId"])), None)
+
+
 def _pack_snapshot(town: str) -> dict | None:
-    entry = next((t for t in pack_index()["towns"] if town in (t["preset"], t["townId"])), None)
+    entry = _pack_entry(town)
     if entry is None:
         return None
     return orjson.loads(gzip.decompress((PACKS / entry["files"]["snapshot"]["path"]).read_bytes()))
 
 
 def resolve(town: str) -> OpsTown:
+    entry = _pack_entry(town)  # a warm instance reuses a pack town without re-reading its snapshot
+    if entry is not None and (hit := cached_ops_town(entry["townId"])) is not None:
+        return hit
     for source in (*SNAPSHOT_SOURCES, _pack_snapshot):
         snap = source(town)
         if snap is not None:

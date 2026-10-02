@@ -13,6 +13,7 @@ import pytest
 from fastapi.testclient import TestClient
 from viewer_contract import validate_frame
 
+from utilsim.io import schemas
 from utilsim.io.snapshot import build_snapshot
 from utilsim.ops.opstown import OpsTown
 from utilsim.ops.routing import Router, access_point
@@ -133,6 +134,9 @@ def test_field_visit_drives_out_and_takes_interim_reads(ayr):
     assert job["arrivalAt"] == pytest.approx(job["startAt"] + job["routeTimes"][-1])
     assert tl["reads"] and all(r["readReason"] == "interim" and r["source"] == "field-visit" for r in tl["reads"])
     assert all(r["consumption"] >= 0 and r["premiseId"] == "P-00042" for r in tl["reads"])
+    for r in tl["reads"]:
+        assert not schemas.errors("meter-read-1.1", r)
+        assert r["scheduledReadAt"] <= r["readAt"]
     assert tl["incidents"] == [] and tl["stateChanges"] == []
 
 
@@ -162,6 +166,15 @@ def test_hosted_api(ayr):
     frame = client.post("/api/sim/frame", json={**body, "at": 8 * 3600 + 120}).json()
     assert frame["premises"]["unsupplied"]["electric"]
     assert client.post("/api/sim/timeline", json={"town": "nowhere", "commands": []}).status_code == 404
+    import api._ops as ops_api
+
+    calls = []
+    real = ops_api._pack_snapshot
+    ops_api._pack_snapshot = lambda town: calls.append(town) or real(town)
+    try:  # a warm instance answers from its cached town without re-reading the pack
+        assert client.post("/api/sim/timeline", json=body).status_code == 200 and calls == []
+    finally:
+        ops_api._pack_snapshot = real
     bad = {"town": "ayr", "commands": [{"at": 1, "type": "explode", "payload": {}}]}
     assert client.post("/api/sim/timeline", json=bad).status_code == 422
 
