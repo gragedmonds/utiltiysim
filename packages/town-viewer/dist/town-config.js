@@ -57,12 +57,12 @@ export function installTownConfig({getContext,api,probe,toast,download,load}){
  async function render(){const {town,mode}=getContext(),cfg=mode==='snapshot'?town?.config:null,box=$('town-config');
   $('town-pane-title').textContent=cfg?'Town & meters':'Build a repeatable town';$('town-pane-intro').hidden=!!cfg;
   if(!cfg){box.hidden=true;return;}box.hidden=false;
-  $('generator-context').textContent='Every setting that shapes this town, from the engine. Values start at this town\'s own configuration; Generate builds a new town from your edits.';
+  $('generator-context').hidden=false;$('generator-context').textContent='Every setting that shapes this town, from the engine. Values start at this town\'s own configuration; Generate builds a new town from your edits.';
   const base=api(),schema=await schemaFor(base,cfg);if(getContext().town!==town)return;
   if(!draft||draft.townId!==town.id)draft={townId:town.id,values:townValues(cfg,schema)};
   $('town-config-id').textContent=`${townLabel(town)} · ${town.id}${town.generatorVersion?' · generator '+town.generatorVersion:''}${schema['x-inferred']?' · this engine does not publish its settings schema, so bounds and descriptions are missing':''}`;
   if(shownFor!==town.id||!form||$('town-config-form').childElementCount===0){shownFor=town.id;
-   form=renderSchemaForm($('town-config-form'),schema,{values:draft.values,base:cfg,groups:isTownGroup,showAdvanced:true,collapsible:true,open:['seeds','town'],skip:['seeds.master'],baseLabel:'This town',onChange:()=>{draft.values=form.values;update();}});
+   form=renderSchemaForm($('town-config-form'),schema,{values:draft.values,base:cfg,groups:isTownGroup,showAdvanced:true,collapsible:true,open:'all',skip:['seeds.master'],baseLabel:'This town',onChange:()=>{draft.values=form.values;update();}});
    draft.values=form.values;form.filter($('town-config-filter').value);}
   $('town-master-seed').value=draft.values.seeds?.master??'';
   if(capability===null){capability=undefined;update();Promise.resolve(probe()).then(h=>generateCapability(base,h)).then(c=>{capability=c;update();});}else update();}
@@ -80,7 +80,6 @@ export function installTownConfig({getContext,api,probe,toast,download,load}){
  $('town-config-generate').onclick=generate;
  $('town-config-download').onclick=()=>{const {town}=getContext();if(!town?.config||!form)return;const name=String(townLabel(town)).toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')||'town',seed=String(form.values.seeds?.master||'').toLowerCase().replace(/[^a-z0-9]+/g,'-');
   const file=`${name}${seed?'-'+seed:''}-config.json`;download(fullConfig(town.config,form.values),file);toast(`Saved ${file}: uv run utilsim gen --config ${file}`);};
- $('town-config-filter').oninput=e=>{if(!form)return;const q=e.target.value.trim(),n=form.filter(q);$('town-config-matches').textContent=q?`${n} setting${n===1?'':'s'} match`:'';};
- $('town-config-expand').onclick=()=>{const cards=[...document.querySelectorAll('#town-config-form details.schema-group')],open=!cards.every(c=>c.open);for(const c of cards)c.open=open;$('town-config-expand').textContent=open?'Close all':'Open all';};
- return {render,state:()=>({changes:form?.changes()||[],capability,generating,values:form?.values||null})};
+ $('town-config-expand').onclick=()=>{const cards=[...document.querySelectorAll('#settings-page details.schema-group')],open=!cards.every(c=>c.open);for(const c of cards)c.open=open;$('town-config-expand').textContent=open?'Collapse all':'Expand all';};
+ return {render,filter:q=>form?form.filter(q):0,state:()=>({changes:form?.changes()||[],capability,generating,values:form?.values||null})};
 }
