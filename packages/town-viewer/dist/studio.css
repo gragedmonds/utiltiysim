@@ -3,7 +3,8 @@
 .studio-header{--studio-accent:#7357d8}
 .focus-layout .topbar.studio-header{position:absolute;left:0;right:0;top:0;height:62px;min-height:62px;padding:0 20px 0 24px;gap:28px;display:flex;align-items:stretch;justify-content:flex-start;background:#fff;border:0;border-top:3px solid var(--studio-accent);border-bottom:1px solid #dfdfe9;pointer-events:auto;z-index:40;box-sizing:border-box}
 .studio-brand{display:flex;align-items:center;gap:10px;font-size:17px;font-weight:750;letter-spacing:-.5px;color:#211d2e;white-space:nowrap;flex:none}
-.studio-logo{width:26px;height:26px;display:grid;place-items:center;border:2px solid var(--studio-accent);color:var(--studio-accent);border-radius:4px;font-size:20px;line-height:1}
+.studio-wordmark{display:block;width:190px;height:auto}
+.studio-icon{display:none;width:34px;height:auto}
 .studio-town{font-size:12px;font-weight:500;letter-spacing:0;color:#8a8497;margin-left:4px;max-width:28ch;overflow:hidden;text-overflow:ellipsis}
 .studio-tabs{display:flex;align-items:stretch;gap:4px;flex:1;margin:0}
 .studio-tabs a{display:flex;align-items:center;padding:0 18px;font-size:14px;color:#777187;text-decoration:none;border-bottom:3px solid transparent;margin-bottom:-1px;white-space:nowrap}
@@ -19,7 +20,8 @@
 @media (max-width:600px){
  .focus-layout .topbar.studio-header{padding:0 8px 0 12px;gap:8px}
  .studio-town{display:none}
- .studio-brand>span:nth-child(2){display:none}
+ .studio-wordmark{display:none}
+ .studio-icon{display:block}
  .studio-tabs a{padding:0 12px;font-size:13px}
  .studio-header .tool-button{width:34px;height:34px}
 }
