@@ -581,7 +581,30 @@ class BillingConfig(BaseModel):
     disconnect_days: int = F(45, "Days after the due date for a disconnection notice.", unit="d", ge=5, le=180,
                              effects=["disconnection notices"])
     winter_moratorium: bool = F(True, "No disconnection notices for electricity and water from Nov 15 to Apr 30 "
-                                "(Ontario).")
+                                "(Ontario); a notice held for the winter is issued on May 1 if the bill is still "
+                                "unpaid.")
+    disconnect_notice_days: int = F(10, "Days from a disconnection notice to the earliest disconnection. A "
+                                    "disconnection also needs a person's approval (the Collections worklist).",
+                                    unit="d", ge=1, le=60, effects=["disconnections"])
+    disconnect_payment_rate: float = F(0.6, "Disconnected customers who pay within a week of the disconnection (and "
+                                       "are reconnected the next business day); the rest stay off until they pay.",
+                                       ge=0, le=1, advanced=True, effects=["collections", "reconnections"])
+    arrangement_break_rate: float = F(0.3, "At-risk payers who break a payment arrangement after a few instalments "
+                                      "(dunning resumes); other payers pay every instalment.", ge=0, le=1,
+                                      advanced=True, effects=["collections"])
+    low_income_referral_rate: float = F(0.15, "Disconnection notices and winter moratorium holds after which the call "
+                                        "centre refers the customer to a low-income programme (once a year per "
+                                        "account).", ge=0, le=1,
+                                        effects=["Low Income Process cases", "disconnections"])
+    low_income_review_days: int = F(10, "Business days the low-income agency takes to decide a referral; dunning "
+                                    "waits meanwhile.", unit="d", ge=1, le=60, advanced=True)
+    low_income_approval_rate: float = F(0.7, "Referrals the agency approves with a grant.", ge=0, le=1,
+                                        effects=["collections", "receivable"])
+    low_income_grant_max: float = F(500.0, "Largest low-income grant credited to an account's arrears.", unit="$",
+                                    ge=0, le=5000, advanced=True)
+    budget_billing_offer_rate: float = F(0.08, "Overdue notices after which the call centre enrols the customer in "
+                                         "budget billing (once a year per account); the plan levels later "
+                                         "invoices.", ge=0, le=1, effects=["Budget Bill Cases", "collections"])
 
 
 class ScenarioConfig(BaseModel):

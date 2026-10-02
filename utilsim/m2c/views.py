@@ -9,6 +9,8 @@ from __future__ import annotations
 import numpy as np
 
 from utilsim.m2c import catalog as cat
+from utilsim.m2c import collections as colls
+from utilsim.m2c import network
 from utilsim.m2c import orders as ords
 from utilsim.m2c import vee as vee_mod
 from utilsim.m2c.base import date_of
@@ -51,7 +53,9 @@ def _r3(x) -> float | None:
 
 
 # ---- summary ----------------------------------------------------------------------------------------------------
-def summary(run: M2CRun, as_of: str | None = None) -> dict:
+def summary(run: M2CRun, as_of: str | None = None, since: str | None = None) -> dict:
+    """``m2c-summary/1.0`` as of a date (year to date); ``since`` (a date) adds ``window``, the period's figures
+    (utilsim/m2c/period.py)."""
     tw, c = run.town, run.cfg
     day, T = as_of_t(run, as_of)
     months = slice(1, 13)
@@ -142,7 +146,14 @@ def summary(run: M2CRun, as_of: str | None = None) -> dict:
                        for k, v in sorted(by_type.items(), key=lambda kv: -kv[1]["count"])},
         "rpaTypes": [k for k in cat.EXCEPTIONS if k in run.rpa_types],
         "premises": {"ids": tw.premise_ids, "status": premise_status(run, T).tolist(), "legend": list(PREMISE_STATUS)},
+        **({"window": _window(run, since, as_of)} if since else {}),
     }
+
+
+def _window(run: M2CRun, since: str, as_of: str | None) -> dict:
+    from utilsim.m2c import period
+
+    return period.window(run, since, as_of)
 
 
 def reliability(run: M2CRun, T: float) -> dict:
@@ -206,7 +217,7 @@ def premise_status(run: M2CRun, T: float) -> np.ndarray:
     last = np.where(read.any(1), 12 - np.argmax(read[:, ::-1], axis=1), 0)
     est = (run.status[np.arange(tw.n_registers), last] == 2) & (run.release_t[np.arange(tw.n_registers), last] <= T)
     np.maximum.at(out, tw.prem[est], 1)
-    rank = {"VEE_REVIEW": 2, "ESTIMATION": 2, "SUPERVISOR": 3, "FIELD": 4}
+    rank = {"VEE_REVIEW": 2, "ESTIMATION": 2, "SUPERVISOR": 3, "FIELD": 4, "COLLECTIONS": 0}
     for case in run.cases:
         if case.created <= T and not (case.resolved is not None and case.resolved <= T):
             q, _ = case.state(T)
@@ -346,7 +357,9 @@ def _row(run: M2CRun, case: Case, T: float) -> dict:
     tw = run.town
     r, m = case.r, case.month
     queue, status, done = _queue_at(case, T)
-    assignee = owner = "you" if case.work is not None else None
+    assignee = owner = "you" if case.work is not None and case.created_by == "studio" else None
+    if case.created_by == "collections":  # a call-centre referral or enrolment: a collections agent has it
+        assignee = "CC-01"
     for t, kind, payload, _ in case.events:
         if t > T:
             break
@@ -367,7 +380,7 @@ def _row(run: M2CRun, case: Case, T: float) -> dict:
     row = {"caseId": case.id, "queue": queue, "status": status, "type": case.type, "label": label,
            "icon": cat.EVENTS[case.type][1], "category": cat.category(case.type, queue, case.work),
            "premiseId": tw.premise_ids[tw.prem[r]], "address": tw.address[tw.prem[r]],
-           "accountId": case.ref if case.work == "hold" else tw.contract_at(r, int(tw.read_day[r, m]))[1],
+           "accountId": case.ref if case.work in cat.ACCOUNT_WORK else tw.contract_at(r, int(tw.read_day[r, m]))[1],
            "commodity": str(tw.commodity[r]), "registerId": tw.reg_ids[r], "readId": run.read_id(r, m),
            "readDate": date_of(int(tw.read_day[r, m])).isoformat(), "createdAt": run.iso(case.created),
            "ageDays": bdays_between(case.created, case.resolved if done else T),
@@ -400,6 +413,8 @@ def _row(run: M2CRun, case: Case, T: float) -> dict:
     linked = [oid for oid in case.orders if run.orders[oid].created <= T]
     if linked:
         row["linkedOrderIds"] = linked
+    # The AMI collector the meter reports through, and the missed reads on it raised that day.
+    row.update(network.row_links(run, case, T) if case.work is None else {"collectorId": None, "collectorCases": 0})
     return row
 
 
@@ -407,7 +422,7 @@ def _row(run: M2CRun, case: Case, T: float) -> dict:
 def worklist(run: M2CRun, queue: str | None = None, *, as_of: str | None = None, status: str = "open",
              sort: str = "age", page: int = 1, page_size: int = 50, type: str | None = None,
              commodity: str | None = None, search: str | None = None, category: str | None = None,
-             assignee: str | None = None) -> dict:
+             assignee: str | None = None, collector: str | None = None, created_on: str | None = None) -> dict:
     if queue is not None and queue not in cat.QUEUES:
         raise ValueError(f"unknown queue {queue!r} (use {', '.join(cat.QUEUES)})")
     if category is not None and category not in (*cat.CATEGORIES, *cat.NO_ENGINE_CATEGORIES, cat.MY_CASES):
@@ -424,8 +439,13 @@ def worklist(run: M2CRun, queue: str | None = None, *, as_of: str | None = None,
     page_size = min(max(1, page_size), 200)
     rows = []
     needle = (search or "").strip().lower()
+    on = parse_day(created_on, -1) if created_on else None  # cases raised that day (a collector's cluster)
     for case in run.cases:
         if case.created > T or empty:
+            continue
+        if on is not None and int(case.created) != on:
+            continue
+        if collector and (case.work is not None or run.town.collector_of(case.r) != collector):
             continue
         done = case.resolved is not None and case.resolved <= T
         if (status == "open" and done) or (status == "resolved" and not done):
@@ -453,7 +473,8 @@ def worklist(run: M2CRun, queue: str | None = None, *, as_of: str | None = None,
     start = (max(1, page) - 1) * page_size
     return {"schemaVersion": "m2c-worklist/1.0", "simulationId": run.simulation_id, "asOf": date_of(day).isoformat(),
             "queue": queue, "category": asked, "status": status, "sort": sort, "total": len(rows), "page": max(1, page),
-            "pageSize": page_size, "rows": rows[start:start + page_size]}
+            "pageSize": page_size, "rows": rows[start:start + page_size],
+            **({"collector": collector} if collector else {}), **({"createdOn": created_on} if created_on else {})}
 
 
 # ---- reads and decisions -----------------------------------------------------------------------------------------
@@ -646,7 +667,8 @@ def case_view(run: M2CRun, case_id: str, *, as_of: str | None = None, truth: boo
     acct = run.account_of(case)
     hold = run.hold_on(acct, T)
     linked = [run.orders[oid] for oid in case.orders if run.orders[oid].created <= T]
-    read = m > 0 and run.read_t[r, m] <= T  # an invoice hold placed before the account's first 2026 read has none
+    # An invoice hold placed before the account's first 2026 read has none; a collections case is about the account.
+    read = m > 0 and run.read_t[r, m] <= T and case.work not in ("low_income", "budget_bill")
     # An action you add today lands at 09:00: offer only what the engine accepts then (the case is open as of today
     # and was raised by 09:00; decisions the case refuses are left out).
     t9 = day + 9.0 / 24
@@ -662,7 +684,7 @@ def case_view(run: M2CRun, case_id: str, *, as_of: str | None = None, truth: boo
                 "consumption": round(float(run.expected[r, m]), 3)} if read else None
     return {"schemaVersion": CASE_VERSION, **row, "simulationId": run.simulation_id, "asOf": date_of(day).isoformat(),
             "expected": expected, "released": released_json(run, case, T),
-            "readHistory": read_history(run, r, T) if case.work != "hold" else [],
+            "readHistory": read_history(run, r, T) if case.work not in cat.ACCOUNT_WORK else [],
             "decision": decision(run, r, m) if read else None, "read": read_record(run, r, m, T, truth) if read else None,
             "heldReadIds": [run.read_id(r, j) for j in case.reads[1:] if run.read_t[r, j] <= T],
             # Truck rolls as local day and seconds, so the map can show the visit.
@@ -676,6 +698,9 @@ def case_view(run: M2CRun, case_id: str, *, as_of: str | None = None, truth: boo
             "studioActions": studio_actions(run, case, T, open_now, hold, linked),
             **({"order": order_json(run, run.orders[case.ref], T)} if case.work == "order" else {}),
             **({"billingDocument": doc_json(run, run.books.docs[case.doc], T, truth)} if case.doc >= 0 else {}),
+            # The AMI collector and the related comm fails (missing reads); a collections case's account work.
+            **network.case_links(run, case, T),
+            **({"collections": colls.case_block(run, case, T)} if case.work in ("low_income", "budget_bill") else {}),
             **({"truth": {"class": case.truth}} if truth else {})}
 
 
@@ -814,6 +839,8 @@ def studio_actions(run: M2CRun, case: Case, T: float, open_now: bool, hold: list
             out.append("order_complete")
     elif case.work == "hold":
         out.append("invoice_unhold")
+    elif case.work is not None:  # a low-income referral or a budget enrolment: notes and ownership only
+        pass
     else:
         if not linked:
             out.append("order_save")
@@ -1038,19 +1065,24 @@ def invoice_status(inv: dict, T: float) -> str:
         return "scheduled"
     paid = inv.get("paid")
     if paid is not None and paid <= T:
-        return "paid" if inv["total"] > 0 else "credit"
-    return "overdue" if inv["due"] < T else "open"
+        return "paid" if colls.amount_due(inv) > 0 else "credit"
+    return "overdue" if colls.due_at(inv, T) < T else "open"
 
 
 def invoice_json(run: M2CRun, inv: dict, T: float) -> dict:
     bk = run.books
     est = [bk.doc_id(bk.docs[k]) for k in inv["docs"] if bk.docs[k].get("estimated")]
+    due = colls.due_at(inv, T)
     return {"id": inv["id"], "schemaVersion": "invoice/1.0", "accountId": inv["account"],
             "billingDocumentIds": [bk.doc_id(bk.docs[k]) for k in inv["docs"]],
             "estimated": bool(est), "estimatedBillingDocumentIds": est,
-            "issuedAt": date_of(inv["issued"]).isoformat(), "dueAt": date_of(int(inv["due"])).isoformat(),
+            "issuedAt": date_of(inv["issued"]).isoformat(), "dueAt": date_of(int(due)).isoformat(),
+            "originalDueAt": date_of(int(inv["due"])).isoformat() if due != inv["due"] else None,
             "totalAmount": inv["total"], "currency": "CAD", "invoiceStatus": invoice_status(inv, T),
             "status": invoice_status(inv, T),
+            # Collections: what is owed (a budget plan's instalment, else the total) and still outstanding.
+            "amountDue": colls.amount_due(inv), "budgetBilling": bool(inv.get("budget")),
+            "outstanding": colls.owed(inv, T), "disconnection": colls.disconnect_state(inv, T),
             "paidAt": run.iso(inv["paid"]) if inv.get("paid") is not None and inv["paid"] <= T else None,
             "payments": [{"at": run.iso(p["at"]), "amount": p["amount"], "status": p["status"]}
                          for p in inv["payments"] if p["at"] <= T],
@@ -1082,19 +1114,22 @@ def billing_kpis(run: M2CRun, T: float) -> tuple[dict, dict[str, float]]:
         if inv["issued"] <= T:
             recv_carry += max(0.0, end - inv["issued"]) * rate * c.process.receivable_carry_ratio
         for p in inv["payments"]:
-            if p["at"] <= T:
-                charge("PAYMENT_RECEIVED" if p["status"] == "received" else "PAYMENT_REJECTED")
-                collected += p["amount"] if p["status"] == "received" else 0.0
+            if p["at"] <= T:  # instalments and low-income grants are cash in too; a returned debit is not
+                charge("PAYMENT_REJECTED" if p["status"] == "rejected" else "PAYMENT_RECEIVED")
+                collected += p["amount"] if p["status"] in colls.PAID else 0.0
         if paid is not None and paid <= T:
             days_to_pay.append(paid - inv["issued"])
-        elif inv["due"] < T and inv["total"] > 0:
-            overdue += inv["total"]
+        elif colls.is_overdue(inv, T):
+            overdue += colls.owed(inv, T)
         for t, k in inv["dunning"]:
             if t <= T:
                 dunning[k] = dunning.get(k, 0) + 1
                 if k != "PAYMENT_REJECTED":
                     charge(k)
     receivable = sum(max(0.0, bk.balance(a, T)) for a in bk.ledger)
+    collections = colls.summary_block(run, T)
+    for k, n in collections["events"].items():  # account-level work (arrangements, holds); cases cost on their own
+        charge(k, n)
     kpis = {"documents": len(docs), "blocked": sum(1 for d in docs if doc_status(run, d, T) == "blocked"),
             "released": len(released), "billed": round(sum(d["total"] for d in released), 2),
             "billingError": round(sum(abs(d["total"] - d["truthTotal"]) for d in released), 2),
@@ -1103,5 +1138,6 @@ def billing_kpis(run: M2CRun, T: float) -> tuple[dict, dict[str, float]]:
             "avgDaysToInvoice": round(float(np.mean(days_to_invoice)), 2) if days_to_invoice else None,
             "avgDaysToPay": round(float(np.mean(days_to_pay)), 2) if days_to_pay else None,
             "billingCarry": round(carry, 2), "receivableCarry": round(recv_carry, 2), "dunning": dunning,
+            "collections": collections,
             "rateChange": {"date": c.billing.rate_change_date, "pct": c.billing.rate_change_pct}}
     return kpis, costs

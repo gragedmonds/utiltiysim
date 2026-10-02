@@ -59,6 +59,22 @@ EVENTS: dict[str, tuple[str, str, str, float, float, float]] = {
     "DUNNING_NOTICE": ("Overdue notice and late fee", "⚠️", "collections", 0, 1.0, 5),
     "DISCONNECT_NOTICE": ("Disconnection notice", "🔌", "collections", 0, 2.0, 15),
     "MORATORIUM_HOLD": ("Winter moratorium hold", "❄️", "collections", 0, 0, 0),
+    # Collections work (utilsim/m2c/collections.py): your actions, the call centre's referrals and their outcomes.
+    "DISCONNECT_APPROVED": ("Disconnection approved", "✅", "collections", 4, 0, 0),
+    "DISCONNECT_CANCELLED": ("Disconnection cancelled", "🚫", "collections", 4, 0, 0),
+    "DISCONNECTED": ("Disconnected for non-payment", "⛔", "collections", 85, 0.5, 25),
+    "RECONNECTED": ("Reconnected", "🔌", "collections", 85, 0.5, 0),
+    "DUE_DATE_EXTENDED": ("Due date extended", "📅", "collections", 4, 0, 0),
+    "FEE_WAIVED": ("Fee waived", "🎟️", "collections", 4, 0, 0),
+    "PAYMENT_ARRANGEMENT": ("Payment arrangement", "🤝", "collections", 12, 0.5, 0),
+    "ARRANGEMENT_COMPLETED": ("Payment arrangement completed", "🏁", "collections", 0, 0.1, 0),
+    "ARRANGEMENT_BROKEN": ("Payment arrangement broken", "💔", "collections", 0, 0.5, 5),
+    "DUNNING_HOLD": ("Dunning hold", "⏸️", "collections", 4, 0, 0),
+    "LOW_INCOME": ("Low-income referral", "🤲", "collections", 6, 0.25, 0),
+    "LOW_INCOME_GRANT": ("Low-income grant approved", "💚", "collections", 0, 0.5, 0),
+    "LOW_INCOME_DECLINED": ("Low-income application declined", "✖️", "collections", 0, 0.5, 0),
+    "BUDGET_BILL": ("Budget billing enrolment", "📆", "collections", 6, 0.25, 0),
+    "BUDGET_PLAN_CREATED": ("Budget billing plan set up", "🗓️", "collections", 8, 0.5, 0),
     "READ_RELEASED": ("Released to billing", "📤", "billing", 0, 0.05, 0),
     # Studio work: your field service orders, invoice holds, notes and ownership.
     "FIELD_SERVICE": ("Field service order", "🛠️", "field", 6, 0.5, 0),
@@ -86,9 +102,13 @@ BILL_TYPES = ("HIGH_BILL", "BILL_CREDIT", "RATE_CLASS", "TRUE_UP")
 OUTSORTS = ("HIGH_BILL", "BILL_CREDIT")  # billing outsorts RPA may release, up to billing.outsort_auto_release_max
 MISSING_TYPES = ("COMM_FAIL", "NO_ACCESS", "NO_READ", "CONSECUTIVE_ESTIMATES")
 WORK_TYPES = ("FIELD_SERVICE", "INVOICE_HOLD")  # cases you open in the Studio (an order, an invoice hold)
+COLLECTION_TYPES = ("LOW_INCOME", "BUDGET_BILL")  # collections cases on an account (you or the call centre open them)
+# Case work kinds that belong to a contract account rather than a read: an invoice hold, a low-income referral and a
+# budget billing enrolment (``Case.work``; ``Case.ref`` is the account).
+ACCOUNT_WORK = ("hold", "low_income", "budget_bill")
 # Who raised a case (``createdBy`` on rows and case views).
 CREATED_BY = {"ami_head_end": "AMI head-end", "meter_reading_route": "Meter-reading route", "vee_batch": "VEE batch",
-              "billing_run": "Billing run", "studio": "You (Utility Studio)"}
+              "billing_run": "Billing run", "studio": "You (Utility Studio)", "collections": "Collections (call centre)"}
 
 QUEUES = {
     "VEE_REVIEW": "VEE review",
@@ -96,6 +116,7 @@ QUEUES = {
     "SUPERVISOR": "Escalations",
     "FIELD": "Field orders",
     "BILLING": "Billing blocks",
+    "COLLECTIONS": "Collections",
 }
 
 # Clarification categories (Utility Studio). Each case gets one from its type and queue (``category()``); the rest of
@@ -108,9 +129,12 @@ CATEGORIES = {
     "Billing Errors": "Billing blocks for a wrong rate class in master data (RATE_CLASS)",
     "Invoice Outsorts": "Invoice holds you placed on an account (INVOICE_HOLD)",
     "Field Work": "Cases in the FIELD queue and your field service orders (FIELD_SERVICE)",
+    "Low Income Process": "Low-income programme referrals (LOW_INCOME) by you or the call centre, open until the "
+                          "agency decides",
+    "Budget Bill Cases": "Budget billing enrolments (BUDGET_BILL) by you or the call centre, open until billing sets "
+                         "up the plan",
 }
-NO_ENGINE_CATEGORIES = ("AMP", "Bill Correction", "Bill Print Errors", "Billing- see IT Supp", "Budget Bill Cases",
-                        "Invoice Errors", "Low Income Process")
+NO_ENGINE_CATEGORIES = ("AMP", "Bill Correction", "Bill Print Errors", "Billing- see IT Supp", "Invoice Errors")
 MY_CASES = "My Assigned Cases"  # not a category: the cases assigned to you
 
 
@@ -120,6 +144,10 @@ def category(kind: str, queue: str | None, work: str | None = None) -> str:
         return "Field Work"
     if work == "hold":
         return "Invoice Outsorts"
+    if kind == "LOW_INCOME":
+        return "Low Income Process"
+    if kind == "BUDGET_BILL":
+        return "Budget Bill Cases"
     if kind == "RATE_CLASS":
         return "Billing Errors"
     if kind in BILL_TYPES:
