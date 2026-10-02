@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import gzip
 from collections.abc import Callable
+from datetime import date, timedelta
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -16,10 +17,10 @@ from typing import Any
 import orjson
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from utilsim.ops.opstown import OpsTown, cached_ops_town, ops_town
-from utilsim.ops.timeline import DEFAULTS, Run
+from utilsim.ops.timeline import DAYS_VERSION, DEFAULTS, MAX_DAYS, Run, run_days
 
 PACKS = Path(__file__).resolve().parents[1] / "packs"
 router = APIRouter()
@@ -102,6 +103,24 @@ class FrameRequest(TimelineRequest):
     premises: bool = True
 
 
+class DaysRequest(BaseModel):
+    """A range of run days, each replayed without commands (the viewer's +1 week / +1 month)."""
+
+    model_config = ConfigDict(populate_by_name=True)
+    town: str = Field(..., description="Pack preset (e.g. 'ayr') or town id.")
+    from_: str = Field(..., alias="from", description="First run day (YYYY-MM-DD, local).")
+    to: str = Field(..., description=f"Last run day, inclusive; at most {MAX_DAYS} days from the first.")
+    settings: dict | None = Field(None, description="Overrides for the run settings, as for /api/sim/timeline.")
+    m2c: dict | None = Field(None, description="The meter-to-cash run; only its `seed` matters here (the days' "
+                             "background incidents never depend on its field orders).")
+    seed: str | None = Field(None, max_length=64, description="Run seed, as for /api/sim/timeline.")
+
+
+def _seed(req: TimelineRequest | DaysRequest) -> str | None:
+    seed = req.seed if req.seed is not None else (req.m2c or {}).get("seed")
+    return seed if isinstance(seed, str) else None
+
+
 def _run(req: TimelineRequest, *, with_m2c: bool = False) -> Run:
     ops = resolve(req.town)
     orders = outcomes = cycle = None
@@ -109,11 +128,9 @@ def _run(req: TimelineRequest, *, with_m2c: bool = False) -> Run:
         from api._m2c import m2c_day  # the meter-to-cash run behind the day's field work and reading rounds
 
         orders, outcomes, cycle = m2c_day(req.town, req.date or ops.scenario_date, req.m2c)
-    seed = req.seed if req.seed is not None else (req.m2c or {}).get("seed")
     try:
         return Run(ops, [c.model_dump() for c in req.commands], day=req.date, settings=req.settings,
-                   field_orders=orders, read_outcomes=outcomes, m2c_cycle=cycle,
-                   seed=seed if isinstance(seed, str) else None)
+                   field_orders=orders, read_outcomes=outcomes, m2c_cycle=cycle, seed=_seed(req))
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
 
@@ -147,6 +164,30 @@ def post_timeline(req: TimelineRequest):
     """``utility-timeline/1.0``: incidents, crew jobs with road routes, events, state changes and field-visit reads
     for a run's command list. Appending a command never changes what earlier commands produced."""
     return J(_run(req, with_m2c=True).timeline())
+
+
+@router.post("/api/sim/days")
+def post_days(req: DaysRequest):
+    """``utility-days/1.0``: the run days from ``from`` to ``to`` (inclusive, at most 62), each replayed with no
+    commands: per day its ``date``, ``interruptions`` (as the timeline reports them: the meter-to-cash run's
+    ``outages`` for the days the viewer skips over) and counts of ``incidents`` and ``jobs``. The days' background
+    incidents are the same draws as a single-day timeline's, so the two always agree."""
+    try:
+        a, b = date.fromisoformat(req.from_), date.fromisoformat(req.to)
+    except ValueError as exc:
+        raise HTTPException(422, f"from/to must be YYYY-MM-DD: {exc}") from exc
+    if b < a:
+        raise HTTPException(422, f"'to' ({req.to}) is before 'from' ({req.from_})")
+    if (b - a).days + 1 > MAX_DAYS:
+        raise HTTPException(422, f"at most {MAX_DAYS} days per request ({(b - a).days + 1} asked)")
+    ops = resolve(req.town)
+    try:
+        days = run_days(ops, [a + timedelta(days=k) for k in range((b - a).days + 1)], settings=req.settings,
+                        seed=_seed(req))
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    return J({"schemaVersion": DAYS_VERSION, "townId": ops.id, "timezone": ops.timezone, "from": req.from_,
+              "to": req.to, "seed": _seed(req), "days": days})
 
 
 @router.post("/api/sim/frame")
