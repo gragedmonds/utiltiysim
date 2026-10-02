@@ -99,14 +99,17 @@ These are in your package and follow your patterns:
 - **`#/worklists` page** (`worklists.js`): queues with aging and backlog sparklines, a KPI strip, a paged case table,
   and a case panel. The panel shows the five VEE tests with rationale, the read history chart, the Activity
   Sequence trace and the actions.
+- **`#/process` page** (`process.js`), "Activity sequences": a month's sequence mix, an event explorer and the trace
+  of one Activity Sequence from its Initiating Event, with what led to an event and what followed from it tinted. It
+  is linked from the Worklists header and from each case.
 - **Engine client** (`m2c.js`): keeps the run's settings overrides and your append-only actions in `localStorage`,
   and drops late replies by channel.
 - **Settings tab** "Meter-to-cash" (`schema-form.js`): rendered from the engine's JSON Schema.
 - **Map:** a "Cases on map" toggle uses `setMarkers` for premises with open cases. The house Billing tab shows the
   engine's reads (read, VEE and bill status) and links to the house's cases.
 
-The routes are a table in `focus-ui.js` (`PAGES`). Opening a pack keeps a deep-linked `#/worklists` or `#/settings`
-page on the first load. Design passes welcome, especially:
+The routes are a table in `focus-ui.js` (`PAGES`). Opening a pack keeps a deep-linked `#/worklists`, `#/process` or
+`#/settings` page on the first load. Design passes welcome, especially:
 - the queue cards;
 - the confidence gauge;
 - how a held read is shown;

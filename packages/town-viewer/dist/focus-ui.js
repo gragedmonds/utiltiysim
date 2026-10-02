@@ -18,7 +18,8 @@ const paths={
 };
 // Full-page views over the map, by hash: #/settings[/tab] and #/worklists[/QUEUE][/case/ID].
 const PAGES=[{id:'settings-page',re:/^#\/settings(?:\/(town|scenarios|data|m2c))?$/},{id:'worklists-page',re:/^#\/worklists(?:\/[A-Z_]+)?(?:\/case\/[\w.:-]+)?$/}];
-export function installFocusUI({getContext,onSettings,onScenario,onWorklists=()=>{},onSettingsTab=()=>{}}){
+PAGES.push({id:'process-page',re:/^#\/process(?:\/(?:[1-9]|1[0-2])(?:\/[\w.:-]+)?)?$/}); // #/process[/MONTH[/EVENT]]: Activity sequences
+export function installFocusUI({getContext,onSettings,onScenario,onWorklists=()=>{},onSettingsTab=()=>{},onProcess=()=>{}}){
  const $=id=>document.getElementById(id), pairs=[['layers-toggle','layers-drawer'],['scenario-toggle','scenario-popover'],['data-toggle','data-popover'],['search-toggle','search-popover']];
  document.querySelectorAll('[data-icon]').forEach(el=>{el.insertAdjacentHTML('afterbegin',`<svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[el.dataset.icon]||''}</svg>`);});
  function closeTools(){for(const [button,panel] of pairs){$(panel).hidden=true;$(button).setAttribute('aria-expanded','false');}}
@@ -45,9 +46,10 @@ export function installFocusUI({getContext,onSettings,onScenario,onWorklists=()=
   if(page==='settings-page'){const tab=hash.match(PAGES[0].re)[1]||'town';closeTools();$('performance-panel').open=false;refresh();document.querySelectorAll('[data-settings-pane]').forEach(el=>el.hidden=el.dataset.settingsPane!==tab);document.querySelectorAll('[data-settings-tab]').forEach(el=>{if(el.dataset.settingsTab===tab)el.setAttribute('aria-current','page');else el.removeAttribute('aria-current');});onSettingsTab(tab);if(was!==page)$('settings-back').focus();}
   if(page==='worklists-page'){closeTools();$('performance-panel').open=false;if(was!==page)$('worklists-back').focus();}
   onWorklists(page==='worklists-page',hash);
+  if(page==='process-page'){closeTools();$('performance-panel').open=false;if(was!==page)$('process-back').focus();}onProcess(page==='process-page',hash);
  }
  function settings(tab='town'){window.location.hash='/settings/'+tab;route();}
- function map(){const from=current;window.location.hash='/town';route();$(from==='worklists-page'?'worklists-toggle':'settings-toggle').focus();}
+ function map(){const from=current;window.location.hash='/town';route();$(from==='settings-page'?'settings-toggle':'worklists-toggle').focus();}
  function worklists(){window.location.hash='/worklists';route();}
  $('settings-toggle').onclick=()=>settings();$('settings-back').onclick=map;$('worklists-toggle').onclick=worklists;$('worklists-back').onclick=map;$('scenario-settings').onclick=()=>settings('scenarios');
  document.querySelectorAll('[data-settings-tab]').forEach(el=>el.onclick=()=>settings(el.dataset.settingsTab));
