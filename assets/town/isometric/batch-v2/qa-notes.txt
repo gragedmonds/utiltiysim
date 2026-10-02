@@ -1,0 +1,81 @@
+Utility Studio five-view asset QA
+
+Complete review batch; not a validated production atlas
+
+All selected files: 1536 x 1024 RGBA. Intended 512 px cells: front-right, front-left, rear-left / rear-right, overhead, empty.
+Visible-haze threshold: alpha > 16/255. Selected empty cells contain only negligible alpha noise, maximum 1/255.
+No selected sheet is a validated production atlas.
+
+Industrial plant — selected initial
+/workspace/scratch/80cbad02ab88/asset-batch-v2/01-industrial-plant-initial.png
+- Initial selected because correction introduced visible background haze and altered rear-left window count.
+- Four distinct quarter views are present, but right facade has two windows in front-right and three in rear-right; identity is not fully locked.
+- Fifth view is high-angle oblique: front doors/wall and vertical equipment depth remain visible.
+- Thresholded alpha bounds touch a cell boundary; inspect cropping before atlas slicing.
+
+Utility depot — selected initial
+/workspace/scratch/80cbad02ab88/asset-batch-v2/02-utility-depot-initial.png
+- Initial selected because correction introduced visible background haze.
+- Four distinct views retain two bays, fenced yard, bins and mast. Fence/gate topology and HVAC position are not geometrically verified.
+- Fifth view shows the front facade, garage doors, upright mast and HVAC front grille; not strict overhead.
+- Thresholded alpha bounds touch a cell boundary; inspect cropping before atlas slicing.
+
+Electric substation — selected initial
+/workspace/scratch/80cbad02ab88/asset-batch-v2/03-electric-substation-initial.png
+- Initial selected because correction expanded sprites across cell boundaries without fixing strict overhead.
+- Four distinct views retain the main transformer and general breaker layout; exact busbar topology is not verified.
+- Fifth view retains upright bushing shafts, transformer radiator front, pedestal fronts and fence height; not strict overhead.
+
+Water pump station — selected initial
+/workspace/scratch/80cbad02ab88/asset-batch-v2/04-water-pump-station-initial.png
+- Initial selected because correction introduced visible background haze.
+- Four distinct facade views preserve front doors, left windows, right pipe loop and rear service equipment reasonably well.
+- Fifth view shows front gable wall and service doors below the roof, plus vent shaft depth; not strict overhead.
+
+Elevated water tower — selected initial
+/workspace/scratch/80cbad02ab88/asset-batch-v2/05-elevated-water-tower-initial.png
+- Initial selected because correction introduced visible background haze.
+- First two views are near duplicates rather than genuine opposite front quadrants. Rear views differ in hatch/ladder visibility.
+- Four structural legs are recognizable, with an extra small riser footing in some views. The circular fifth view reads as overhead, but hatch/ladder placement and scale need review.
+
+Gas city gate and regulator station — selected initial
+/workspace/scratch/80cbad02ab88/asset-batch-v2/06-gas-city-gate-initial.png
+- Initial selected because correction introduced visible background haze and duplicated its rear quadrants.
+- First two views repeat nearly the same front angle, and lower-left is another front view rather than rear-right. A reliable four-direction set is missing.
+- Cabinet placement/height and pipe visibility drift. Fifth view shows cabinet fronts, upright gauges and equipment depth; not strict overhead.
+
+Bucket line truck — selected initial
+/workspace/scratch/80cbad02ab88/asset-batch-v2/07-bucket-line-truck-initial.png
+- Initial selected because correction introduced visible background haze.
+- Four isometric views show distinct front/rear quadrants and recognizable ladder-versus-reel sides; exact intrinsic handedness and hinge placement are not fully verified.
+- Fifth view shows grille, headlight and bumper depth. It is high-angle oblique, not strict overhead.
+
+Water crew truck and excavator — selected initial
+/workspace/scratch/80cbad02ab88/asset-batch-v2/08-water-crew-truck-excavator-initial.png
+- Initial selected because correction created duplicated rear views and additional accessory drift.
+- First two initial views are near duplicates rather than opposite front quadrants.
+- Excavator remains prominently visible in both rear views, implying side/occlusion drift; ladder/toolbox placement changes. Fifth view has grille and vertical depth. Not a reliable rigid two-vehicle rotation set.
+
+Gas service truck — selected initial
+/workspace/scratch/80cbad02ab88/asset-batch-v2/09-gas-service-truck-initial.png
+- Initial selected because correction introduced visible background haze.
+- Rear-left and rear-right are near-duplicate camera quadrants. Pipe rack, hose reel and toolbox placement vary or disappear across views.
+- Fifth view retains grille/bumper depth and accessory handedness needs review. Not a validated four-direction rotation set.
+
+Meter technician van — selected corrected
+/workspace/scratch/80cbad02ab88/asset-batch-v2/10-meter-technician-van-corrected.png
+- Four distinct isometric views preserve windowed versus blank cargo sides and rear double doors.
+- Roof ladder stays visually similar, but strict intrinsic left-side placement relative to overhead requires review.
+- Plan retains grille/headlight faces and bumper depth; strict overhead projection fails.
+
+Residential electric AMI meter module — selected corrected
+/workspace/scratch/80cbad02ab88/asset-batch-v2/11-residential-electric-ami-meter-corrected.png
+- Four distinct views correctly keep the reading face on the front and a plain mounting plate at the rear.
+- Cabinet latch/port detail is broadly consistent; mounting-tab and hinge details vary slightly.
+- Correction removed the display from the fifth view, but circular cover front ellipse and upright mounting tab remain visible. Not a strict top projection.
+
+Residential diaphragm gas meter module — selected corrected
+/workspace/scratch/80cbad02ab88/asset-batch-v2/12-residential-diaphragm-gas-meter-corrected.png
+- Correction made the two rear views distinct while retaining a plain meter back.
+- Asymmetric inlet regulator and outlet remain recognizable, but elbow orientation and back fasteners vary.
+- Fifth view still shows front reading-window housing, vertical face bolts and regulator front profile; strict overhead projection fails.
