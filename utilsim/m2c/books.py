@@ -79,15 +79,24 @@ class Books:
         rate = self.run.town.inst_rate[i]
         return _swap(rate) if self.rate_err_t[i] <= t < self.rate_fix_t[i] else rate
 
-    def quantities(self, i: np.ndarray, m: np.ndarray, src: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-        """Import and export quantities per installation period from register values ``src`` (released or truth)."""
-        digits = self.run.town.digits
+    def quantities(self, i: np.ndarray, m: np.ndarray, src: np.ndarray,
+                   device: bool = False) -> tuple[np.ndarray, np.ndarray]:
+        """Import and export quantities per installation period from register values ``src`` (released or truth).
+        ``device``: a period with a device change bills the new register from its initial read, plus the old
+        register's last stretch (``Install.carry``)."""
+        run = self.run
+        digits = run.town.digits
         out = []
         for rows in (self.main[i], self.export_row[i]):
             ok = rows >= 0
             rr = np.where(ok, rows, 0)
             mod = 10.0 ** digits[rr]
-            d = src[rr, m] - src[rr, m - 1]
+            prev = src[rr, m - 1].astype(float)
+            if device:
+                for k in np.flatnonzero(ok & (run.dev_change[rr, m] != None)):  # noqa: E711 (object array)
+                    r, mm = int(rr[k]), int(m[k])
+                    prev[k] = run.dev_change[r, mm].carry(r, float(src[r, mm - 1]), float(run.normal_at[r, mm - 1]))
+            d = src[rr, m] - prev
             out.append(np.where(ok, np.where(d < -0.5 * mod, d + mod, d), 0.0))
         return out[0], out[1]
 
@@ -143,7 +152,7 @@ class Books:
         m = np.array([x[1] for x in ready])
         rates = [self.rate_at(a, t) for a in i.tolist()]
         right = [run.town.inst_rate[a] for a in i.tolist()]
-        qi, qe = self.quantities(i, m, run.released)
+        qi, qe = self.quantities(i, m, run.released, device=True)
         ti, te = self.quantities(i, m, run.truth)
         ei, ee = self.expected(i, m)
         totals = self.compute(list(zip(i.tolist(), m.tolist(), rates, qi.tolist(), qe.tolist(), strict=True)))

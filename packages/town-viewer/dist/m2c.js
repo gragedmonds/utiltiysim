@@ -60,18 +60,21 @@ export class EngineM2C{
  lockedBefore(day){const last=this.lastActionDay();return last&&day&&day<last?last:null;}
  // Appends a decision on the current view date and checks it with the engine; a refused action is removed again:
  // HTTP 422, or an engine that skips it with a warning ("ACT-n: …"), which is a refusal too. One at a time: while the
- // engine records one (`pending`), another is refused, so a double click cannot record it twice.
+ // engine records one (`pending`), another is refused, so a double click cannot record it twice. The engine's notices
+ // on a recorded action ("ACT-n (notice): …", e.g. a case completed while its order is open) are kept in `notices`,
+ // and `onAct` hears every recorded action (the map refreshes its operations day: a dispatched order is a crew job).
  async act(type,caseId,value=null,extra={}){
   if(this.pending)throw Error('The engine is still recording your previous action.');
   if(!this.asOf)throw Error('Pick a view date first.');
   if(!this.canAct())throw Error(`Actions are append-only: move the date to ${this.lastActionDay()} or later.`);
   const a={id:'ACT-'+(this.actions.length+1),day:this.asOf,type,...(caseId?{caseId}:{}),...extra};if(value!=null&&value!=='')a.value=Number(value);
-  this.actions.push(a);this.pending=a;
-  try{const res=await this.summary(),skipped=(res?.warnings||[]).find(w=>String(w).startsWith(a.id+':'));
-   if(skipped){const e=Error(String(skipped).slice(a.id.length+1).replace(/ \(skipped\)$/,'').trim());e.status=422;e.detail=e.message;throw e;}}
+  this.actions.push(a);this.pending=a;this.notices=[];
+  try{const res=await this.summary(),warn=(res?.warnings||[]).map(String),skipped=warn.find(w=>w.startsWith(a.id+':'));
+   if(skipped){const e=Error(skipped.slice(a.id.length+1).replace(/ \(skipped\)$/,'').trim());e.status=422;e.detail=e.message;throw e;}
+   this.notices=noticesFor(warn,a.id);}
   catch(e){if(!e.superseded){if(this.actions.at(-1)===a)this.actions.pop();throw e;}}
   finally{this.pending=null;}
-  this.save();return a;
+  this.save();try{this.onAct?.(a);}catch{}return a;
  }
  setAsOf(day){this.asOf=day||null;this.save();}
  setSettings(overrides){this.settings=overrides&&Object.keys(overrides).length?overrides:null;this.save();}
@@ -83,6 +86,8 @@ export class EngineM2C{
  export(){return {schemaVersion:'viewer-m2c-run/1.0',townId:this.townId,town:this.townRef,settings:this.settings,seed:this.seed,actions:this.actions,outages:this.outageList(),asOf:this.asOf};}
 }
 
+// The engine's notices on one action ("ACT-3 (notice): CASE-… was completed while …"): recorded, but worth a warning.
+export function noticesFor(warnings,id){const p=id+' (notice):';return (warnings||[]).map(String).filter(w=>w.startsWith(p)).map(w=>w.slice(p.length).trim());}
 // Premises whose electric meter is AMI (from the town snapshot): those meters need mains power to answer the head end.
 export function mainsAmiPremises(town){const tech=new Map((town?.meters||[]).map(m=>[m.id,m.technology]));return new Set((town?.servicePoints||[]).filter(s=>s.commodity==='electric'&&tech.get(s.meterId)==='AMI').map(s=>s.premiseId));}
 // The map's "Meter-to-cash today" card with the day's own interruptions applied. The operations timeline builds the

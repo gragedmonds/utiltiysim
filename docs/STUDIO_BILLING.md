@@ -73,7 +73,8 @@ A refused action returns **HTTP 422**. Its `detail` is a string, or for order re
 - **Record (`m2c-installation/1.0`):**
   - Header fields: `installationId`, `premiseId`, `address`, `commodity`, `rateCategory`, `billingClass`, `mruId`,
     `portion`, `status`, `servicePointId`.
-  - Lists: `meters[]` (each with `registers[]`), `contracts[]`, `accounts[]` (each with `businessPartner`, `balance`,
+  - Lists: `meters[]` (each with `registers[]`, the current `deviceId` and its `devices[]` history), `contracts[]`,
+    `accounts[]` (each with `businessPartner`, `balance`,
     `ledger[]` and `invoiceHold`), `billingDocuments[]`, `invoices[]` (each with `payments[]` and `dunning[]`),
     `reads[]`, `cases[]`.
 
@@ -85,8 +86,8 @@ A refused action returns **HTTP 422**. Its `detail` is a string, or for order re
 | **Billing document** | One `billingDocuments[]` entry. `lines[]` has `type`, `description`, `quantity`, `unit`, `rate` and `amount`, plus `subtotal`, `tax` and `totalAmount`. A rebill has `replaces`; a reversed document has `reversedAt`. |
 | **Print document** | One `invoices[]` entry: `billingDocumentIds[]`, `payments[]` (`at`, `amount`, `status`), `dunning[]` (`at`, `type`, `label`). |
 | **Contract** | The current entry in `contracts[]`, plus from `accounts[0]`: `paymentMethod`, `budgetBilling`, `balance`, `ledger[]` (`at`, `type`, `amount`, `ref`) and `invoiceHold`. |
-| **Installation / Device** | `meters[]` (`meterId`, `technology`) and `registers[]` (`registerId`, `direction`, `unit`, `digits`, `multiplier`). |
-| **MR results** | `reads[]`: `scheduledReadAt`, `registerValue`, `consumption`, `unit`, `readType`, `veeStatus`, `billStatus`. Opening one calls Display Meter Reading Results with the read's `id`. |
+| **Installation / Device** | `meters[]` (`meterId`: the meter slot, `deviceId`: the device in it as of the run date, `technology`) and `registers[]` (`registerId`, `direction`, `unit`, `digits`, `multiplier`). **Device history** is `devices[]`, oldest first: `deviceId`, `installedAt` (null for the snapshot's device), `removedAt`, `initialReads` and `removalReads` (by register id), `by` (`you` or a field crew `FIELD-n`), `orderId`, `caseId`, `current`. **Replace device** is `device_replace {meterId, deviceId, installDate, initialRead, removalRead?, note?}`: the new register counts from its initial read and later reads are diffed against it; an install date before a read already released on the old device is refused (422 with the date). |
+| **MR results** | `reads[]`: `scheduledReadAt`, `registerValue`, `consumption`, `unit`, `readType`, `veeStatus`, `billStatus`, `deviceId`. A missed read has `cause` (`label`, `outageStart`, `outageEnd`, `reason`): the Note column says e.g. "Missed: power outage 00:00–04:00 (AMI last gasp)". Opening one calls Display Meter Reading Results with the read's `id`. |
 
 ### Display Meter Reading Results (query → record)
 
@@ -99,12 +100,16 @@ A refused action returns **HTTP 422**. Its `detail` is a string, or for order re
     "missed: power outage 01:00–03:20" from `cause.label`, `outageStart` and `outageEnd`, or `cause.reason`.
   - A register that went backwards (not a rollover) has `consumption: null`, `registerRegression: true` and the
     negative `registerDelta`; `rolloverFlag` is true only for a real rollover.
+  - `deviceId` is the device the read was taken on. A read period with a device replacement has `deviceChange`
+    (`deviceId`, `previousDeviceId`, `installedAt`, `initialRead`, `removalRead`, `oldRegisterUse`): its
+    `previousRegisterValue` is the new register's initial read, and its consumption adds the old register's last
+    stretch (`oldRegisterUse`).
   - Its VEE decision is `decision`: `tests[]` (`test`, `outcome`, `contribution`, `rationale`), `confidence`,
     `disposition`, `expectedConsumption`.
   - Linked records: `installationId`, `contractId`, `accountId`, `businessPartnerId`, `premiseId`, `address`,
     `meterId`, `registerId`, `case`, `order`.
   - The register's other readings are `history[]` (`readId`, `readDate`, `registerValue`, `readType`, `veeStatus`,
-    `cause` for a missed one).
+    `cause` for a missed one, so the history can say "missed: power outage" too).
 
 Astra's navigation rules hold. A reading opened from Billing Details may go back to it. Installation, contract and
 billing pages reached from a standalone reading go through the installation query.
@@ -118,9 +123,13 @@ billing pages reached from a standalone reading go through the installation quer
     **Invoice Outsorts** (invoice holds), **Low Income Process** (LOW_INCOME referrals) and **Budget Bill Cases**
     (BUDGET_BILL enrolments). The last two are in the `COLLECTIONS` queue; their case view has `collections` (the
     account's overdue and outstanding, the agency's decision and grant, or the plan's instalment) and no read.
+    **Escalations** lists every case in the SUPERVISOR queue (escalated by VEE, an analyst or you), whatever its type:
+    a supervisor works it after the pickup lag (run settings `process.supervisor_queue_days_min`–`max`), unless you
+    take it (`assign`) and decide it yourself. A note, an order or a hold on an escalation does not take it from the
+    supervisors.
   - Rows also carry `actionableFrom`, `createdBy` / `createdByLabel` (AMI head-end, meter-reading route, VEE batch,
-    billing run, you), `cause` (missing reads), `registerDelta`, `registerWentBackwards`, `previousEstimated` and
-    `releasedMethod`.
+    billing run, you), `cause` (missing reads), `registerDelta`, `registerWentBackwards`, `previousEstimated`,
+    `releasedMethod` and `relatedCaseIds` (the other open cases at the same premise: show "2 related cases" with links).
 - **Case** comes from `POST /api/m2c/case {caseId}`.
   - Billing-related fields: `queue`, `type`, `category`, `impact`, `invoiceHold`, `notes[]`, `orders[]`,
     `billingDocument`.
@@ -130,11 +139,18 @@ billing pages reached from a standalone reading go through the installation quer
     `previousEstimated`; `readHistory[]` (`readId`, `date`, `register`, `consumption`, `type`, `estimated`, `method`,
     `veeStatus`, `caseId`; up to 13 periods); `cause {code, label, reasonCode, reason, lastGaspAt?, outageSince?}` for
     a missing read.
+  - Field work: `relatedCases[]` (`caseId`, `label`, `commodity`, `queue`, `coverable`: a field order from this case
+    can cover it); `fieldOutcome` (the newest field order outcome written back: `orderId`, `kind`, `label`, `text`,
+    `by`, `at`, and the kind's fields); `checkRead {value, orderId}` when that outcome gives the read a check read.
+    `check_read` in `actions` releases the read with it (method `field_read`).
   - `actions` lists the decisions allowed today; `studioActions` lists the case work allowed today. Both list only
     what the engine accepts from an action dated the run date, so both are empty before `actionableFrom`.
   - Show a button only when its action is in one of these lists. For example, while an account is on hold, `accept`
     (the outsort release) disappears; on a register that went backwards `accept` is not offered (estimate, override
-    with the right value, or a field order); a missing read offers only estimate, field order and escalate.
+    with the right value, or a field order); a missing read offers only estimate, field order, escalate and, after a
+    field order took a read, `check_read`.
+  - Completing a case while its order is still open is allowed; the summary's `warnings` then carry `ACT-n (notice):
+    … the order goes on`. Warn about it, never block it.
   - Show a backwards register as `registerDelta` (negative), not as the read's `consumption`, which a meter data
     system records as a rollover.
 - **Releasing a billing outsort** is `accept` with a `note`, the reason. Holds are
@@ -150,13 +166,23 @@ billing pages reached from a standalone reading go through the installation quer
 ### Field service orders
 
 - **The form's vocabulary** comes from `GET /api/m2c/vocabulary?town=`: fields (label, tab, required, kind,
-  choices, bounds), component units, stages and system statuses.
+  choices, bounds), component units, stages and system statuses, and `order.outcomes` (the structured field outcomes
+  and their fields).
 - **Opening an order:** `POST /api/m2c/order {orderId | sourceCaseId | readId}` returns the order, or `order: null`
   and a prefill `proposal` when that source has none yet.
-- **Steps:** `order_save`, `order_release`, `order_dispatch`, `order_complete`. Complete is allowed only from the
-  order's start date, so fast-forward to that date to complete it.
-- **On the map:** a dispatched order becomes a field van on its start date. "Watch the truck roll" opens that day on
-  the map.
+- **One visit per premise:** when the case has `coverable` related cases, offer to cover them; send their ids as
+  `coverCaseIds` with the first `order_save`. The order lists them (`coveredCaseIds`) and its outcome is written back
+  to each.
+- **Steps:** `order_save`, `order_release`, `order_dispatch`, then the order moves on its own: on its start date
+  (never before) the crew rolls at 07:00–09:00 (En route, `REL DISP ENRT`), is On site (`REL DISP ONST`) and
+  completes it (`TECO`) with a simulated outcome when the visit ends. `order_complete {orderId, outcome, note?}`
+  records your outcome instead, on the day the crew works the order (`completable` on the order says when); a later
+  completion is refused. The outcome kinds: `read_taken {value, date}`, `read_confirmed`, `meter_exchanged
+  {deviceId, installDate, initialRead, removalRead?}`, `no_access`, `defect_found {text}`. The order's `outcome` is
+  `{kind, label, text, by, at, ...}` (`by`: `you` or the crew), and `history[]` says who moved each stage (`by`).
+- **On the map:** a dispatched order becomes a field van on its start date. The viewer refreshes the map's
+  operations day after every Workspace action, so an order dispatched for today appears in the Field operations panel
+  at once. "Watch the truck roll" opens that day on the map.
 
 ### Collections worklists (left nav "Collections")
 

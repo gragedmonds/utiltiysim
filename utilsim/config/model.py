@@ -489,6 +489,12 @@ class ProcessConfig(BaseModel):
                                         le=10, advanced=True)
     supervisor_minutes: float = F(40.0, "Supervisor review time per escalation.", unit="min", ge=5, le=240,
                                   advanced=True)
+    supervisor_queue_days_min: int = F(1, "Minimum wait before a supervisor picks up an escalation (VEE's own "
+                                       "escalations wait this long).", unit="d", ge=1, le=20,
+                                       effects=["escalation backlog", "days to bill"])
+    supervisor_queue_days_max: int = F(3, "Maximum wait before a supervisor picks up an escalation from an analyst "
+                                       "or you. An escalation you take yourself (assign) waits for you.", unit="d",
+                                       ge=1, le=30, effects=["escalation backlog", "days to bill"])
     field_orders_per_day: int = F(6, "Meter investigations, re-reads and exchanges completed per business day.",
                                   ge=0, le=500, effects=["field order backlog", "estimates"])
     field_days_min: int = F(1, "Earliest a field order is worked after it is raised.", unit="d", ge=0, le=20,
@@ -669,6 +675,8 @@ class SimConfig(BaseModel):
             raise ValueError("process.analyst_queue_days_max must be >= min")
         if self.process.review_minutes_max < self.process.review_minutes_min:
             raise ValueError("process.review_minutes_max must be >= min")
+        if self.process.supervisor_queue_days_max < self.process.supervisor_queue_days_min:
+            raise ValueError("process.supervisor_queue_days_max must be >= min")
         if self.vee.reject_confidence > self.vee.accept_confidence:
             raise ValueError("vee.reject_confidence must not exceed vee.accept_confidence")
         if self.vee.max_period_days < self.vee.min_period_days:

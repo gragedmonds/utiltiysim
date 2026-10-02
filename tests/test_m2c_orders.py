@@ -182,12 +182,14 @@ def test_order_lifecycle_links_a_field_work_case_and_keeps_the_source_open(base,
     assert row["category"] == "MR Implausibles" and row["linkedOrderIds"] == [oid]
     assert row["assignee"] == row["owner"] == "Dana"
     cv = views.case_view(run, source.id, as_of=end)
-    assert [n["text"] for n in cv["notes"]] == ["Customer called about the bill"]
+    # The order's outcome is written back to its source case (an older list's note alone: a remark).
+    assert [n["text"] for n in cv["notes"]] == ["Customer called about the bill", "Seals intact; read 4182"]
     assert cv["orders"][0]["stage"] == "Completed" and "order_save" not in cv["studioActions"]
     draft = views.case_view(run, fw.id, as_of=iso(plan["d0"]))
     assert draft["status"] == "draft" and draft["studioActions"] == ["note", "assign", "order_save", "order_release"]
     fv = views.case_view(run, fw.id, as_of=end)
-    assert fv["category"] == "Field Work" and fv["order"]["outcome"] == "Seals intact; read 4182"
+    assert fv["category"] == "Field Work" and fv["order"]["outcome"]["text"] == "Seals intact; read 4182"
+    assert fv["order"]["outcome"]["kind"] == "remark" and fv["order"]["outcome"]["by"] == "you"
     assert fv["order"]["visit"]["activity"] == "meter_investigation" and fv["order"]["components"] == SEAL
     field = views.worklist(run, None, as_of=end, status="all", category="Field Work")["rows"]
     assert fw.id in [r["caseId"] for r in field]

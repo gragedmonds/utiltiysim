@@ -27,6 +27,7 @@ from utilsim.m2c.run import (
     CASE_WORK,
     COLLECTION_ACTIONS,
     DECISIONS,
+    DEVICE_ACTIONS,
     M2C_GROUPS,
     MAX_SEED,
     ORDER_ACTIONS,
@@ -46,18 +47,19 @@ RUN_CACHE = 4
 class Action(BaseModel):
     id: str | None = None
     day: str = Field(..., description="Local date of the decision (YYYY-MM-DD), in 2026, never before the previous action.")
-    type: Literal["accept", "override", "estimate", "field_order", "escalate", "field_read", "order_save",
-                  "order_release", "order_dispatch", "order_complete", "note", "assign", "invoice_hold",
-                  "invoice_unhold", "payment_arrangement", "extend_due", "dunning_hold", "low_income_referral",
-                  "budget_billing", "waive_fee", "disconnect_approve", "disconnect_cancel"]
+    type: Literal["accept", "override", "estimate", "field_order", "escalate", "check_read", "field_read",
+                  "order_save", "order_release", "order_dispatch", "order_complete", "note", "assign", "invoice_hold",
+                  "invoice_unhold", "device_replace", "payment_arrangement", "extend_due", "dunning_hold",
+                  "low_income_referral", "budget_billing", "waive_fee", "disconnect_approve", "disconnect_cancel"]
     caseId: str | None = Field(None, description="The case acted on (decisions, note, assign; invoice_hold and "
                                                  "invoice_unhold take a caseId or an accountId).")
     premiseId: str | None = Field(None, description="field_read: the premise a field visit read on the map.")
     at: float | None = Field(None, ge=0, lt=86400, description="field_read: seconds since local midnight.")
     value: float | None = Field(None, ge=0, description="Register value for an override.")
-    note: str | None = Field(None, max_length=2000, description="A reason (decisions, invoice_hold, invoice_unhold; "
-                                                                "required for holds) or the field outcome "
-                                                                "(order_complete, required).")
+    note: str | None = Field(None, max_length=2000, description="A reason (decisions, invoice_hold, invoice_unhold, "
+                                                                "device_replace; required for holds), or a comment "
+                                                                "with an order_complete outcome (an older action list's "
+                                                                "order_complete may carry a note alone).")
     text: str | None = Field(None, max_length=2000, description="note: the note text (required).")
     assignee: str | None = Field(None, max_length=200, description="assign: who works the case (required).")
     accountId: str | None = Field(None, description="invoice_hold / invoice_unhold: the account (or give a caseId); "
@@ -82,6 +84,20 @@ class Action(BaseModel):
     components: list[dict[str, Any]] | None = Field(
         None, max_length=ords.MAX_COMPONENTS, description="order_save: the component rows {description, quantity, "
                                                           "unit} (replaces the draft's list).")
+    coverCaseIds: list[str] | None = Field(
+        None, max_length=ords.MAX_COVER, description="order_save (new order) or field_order: other open read cases at "
+                                                     "the same premise the visit also covers (one visit per premise).")
+    outcome: dict[str, Any] | None = Field(
+        None, description="order_complete: the structured field outcome {kind: read_taken | read_confirmed | "
+                          "meter_exchanged | no_access | defect_found, ...}; see GET /api/m2c/vocabulary "
+                          "order.outcomes.")
+    meterId: str | None = Field(None, description="device_replace: the meter (device slot) on the installation.")
+    deviceId: str | None = Field(None, max_length=ords.DEVICE_ID, description="device_replace: the new device's id.")
+    installDate: str | None = Field(None, description="device_replace: when the new device went in (YYYY-MM-DD, on "
+                                                      "or before the action day, after the last released read).")
+    initialRead: float | None = Field(None, ge=0, description="device_replace: the new register's first value.")
+    removalRead: float | None = Field(None, ge=0, description="device_replace: the old register's last value "
+                                                              "(optional; else the normal use is assumed).")
 
 
 class Outage(BaseModel):
@@ -278,7 +294,8 @@ def get_vocabulary(town: str | None = None):
     plants = [ords.plant(_town(town).name)] if town else []
     return J({"schemaVersion": "m2c-vocabulary/1.0", "town": town, "order": ords.vocabulary(plants),
               "actions": {"decisions": list(DECISIONS), "field": ["field_read"], "orders": list(ORDER_ACTIONS),
-                          "caseWork": list(CASE_WORK), "collections": list(COLLECTION_ACTIONS)},
+                          "caseWork": list(CASE_WORK), "collections": list(COLLECTION_ACTIONS),
+                          "devices": list(DEVICE_ACTIONS)},
               "collections": {"lists": list(colls.LISTS), "accountActions": list(colls.ACCOUNT_ACTIONS),
                               "invoiceActions": list(colls.INVOICE_ACTIONS), "fees": colls.FEES,
                               "instalments": {"min": colls.INSTALMENTS[0], "max": colls.INSTALMENTS[1], "default": 3},
@@ -489,14 +506,19 @@ def _field_orders(run: M2CRun, d: int) -> list[dict]:
             if case.work == "order":
                 o = run.orders[case.ref]
                 f = o.fields
+                more = f" · +{len(o.covered)} more case{'s' if len(o.covered) > 1 else ''}" if o.covered else ""
                 out.append({**job, "orderId": o.id, "sourceCaseId": case.source,
                             "activity": ords.ACTIVITY.get(f.get("activityType"), "special_read"),
-                            "minutes": o.minutes, "label": f"{f.get('shortText') or o.id} · {tw.address[p]}"})
+                            "minutes": o.minutes, "label": f"{f.get('shortText') or o.id} · {tw.address[p]}{more}",
+                            **({"coveredCaseIds": [c.id for c in o.covered]} if o.covered else {})})
                 continue
             nxt = next((e[1] for e in case.events[k + 1:] if e[1] in ("METER_EXCHANGE", "SPECIAL_READ")), "SPECIAL_READ")
+            shared = case.events[k][2].get("caseIds") or []  # one visit for the premise's cases
             out.append({**job, "activity": "meter_exchange" if nxt == "METER_EXCHANGE" else "special_read",
-                        "minutes": 45 if nxt == "METER_EXCHANGE" else 20,
-                        "label": f"{cat.EVENTS[case.type][0]} · {tw.address[p]}"})
+                        "minutes": (45 if nxt == "METER_EXCHANGE" else 20) + 10 * max(0, len(shared) - 1),
+                        "label": f"{cat.EVENTS[case.type][0]} · {tw.address[p]}"
+                                 + (f" · {len(shared)} cases" if len(shared) > 1 else ""),
+                        **({"caseIds": shared} if shared else {})})
     return out
 
 

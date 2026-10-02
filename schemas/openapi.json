@@ -71,6 +71,22 @@
             "description": "order_save: the component rows {description, quantity, unit} (replaces the draft's list).",
             "title": "Components"
           },
+          "coverCaseIds": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 20,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "order_save (new order) or field_order: other open read cases at the same premise the visit also covers (one visit per premise).",
+            "title": "Covercaseids"
+          },
           "day": {
             "description": "Local date of the decision (YYYY-MM-DD), in 2026, never before the previous action.",
             "title": "Day",
@@ -89,6 +105,19 @@
             ],
             "description": "extend_due: days added to the due date (1-60, default 14); dunning_hold: days dunning waits (1-90, default 30).",
             "title": "Days"
+          },
+          "deviceId": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "device_replace: the new device's id.",
+            "title": "Deviceid"
           },
           "fee": {
             "anyOf": [
@@ -130,6 +159,31 @@
             ],
             "title": "Id"
           },
+          "initialRead": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "device_replace: the new register's first value.",
+            "title": "Initialread"
+          },
+          "installDate": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "device_replace: when the new device went in (YYYY-MM-DD, on or before the action day, after the last released read).",
+            "title": "Installdate"
+          },
           "instalments": {
             "anyOf": [
               {
@@ -156,6 +210,18 @@
             "description": "extend_due, waive_fee, disconnect_approve, disconnect_cancel: the invoice (INV-{account}-{YYYYMMDD}, required).",
             "title": "Invoiceid"
           },
+          "meterId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "device_replace: the meter (device slot) on the installation.",
+            "title": "Meterid"
+          },
           "note": {
             "anyOf": [
               {
@@ -166,7 +232,7 @@
                 "type": "null"
               }
             ],
-            "description": "A reason (decisions, invoice_hold, invoice_unhold; required for holds) or the field outcome (order_complete, required).",
+            "description": "A reason (decisions, invoice_hold, invoice_unhold, device_replace; required for holds), or a comment with an order_complete outcome (an older action list's order_complete may carry a note alone).",
             "title": "Note"
           },
           "orderId": {
@@ -180,6 +246,19 @@
             ],
             "description": "Order actions: the field service order (order_save without it creates a draft from a source).",
             "title": "Orderid"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "order_complete: the structured field outcome {kind: read_taken | read_confirmed | meter_exchanged | no_access | defect_found, ...}; see GET /api/m2c/vocabulary order.outcomes.",
+            "title": "Outcome"
           },
           "premiseId": {
             "anyOf": [
@@ -204,6 +283,19 @@
             ],
             "description": "order_save (new order): the read the order is raised from.",
             "title": "Readid"
+          },
+          "removalRead": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "device_replace: the old register's last value (optional; else the normal use is assumed).",
+            "title": "Removalread"
           },
           "sourceCaseId": {
             "anyOf": [
@@ -237,6 +329,7 @@
               "estimate",
               "field_order",
               "escalate",
+              "check_read",
               "field_read",
               "order_save",
               "order_release",
@@ -246,6 +339,7 @@
               "assign",
               "invoice_hold",
               "invoice_unhold",
+              "device_replace",
               "payment_arrangement",
               "extend_due",
               "dunning_hold",

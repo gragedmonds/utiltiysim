@@ -1,16 +1,20 @@
 """Field service orders: the Utility Studio order form (vocabulary and validation) and its lifecycle.
 
-An order goes Draft → Ready for dispatch → Dispatched → Completed, one dated action at a time:
+An order goes Draft → Ready for dispatch → Dispatched → En route → On site → Completed, one dated action at a time:
 - ``order_save`` creates a Draft from a source (a case, or a read) or updates a Draft. Incomplete forms are allowed.
+  A new order may also cover other open cases at the same premise (``coverCaseIds``): one visit for all of them.
 - ``order_release`` validates the whole form against the action's day; a form with errors is refused with an error
   per field. A valid one becomes Ready for dispatch and its fields are frozen.
 - ``order_dispatch`` sends a released order to a field crew. The crew rolls on the basic start date (or on the
-  dispatch day, when that is later).
-- ``order_complete`` records the field outcome, on or after the basic start.
+  dispatch day, when that is later); the run moves it en route, on site and completed that day, with a simulated
+  crew outcome.
+- ``order_complete`` records your structured outcome instead (``outcome``: read taken, read confirmed, meter
+  exchanged, no access, defect found), on or after the basic start; on the day the crew works the order, yours
+  replaces the crew's.
 
 Everything here depends only on the action list and the town, so a refused step is refused the same way under any
 run settings. ``Ledger`` replays the order steps before the year is simulated; the run then links each order to
-its Field Work case and schedules the truck roll (``run.py``).
+its Field Work case, rolls the crew and records the outcome (``run.py``).
 """
 
 from __future__ import annotations
@@ -24,8 +28,10 @@ from typing import Any
 from utilsim.m2c.base import M2CTown, date_of
 from utilsim.m2c.registers import day_of
 
-STAGES = ("Draft", "Ready for dispatch", "Dispatched", "Completed")
-SYSTEM_STATUS = {"Draft": "CRTD", "Ready for dispatch": "REL", "Dispatched": "REL DISP", "Completed": "TECO"}
+STAGES = ("Draft", "Ready for dispatch", "Dispatched", "En route", "On site", "Completed")
+SYSTEM_STATUS = {"Draft": "CRTD", "Ready for dispatch": "REL", "Dispatched": "REL DISP", "En route": "REL DISP ENRT",
+                 "On site": "REL DISP ONST", "Completed": "TECO"}
+OPEN_STAGES = ("Dispatched", "En route", "On site")  # dispatched, not completed yet: order_complete applies
 TEXT, LONG = 120, 1600
 NOTE_MAX = 600
 MAX_COMPONENTS = 50
@@ -64,6 +70,17 @@ CHOICES: dict[str, tuple[str, ...]] = {
 # Activity type → the crew job's activity in the operations timeline.
 ACTIVITY = {"Special meter read": "special_read", "Meter investigation": "meter_investigation",
             "Meter exchange": "meter_exchange", "Access investigation": "access_investigation"}
+# Structured field outcomes (``order_complete`` ``outcome.kind``): label and the fields each kind takes.
+OUTCOMES: dict[str, tuple[str, tuple[str, ...]]] = {
+    "read_taken": ("Read taken", ("value", "date")),
+    "read_confirmed": ("Read confirmed", ()),
+    "meter_exchanged": ("Meter exchanged", ("deviceId", "installDate", "initialRead", "removalRead")),
+    "no_access": ("No access", ()),
+    "defect_found": ("Defect found", ("text",)),
+}
+REMARK = "remark"  # an older action list's free-text outcome (``note`` alone): kept, with no write-back
+DEVICE_ID = 40
+MAX_COVER = 20
 COMPONENT_KEYS = ("description", "quantity", "unit")
 UNITS = ("EA", "M")
 WORK_CENTER = {"electric": "METER-ELECTRIC", "water": "METER-WATER", "gas": "METER-GAS"}
@@ -108,7 +125,14 @@ def vocabulary(plants: list[str]) -> dict:
             "components": {"keys": list(COMPONENT_KEYS), "units": list(UNITS), "max": MAX_COMPONENTS,
                            "rule": "each component needs a description, a positive quantity and a valid unit"},
             "activities": ACTIVITY, "stages": list(STAGES), "systemStatus": SYSTEM_STATUS,
-            "workCenterByCommodity": WORK_CENTER}
+            "workCenterByCommodity": WORK_CENTER,
+            "outcomes": [{"kind": k, "label": label, "fields": list(f)} for k, (label, f) in OUTCOMES.items()],
+            "outcomeRules": {"value": "register value, 0 or more", "date": "YYYY-MM-DD, from the basic start to the "
+                             "completion day", "deviceId": f"the new device's serial, at most {DEVICE_ID} characters",
+                             "installDate": "YYYY-MM-DD, from the basic start to the completion day",
+                             "initialRead": "the new register's first value, 0 or more",
+                             "removalRead": "optional: the old register's last value, 0 or more",
+                             "text": f"what the crew found, at most {NOTE_MAX} characters"}}
 
 
 # ---- checks -------------------------------------------------------------------------------------------------------
@@ -215,6 +239,77 @@ def text(value, what: str, limit: int = NOTE_MAX) -> str:
     return value.strip()
 
 
+def register_value(v, what: str, required: bool = True) -> float | None:
+    """A register value (0 or more); ValueError otherwise. None when optional and not given."""
+    if v is None and not required:
+        return None
+    x = _number(v)
+    if x is None or x < 0 or isinstance(v, str):
+        raise ValueError(f"{what} is a register value of 0 or more")
+    return round(x, 3)
+
+
+def day_in(v, what: str, lo: int, hi: int) -> int:
+    """A ``YYYY-MM-DD`` date from day ``lo`` to day ``hi`` (day indices); ValueError otherwise."""
+    d = _date(v)
+    if d is None:
+        raise ValueError(f"{what} is a date (YYYY-MM-DD)")
+    k = day_of(d)
+    if not lo <= k <= hi:
+        raise ValueError(f"{what} must be from {date_of(lo).isoformat()} to {date_of(hi).isoformat()}")
+    return k
+
+
+def device_id(v) -> str:
+    try:
+        return text(v, "the new device id (serial)", DEVICE_ID)
+    except ValueError:
+        raise ValueError(f"the new device id (serial) is required, at most {DEVICE_ID} characters") from None
+
+
+def check_outcome(outcome, lo: int, hi: int) -> dict:
+    """A structured field outcome, normalised (dates ``lo``–``hi``: the order's start to the completion day); raises
+    ValueError with what is wrong."""
+    if not isinstance(outcome, dict) or outcome.get("kind") not in OUTCOMES:
+        raise ValueError(f"outcome.kind must be one of {', '.join(OUTCOMES)}")
+    kind = outcome["kind"]
+    extra = set(outcome) - {"kind", *OUTCOMES[kind][1]}
+    if extra:
+        raise ValueError(f"outcome {kind} takes {', '.join(OUTCOMES[kind][1]) or 'no other fields'} "
+                         f"(not {', '.join(sorted(extra))})")
+    out: dict[str, Any] = {"kind": kind}
+    if kind == "read_taken":
+        out["value"] = register_value(outcome.get("value"), "outcome.value (the read taken)")
+        out["date"] = date_of(day_in(outcome.get("date"), "outcome.date (when the read was taken)", lo, hi)).isoformat()
+    elif kind == "meter_exchanged":
+        out["deviceId"] = device_id(outcome.get("deviceId"))
+        out["installDate"] = date_of(day_in(outcome.get("installDate"), "outcome.installDate", lo, hi)).isoformat()
+        out["initialRead"] = register_value(outcome.get("initialRead"), "outcome.initialRead (the new register)")
+        removal = register_value(outcome.get("removalRead"), "outcome.removalRead (the old register)", False)
+        if removal is not None:
+            out["removalRead"] = removal
+    elif kind == "defect_found":
+        out["text"] = text(outcome.get("text"), "outcome.text (the defect found)")
+    return out
+
+
+def outcome_text(o: dict) -> str:
+    """One line for an outcome: ``Read taken: 4,182 on 2026-07-14``."""
+    kind = o.get("kind")
+    if kind == REMARK:
+        return str(o.get("text") or "")
+    label = OUTCOMES.get(kind, (kind or "Outcome",))[0]
+    if kind == "read_taken":
+        return f"{label}: {o['value']:,.3f} on {o['date']}"
+    if kind == "meter_exchanged":
+        return (f"{label}: new device {o['deviceId']} installed {o['installDate']}, initial read "
+                f"{o['initialRead']:,.3f}" + (f" (old register {o['removalRead']:,.3f})" if o.get("removalRead")
+                                              is not None else ""))
+    if kind == "defect_found":
+        return f"{label}: {o['text']}"
+    return str(label)
+
+
 # ---- orders -------------------------------------------------------------------------------------------------------
 @dataclass(eq=False)
 class Order:
@@ -231,6 +326,13 @@ class Order:
     source: Any = None  # the source case, when there is one open (set by the run)
     roll_t: float | None = None
     detached: bool = False  # the run could not link it (its source case no longer exists in this run)
+    cover_ids: list[str] = field(default_factory=list)  # other cases at the premise this visit covers (requested)
+    covered: list[Any] = field(default_factory=list)  # the covered cases the run linked
+    completion: tuple | None = None  # your order_complete: (action index, t, actionId, outcome, note)
+    outcome: dict | None = None  # the recorded outcome (yours or the crew's), with by and at (set by the run)
+    crew: str | None = None
+    done_t: float | None = None  # when the crew's visit ends (set when it rolls)
+    case_outcomes: dict[str, tuple[dict, int]] = field(default_factory=dict)  # case id -> (outcome, register read)
 
     @property
     def stage(self) -> str:
@@ -254,6 +356,9 @@ class Order:
 
     def stage_at(self, T: float) -> str | None:
         return next((s for t, s, _, _ in reversed(self.stages) if t <= T), None)
+
+    def completed_at(self) -> float | None:
+        return next((t for t, s, _, _ in self.stages if s == "Completed"), None)
 
     def version_at(self, T: float) -> tuple[float, str, dict, list] | None:
         return next((v for v in reversed(self.versions) if v[0] <= T), None)
@@ -295,6 +400,8 @@ class Ledger:
                 o = self._order(k, a)
                 if (src_case and src_case != o.source_case) or (src_read and src_read != o.source_read):
                     raise ActionError(f"{where}: order {o.id} keeps its source; it cannot be moved to another")
+                if a.get("coverCaseIds"):
+                    raise ActionError(f"{where}: the cases an order covers are set when it is created")
             else:
                 if bool(src_case) == bool(src_read) or not isinstance(src_case or src_read, str):
                     raise ActionError(f"{where}: a new order needs one source: sourceCaseId or readId")
@@ -309,8 +416,14 @@ class Ledger:
                             raise ActionError(f"{where}: unknown read {src_read!r}") from None
                         if self.town.read_day[r, m] + self.town.hour[r] / 24.0 > t:
                             raise ActionError(f"{where}: read {src_read} is not taken yet on {date_of(day)}")
+                    cover = a.get("coverCaseIds") or []
+                    if not isinstance(cover, list) or len(cover) > MAX_COVER or not all(
+                            isinstance(x, str) and x for x in cover) or (src_case and src_case in cover):
+                        raise ActionError(f"{where}: coverCaseIds lists up to {MAX_COVER} other case ids at the "
+                                          "same premise")
                     n = len(self.orders) + 1
-                    o = Order(f"WO-{date_of(day).strftime('%y%m%d')}-{n:04d}", n, src_case, src_read, t, r, m)
+                    o = Order(f"WO-{date_of(day).strftime('%y%m%d')}-{n:04d}", n, src_case, src_read, t, r, m,
+                              cover_ids=list(dict.fromkeys(cover)))
                     o.stages.append((t, "Draft", aid, None))
                     self.orders[o.id] = o
                     self.by_source[key] = o.id
@@ -325,7 +438,8 @@ class Ledger:
             self.steps.setdefault(k, ("save", o))
             return {"orderId": o.id, **({"sourceCaseId": src_case} if src_case else {}),
                     **({"readId": src_read} if src_read else {}), **({"fields": fields_in} if fields_in else {}),
-                    **({"components": comps_in} if comps_in is not None else {})}
+                    **({"components": comps_in} if comps_in is not None else {}),
+                    **({"coverCaseIds": o.cover_ids} if self.steps[k][0] == "create" and o.cover_ids else {})}
         o = self._order(k, a)
         if typ == "order_release":
             if o.stage != "Draft":
@@ -343,19 +457,24 @@ class Ledger:
                 raise ActionError(f"{where}: order {o.id} is already {o.stage}")
             o.stages.append((t, "Dispatched", aid, None))
             self.steps[k] = ("dispatch", o)
-        else:  # order_complete
-            try:
-                note = text(a.get("note"), "the field outcome (note)")
-            except ValueError as exc:
-                raise ActionError(f"{where}: {exc}") from None
+        else:  # order_complete: a structured outcome (or, from an older action list, a note alone)
             if o.stage in ("Draft", "Ready for dispatch"):
                 raise ActionError(f"{where}: dispatch order {o.id} before completing it (it is {o.stage})")
-            if o.stage == "Completed":
+            if o.completion is not None:
                 raise ActionError(f"{where}: order {o.id} is already completed")
             if day < o.start_day:
                 raise ActionError(f"{where}: order {o.id} starts on {o.fields['startDate']}; complete it on or after "
                                   "that day")
-            o.stages.append((t, "Completed", aid, note))
+            try:
+                if a.get("outcome") is not None:
+                    outcome = check_outcome(a["outcome"], o.start_day, day)
+                    note = text(a["note"], "the note") if a.get("note") is not None else None
+                else:
+                    outcome = {"kind": REMARK, "text": text(a.get("note"), "the field outcome (outcome, or a note)")}
+                    note = None
+            except ValueError as exc:
+                raise ActionError(f"{where}: {exc}") from None
+            o.completion = (k, t, aid, outcome, note)
             self.steps[k] = ("complete", o)
-            return {"orderId": o.id, "note": note}
+            return {"orderId": o.id, "outcome": outcome, **({"note": note} if note else {})}
         return {"orderId": o.id}

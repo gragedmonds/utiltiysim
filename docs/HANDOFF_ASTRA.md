@@ -205,6 +205,22 @@ phone quality profiles and WebGL recovery.
 - **Case work:** Take ownership, Add note, Do Not Invoice Account, Remove Invoice Hold, and Release billing / invoice
   outsort (which takes a reason). Each button appears only when the engine lists the action for that case on the
   run date. While an invoice hold is on, the release is not offered.
+- **Field work** (from a tester's month in the Workspace):
+  - Complete on an order opens a structured outcome form (read taken with value and date, read confirmed, meter
+    exchanged with the new device id, install date and initial read, no access, defect found) instead of one free-text
+    field. The outcome shows on the order and on each case it serves ("Field Outcome"), and a read it took is offered
+    as "Release check read" (a field read).
+  - Orders move on their own: en route, on site and completed by the crew on the start date, with its simulated
+    outcome; Complete records yours instead that day. An order dispatched for today shows on the map's Field
+    operations panel at once.
+  - The installation's Device screen has a Device History and "Replace device…" (new device id, install date,
+    initial read, optional removal read); the Installation screen lists the current device.
+  - "Escalations" in the left nav lists the supervisor queue; an escalated case says a supervisor picks it up.
+  - Cases and list rows show "2 related cases" (other open cases at the premise) with links; creating an order offers
+    to cover them with the same visit.
+  - A case completed while its order is open shows a warning on the page and in the toast; it is never blocked.
+  - Missed reads say why in Display Meter Reading Results and MR results ("Missed: power outage 00:00–04:00 (AMI last
+    gasp)").
 
 ## 10. Utility Studio seams (engine side)
 
@@ -219,12 +235,15 @@ today. Details and rules: `docs/M2C.md` "Studio work".
 | Save Draft | `act('order_save', null, null, {sourceCaseId \| readId, fields, components})` (new) or `{orderId, fields, components}` (edit); then `order(...)` gives `orderId` (`WO-yymmdd-nnnn`) and the Field Work `caseId` |
 | `validateFieldOrder` + Release & Save | `act('order_release', null, null, {orderId})`; a 422 `detail.fieldErrors` is `{field: message}` with your messages; `detail.message` for the toast. Your client check can stay for instant feedback; the engine is the authority |
 | `dispatchFieldOrder` | `act('order_dispatch', null, null, {orderId})` (refused before release) |
-| `updateCase(...,'complete')` | `act('order_complete', null, null, {orderId, note})` (after dispatch, on or after the basic start) |
+| `updateCase(...,'complete')` | `act('order_complete', null, null, {orderId, outcome: {kind, ...}, note?})` on the day the crew works the order (the order's `completable`); `outcome` kinds and fields are `GET /api/m2c/vocabulary` → `order.outcomes`. The order's `outcome` is now an object `{kind, label, text, by, at, ...}`, not a string |
+| Field outcome on a case | The case view's `fieldOutcome` and `checkRead`; `act('check_read', caseId)` releases the check read (method `field_read`) |
+| Device replacement | `act('device_replace', null, null, {meterId, deviceId, installDate, initialRead, removalRead?, note?})`; the installation's `meters[].devices` is the history, `meters[].deviceId` the current device |
+| Related cases, one visit | Rows' `relatedCaseIds`, the case view's `relatedCases` (`coverable`); `coverCaseIds` on the first `order_save` (or on a `field_order` decision) |
 | `noteDialog` note | `act('note', caseId, null, {text})`; the case view lists `notes` |
 | hold / unhold | `act('invoice_hold' \| 'invoice_unhold', caseId, null, {note})` (or `{accountId, note}`); the case view has `invoiceHold` |
 | release (outsort) | `act('accept', caseId, null, {note})` on a `BILLING` case; refused while the account is on hold |
 | assignee | `act('assign', caseId, null, {assignee})`; rows carry `assignee` and `owner` |
-| `clarificationCases`, `categories` | `queue({category, status, search, page})`; rows carry `category`, read fields and `linkedOrderIds` / `orderId`. Categories without engine meaning return empty lists |
+| `clarificationCases`, `categories` | `queue({category, status, search, page})`; rows carry `category`, read fields and `linkedOrderIds` / `orderId`. Categories without engine meaning return empty lists. **Escalations** is a category now (every SUPERVISOR case); MR Implausibles and Meter Read Follow-Up no longer include escalated cases |
 | `readRows` | `queue({category: 'MR Implausibles'})` rows (meter, previous, observed, expected, consumption, `validationText`) |
 | Display Billing / installation query | `POST /api/m2c/installation {installationId}` (404 → "not found" on the query) |
 | Display Meter Reading Results | `POST /api/m2c/read-document {readId}` |
