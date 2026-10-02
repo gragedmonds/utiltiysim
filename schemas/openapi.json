@@ -250,6 +250,19 @@
             "title": "Outages",
             "type": "array"
           },
+          "seed": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Run seed: re-rolls the run's random draws (missed reads, anomalies, analyst work, bill checks) on the same town. Blank or null: the town's seed (GET /api/m2c/settings?town= shows it).",
+            "title": "Seed"
+          },
           "settings": {
             "anyOf": [
               {
@@ -355,6 +368,19 @@
           "readId": {
             "title": "Readid",
             "type": "string"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Run seed: re-rolls the run's random draws (missed reads, anomalies, analyst work, bill checks) on the same town. Blank or null: the town's seed (GET /api/m2c/settings?town= shows it).",
+            "title": "Seed"
           },
           "settings": {
             "anyOf": [
@@ -486,6 +512,19 @@
             "title": "Outages",
             "type": "array"
           },
+          "seed": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Run seed: re-rolls the run's random draws (missed reads, anomalies, analyst work, bill checks) on the same town. Blank or null: the town's seed (GET /api/m2c/settings?town= shows it).",
+            "title": "Seed"
+          },
           "settings": {
             "anyOf": [
               {
@@ -575,6 +614,19 @@
             "title": "Query",
             "type": "string"
           },
+          "seed": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Run seed: re-rolls the run's random draws (missed reads, anomalies, analyst work, bill checks) on the same town. Blank or null: the town's seed (GET /api/m2c/settings?town= shows it).",
+            "title": "Seed"
+          },
           "settings": {
             "anyOf": [
               {
@@ -642,13 +694,26 @@
                 "type": "null"
               }
             ],
-            "description": "The meter-to-cash run ({settings, actions, outages}) whose field orders for this day become crew jobs (see /api/m2c/*).",
+            "description": "The meter-to-cash run ({settings, actions, outages, seed}) whose field orders for this day become crew jobs (see /api/m2c/*).",
             "title": "M2C"
           },
           "premises": {
             "default": true,
             "title": "Premises",
             "type": "boolean"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Run seed: re-rolls the day's background incidents (default: the m2c run's seed, else none: the town's draws).",
+            "title": "Seed"
           },
           "settings": {
             "anyOf": [
@@ -660,7 +725,7 @@
                 "type": "null"
               }
             ],
-            "description": "Overrides for response timings (see GET /api/sim/settings).",
+            "description": "Overrides for the run settings: timings, crews, incident rates (see GET /api/sim/settings/schema?town=).",
             "title": "Settings"
           },
           "town": {
@@ -723,6 +788,19 @@
             "maxItems": 500,
             "title": "Outages",
             "type": "array"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Run seed: re-rolls the run's random draws (missed reads, anomalies, analyst work, bill checks) on the same town. Blank or null: the town's seed (GET /api/m2c/settings?town= shows it).",
+            "title": "Seed"
           },
           "settings": {
             "anyOf": [
@@ -809,6 +887,19 @@
             "description": "Billing portion (export pages); default: all.",
             "title": "Portion"
           },
+          "seed": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Run seed: re-rolls the run's random draws (missed reads, anomalies, analyst work, bill checks) on the same town. Blank or null: the town's seed (GET /api/m2c/settings?town= shows it).",
+            "title": "Seed"
+          },
           "settings": {
             "anyOf": [
               {
@@ -892,6 +983,19 @@
             "description": "The order raised on this read (from the read or its case).",
             "title": "Readid"
           },
+          "seed": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Run seed: re-rolls the run's random draws (missed reads, anomalies, analyst work, bill checks) on the same town. Blank or null: the town's seed (GET /api/m2c/settings?town= shows it).",
+            "title": "Seed"
+          },
           "settings": {
             "anyOf": [
               {
@@ -973,10 +1077,12 @@
             "type": "number"
           },
           "utility": {
+            "description": "The service lost, or \"ami\" for an AMI collector outage (service goes on; the premises' AMI meters cannot report)",
             "enum": [
               "electric",
               "water",
-              "gas"
+              "gas",
+              "ami"
             ],
             "title": "Utility",
             "type": "string"
@@ -1026,6 +1132,19 @@
           "premiseId": {
             "title": "Premiseid",
             "type": "string"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Run seed: re-rolls the run's random draws (missed reads, anomalies, analyst work, bill checks) on the same town. Blank or null: the town's seed (GET /api/m2c/settings?town= shows it).",
+            "title": "Seed"
           },
           "settings": {
             "anyOf": [
@@ -1178,6 +1297,19 @@
             ],
             "title": "Search"
           },
+          "seed": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Run seed: re-rolls the run's random draws (missed reads, anomalies, analyst work, bill checks) on the same town. Blank or null: the town's seed (GET /api/m2c/settings?town= shows it).",
+            "title": "Seed"
+          },
           "settings": {
             "anyOf": [
               {
@@ -1274,6 +1406,19 @@
             "title": "Readid",
             "type": "string"
           },
+          "seed": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Run seed: re-rolls the run's random draws (missed reads, anomalies, analyst work, bill checks) on the same town. Blank or null: the town's seed (GET /api/m2c/settings?town= shows it).",
+            "title": "Seed"
+          },
           "settings": {
             "anyOf": [
               {
@@ -1339,6 +1484,19 @@
             "title": "Outages",
             "type": "array"
           },
+          "seed": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Run seed: re-rolls the run's random draws (missed reads, anomalies, analyst work, bill checks) on the same town. Blank or null: the town's seed (GET /api/m2c/settings?town= shows it).",
+            "title": "Seed"
+          },
           "settings": {
             "anyOf": [
               {
@@ -1399,8 +1557,21 @@
                 "type": "null"
               }
             ],
-            "description": "The meter-to-cash run ({settings, actions, outages}) whose field orders for this day become crew jobs (see /api/m2c/*).",
+            "description": "The meter-to-cash run ({settings, actions, outages, seed}) whose field orders for this day become crew jobs (see /api/m2c/*).",
             "title": "M2C"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Run seed: re-rolls the day's background incidents (default: the m2c run's seed, else none: the town's draws).",
+            "title": "Seed"
           },
           "settings": {
             "anyOf": [
@@ -1412,7 +1583,7 @@
                 "type": "null"
               }
             ],
-            "description": "Overrides for response timings (see GET /api/sim/settings).",
+            "description": "Overrides for the run settings: timings, crews, incident rates (see GET /api/sim/settings/schema?town=).",
             "title": "Settings"
           },
           "town": {
@@ -1546,7 +1717,7 @@
   "info": {
     "description": "Seeded utility-town engine: geography, networks, customers, simulation, meter-to-cash.",
     "title": "utilsim",
-    "version": "0.7.0"
+    "version": "0.8.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -1621,6 +1792,7 @@
     },
     "/api/health": {
       "get": {
+        "description": "Status, versions, towns (pack presets, then ready generated town ids, with details in ``generated``) and\n``capabilities`` (``generate``: this engine can build new towns with ``POST /api/towns``).",
         "operationId": "health_api_health_get",
         "responses": {
           "200": {
@@ -1859,8 +2031,26 @@
     },
     "/api/m2c/settings": {
       "get": {
-        "description": "Run settings for meter-to-cash: JSON Schema (groups, defaults, bounds, units, effects), defaults, vocabulary.",
+        "description": "Run settings for meter-to-cash: JSON Schema (groups, defaults, bounds, units, effects), defaults, vocabulary,\nand the run ``seed`` (blank = the town's seed). ``?town=`` takes the defaults and the seed from that town.",
         "operationId": "get_settings_api_m2c_settings_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "town",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Town"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -1869,6 +2059,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "summary": "Get Settings"
@@ -2161,8 +2361,26 @@
     },
     "/api/sim/settings": {
       "get": {
-        "description": "Default response timings for operations runs (override per request with ``settings``).",
+        "description": "Default run settings for operations runs (override per request with ``settings``); ``?town=`` gives that\ntown's (its crews, shift, targets, voltage floor and incident rates).",
         "operationId": "get_settings_api_sim_settings_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "town",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Town"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -2171,6 +2389,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "summary": "Get Settings"
@@ -2178,8 +2406,26 @@
     },
     "/api/sim/settings/schema": {
       "get": {
-        "description": "Operations settings as JSON Schema (titles, units, bounds, effects) with their defaults, for the viewer's\nConfiguration. Send overrides as a timeline or frame request's ``settings``.",
+        "description": "Operations settings as JSON Schema (titles, units, bounds, effects; ``x-town`` names the town config field a\ndefault comes from) with their defaults, for the viewer's Configuration. ``?town=`` fills the defaults from that\ntown. Send overrides as a timeline or frame request's ``settings``.",
         "operationId": "get_settings_schema_api_sim_settings_schema_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "town",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Town"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -2188,6 +2434,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "summary": "Get Settings Schema"
@@ -2249,6 +2505,7 @@
     },
     "/api/towns": {
       "post": {
+        "description": "Generate a town from a preset (with seed, houses, scenario and deep-merged overrides) or a complete\n``config``. ``{townId, status}``: 201 ready, 202 building (poll ``GET /api/towns/{id}``), 422 invalid or failed.",
         "operationId": "create_town_api_towns_post",
         "requestBody": {
           "content": {
@@ -3015,6 +3272,7 @@
     },
     "/api/towns/{tid}/snapshot.json": {
       "get": {
+        "description": "The town's ``utility-town/2.0`` snapshot (gzip); ``profile`` (or ``detail``) ``viewer`` leaves out reads and\nthe customer and billing tables.",
         "operationId": "get_snapshot_api_towns__tid__snapshot_json_get",
         "parameters": [
           {
@@ -3031,13 +3289,41 @@
             "name": "profile",
             "required": false,
             "schema": {
-              "default": "full",
-              "enum": [
-                "full",
-                "viewer"
+              "anyOf": [
+                {
+                  "enum": [
+                    "full",
+                    "viewer"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
               ],
-              "title": "Profile",
-              "type": "string"
+              "title": "Profile"
+            }
+          },
+          {
+            "description": "Alias of profile.",
+            "in": "query",
+            "name": "detail",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "full",
+                    "viewer"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Alias of profile.",
+              "title": "Detail"
             }
           }
         ],

@@ -152,8 +152,8 @@
     "min_main_mm": 50,
     "valve_spacing_m": 800.0,
     "calorific_mj_per_m3": 37.5,
-    "base_pressure_kpa": 101.325,
-    "base_temperature_c": 15.0
+    "base_pressure_kpa": 101.559771,
+    "base_temperature_c": 15.738889
   },
   "water": {
     "lpcd": 220.0,
