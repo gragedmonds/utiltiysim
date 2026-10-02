@@ -66,7 +66,8 @@ class SeedsConfig(BaseModel):
                                advanced=True)
     weather: str | None = F(None, "Override seed for weather series (re-roll storms, keep the town).", advanced=True)
     incidents: str | None = F(None, "Override seed for incident hazards.", advanced=True)
-    anomalies: str | None = F(None, "Override seed for meter/read anomalies.", advanced=True)
+    anomalies: str | None = F(None, "Override seed for the meter-to-cash run (missed reads, anomalies, analyst work, "
+                              "bill checks); a request's run seed overrides it per run.", advanced=True)
 
     def for_(self, subsystem: str) -> str:
         v = getattr(self, subsystem, None)

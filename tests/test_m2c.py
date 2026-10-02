@@ -166,7 +166,7 @@ def test_views_are_valid_bounded_and_deterministic(ayr, ayr_town):
 
 
 def test_a_run_seed_rerolls_the_run_on_the_same_town(ayr, ayr_town):
-    town_seed = ayr_town.cfg.seeds.for_("households")
+    town_seed = ayr_town.cfg.seeds.for_("anomalies")
     # No seed: exactly the town-derived draws as before the seed existed; naming the town seed is the same run.
     assert ayr.run_seed is None and ayr.seed == f"{town_seed}:m2c"
     same = M2CRun(ayr_town, seed=town_seed)

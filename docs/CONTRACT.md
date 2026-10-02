@@ -238,8 +238,8 @@ Draws are counter-based hashes of (the town's `seeds.incidents`, the run `seed` 
 incidents never depend on other days or on commands. Each is worked exactly like a `break_asset` (detection,
 dispatch, isolation, repair, back-feed, relights, interruptions) with `source: "background"`, id `INC-BG-n` and
 `commandId: null`; a user's incidents keep `INC-n` and `source: "user"`. The timeline's `background` reports
-`{enabled, stormDay, stormWindow?, expected: {kind: count}, exposure, incidentIds}`. At the defaults Ayr expects about
-14 a year (most days are quiet) and Cobourg about 39. A collector outage changes no network: the collector goes
+`{enabled, stormDay, stormWindow?, expected: {kind: count}, exposure, incidentIds}`. At the defaults Ayr expects about 15
+a year (2026 draws 9, so 356 days are quiet) and Cobourg about 40 (39, on 36 days). A collector outage changes no network: the collector goes
 silent (`collector.offline`), the head end alarms after `detectSeconds.ami`, and a meter technician repairs it in the
 day shift (`shiftStartHour`–`shiftEndHour`; detected after hours, it waits for the morning). Its premises appear in
 `interruptions` as `{utility: "ami", start, end, premiseIds, collectorId, incidentId}`; sent to meter-to-cash as

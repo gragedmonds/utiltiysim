@@ -183,8 +183,8 @@ class Case:
 
 # ---- the run ----------------------------------------------------------------------------------------------------
 def town_seed(cfg: SimConfig) -> str:
-    """The seed a run uses when the request names none: the town's household seed."""
-    return cfg.seeds.for_("households")
+    """The seed a run uses when the request names none: the town's ``seeds.anomalies`` (else the master seed)."""
+    return cfg.seeds.for_("anomalies")
 
 
 def run_seed(cfg: SimConfig, seed: str | None) -> str | None:

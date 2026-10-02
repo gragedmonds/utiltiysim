@@ -11,7 +11,7 @@ A run is stateless and deterministic: `(town, settings, actions, outages, seed)`
   (`?town=` takes the defaults from that town).
 - `seed` (optional, top level, at most 64 characters) re-rolls the run on the same town: every random draw of the run
   (missed reads, anomalies and their onsets, analyst pickup and review, bill checks, payments) comes from
-  `"{seed}:m2c"` instead of the town's `"{seeds.households}:m2c"`. Blank, `null` or the town's own seed is the town's
+  `"{seed}:m2c"` instead of the town's `"{seeds.anomalies or seeds.master}:m2c"`. Blank, `null` or the town's own seed is the town's
   run, exactly as before the field existed (same `simulationId`). The routes, read days, meters and customers never
   change. `GET /api/m2c/settings` returns `seed: {type, maxLength: 64, default: <town seed>, title, description}`,
   so a form can show "blank = town seed"; summaries echo `seed` (`null` for the town's run). Operations requests
