@@ -17,9 +17,11 @@ A run is stateless and deterministic: `(town, settings, actions, outages, seed)`
   so a form can show "blank = town seed"; summaries echo `seed` (`null` for the town's run). Operations requests
   pass it inside `m2c` (`m2c: {settings, actions, outages, seed}`), and every run cache key includes it.
 - `actions` are analyst decisions from the viewer: `{id, day, type, caseId, value?, note?}`.
-  - `type` is one of `accept`, `override` (with a register value), `estimate`, `field_order` or `escalate`.
+  - `type` is one of `accept`, `override` (with a register value), `estimate`, `field_order` (optionally with
+    `coverCaseIds`), `escalate` or `check_read` (release the read with a completed field order's check read).
   - The Utility Studio adds field service orders (`order_save`, `order_release`, `order_dispatch`,
-    `order_complete`) and case work (`note`, `assign`, `invoice_hold`, `invoice_unhold`); see "Studio work" below.
+    `order_complete`), case work (`note`, `assign`, `invoice_hold`, `invoice_unhold`) and device replacement
+    (`device_replace`); see "Studio work" and "Devices" below.
   - Actions are append-only by `day`. An action never changes anything before its day, so a reply for an earlier
     date stays valid.
   - A refused action is HTTP 422 with a clear `detail` (for an order form, an object with `fieldErrors`), so the
@@ -51,9 +53,12 @@ Cobourg-sized town (16k registers) replays its year in about 2 s, and warm insta
 
 Each business day goes in this order:
 
-1. **Your actions** at 09:00.
-2. **RPA carry-over** (07:00): cases deferred from the previous evening.
-3. **Analysts** work `VEE_REVIEW` and `ESTIMATION` cases, oldest first.
+1. **Your orders' crews** roll (07:00–09:00, any day) for the orders dispatched for that start date.
+2. **Your actions** at 09:00. Then the crews on your orders record their outcomes, stamped when each visit ends,
+   unless you completed the order that day (yours replaces the crew's); see "Your orders and the simulated field
+   workforce".
+3. **RPA carry-over** (07:00): cases deferred from the previous evening.
+4. **Analysts** work `VEE_REVIEW` and `ESTIMATION` cases, oldest first.
    - A case becomes eligible after `analyst_queue_days_min`–`max` business days.
    - Each review takes `review_minutes_min`–`max`, within `analysts × analyst_hours_per_day`.
    - The analyst reaches the true cause with probability `analyst_accuracy`. Correct actions by cause:
@@ -62,15 +67,22 @@ Each business day goes in this order:
      - meter fault: field order;
      - real usage (leak, vacant consumption): accept, then a customer callback.
    - An escalate disposition, or a bill impact at or above `vee.escalate_impact`, goes to `SUPERVISOR`.
-4. **Supervisors** approve escalations every business day, up to `supervisors × supervisor_hours_per_day ÷
-   supervisor_minutes` (3 a day by default). An escalation becomes eligible 1–4 business days after it is raised
-   (their pickup lag), oldest first. A case you own waits for you.
-5. **Field crews** complete up to `field_orders_per_day` orders. A meter fault gets a meter exchange (and the meter is
-   fixed); otherwise the crew takes a special read.
-6. **Evening batch** for the portions read today: reads, then VEE at 18:00, then exceptions.
+   - One visit per premise: an analyst (or a supervisor, or RPA) who sends a case to the field sends the premise's
+     other open read cases nobody owns (and no RPA run is due on) along with it (`FIELD_ORDER` with `with`).
+5. **Supervisors** approve escalations every business day, up to `supervisors × supervisor_hours_per_day ÷
+   supervisor_minutes` (3 a day by default), oldest first. An escalation from an analyst or you becomes eligible
+   `supervisor_queue_days_min`–`max` business days after it is raised (default 1–3), a case VEE escalated itself
+   after `supervisor_queue_days_min`. An escalation stays with the supervisors: a note, an order or a hold on it does
+   not make you its owner. Only `assign` takes it from them (a case you own waits for you).
+6. **Field crews** visit up to `field_orders_per_day` premises, oldest work first. One truck roll per premise settles
+   every open read case there that nobody owns (the lead case has `TRUCK_ROLL` with `caseIds`, the others
+   `VISIT_SHARED`). A meter fault gets a meter exchange: a new device and register, initial read 0, registered at
+   the visit (an exchange whose registration failed is registered as found, at its dial); otherwise the crew takes a
+   special read.
+7. **Evening batch** for the portions read today: reads, then VEE at 18:00, then exceptions.
    - 19:30: billing documents for every installation period whose reads are all released.
    - 20:00: invoices that consolidate each account's released documents.
-7. **RPA** resolves exception types covered by `rpa_coverage`, taken in the order of `catalog.EXCEPTIONS`. Half are
+8. **RPA** resolves exception types covered by `rpa_coverage`, taken in the order of `catalog.EXCEPTIONS`. Half are
    resolved the same evening; the rest at 07:00 the next business day. RPA never resolves a `TRUE_UP` block, nor a
    `HIGH_BILL` or `BILL_CREDIT` outsort above `billing.outsort_auto_release_max`: those wait for a person.
 
@@ -97,7 +109,8 @@ ids: Field Work `CASE-{yymmdd}-F{nnnn}` and invoice holds `CASE-{yymmdd}-H{nnnn}
 `power_outage` (with `lastGaspAt`), `collector_outage` (with `outageSince`), `comm_fail` (AMI head-end or drive-by),
 `no_access` or `no_read_document`; `reason` is one line that names it ("No read: the meter lost power at 00:00 on
 2026-03-03 (AMI last gasp) and was still without power at the 02:00 read (back at 04:00 on 2026-03-03)."). The five
-VEE tests stay `not_applicable`, each saying what it would have checked. A case with no read value offers `estimate`, `field_order` and `escalate` only.
+VEE tests stay `not_applicable`, each saying what it would have checked. A case with no read value offers `estimate`,
+`field_order` and `escalate` only, and `check_read` once a field order took a read.
 
 **What a decision needs.** Case views (`work-case/1.0`) carry:
 - `expected`: `{registerValue, consumption}`, the expected register (previous register + expected use) and use;
@@ -109,11 +122,22 @@ VEE tests stay `not_applicable`, each saying what it would have checked. A case 
 - `readHistory`: the register's periods to date (up to 13, oldest first), each `{readId, date, register,
   consumption, type, estimated, method, veeStatus, caseId}`;
 - `actionableFrom`, `cause`, `createdBy`;
+- `relatedCases`: the other open cases at the premise (`{caseId, type, label, commodity, queue, registerId,
+  coverable}`; `coverable`: a field order from this case can also cover it, one visit per premise);
+- `fieldOutcome`: the newest outcome a completed field order wrote back to the case (`{orderId, kind, label, text,
+  by, at, registerId, ...}`), and `checkRead` (`{value, orderId}`) when that outcome gives this read a check read;
 - `actions` and `studioActions`: only what the engine accepts from an action dated the view's day (empty while the
   case is not open at 09:00 that day).
 
 Worklist rows carry `actionableFrom`, `createdBy`, `createdByLabel`, `cause`, `registerDelta`,
-`registerWentBackwards`, `previousEstimated` and `releasedMethod` as well.
+`registerWentBackwards`, `previousEstimated`, `releasedMethod` and `relatedCaseIds` as well.
+
+**Check reads.** A completed field order writes its outcome back to every case it serves: a "Field order completed"
+step (`ORDER_COMPLETED`, in the processing history and the case notes). A read taken on the case's register (brought
+back to the read date by the normal use since), or a read confirmed on a read that came in, is the case's check read:
+the `check_read` decision releases the read with it, method `field_read`. A crew's outcome counts from the day after
+the visit (that day you may still replace it); yours counts at once. A check read below the last actual read is
+refused like an `accept` (register the device replacement first).
 
 **Backwards registers.** A register below its last actual read (as read, corrected or field read; not an estimate),
 and not a plausible rollover, is never released as read:
@@ -121,7 +145,41 @@ and not a plausible rollover, is never released as read:
 - your `accept` is refused ("estimate it, correct the value (override) or send a field order");
 - a read below the previous *estimate* only is a true-up of that estimate and can be accepted.
 
-Your `override` value is yours to give; billing still checks the true-up it causes.
+Your `override` value is yours to give; billing still checks the true-up it causes. After a device replacement (see
+"Devices"), the floor is the new register's initial read: a read on the new device is not backwards against the
+old register's reads.
+
+## Devices
+
+Each meter slot (`meterId` in the snapshot) holds one device at a time; the snapshot's device is in place before 2026.
+A **device replacement** installs a new device (`deviceId`, the serial) with its registers' initial reads from an
+install date:
+- your `device_replace` `{day, meterId, deviceId, installDate, initialRead, removalRead?, note?, caseId?}` (from the
+  installation record): `installDate` is on or before the action day, and after the last read already released on the
+  old device (else 422: "the read of … was already released on device …"); `initialRead` is the case register's
+  (the slot's first register when no `caseId` names one), other registers start at 0 (at their dial when it registers
+  a swap already made); a `caseId` records `DEVICE_REPLACED` on that case. A device id already in use is refused.
+- a field order completed with `meter exchanged` (yours, or the crew's on a meter exchange or meter investigation
+  order that finds a faulty meter);
+- the simulated crews' meter exchanges (`METER_EXCHANGE` with `deviceId`, `previousDeviceId`, `initialRead`).
+
+What it changes:
+- **Reads** after the install date are diffed against the new register. The read period with the change bills the
+  new register from its initial read, plus the old register's last stretch: its `removalRead` less the previous
+  read, or, when no removal read is known, the normal use up to the install date. Read records carry `deviceId` (the
+  device at the read) and, for that period, `deviceChange` `{deviceId, previousDeviceId, installedAt, registeredAt,
+  initialRead, removalRead, oldRegisterUse, by}`, with `previousRegisterValue` the initial read. A change registered
+  after the read was taken re-bases that read too, so a held backwards read can then be accepted.
+- **The meter.** A meter that shows an exchange whose registration failed (`exchange_registration_failure`: a new
+  meter the system did not know) is registered as found: nothing is swapped. Any other replacement swaps the meter
+  when it is registered: the new dial reads the initial read plus what flowed since the install date, and a fault on
+  the old meter ends.
+- **A backwards register stops recurring.** A register that dropped (35,623 → 61.7 after an unregistered exchange) used
+  to raise `REGISTER_REGRESSION` every cycle; once the device is registered, later reads count from it.
+
+The installation lookup lists, per meter, `deviceId` (current as of `asOf`) and `devices[]`: `{deviceId,
+installedAt, registeredAt, removedAt, initialReads, removalReads, by, orderId, caseId, note, physical, current}`,
+oldest first.
 
 ## Weather
 
@@ -267,10 +325,12 @@ The Utility Studio Workspace acts on the run with the same append-only actions. 
 
 | Action | Body | Effect |
 |---|---|---|
-| `order_save` | `{day, orderId?, sourceCaseId? \| readId?, fields{…}, components[{description, quantity, unit}]}` | Without `orderId`: a new **Draft** from one source (an open case, or a read taken by then), id `WO-{yymmdd}-{nnnn}`, plus a linked **Field Work** case `CASE-{yymmdd}-F{nnnn}` (`FIELD` queue). With `orderId` (or the same source again): updates that Draft; `fields` merge, `components` replace. Incomplete forms are allowed; unknown fields or wrong types are refused (`fieldErrors`). |
+| `order_save` | `{day, orderId?, sourceCaseId? \| readId?, coverCaseIds?, fields{…}, components[{description, quantity, unit}]}` | Without `orderId`: a new **Draft** from one source (an open case, or a read taken by then), id `WO-{yymmdd}-{nnnn}`, plus a linked **Field Work** case `CASE-{yymmdd}-F{nnnn}` (`FIELD` queue). `coverCaseIds` (new orders only): other open read cases at the same premise the one visit also serves; each links the order (a case already with an order, another premise's, a billing block or someone else's is refused). With `orderId` (or the same source again): updates that Draft; `fields` merge, `components` replace. Incomplete forms are allowed; unknown fields or wrong types are refused (`fieldErrors`). |
 | `order_release` | `{day, orderId}` | Validates the whole form against the action's day → **Ready for dispatch**, or 422 with `fieldErrors` (field → message). |
-| `order_dispatch` | `{day, orderId}` | Only after release → **Dispatched**. The crew rolls at 07:00–09:00 on the basic start date (or 30 min after dispatch when that is on or after the start). |
-| `order_complete` | `{day, orderId, note}` | Only after dispatch, on or after the basic start → **Completed** with the outcome note; the Field Work case is resolved. A `Meter exchange` order swaps a faulty meter, so later reads recover. |
+| `order_dispatch` | `{day, orderId}` | Only after release → **Dispatched**. The crew rolls at 07:00–09:00 on the basic start date (or 30 min after dispatch when that is on or after the start), never before it: **En route**, **On site** 20 min later, and **Completed** when the order's duration is up, with the crew's outcome. |
+| `order_complete` | `{day, orderId, outcome, note?}` | Your structured outcome (below), on the day the crew works the order: it replaces the crew's. Before the start, or after the crew completed it on an earlier day, it is refused ("already completed by field crew FIELD-1 at …"). An older action list's `{note}` alone still replays as a remark. |
+| `check_read` | `{day, caseId, orderId?}` | A decision: releases the case's read with its check read (see "Cases"), method `field_read`. |
+| `device_replace` | `{day, meterId, deviceId, installDate, initialRead, removalRead?, note?, caseId?}` | A new device and register on an installation's meter; see "Devices". |
 | `note` | `{day, caseId, text}` | A case note (required text, ≤ 600 characters), listed in the case view's `notes`. |
 | `assign` | `{day, caseId, assignee}` | The case's owner and assignee. |
 | `invoice_hold` | `{day, caseId \| accountId, note}` | Holds the account's invoices: released documents wait (`INVOICE_DEFERRED`) instead of being invoiced. Opens an **Invoice Outsorts** case `CASE-{yymmdd}-H{nnnn}` (`BILLING` queue). One hold per account at a time. |
@@ -287,28 +347,56 @@ data):
 - duration is a positive number of minutes (at most 1,440);
 - each component needs a description, a positive quantity and a unit (`EA` or `M`).
 
-Lifecycle rules: dispatch only a released order; complete only a dispatched one, on or after its start, with an
-outcome note; only a Draft can be saved. Reopening is the viewer's: `POST /api/m2c/order` with the source
+Lifecycle rules: dispatch only a released order; complete only a dispatched one, on the day its crew works it (on or
+after its start); only a Draft can be saved. Reopening is the viewer's: `POST /api/m2c/order` with the source
 (`sourceCaseId` or `readId`) returns the existing order, or `order: null` with a suggested form (`proposal`). There
 is never a second order for a source: saving again from the same source edits the same draft, and an order raised on
 the same read from another path (its case, or the read) is refused.
+
+**Field outcomes.** `order_complete` takes `outcome` `{kind, ...}` (`GET /api/m2c/vocabulary` serves them as
+`order.outcomes`) and an optional comment `note`:
+
+| `kind` | Fields | Write-back |
+|---|---|---|
+| `read_taken` | `value` (register, ≥ 0), `date` (from the basic start to the action day) | A check read for the order's register |
+| `read_confirmed` | none | The reported read is the check read (a read that came in) |
+| `meter_exchanged` | `deviceId`, `installDate`, `initialRead`, `removalRead?` | A device replacement (see "Devices") |
+| `no_access` | none | Recorded on the cases |
+| `defect_found` | `text` (≤ 600 characters) | Recorded on the cases |
+
+The order's `outcome` (`field-order/1.0`) is `{kind, label, text, by, at, ...fields}`: `by` is `you` or the crew
+(`FIELD-n`), `text` one line ("Read taken: 4,182.000 on 2026-07-14"). The crew's simulated outcome follows the meter
+it finds: no access (a walked meter, at the town's `reading.manual_no_access`, unless the order is an access
+investigation); a faulty meter exchanged (meter exchange and meter investigation orders) or reported as a defect;
+a read taken when the read was missing or wrong; else the read confirmed. Each case the order covers on another
+register gets the crew's read of that register. `completable` on the order (and `order_complete` in the Field Work
+case's `studioActions`) says whether your outcome applies today.
 
 **Source cases stay open.** Creating an order does not release the source reading or resolve the source case: the
 case keeps its queue and category and links the order (`linkedOrderIds` on rows, `orders` in the case view). Your
 first Studio action on a case (an order, a note, a hold) makes you its owner; `assign` gives it to someone else.
 **An owned case waits for its owner**: RPA, analysts, supervisors and the simulated field crews leave it alone until
-you decide it (`accept`, `override`, `estimate`). `escalate` and `field_order` are explicit hand-offs: they clear the
-owner, and supervisors or the simulated crews then work the case as usual. Field Work and hold cases are yours:
-decisions do not apply to them (use `order_complete`, `invoice_unhold`).
+you decide it (`accept`, `override`, `estimate`, `check_read`). `escalate` and `field_order` are explicit hand-offs:
+they clear the owner, and supervisors or the simulated crews then work the case as usual. An escalated case is not
+taken from the supervisors by a note, an order or a hold; `assign` takes it. Field Work and hold cases are yours:
+decisions do not apply to them (use `order_complete`, `invoice_unhold`). Completing a case while its order is open is
+allowed: the order goes on, and the run's `warnings` carry a notice `ACT-n (notice): CASE-… was completed while field
+service order WO-… is still Dispatched; the order goes on` (not a refusal).
+
+**One visit per premise.** Several open cases on one premise (three consecutive-estimate cases, one per utility)
+should cost one truck roll. Rows list them (`relatedCaseIds`), case views describe them (`relatedCases`, with
+`coverable`), and an order (`order_save` `coverCaseIds`) or a `field_order` decision (`coverCaseIds`) covers them: the
+covered cases link the order and get its outcome. The simulated workforce does the same (see "A day in the run").
 
 **Your orders and the simulated field workforce.** The run already has field crews: a `field_order` decision (or an
-analyst's) moves a case to the `FIELD` queue, and the crew pool rolls up to `process.field_orders_per_day` trucks a
-business day (08:00–15:00); that visit settles the case (a meter exchange or a special read). Your field service
-orders do not use that pool or its capacity: they are owned, they roll when you dispatch them (07:00–09:00 on the
-basic start date, any day), and completing one records your outcome without settling the source case. Both kinds are
-`FIELD` work: they count in the `FIELD` queue, show as "field order" on the map, and become `field_order` crew jobs in
-the operations timeline (yours carry `orderId`). On the map, a `field_read` visit still settles every open,
-non-Studio read case at the premise.
+analyst's) moves a case to the `FIELD` queue, and the crew pool visits up to `process.field_orders_per_day` premises
+a business day (08:00–15:00); that visit settles the premise's open cases (a meter exchange or a special read).
+Your field service orders do not use that pool or its capacity: they are owned, they roll when you dispatch them
+(07:00–09:00 on the basic start date, any day), and the crew (or you) completes them that day without settling the
+source case. Both kinds are `FIELD` work: they count in the `FIELD` queue, show as "field order" on the map, and
+become `field_order` crew jobs in the operations timeline (yours carry `orderId`, and `coveredCaseIds` when the
+visit covers other cases). On the map, a `field_read` visit still settles every open, non-Studio read case at the
+premise.
 
 **Invoice holds** mirror the Studio's `updateCase`: while a hold is on, releasing that account's billing outsort
 (`accept` or `estimate` on a `BILLING` case) is refused. Releasing an outsort is `accept` with a reason in `note`.
@@ -321,14 +409,15 @@ keeps the queue it was resolved from). `POST /api/process/queue` filters by `cat
 
 | Category | Engine meaning |
 |---|---|
-| MR Implausibles | Value exceptions (`HIGH_USAGE`, `LOW_USAGE`, `ZERO_USAGE`, `ERRATIC`, …), in `VEE_REVIEW` or `SUPERVISOR` |
-| Meter Read Follow-Up | Missing reads: `COMM_FAIL`, `NO_ACCESS`, `NO_READ`, `CONSECUTIVE_ESTIMATES` (`ESTIMATION`, or escalated) |
+| MR Implausibles | Value exceptions (`HIGH_USAGE`, `LOW_USAGE`, `ZERO_USAGE`, `ERRATIC`, …) in `VEE_REVIEW` |
+| Meter Read Follow-Up | Missing reads: `COMM_FAIL`, `NO_ACCESS`, `NO_READ`, `CONSECUTIVE_ESTIMATES` in `ESTIMATION` |
 | Billing Outsorts | Billing blocks `HIGH_BILL`, `BILL_CREDIT`, `TRUE_UP` |
 | Billing Errors | Billing blocks `RATE_CLASS` (wrong rate class in master data) |
 | Invoice Outsorts | Your invoice holds (`INVOICE_HOLD` cases) |
 | Field Work | Any case in the `FIELD` queue, and your field service orders (`FIELD_SERVICE` cases) |
+| Escalations | Any case in the `SUPERVISOR` queue (escalated by VEE, an analyst or you), whatever its type |
 
-Field Work comes first: a case in the `FIELD` queue is Field Work whatever its type. A category is a view of the
+Field Work comes first: a case in the `FIELD` queue is Field Work whatever its type; then Escalations. A category is a view of the
 engine's queues, so a case moves category only when it moves queue. The Studio's other categories (AMP, Bill Correction, Bill Print Errors, Billing- see IT Supp, Budget Bill Cases,
 Invoice Errors, Low Income Process) have no engine meaning yet: they are accepted and return empty lists.
 
@@ -338,9 +427,10 @@ opening each case.
 
 ### Lookups for the query screens
 
-- `POST /api/m2c/installation` `{installationId}` (Display Billing): the installation, its meters and registers,
-  contracts with account and business partner, billing documents with lines, invoices, the accounts' ledgers and
-  holds, its read results and its cases, as of `asOf`. 404 for an unknown id.
+- `POST /api/m2c/installation` `{installationId}` (Display Billing): the installation, its meters and registers
+  (each meter with its current `deviceId` and its `devices` history), contracts with account and business partner,
+  billing documents with lines, invoices, the accounts' ledgers and holds, its read results and its cases, as of
+  `asOf`. 404 for an unknown id.
 - `POST /api/m2c/read-document` `{readId}` (Display Meter Reading Results): the read (`meter-read/1.1`), its VEE
   decision, the installation, contract, account and partner, its case and order, and the register's reads to date.
   404 for an unknown read or one not taken yet.
@@ -353,11 +443,11 @@ opening each case.
 | Endpoint | Returns |
 |---|---|
 | `GET /api/m2c/settings?town=` | Schema, defaults (the town's with `?town=`), the run `seed` (default: the town seed), queues, exception vocabulary, action types, clarification categories |
-| `GET /api/m2c/vocabulary?town=` | `m2c-vocabulary/1.0`: the field service order form as data (fields with label, tab, required, kind, bounds and choices; the town's planning plant; component units; stages and system status), action types, queues and categories |
+| `GET /api/m2c/vocabulary?town=` | `m2c-vocabulary/1.0`: the field service order form as data (fields with label, tab, required, kind, bounds and choices; the town's planning plant; component units; stages and system status; the structured field `outcomes`), action types (`decisions`, `orders`, `caseWork`, `devices`), queues and categories |
 | `POST /api/m2c/summary` | `m2c-summary/1.0`: KPIs, cost (labour, system, CX, reads), carry, VEE precision/recall against truth, `billing`, `reliability`, `weather`, queues with aging and daily opened/closed/backlog, exception mix, RPA rules, one status per premise |
 | `POST /api/process/queue` | Paged worklist: `queue` (incl. `BILLING`), `category`, `assignee`, `status`, `sort` (`age` oldest first, `impact`, `confidence`, `created` newest first; ties by case id, so pages never overlap), `page`, `pageSize` ≤ 200, `type`, `commodity`, `search` (case, address, premise, account, meter or order id). `total` counts every matching row |
-| `POST /api/m2c/case` | `work-case/1.0`: the case, its VEE decision, the read, 12-month history and `readHistory`, `expected`, `released`, the register check, `cause`, `createdBy`, `actionableFrom`, events (`event/1.0`) with causal edges, allowed decisions (`actions`) and Studio actions (`studioActions`), `notes`, linked `orders`, the account's `invoiceHold`, and for a Field Work case its `order` (`truth: true` adds ground truth); see "Cases" |
-| `POST /api/m2c/order` | `m2c-order/1.0`: a field service order (`field-order/1.0`: form, stage, SAP system status, history, source, reference installation/meter/contract, crew visit) by `orderId`, or the order of a `sourceCaseId` / `readId` (`order: null` and a `proposal` when there is none) |
+| `POST /api/m2c/case` | `work-case/1.0`: the case, its VEE decision, the read, 12-month history and `readHistory`, `expected`, `released`, the register check, `cause`, `createdBy`, `actionableFrom`, events (`event/1.0`) with causal edges, allowed decisions (`actions`) and Studio actions (`studioActions`), `notes`, linked `orders` (each with its `outcome` and `coveredCaseIds`), `fieldOutcome` and `checkRead`, `relatedCases`, the account's `invoiceHold`, and for a Field Work case its `order` (`truth: true` adds ground truth); see "Cases" |
+| `POST /api/m2c/order` | `m2c-order/1.0`: a field service order (`field-order/1.0`: form, stage, SAP system status, history with who moved it, source, `coveredCaseIds`, reference installation/meter/contract, crew visit with `onSiteAt` and `doneAt`, structured `outcome`, `completable`) by `orderId`, or the order of a `sourceCaseId` / `readId` (`order: null` and a `proposal` when there is none) |
 | `POST /api/m2c/installation` | `m2c-installation/1.0` for one `installationId` (see "Lookups") |
 | `POST /api/m2c/read-document` | `m2c-read-document/1.0` for one `readId` |
 | `POST /api/m2c/possible-entries` | `m2c-possible-entries/1.0`: F4 matches `{id, text}` for a `kind` and `query`, paged |
@@ -394,11 +484,15 @@ commands and on their own crews:
 
   The map shows a ring over each house at each step, and the operations panel lists the day.
 - **Field orders:** when the request carries the meter-to-cash run (`m2c: {settings, actions}`), that run's truck
-  rolls on the day become `field_order` jobs (`FIELD-n` crews, 45 min for an exchange, 20 for a special read).
-  A field service order you dispatched becomes a job on its basic start date with its own activity (from the
-  activity type: `special_read`, `meter_investigation`, `meter_exchange`, `access_investigation`), duration, label
-  (the order description) and `orderId`; its `caseId` is the Field Work case. The timeline replays the stored action
-  list leniently: an action that no longer applies is skipped, never a 422.
+  rolls on the day become `field_order` jobs (`FIELD-n` crews, 45 min for an exchange, 20 for a special read, 10 more
+  per extra case when one visit settles several: the job then carries `caseIds`).
+  A field service order you dispatched becomes a job on its basic start date (never before it; the day you dispatch
+  it when that is on or after the start) with its own activity (from the activity type: `special_read`,
+  `meter_investigation`, `meter_exchange`, `access_investigation`), duration, label (the order description) and
+  `orderId`; its `caseId` is the Field Work case, and `coveredCaseIds` the cases the same visit covers. The timeline
+  replays the stored action list leniently: an action that no longer applies is skipped, never a 422. The viewer
+  refreshes the map's operations day after each Workspace action, so an order dispatched for today shows in the Field
+  operations panel at once.
 
 The viewer keeps one run day for the map and the worklists. "Watch the truck roll" on a field-order case moves the
 map to that day and follows the van, and a field visit on the map is reported back as `field_read`.
