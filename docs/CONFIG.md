@@ -79,6 +79,8 @@ Size, road skeleton source, terrain and land use.
 | `industrial_lots` | `2` | 0–10 |  | Number of large industrial customers. |
 | `houses_per_school` | `2500` | 500–20000 |  | (advanced) One school per this many houses. |
 | `margin_m` | `120.0` | 0–1000 | m | (advanced) Empty margin around the developed area. |
+| `corridor_max_deflection_deg` | `35.0` | 5–90 | deg | (advanced) Arterial/collector road edges continue one corridor through a junction when the heading changes by at most this much. *Affects: corridors, trunk routes, corridor changes.* |
+| `corridor_name_bonus_deg` | `20.0` | 0–60 | deg | (advanced) Extra deflection allowed when both edges carry the same street name (a name is weak evidence of continuity). *Affects: corridors.* |
 
 ## Housing & households
 
@@ -125,7 +127,20 @@ Bulk supply, substations, feeders, transformers, services.
 | `max_houses_per_transformer_overhead` | `6` | 1–20 |  | Max houses on a pole-mount transformer. |
 | `max_houses_per_transformer_underground` | `10` | 1–25 |  | Max houses on a pad-mount transformer. |
 | `feeder_design_mva` | `6.0` | 1–20 | MVA | Design peak per feeder. *Affects: feeder count, tie switches.* |
+| `feeder_max_customers` | `1200` | 100–10000 |  | Most customers planned on one feeder (limits how many lose supply when a feeder breaker trips). *Affects: feeder count, feeder territories, tie switches.* |
+| `min_feeders_per_substation` | `2` | 1–12 |  | Feeders leaving each substation at least (fewer only when it serves fewer transformer groups), so normally-open ties can back-feed. *Affects: feeder count, tie switches, outage size.* |
 | `substation_mva` | `25.0` | 5–100 | MVA | Firm capacity per substation. *Affects: substation count.* |
+| `route_weight_arterial` | `1.0` | 0.1–10 |  | (advanced) Feeder routing cost per metre along an arterial (trunks follow the cheapest corridors). *Affects: trunk routes, feeder territories.* |
+| `route_weight_collector` | `1.4` | 0.1–10 |  | (advanced) Feeder routing cost per metre along a collector. *Affects: trunk routes.* |
+| `route_weight_local` | `2.0` | 0.1–10 |  | (advanced) Feeder routing cost per metre along a local street. *Affects: trunk routes, lateral routes.* |
+| `route_turn_penalty_m` | `60.0` | 0–2000 | m | (advanced) Routing cost of a 90° turn, in weighted metres; it grows with the square of the angle (a U-turn costs 4×). Bends under 10° are free. *Affects: trunk continuity, severe turns.* |
+| `route_corridor_change_penalty_m` | `80.0` | 0–2000 | m | (advanced) Routing cost of switching from one arterial/collector corridor to another. *Affects: trunk continuity, corridor changes.* |
+| `route_hierarchy_penalty_m` | `60.0` | 0–2000 | m | (advanced) Routing cost per step up or down the road hierarchy (arterial ↔ collector ↔ local). *Affects: trunks staying on main roads.* |
+| `trunk_min_load_share` | `0.04` | 0–0.5 |  | (advanced) A feeder trunk extends along a corridor while at least this share of the feeder's connected load lies at or beyond that point; smaller tails are served by laterals. *Affects: trunk length, three-phase backbone.* |
+| `route_shared_trunk_factor` | `1.2` | 1.0–5.0 |  | (advanced) Cost multiplier for running a feeder express through another feeder's territory or alongside its trunk. *Affects: express sections, feeder separation.* |
+| `severe_turn_deg` | `60.0` | 20–170 | deg | (advanced) A trunk turn at least this sharp counts as severe in the routing metrics. |
+| `ties_per_feeder_pair` | `1` | 0–4 |  | Normally-open tie switches between each pair of neighbouring feeders. *Affects: tie switches, back-feed options.* |
+| `tie_max_length_m` | `800.0` | 0–5000 | m | (advanced) Longest new line built to tie a feeder that touches no other feeder. *Affects: tie switches.* |
 | `overhead_before_year` | `1978` | 1850–2030 |  | Districts built before this year are overhead (poles); later underground. *Affects: poles, lightning exposure, storm outages.* |
 | `pole_spacing_m` | `42.0` | 20–90 | m | (advanced) Pole span on overhead lines. |
 | `voltage_min_pu` | `0.95` | 0.85–1.0 |  | (advanced) Lower service voltage limit (CSA CAN3-C235 / ANSI Range A). |

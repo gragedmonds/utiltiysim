@@ -35,7 +35,9 @@
     "commercial_cluster_m": 120.0,
     "industrial_lots": 2,
     "houses_per_school": 2500,
-    "margin_m": 120.0
+    "margin_m": 120.0,
+    "corridor_max_deflection_deg": 35.0,
+    "corridor_name_bonus_deg": 20.0
   },
   "housing": {
     "lot_frontage_m": {
@@ -117,7 +119,20 @@
     "max_houses_per_transformer_overhead": 6,
     "max_houses_per_transformer_underground": 10,
     "feeder_design_mva": 6.0,
+    "feeder_max_customers": 1200,
+    "min_feeders_per_substation": 2,
     "substation_mva": 25.0,
+    "route_weight_arterial": 1.0,
+    "route_weight_collector": 1.4,
+    "route_weight_local": 2.0,
+    "route_turn_penalty_m": 60.0,
+    "route_corridor_change_penalty_m": 80.0,
+    "route_hierarchy_penalty_m": 60.0,
+    "trunk_min_load_share": 0.04,
+    "route_shared_trunk_factor": 1.2,
+    "severe_turn_deg": 60.0,
+    "ties_per_feeder_pair": 1,
+    "tie_max_length_m": 800.0,
     "overhead_before_year": 1978,
     "pole_spacing_m": 42.0,
     "voltage_min_pu": 0.95,
@@ -315,6 +330,7 @@
     "escalate_impact": 150.0,
     "trend_ratio": 0.8,
     "trend_periods": 3,
+    "oms_events": true,
     "estimation": "prior_year",
     "history_noise": 0.1
   },

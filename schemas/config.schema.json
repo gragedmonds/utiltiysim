@@ -578,6 +578,19 @@
           ],
           "x-unit": "MVA"
         },
+        "feeder_max_customers": {
+          "default": 1200,
+          "description": "Most customers planned on one feeder (limits how many lose supply when a feeder breaker trips).",
+          "maximum": 10000,
+          "minimum": 100,
+          "title": "Feeder Max Customers",
+          "type": "integer",
+          "x-effects": [
+            "feeder count",
+            "feeder territories",
+            "tie switches"
+          ]
+        },
         "kva_ac": {
           "default": 3.5,
           "description": "Added peak for central air conditioning.",
@@ -652,6 +665,19 @@
           "title": "Max Houses Per Transformer Underground",
           "type": "integer"
         },
+        "min_feeders_per_substation": {
+          "default": 2,
+          "description": "Feeders leaving each substation at least (fewer only when it serves fewer transformer groups), so normally-open ties can back-feed.",
+          "maximum": 12,
+          "minimum": 1,
+          "title": "Min Feeders Per Substation",
+          "type": "integer",
+          "x-effects": [
+            "feeder count",
+            "tie switches",
+            "outage size"
+          ]
+        },
         "overhead_before_year": {
           "default": 1978,
           "description": "Districts built before this year are overhead (poles); later underground.",
@@ -688,6 +714,98 @@
           ],
           "x-unit": "kV"
         },
+        "route_corridor_change_penalty_m": {
+          "default": 80.0,
+          "description": "Routing cost of switching from one arterial/collector corridor to another.",
+          "maximum": 2000,
+          "minimum": 0,
+          "title": "Route Corridor Change Penalty M",
+          "type": "number",
+          "x-advanced": true,
+          "x-effects": [
+            "trunk continuity",
+            "corridor changes"
+          ],
+          "x-unit": "m"
+        },
+        "route_hierarchy_penalty_m": {
+          "default": 60.0,
+          "description": "Routing cost per step up or down the road hierarchy (arterial ↔ collector ↔ local).",
+          "maximum": 2000,
+          "minimum": 0,
+          "title": "Route Hierarchy Penalty M",
+          "type": "number",
+          "x-advanced": true,
+          "x-effects": [
+            "trunks staying on main roads"
+          ],
+          "x-unit": "m"
+        },
+        "route_shared_trunk_factor": {
+          "default": 1.2,
+          "description": "Cost multiplier for running a feeder express through another feeder's territory or alongside its trunk.",
+          "maximum": 5.0,
+          "minimum": 1.0,
+          "title": "Route Shared Trunk Factor",
+          "type": "number",
+          "x-advanced": true,
+          "x-effects": [
+            "express sections",
+            "feeder separation"
+          ]
+        },
+        "route_turn_penalty_m": {
+          "default": 60.0,
+          "description": "Routing cost of a 90° turn, in weighted metres; it grows with the square of the angle (a U-turn costs 4×). Bends under 10° are free.",
+          "maximum": 2000,
+          "minimum": 0,
+          "title": "Route Turn Penalty M",
+          "type": "number",
+          "x-advanced": true,
+          "x-effects": [
+            "trunk continuity",
+            "severe turns"
+          ],
+          "x-unit": "m"
+        },
+        "route_weight_arterial": {
+          "default": 1.0,
+          "description": "Feeder routing cost per metre along an arterial (trunks follow the cheapest corridors).",
+          "maximum": 10,
+          "minimum": 0.1,
+          "title": "Route Weight Arterial",
+          "type": "number",
+          "x-advanced": true,
+          "x-effects": [
+            "trunk routes",
+            "feeder territories"
+          ]
+        },
+        "route_weight_collector": {
+          "default": 1.4,
+          "description": "Feeder routing cost per metre along a collector.",
+          "maximum": 10,
+          "minimum": 0.1,
+          "title": "Route Weight Collector",
+          "type": "number",
+          "x-advanced": true,
+          "x-effects": [
+            "trunk routes"
+          ]
+        },
+        "route_weight_local": {
+          "default": 2.0,
+          "description": "Feeder routing cost per metre along a local street.",
+          "maximum": 10,
+          "minimum": 0.1,
+          "title": "Route Weight Local",
+          "type": "number",
+          "x-advanced": true,
+          "x-effects": [
+            "trunk routes",
+            "lateral routes"
+          ]
+        },
         "secondary_v": {
           "default": 240.0,
           "description": "Split-phase secondary voltage (120/240 V).",
@@ -697,6 +815,16 @@
           "type": "number",
           "x-advanced": true,
           "x-unit": "V"
+        },
+        "severe_turn_deg": {
+          "default": 60.0,
+          "description": "A trunk turn at least this sharp counts as severe in the routing metrics.",
+          "maximum": 170,
+          "minimum": 20,
+          "title": "Severe Turn Deg",
+          "type": "number",
+          "x-advanced": true,
+          "x-unit": "deg"
         },
         "substation_mva": {
           "default": 25.0,
@@ -709,6 +837,31 @@
             "substation count"
           ],
           "x-unit": "MVA"
+        },
+        "tie_max_length_m": {
+          "default": 800.0,
+          "description": "Longest new line built to tie a feeder that touches no other feeder.",
+          "maximum": 5000,
+          "minimum": 0,
+          "title": "Tie Max Length M",
+          "type": "number",
+          "x-advanced": true,
+          "x-effects": [
+            "tie switches"
+          ],
+          "x-unit": "m"
+        },
+        "ties_per_feeder_pair": {
+          "default": 1,
+          "description": "Normally-open tie switches between each pair of neighbouring feeders.",
+          "maximum": 4,
+          "minimum": 0,
+          "title": "Ties Per Feeder Pair",
+          "type": "integer",
+          "x-effects": [
+            "tie switches",
+            "back-feed options"
+          ]
         },
         "transformer_kva_steps": {
           "default": [
@@ -744,6 +897,19 @@
           "title": "Transmission Kv",
           "type": "number",
           "x-unit": "kV"
+        },
+        "trunk_min_load_share": {
+          "default": 0.04,
+          "description": "A feeder trunk extends along a corridor while at least this share of the feeder's connected load lies at or beyond that point; smaller tails are served by laterals.",
+          "maximum": 0.5,
+          "minimum": 0,
+          "title": "Trunk Min Load Share",
+          "type": "number",
+          "x-advanced": true,
+          "x-effects": [
+            "trunk length",
+            "three-phase backbone"
+          ]
         },
         "voltage_max_pu": {
           "default": 1.05,
@@ -1962,6 +2128,34 @@
           ],
           "x-unit": "m"
         },
+        "corridor_max_deflection_deg": {
+          "default": 35.0,
+          "description": "Arterial/collector road edges continue one corridor through a junction when the heading changes by at most this much.",
+          "maximum": 90,
+          "minimum": 5,
+          "title": "Corridor Max Deflection Deg",
+          "type": "number",
+          "x-advanced": true,
+          "x-effects": [
+            "corridors",
+            "trunk routes",
+            "corridor changes"
+          ],
+          "x-unit": "deg"
+        },
+        "corridor_name_bonus_deg": {
+          "default": 20.0,
+          "description": "Extra deflection allowed when both edges carry the same street name (a name is weak evidence of continuity).",
+          "maximum": 60,
+          "minimum": 0,
+          "title": "Corridor Name Bonus Deg",
+          "type": "number",
+          "x-advanced": true,
+          "x-effects": [
+            "corridors"
+          ],
+          "x-unit": "deg"
+        },
         "era_core_year": {
           "default": 1925,
           "description": "Construction year at the town centre.",
@@ -2649,5 +2843,5 @@
   },
   "title": "SimConfig",
   "type": "object",
-  "x-generator-version": "0.5.0"
+  "x-generator-version": "0.6.0"
 }

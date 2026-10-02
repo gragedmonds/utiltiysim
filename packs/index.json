@@ -1,13 +1,13 @@
 {
   "schemaVersion": "town-pack/1.0",
-  "generatorVersion": "0.5.0",
+  "generatorVersion": "0.6.0",
   "towns": [
     {
       "preset": "whitby_small",
       "description": "Whitby street extract (OSM), 480 homes. Matches the prototype's default town size.",
-      "townId": "town-c9ef67ecd21956d1",
-      "topologyRevision": "topo-b4a028b3a1a11f8dc2a9",
-      "indexRevision": "idx-a97e6d1fa606149ec971",
+      "townId": "town-402084ad1c35648c",
+      "topologyRevision": "topo-004b6a3e3aa286701a4d",
+      "indexRevision": "idx-85aeb2841eaa36bcd36e",
       "homes": 480,
       "premises": 609,
       "place": null,
@@ -22,21 +22,21 @@
       "timezone": "America/Toronto",
       "files": {
         "snapshot": {
-          "path": "whitby_small/town-c9ef67ecd21956d1.7ffc9a0e68.snapshot.json.gz",
-          "bytes": 699134
+          "path": "whitby_small/town-402084ad1c35648c.c60707a88f.snapshot.json.gz",
+          "bytes": 702714
         },
         "replay": {
-          "path": "whitby_small/town-c9ef67ecd21956d1.c0badf2658.replay-day.json.gz",
-          "bytes": 599401
+          "path": "whitby_small/town-402084ad1c35648c.c66f1f659f.replay-day.json.gz",
+          "bytes": 600190
         }
       }
     },
     {
       "preset": "ayr",
       "description": "Ayr, Ontario: real OSM streets (snapshot 2026-10-01, 1,500 m radius), 1,861 homes at natural size.",
-      "townId": "town-7b4f597c8a2df9e5",
-      "topologyRevision": "topo-2b2db2e18e4c3e5e957c",
-      "indexRevision": "idx-3eed5488c67750ab8c4a",
+      "townId": "town-a55cd105b5de124d",
+      "topologyRevision": "topo-8d2e3ff4902423f10088",
+      "indexRevision": "idx-8b70e1dd0ef3c4d649cb",
       "homes": 1861,
       "premises": 2110,
       "place": {
@@ -54,21 +54,21 @@
       "timezone": "America/Toronto",
       "files": {
         "snapshot": {
-          "path": "ayr/town-7b4f597c8a2df9e5.0c868cd582.snapshot.json.gz",
-          "bytes": 2222353
+          "path": "ayr/town-a55cd105b5de124d.fa168afd58.snapshot.json.gz",
+          "bytes": 2229102
         },
         "replay": {
-          "path": "ayr/town-7b4f597c8a2df9e5.b472327bf5.replay-day.json.gz",
-          "bytes": 1923627
+          "path": "ayr/town-a55cd105b5de124d.14f8c54c74.replay-day.json.gz",
+          "bytes": 1926939
         }
       }
     },
     {
       "preset": "elora",
       "description": "Elora, Ontario: real OSM streets (snapshot 2026-10-01, 1,800 m radius), 3,271 homes at natural size.",
-      "townId": "town-4cbd285dc8af6609",
-      "topologyRevision": "topo-f4617574e6e10e315d57",
-      "indexRevision": "idx-706b608da6e66e8339c1",
+      "townId": "town-f650351963543653",
+      "topologyRevision": "topo-ae4af674ffae00585194",
+      "indexRevision": "idx-5753515228ddc9a7d28d",
       "homes": 3271,
       "premises": 3858,
       "place": {
@@ -86,21 +86,21 @@
       "timezone": "America/Toronto",
       "files": {
         "snapshot": {
-          "path": "elora/town-4cbd285dc8af6609.860ce298b2.snapshot.json.gz",
-          "bytes": 3918566
+          "path": "elora/town-f650351963543653.82424365d9.snapshot.json.gz",
+          "bytes": 3930983
         },
         "replay": {
-          "path": "elora/town-4cbd285dc8af6609.c52582943e.replay-day.json.gz",
-          "bytes": 3312783
+          "path": "elora/town-f650351963543653.0d28699508.replay-day.json.gz",
+          "bytes": 3316355
         }
       }
     },
     {
       "preset": "cobourg",
       "description": "Cobourg, Ontario: real OSM streets (snapshot 2026-10-01, 2,500 m radius), 5,500 homes at natural size.",
-      "townId": "town-0ce727799855fca1",
-      "topologyRevision": "topo-3d7abfb0c2e1f3246ae2",
-      "indexRevision": "idx-3d97d85090ac6aa48b78",
+      "townId": "town-ade2631bd3aa3f51",
+      "topologyRevision": "topo-798b84f9c823503e8205",
+      "indexRevision": "idx-eed1bc0cbb65ae349d15",
       "homes": 5500,
       "premises": 6276,
       "place": {
@@ -118,12 +118,12 @@
       "timezone": "America/Toronto",
       "files": {
         "snapshot": {
-          "path": "cobourg/town-0ce727799855fca1.1e0cf89b3d.snapshot.json.gz",
-          "bytes": 6309736
+          "path": "cobourg/town-ade2631bd3aa3f51.b5e7023809.snapshot.json.gz",
+          "bytes": 6334920
         },
         "replay": {
-          "path": "cobourg/town-0ce727799855fca1.bedd0e2857.replay-day.json.gz",
-          "bytes": 5157896
+          "path": "cobourg/town-ade2631bd3aa3f51.61b509bac4.replay-day.json.gz",
+          "bytes": 5178735
         }
       }
     }
