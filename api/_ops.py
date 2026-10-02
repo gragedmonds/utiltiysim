@@ -80,9 +80,12 @@ class TimelineRequest(BaseModel):
     town: str = Field(..., description="Pack preset (e.g. 'ayr') or town id.")
     date: str | None = Field(None, description="Run day (local); default: the town's scenario date.")
     commands: list[Command] = Field(default_factory=list, max_length=500)
-    settings: dict | None = Field(None, description="Overrides for response timings (see GET /api/sim/settings).")
+    settings: dict | None = Field(None, description="Overrides for the run settings: timings, crews, incident rates "
+                                  "(see GET /api/sim/settings/schema?town=).")
     m2c: dict | None = Field(None, description="The meter-to-cash run ({settings, actions, outages, seed}) whose "
                              "field orders for this day become crew jobs (see /api/m2c/*).")
+    seed: str | None = Field(None, max_length=64, description="Run seed: re-rolls the day's background incidents "
+                             "(default: the m2c run's seed, else none: the town's draws).")
 
 
 class FrameRequest(TimelineRequest):
@@ -97,9 +100,11 @@ def _run(req: TimelineRequest, *, with_m2c: bool = False) -> Run:
         from api._m2c import m2c_day  # the meter-to-cash run behind the day's field work and reading rounds
 
         orders, outcomes, cycle = m2c_day(req.town, req.date or ops.scenario_date, req.m2c)
+    seed = req.seed if req.seed is not None else (req.m2c or {}).get("seed")
     try:
         return Run(ops, [c.model_dump() for c in req.commands], day=req.date, settings=req.settings,
-                   field_orders=orders, read_outcomes=outcomes, m2c_cycle=cycle)
+                   field_orders=orders, read_outcomes=outcomes, m2c_cycle=cycle,
+                   seed=seed if isinstance(seed, str) else None)
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
 
@@ -111,18 +116,21 @@ def get_packs():
 
 
 @router.get("/api/sim/settings")
-def get_settings():
-    """Default response timings for operations runs (override per request with ``settings``)."""
-    return J(DEFAULTS)
+def get_settings(town: str | None = None):
+    """Default run settings for operations runs (override per request with ``settings``); ``?town=`` gives that
+    town's (its crews, shift, targets, voltage floor and incident rates)."""
+    return J(resolve(town).run_defaults if town else DEFAULTS)
 
 
 @router.get("/api/sim/settings/schema")
-def get_settings_schema():
-    """Operations settings as JSON Schema (titles, units, bounds, effects) with their defaults, for the viewer's
-    Configuration. Send overrides as a timeline or frame request's ``settings``."""
+def get_settings_schema(town: str | None = None):
+    """Operations settings as JSON Schema (titles, units, bounds, effects; ``x-town`` names the town config field a
+    default comes from) with their defaults, for the viewer's Configuration. ``?town=`` fills the defaults from that
+    town. Send overrides as a timeline or frame request's ``settings``."""
     from utilsim.ops.settings_schema import settings_schema
 
-    return J({"schema": settings_schema(), "defaults": DEFAULTS})
+    defaults = resolve(town).run_defaults if town else DEFAULTS
+    return J({"schema": settings_schema(defaults), "defaults": defaults, "town": town})
 
 
 @router.post("/api/sim/timeline")

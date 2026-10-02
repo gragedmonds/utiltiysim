@@ -174,6 +174,11 @@ def premise_outages(run: M2CRun, p: int, T: float) -> list[dict]:
     for o in run.outage_log:
         if o["t0"] > T or not (o["prem"] == p).any():
             continue
+        if o["utility"] == "ami":  # a collector outage: service went on, only the AMI meters fell silent
+            out.append({"id": o["id"], "utility": "ami", "start": run.iso(o["t0"]), "end": run.iso(o["t1"]),
+                        "ongoing": o["t1"] > T, "minutes": round((min(o["t1"], T) - o["t0"]) * 1440.0, 1), "lost": 0.0,
+                        "unit": "", "lastGasp": False, "collectorOutage": True})
+            continue
         rows = o["rows"][(tw.prem[o["rows"]] == p) & (tw.direction[o["rows"]] == "import")]
         end = min(o["t1"], T)
         lost = 0.0

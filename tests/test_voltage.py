@@ -103,12 +103,12 @@ def test_backfeed_is_declined_when_the_receiving_feeder_would_overload(ayr):
         k = net.edge_index[q["edgeId"]]
         if edges.loop[k]:
             continue
-        tl = Run(ayr, [break_pole(q, 8 * 3600)]).timeline()
+        tl = Run(ayr, [break_pole(q, 8 * 3600)], settings={"randomIncidents": False}).timeline()
         if tl["incidents"] and tl["incidents"][0].get("tie"):
             break
     inc = tl["incidents"][0]
     assert inc["tie"]["maxLoading"] <= 1.3 and inc["tie"]["minVoltage"] >= 110
-    strict = Run(ayr, [break_pole(q, 8 * 3600)], settings={"tieMaxLoading": 0.01}).timeline()
+    strict = Run(ayr, [break_pole(q, 8 * 3600)], settings={"tieMaxLoading": 0.01, "randomIncidents": False}).timeline()
     inc2 = strict["incidents"][0]
     assert "tie" not in inc2 and inc2["tiesDeclined"][0]["maxLoading"] > 0.01
     assert any(e["eventType"] == "backfeed.declined" for e in strict["events"])

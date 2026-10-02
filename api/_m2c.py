@@ -72,7 +72,9 @@ class Action(BaseModel):
 class Outage(BaseModel):
     id: str | None = None
     day: str = Field(..., description="Local date the interruption began (YYYY-MM-DD), in 2026.")
-    utility: Literal["electric", "water", "gas"]
+    utility: Literal["electric", "water", "gas", "ami"] = Field(
+        ..., description="The service lost, or \"ami\" for an AMI collector outage (service goes on; the premises' AMI "
+                         "meters cannot report)")
     start: float = Field(..., ge=0, lt=86400, description="Seconds since local midnight of ``day``.")
     end: float = Field(..., gt=0, description="Seconds since local midnight of ``day`` (may pass midnight).")
     premiseIds: list[str] = Field(..., min_length=1, max_length=20000)

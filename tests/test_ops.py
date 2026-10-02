@@ -21,6 +21,8 @@ from utilsim.ops.timeline import Run
 from utilsim.sim.state import FrameBuilder, local_time
 
 ROOT = Path(__file__).resolve().parents[1]
+# Most tests follow one incident they cause: background incidents (on by default) are switched off for them.
+QUIET = {"randomIncidents": False}
 
 
 @pytest.fixture(scope="module")
@@ -80,7 +82,7 @@ def test_routes_follow_roads_with_increasing_times(ayr):
 
 def test_broken_pole_trips_a_fuse_then_crew_isolates_and_restores(ayr, ayr_snapshot):
     pole = fused_pole(ayr)
-    run = Run(ayr, [break_pole(pole, 8 * 3600)])
+    run = Run(ayr, [break_pole(pole, 8 * 3600)], settings=QUIET)
     tl = run.timeline()
     inc = tl["incidents"][0]
     assert inc["device"]["kind"] == "fuse" and 0 < inc["unsupplied"]["atFault"] < len(ayr.premises) / 2
@@ -115,7 +117,7 @@ def test_trunk_fault_is_backfed_through_a_normally_open_tie(ayr, ayr_snapshot):
     for q in net.equipment:  # the first trunk pole (id order) whose fault leaves customers cut off after isolation
         if q["kind"] != "pole" or edges[net.edge_index[q["edgeId"]]].get("designRole") != "trunk":
             continue
-        run = Run(ayr, [break_pole(q, 8 * 3600)])
+        run = Run(ayr, [break_pole(q, 8 * 3600)], settings=QUIET)
         tl = run.timeline()
         if tl["incidents"][0]["unsupplied"]["afterIsolation"] > 0:
             break
@@ -143,7 +145,7 @@ def test_water_main_break_leaks_until_valves_isolate_it(ayr, ayr_snapshot):
     x, z = net.points[k][0]
     run = Run(ayr, [{"id": "W", "at": 9 * 3600, "type": "break_asset",
                      "payload": {"id": net.edge_ids[k], "kind": "main", "utility": "water", "edgeId": net.edge_ids[k],
-                                 "x": float(x), "z": float(z)}}])
+                                 "x": float(x), "z": float(z)}}], settings=QUIET)
     tl = run.timeline()
     inc = tl["incidents"][0]
     base = run.ops.frames.frame(run._when(9 * 3600 + 300))
@@ -170,7 +172,8 @@ def test_water_main_break_leaks_until_valves_isolate_it(ayr, ayr_snapshot):
 
 
 def test_field_visit_drives_out_and_takes_interim_reads(ayr):
-    tl = Run(ayr, [{"id": "V", "at": 10 * 3600, "type": "dispatch", "payload": {"targetId": "P-00042"}}]).timeline()
+    tl = Run(ayr, [{"id": "V", "at": 10 * 3600, "type": "dispatch", "payload": {"targetId": "P-00042"}}],
+             settings=QUIET).timeline()
     job = next(j for j in tl["jobs"] if j["kind"] == "field_visit")
     assert job["premiseId"] == "P-00042" and job["crewId"].startswith("TECH")
     assert len(job["route"]) == len(job["routeTimes"]) and job["routeTimes"][0] == 0
@@ -234,7 +237,7 @@ def test_reading_rounds_walk_the_route_in_order(ayr):
 
     mru = next(m for m in ayr.mrus if m["technology"] == "MANUAL")
     day = scheduled_read_date(2026, 7, mru["portion"]).isoformat()
-    tl = Run(ayr, [], day=day).timeline()
+    tl = Run(ayr, [], day=day, settings=QUIET).timeline()
     job = next(j for j in tl["jobs"] if j["kind"] == "meter_reading" and j["mruId"] == mru["id"])
     assert job["mode"] == "walk" and job["crewId"] == mru["readerId"]
     assert job["meters"] == sum(1 for p in ayr.premises if p.get("mruId") == mru["id"])
@@ -245,7 +248,7 @@ def test_reading_rounds_walk_the_route_in_order(ayr):
     assert np.hypot(start["x"] - end["x"], start["z"] - end["z"]) < 5  # the reader walks back to the van
     kinds = [e["eventType"] for e in tl["events"]]
     assert "reading.started" in kinds and "reading.completed" in kinds
-    assert Run(ayr, [], day=day, settings={"meterReading": False}).timeline()["jobs"] == []
+    assert Run(ayr, [], day=day, settings={**QUIET, "meterReading": False}).timeline()["jobs"] == []
     # Each meter is read in sequence order while the walker is out.
     at = [s["at"] for s in job["stops"]]
     assert len(at) == job["meters"] and all(np.diff(at) >= 0)
@@ -336,7 +339,7 @@ def test_gas_main_break_relights_every_shut_premise(ayr, ayr_snapshot):
         cmd = {"id": "G", "at": 9 * 3600, "type": "break_asset",
                "payload": {"id": net.edge_ids[k], "kind": "main", "utility": "gas", "edgeId": net.edge_ids[k],
                            "x": float(x), "z": float(z)}}
-        run = Run(ayr, [cmd])
+        run = Run(ayr, [cmd], settings=QUIET)
         tl = run.timeline()
         if tl["incidents"] and tl["incidents"][0]["unsupplied"]["afterIsolation"] >= 3:
             break
@@ -370,12 +373,12 @@ def test_outages_from_operations_reach_meter_to_cash(ayr):
     pole = fused_pole(ayr)
     base = run_for(RunRequest(town="ayr"))
     tw = base.town
-    probe = Run(ayr, [break_pole(pole, 3600)]).timeline()
+    probe = Run(ayr, [break_pole(pole, 3600)], settings=QUIET).timeline()
     hit = {p for i in probe["interruptions"] for p in i["premiseIds"]}
     ami = next(r for r in range(tw.n_registers) if tw.premise_ids[tw.prem[r]] in hit and tw.tech[r] == "AMI"
                and tw.commodity[r] == "electric")
     day = date_of(int(tw.read_day[ami, 3])).isoformat()  # an AMI read night inside the outage (reads at 02:00)
-    tl = Run(ayr, [break_pole(pole, 3600)], day=day).timeline()
+    tl = Run(ayr, [break_pole(pole, 3600)], day=day, settings=QUIET).timeline()
     inc = tl["incidents"][0]
     assert {p for i in tl["interruptions"] for p in i["premiseIds"]} == hit
     assert sum(len(i["premiseIds"]) for i in tl["interruptions"]) == inc["unsupplied"]["atFault"]

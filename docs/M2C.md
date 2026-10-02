@@ -28,7 +28,8 @@ A run is stateless and deterministic: `(town, settings, actions, outages, seed)`
 - `field_read` (`{day, premiseId, at}`, no `caseId`) is a field visit made on the map. The tech reads the
   premise's meters, and each of its open read cases settles on the spot: a faulty meter is exchanged, otherwise a
   special read gives the real register value.
-- `outages` are service interruptions from the operations simulator: `{day, utility, start, end, premiseIds}`, with
+- `outages` are service interruptions from the operations simulator: `{day, utility, start, end, premiseIds}`
+  (`utility` `electric`, `water`, `gas`, or `ami` for an AMI collector outage), with
   start and end in seconds since local midnight of `day` (end may pass midnight, up to a week). An operations
   timeline reports them as `interruptions`. See "Outages from the map" below.
 - Views read the finished year *as of* a date (`asOf`, default: the town's scenario date).
@@ -321,7 +322,7 @@ map to that day and follows the van, and a field visit on the map is reported ba
 
 ### Outages from the map
 
-Break a pole or a main on the map and the outage reaches meter-to-cash. The timeline's `interruptions` list who lost
+Break a pole or a main on the map, or let a background incident happen, and the outage reaches meter-to-cash. The timeline's `interruptions` list who lost
 which service and when; the viewer keeps them per operations day and sends them as the run's `outages`. In the run:
 - **Use stops:** each register loses its normal consumption for the hours without service (an electric outage also
   stops PV export), so the following reads, bills and true-ups are lower.
@@ -331,6 +332,12 @@ which service and when; the viewer keeps them per operations day and sends them 
 - **VEE knows:** with `vee.oms_events` (default on), the hours without service lower the expected use, and the
   context test's rationale names them. Turn it off to see what an outage does to low-usage flags when VEE is not
   told.
+- **Silent collectors:** an outage with `utility: "ami"` is an AMI collector outage from operations (a background
+  incident; see CONTRACT.md "Background incidents"). Service goes on and nothing stops flowing, but every AMI meter
+  (any commodity) at its premises misses a read that falls inside it (`reasonCode` `SIM_COLLECTOR_OUTAGE`); the
+  `COMM_FAIL` case is caused by an `AMI_COLLECTOR_OUTAGE` event. A collector that fails in the evening is repaired in
+  the next day shift, so the night's 02:00 reads are the ones it costs. It is not in `reliability`; a premise view
+  lists it among its `outages` with `utility: "ami"`, `collectorOutage: true` and no use lost.
 - **Reliability:** the summary's `reliability` reports interruptions, customers interrupted, customer-minutes, SAIDI
   minutes per customer served, use lost and AMI last gasps, per utility. A premise view lists its `outages`.
 

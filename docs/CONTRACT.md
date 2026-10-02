@@ -188,9 +188,10 @@ Vercel) for the prebuilt towns in `packs/`.
 | Method & path | Body | Returns |
 |---|---|---|
 | `GET /api/packs` | – | prebuilt towns (`town-pack/1.0`) |
-| `GET /api/sim/settings` | – | default response timings (detection, mobilisation, isolate/repair/flush minutes, leak rates, visit minutes, `autoDispatch`) |
-| `POST /api/sim/timeline` | `{town, date?, commands[], settings?}` | `utility-timeline/1.0` |
-| `POST /api/sim/frame` | `{town, date?, commands[], settings?, at, premises?}` | a complete `utility-state/1.0` frame with the run's switching, valves and leaks |
+| `GET /api/sim/settings?town=` | – | the run settings' defaults (timings, crews, readers, shift, targets, voltage floor, incident rates); with `town`, that town's |
+| `GET /api/sim/settings/schema?town=` | – | `{schema, defaults, town}`: the settings as JSON Schema (see below) |
+| `POST /api/sim/timeline` | `{town, date?, commands[], settings?, m2c?, seed?}` | `utility-timeline/1.0` |
+| `POST /api/sim/frame` | `{town, date?, commands[], settings?, seed?, at, premises?}` | a complete `utility-state/1.0` frame with the run's switching, valves and leaks |
 
 `town` is a pack preset (`ayr`) or a town id. `at` and every time below are **seconds since local midnight of the
 run day** (default: the town's scenario date).
@@ -210,14 +211,50 @@ What the engine does:
   damaged section; customers inside it lose supply; repair (and flush for water), then restore.
 * **Field visit:** a meter technician drives out, takes interim reads of the premise's meters (`meter-read/1.1`,
   `readReason: interim`, `source: field-visit`) and returns.
-* Crews (`operations.*_crews`, `meter_techs`) start at the depot, are assigned first come first served and are never
+* Crews (`electricCrews`, `waterCrews`, `gasCrews`, `meterTechs`, `fieldCrews`, `relightCrews`; the first four
+  default to the town's `operations.*`) start at the depot, are assigned first come first served and are never
   reassigned; a job waits (`workorder.queued`) when none is free. Routes are the fastest by travel time on the road
   graph at the configured class speeds, in the right-hand lane, with a timestamp at every vertex.
+* Reading rounds take readers in turn (`meterWalkers`, `meterVans`; route k → reader k mod n, as the town assigned
+  them); a reader with two rounds on one day starts the second when back from the first (`requestedAt` is the
+  planned start).
+* A gas incident reports `response: {minutes, targetMinutes, met}`: detection to the crew on site against
+  `gasResponseTargetMinutes` (the town's `operations.gas_response_target_min`).
+
+**Background incidents.** Unless `settings.randomIncidents` is false (default: not the town's
+`incidents.manual_only`), each day also has incidents nobody caused, drawn at yearly rates scaled to the town
+(`utilsim/ops/hazards.py`):
+
+| Kind | Rate setting (town default) | Exposure |
+|---|---|---|
+| `water_main_break` | `waterMainBreaksPer100km` (`incidents.water_main_breaks_per_100km`) | km of water main; cast iron counts twice |
+| `gas_leak` | `gasMainLeaksPer100km` | km of gas main |
+| `gas_service_leak` | `gasServiceLeaksPer1000` | gas services (leaks at `leakM3h.gas_service`; its own shut-off isolates one premise) |
+| `transformer_failure` | `transformerFailuresPer1000` | transformers, ×3 for one loaded above its rating at the 18:00 peak of the month (its own fuse; only its customers) |
+| `line_fault` | `overheadFaultsPerKmStormDay` × storm days | km of overhead primary, on storm days (`stormDaysPerYear`, `weather.storm_days_per_year`, spread by month, mostly May–Sep), between 13:00 and 21:00 |
+| `collector_outage` | `collectorOutagesPerYear` (town-wide) | AMI collectors with meters |
+
+Draws are counter-based hashes of (the town's `seeds.incidents`, the run `seed` if any, date, hazard), so a day's
+incidents never depend on other days or on commands. Each is worked exactly like a `break_asset` (detection,
+dispatch, isolation, repair, back-feed, relights, interruptions) with `source: "background"`, id `INC-BG-n` and
+`commandId: null`; a user's incidents keep `INC-n` and `source: "user"`. The timeline's `background` reports
+`{enabled, stormDay, stormWindow?, expected: {kind: count}, exposure, incidentIds}`. At the defaults Ayr expects about
+14 a year (most days are quiet) and Cobourg about 39. A collector outage changes no network: the collector goes
+silent (`collector.offline`), the head end alarms after `detectSeconds.ami`, and a meter technician repairs it in the
+day shift (`shiftStartHour`–`shiftEndHour`; detected after hours, it waits for the morning). Its premises appear in
+`interruptions` as `{utility: "ami", start, end, premiseIds, collectorId, incidentId}`; sent to meter-to-cash as
+outages, their AMI meters miss the reads that fall inside it (see [M2C.md](M2C.md)).
+
+A request's `seed` (top level, else the `m2c` run's seed) re-rolls the background incidents and is part of the
+`simulationId`; none keeps the town's own draws.
 
 `GET /api/sim/settings` returns the operations defaults. `GET /api/sim/settings/schema` returns the same settings as
-JSON Schema, with titles, units, bounds and effects. Groups marked `x-flat` hold top-level keys; the others are the
-nested per-utility or per-incident settings. A timeline or frame request's `settings` overrides only what it names;
-the viewer's Configuration → Scenario tab sends them.
+JSON Schema, with titles, units, bounds and effects. Groups marked `x-flat` hold top-level keys (`crews`,
+`dispatch`, `incidents`, `backfeed`, `reading`); the others are the nested per-utility or per-incident settings. A
+field whose default comes from the town's config names that config field in `x-town` (for example
+`operations.gas_crews`, `incidents.water_main_breaks_per_100km`, `electric.voltage_min_pu`); `?town=` fills those
+defaults from the town, so they can be tweaked per run without generating a new town. A timeline or frame request's
+`settings` overrides only what it names; the viewer's Configuration → Scenario tab sends them.
 
 `utility-timeline/1.0`: `simulationId` (the same as the town's frames for that day), `incidents` (with protective
 device, detection, isolation and restoration times, unsupplied counts), `jobs` (Astra's job shape: `startAt`,
@@ -225,7 +262,8 @@ device, detection, isolation and restoration times, unsupplied counts), `jobs` (
 `roadPoint`, `visitPoint`, `crewId`), `events` (`event/1.0` envelope, `eventId = <correlation>:<n>`, sequence by
 time), `stateChanges` (times where supply changes, with unsupplied premise ids, disabled edges and leaks per utility),
 `interruptions` (who lost which service and when: `{utility, start, end, premiseIds}` grouped by identical spans, `end`
-null if still out at the end of the day; the meter-to-cash run's `outages`), `reads`, `warnings`.
+null if still out at the end of the day; the meter-to-cash run's `outages`; collector outages add `utility: "ami"` entries),
+`seed`, `background` (above), `reads`, `warnings`.
 
 Frames from `/api/sim/frame` add `premises.unsupplied` (`{electric: [premiseId…], …}`) when anyone is without supply.
 Every frame also carries the radial power flow: `networks.electric.loading` per edge (apparent power over capacity),
@@ -234,7 +272,9 @@ They also carry `premises.pressure.water` and `premises.pressure.gas`: service p
 hydraulics, loops included. It is null when the premise is unsupplied or not served.
 
 Back-feed closes a tie only if the feeder picking up the load stays within `tieMaxLoading` (1.3, the emergency
-rating) and every customer keeps at least `tieMinVoltage` (110 V), checked hourly across the repair. Otherwise the
+rating) and every customer keeps at least `tieMinVoltage`, checked hourly across the repair. Its default is the
+town's lower service limit less 4 V (`electric.voltage_min_pu` × 120 V − 4 V: 110 V, ANSI C84.1 Range B, at the
+default 0.95 pu). Otherwise the
 incident lists `tiesDeclined` and a `backfeed.declined` event explains why. An accepted tie reports its `maxLoading`
 and `minVoltage`.
 
