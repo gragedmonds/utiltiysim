@@ -69,7 +69,9 @@ def test_a_generated_town_runs_operations_and_meter_to_cash():
     built = time.perf_counter() - t0
     assert r.status_code == 201, r.text
     tid = r.json()["townId"]
-    assert client.post("/api/towns", json={"config": cfg}).json() == {"townId": tid, "status": "ready"}  # same id
+    again = client.post("/api/towns", json={"config": cfg}).json()
+    assert again == {"townId": tid, "ref": r.json()["ref"], "status": "ready"}  # same id and the same name
+    assert again["ref"].startswith("ayr~")
     health = client.get("/api/health").json()
     assert health["capabilities"]["generate"] is True and tid in health["towns"] and "ayr" in health["towns"]
     assert next(t for t in health["generated"] if t["townId"] == tid)["seed"] == "AYR-STUDIO-7"

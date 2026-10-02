@@ -19,7 +19,7 @@ from api._towns import health as health_body
 from api._towns import ready_town as _town
 from api._towns import router as towns_router
 from api.store import store
-from utilsim.config import SCENARIOS, config_schema, list_presets, load_preset
+from utilsim.config import SCENARIOS
 from utilsim.config.presets import deep_merge
 from utilsim.io.geojson import LAYERS, layer
 from utilsim.io.tables import table_rows, to_csv_text, to_parquet_bytes
@@ -60,30 +60,12 @@ def get_published_schema(name: str):
     return J(load(name))
 
 
-@app.get("/api/config/schema")
-def get_schema():
-    return J(config_schema())
-
-
-@app.get("/api/config/presets")
-def get_presets():
-    return J({"towns": list_presets(), "scenarios": sorted(SCENARIOS)})
-
-
 @app.get("/api/sources")
 def get_sources():
     """Frozen street extracts (real places) with attribution and the presets built on them."""
     from utilsim.gen.sources import list_sources
 
     return J({"sources": list_sources()})
-
-
-@app.get("/api/config/presets/{name}")
-def get_preset(name: str):
-    try:
-        return J(load_preset(name).model_dump(mode="json"))
-    except KeyError as exc:
-        raise HTTPException(404, str(exc)) from exc
 
 
 @app.get("/api/towns/{tid}/layers/{name}.geojson")

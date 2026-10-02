@@ -1776,7 +1776,8 @@
     },
     "/api/config/schema": {
       "get": {
-        "operationId": "get_schema_api_config_schema_get",
+        "description": "The full SimConfig JSON Schema with UI hints (groups, x-applies, bounds, units, x-status) for the\nConfiguration page.",
+        "operationId": "get_config_schema_api_config_schema_get",
         "responses": {
           "200": {
             "content": {
@@ -1787,7 +1788,7 @@
             "description": "Successful Response"
           }
         },
-        "summary": "Get Schema"
+        "summary": "Get Config Schema"
       }
     },
     "/api/health": {

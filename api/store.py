@@ -14,8 +14,9 @@ import orjson
 
 from utilsim.config.model import SimConfig
 
-CACHE_DIR = Path(os.environ.get("UTILSIM_CACHE", ".utilsim_cache"))
-SYNC_LIMIT = int(os.environ.get("UTILSIM_SYNC_HOUSES", "2000"))
+SERVERLESS = bool(os.environ.get("VERCEL"))  # a function invocation cannot leave a build running after it returns
+CACHE_DIR = Path(os.environ.get("UTILSIM_CACHE", "/tmp/utilsim-cache" if SERVERLESS else ".utilsim_cache"))
+SYNC_LIMIT = int(os.environ.get("UTILSIM_SYNC_HOUSES", str(10**9) if SERVERLESS else "2000"))
 MAX_TOWNS = int(os.environ.get("UTILSIM_MAX_TOWNS", "4"))
 
 
@@ -43,6 +44,18 @@ class TownStore:
         with self._lock:
             self._jobs[tid] = self._pool.submit(self._build, tid, cfg)
         return tid, "building"
+
+    def build(self, cfg: SimConfig) -> str:
+        """Build ``cfg`` now (in this request) unless it is ready; returns its status."""
+        tid = cfg.town_id()
+        with self._lock:
+            self._configs[tid] = cfg
+        if tid not in self._towns:
+            self._build(tid, cfg)
+        return self.status(tid)
+
+    def config(self, tid: str) -> SimConfig | None:
+        return self._configs.get(tid)
 
     def _build(self, tid: str, cfg: SimConfig) -> None:
         try:

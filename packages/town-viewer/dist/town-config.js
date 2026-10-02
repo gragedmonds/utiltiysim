@@ -21,7 +21,7 @@ export function fullConfig(config,values){return {...structuredClone(config||{})
 // A new master seed that keeps the current one's prefix (WHITBY-042 → WHITBY-K7Q2PX); shown, so it is repeatable.
 export function newSeed(current,random=Math.random){const abc='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',prefix=(String(current||'').split('-')[0].replace(/[^A-Za-z0-9]/g,'').toUpperCase().slice(0,20))||'TOWN';
  for(;;){let s='';for(let i=0;i<6;i++)s+=abc[Math.floor(random()*abc.length)%abc.length];const seed=prefix+'-'+s;if(seed!==current)return seed;}}
-export const HOSTED_NOTE='Generating a town needs a local engine (uv run utilsim serve); the hosted engine serves the prebuilt towns.';
+export const HOSTED_NOTE='This engine cannot build towns (its generation libraries are not installed); it serves the prebuilt towns.';
 // Can this engine build towns? health.capabilities.generate when the engine says; otherwise a local (not hosted)
 // engine that serves the generator's presets also takes POST /api/towns.
 export async function generateCapability(api,health,fetchImpl=globalThis.fetch?.bind(globalThis)){
@@ -31,7 +31,8 @@ export async function generateCapability(api,health,fetchImpl=globalThis.fetch?.
  try{const r=await fetchImpl(api+'/config/presets');return r.ok?{ok:true}:{ok:false,reason:HOSTED_NOTE};}catch{return {ok:false,reason:HOSTED_NOTE};}
 }
 function detailText(d){if(!d)return '';if(typeof d==='string')return d;if(Array.isArray(d))return d.map(e=>(e.loc?e.loc.filter(x=>x!=='body'&&x!=='config').join('.')+': ':'')+(e.msg||JSON.stringify(e))).join('; ');return d.message||JSON.stringify(d);}
-// POST the config, then poll GET /api/towns/{id} until it is ready. Resolves to the town id.
+// POST the config, then poll GET /api/towns/{id} until it is ready. Resolves to the town's reference (its self-describing
+// name, which any engine instance and any shared link rebuilds), or its id from an engine that does not name towns.
 export async function requestTown(api,config,{fetchImpl=globalThis.fetch?.bind(globalThis),onStatus=()=>{},sleep=ms=>new Promise(r=>setTimeout(r,ms)),interval=1500,timeoutMs=20*60000,now=()=>Date.now()}={}){
  const r=await fetchImpl(api+'/towns',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({config})});let body={};try{body=await r.json();}catch{}
  if(r.status===404||r.status===405){const e=Error('This engine does not generate towns. '+HOSTED_NOTE);e.unsupported=true;throw e;}
@@ -42,7 +43,7 @@ export async function requestTown(api,config,{fetchImpl=globalThis.fetch?.bind(g
   const s=await fetchImpl(api+'/towns/'+encodeURIComponent(tid));let b={};try{b=await s.json();}catch{}status=b.status||(s.ok?'ready':'unknown');
   if(status==='failed')throw Error('The engine could not build this town: '+(detailText(b.error)||'unknown error'));if(status==='unknown')throw Error(`The engine no longer knows ${tid}.`);
   onStatus({townId:tid,status,elapsed:now()-start});}
- return tid;
+ return body.ref||tid;
 }
 // The page: deps give the current town and mode, the engine API, a health probe, toast/download and a loader.
 export function installTownConfig({getContext,api,probe,toast,download,load}){

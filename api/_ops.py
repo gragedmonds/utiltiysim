@@ -25,6 +25,8 @@ PACKS = Path(__file__).resolve().parents[1] / "packs"
 router = APIRouter()
 # Extra snapshot sources (the local API adds its generated-town store): fn(town) -> snapshot dict or None.
 SNAPSHOT_SOURCES: list[Callable[[str], dict | None]] = []
+# Town references that name a town by more than its id (a generated town's preset~changes): fn(ref) -> town id or None.
+TOWN_KEYS: list[Callable[[str], str | None]] = []
 
 
 def J(data: Any, status: int = 200) -> Response:
@@ -52,7 +54,13 @@ def _pack_snapshot(town: str) -> dict | None:
 def town_key(town: str) -> str:
     """The town id behind a pack preset (or the reference itself), for warm-instance caches."""
     entry = _pack_entry(town)
-    return entry["townId"] if entry is not None else town
+    if entry is not None:
+        return entry["townId"]
+    for key in TOWN_KEYS:
+        tid = key(town)
+        if tid:
+            return tid
+    return town
 
 
 def load_snapshot(town: str) -> dict:

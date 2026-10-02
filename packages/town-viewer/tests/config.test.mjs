@@ -95,7 +95,7 @@ test('generation is offered only where the engine can build towns',async()=>{
  assert.deepEqual(await generateCapability('/api',{status:'ok',towns:['ayr']},ok),{ok:true});
  assert.equal((await generateCapability('/api',{status:'ok',towns:['ayr']},missing)).ok,false);
  assert.match((await generateCapability('/api',null,ok)).reason,/No engine is connected/);
- assert.match(HOSTED_NOTE,/uv run utilsim serve/);
+ assert.match(HOSTED_NOTE,/cannot build towns/);
 });
 
 test('generate posts the full config, polls until ready and reports engine refusals',async()=>{
@@ -105,6 +105,7 @@ test('generate posts the full config, polls until ready and reports engine refus
  assert.equal(tid,'town-abc12345');assert.deepEqual(calls[0],['POST','http://e/api/towns',{config:{seeds:{master:'X'}}}]);
  assert.deepEqual(calls.slice(1).map(c=>c[1]),Array(3).fill('http://e/api/towns/town-abc12345'));assert.deepEqual(seen,['building','building','building','ready']);
  const ready=async()=>({ok:true,status:201,json:async()=>({townId:'town-1',status:'ready'})});assert.equal(await requestTown('/api',{},{fetchImpl:ready}),'town-1');
+ const named=async()=>({ok:true,status:201,json:async()=>({townId:'town-1',ref:'ayr~eNqrVs',status:'ready'})});assert.equal(await requestTown('/api',{},{fetchImpl:named}),'ayr~eNqrVs','the reference wins: any engine instance rebuilds it');
  await assert.rejects(requestTown('/api',{},{fetchImpl:async()=>({ok:false,status:405,json:async()=>({})})}),e=>e.unsupported===true);
  await assert.rejects(requestTown('/api',{},{fetchImpl:async()=>({ok:false,status:422,json:async()=>({detail:[{loc:['body','config','town','houses'],msg:'Input should be less than or equal to 10000'}]})})}),/Engine 422: town\.houses: Input should be less than or equal to 10000/);
  await assert.rejects(requestTown('/api',{},{fetchImpl:async()=>({ok:false,status:422,json:async()=>({townId:'town-9',status:'failed',error:'ValueError: no roads'})})}),/could not build this town: ValueError: no roads/);
