@@ -68,6 +68,14 @@ class M2CTown:
     meter_commodity: np.ndarray
     meter_tech: np.ndarray
     meter_keys: np.ndarray
+    # Installations (one per premise and utility) and accounts, for billing.
+    inst_ids: list[str]
+    inst_of: np.ndarray  # register -> installation row
+    inst_rows: list[np.ndarray]
+    inst_rate: list[str]  # rate category in billing master data (e.g. RES-E)
+    tariffs: dict[str, dict]
+    account_method: dict[str, str]
+    account_profile: dict[str, str]
 
     @property
     def n_registers(self) -> int:
@@ -85,6 +93,8 @@ class M2CTown:
     def contract_at(self, r: int, day: int) -> tuple[str, str]:
         """(contract id, account id) active for register row ``r`` on ``day`` (the current one if none)."""
         ten = self.contracts.get((int(self.prem[r]), str(self.commodity[r])), [])
+        if len(ten) == 1:
+            return ten[0][2], ten[0][3]
         for start, end, ctr, acct in ten:
             if start <= day < end:
                 return ctr, acct
@@ -129,6 +139,15 @@ class M2CTown:
                  [regs.day_of(scheduled_read_date(YEAR, mo, p)) for mo in range(1, 13)] for p in set(portion.tolist())}
         read_day = np.array([table[p] for p in portion], dtype=np.int64).reshape(len(portion), 13)
         inst_prem = {x["id"]: (pidx[x["premiseId"]], x["division"]) for x in snap["installations"]}
+        rate_of = {x["id"]: x.get("rateCategory") or "" for x in snap["installations"]}
+        inst_ids = list(dict.fromkeys(cols[4])) if rows else []
+        inst_index = {x: k for k, x in enumerate(inst_ids)}
+        inst_of = np.array([inst_index[x] for x in cols[4]], dtype=np.int64)
+        tariffs = {}
+        for t in snap.get("tariffs", []):
+            base = next((b for b in snap["tariffs"] if b["id"] == t.get("basedOn")), {})
+            tariffs[t["id"]] = {**base, **{k: v for k, v in t.items() if k != "basedOn"}}
+        profile = {b["id"]: b.get("paymentProfile") or "on_time" for b in snap.get("businessPartners", [])}
         contracts: dict[tuple[int, str], list[tuple[int, int, str, str]]] = {}
         for ctr in snap["contracts"]:
             k = inst_prem.get(ctr["installationId"])
@@ -153,7 +172,11 @@ class M2CTown:
             tech=np.array(cols[11]), mru=list(cols[12]), portion=portion, base=np.array(cols[14], dtype=float),
             hour=np.array(cols[15], dtype=float), read_day=read_day, contracts=contracts,
             meter_prem=np.array(m_prem, dtype=np.int64), meter_commodity=np.array(m_comm),
-            meter_tech=np.array(m_tech), meter_keys=np.array(m_keys, dtype=np.int64))
+            meter_tech=np.array(m_tech), meter_keys=np.array(m_keys, dtype=np.int64),
+            inst_ids=inst_ids, inst_of=inst_of, inst_rows=[np.flatnonzero(inst_of == k) for k in range(len(inst_ids))],
+            inst_rate=[rate_of.get(x, "") for x in inst_ids], tariffs=tariffs,
+            account_method={a["id"]: a.get("paymentMethod") or "online" for a in snap.get("accounts", [])},
+            account_profile={a["id"]: profile.get(a.get("businessPartnerId"), "on_time") for a in snap.get("accounts", [])})
 
 
 def date_of(day: int) -> date:

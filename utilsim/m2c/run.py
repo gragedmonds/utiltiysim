@@ -33,8 +33,9 @@ from utilsim.m2c import catalog as cat
 from utilsim.m2c import registers as regs
 from utilsim.m2c import vee as vee_mod
 from utilsim.m2c.base import M2CTown, date_of
+from utilsim.m2c.books import Books
 
-M2C_GROUPS = ("process", "anomalies", "reading", "vee")
+M2C_GROUPS = ("process", "anomalies", "reading", "vee", "billing")
 SUMMARY_VERSION = "m2c-summary/1.0"
 CASE_VERSION = "work-case/1.0"
 DECISION_VERSION = "vee-decision/1.0"
@@ -122,6 +123,7 @@ class Case:
     events: list[tuple] = field(default_factory=list)  # (t, type, payload, cause event index | None)
     moves: list[tuple] = field(default_factory=list)  # (t, queue | None, status)
     proposal: str | None = None
+    doc: int = -1  # billing document (billing cases)
     assignee: str | None = None
     resolved: float | None = None
     outcome: str | None = None
@@ -183,6 +185,9 @@ class M2CRun:
         tw, c = self.town, self.cfg
         R, M = tw.n_registers, len(tw.meter_ids)
         self.reg_keys = np.array([str_key(x) for x in tw.reg_ids], dtype=np.int64)
+        # Prior-year history around this year's normal use, per register and month.
+        self.hist = np.clip(1.0 + c.vee.history_noise * hash_normal(self.seed, P_READ, self.reg_keys[:, None],
+                                                                    np.arange(13)[None, :], 7), 0.6, 1.4)
         shape = (R, 13)
         self.obs = np.full(shape, np.nan)
         self.truth = np.full(shape, np.nan)
@@ -289,6 +294,9 @@ class M2CRun:
         self.series = {q: np.zeros((YEAR_DAYS, 3), dtype=np.int64) for q in cat.QUEUES}  # opened, closed, backlog
         self.read_counts = np.zeros((YEAR_DAYS, 3), dtype=np.int64)  # AMI, AMR, MANUAL reads per day
         self.auto_accepted = np.zeros(YEAR_DAYS, dtype=np.int64)
+        self._rpa_later: list[tuple[Case, float]] = []
+        self.bday_set = _BSET
+        self.books = Books(self)
 
     # ---- physics of a register ----------------------------------------------------------------------------------
     def _extras(self, rows: np.ndarray, t: np.ndarray) -> np.ndarray:
@@ -324,8 +332,7 @@ class M2CRun:
         return out
 
     def _hist(self, rows: np.ndarray, m: int) -> np.ndarray:
-        noise = self.cfg.vee.history_noise
-        return np.clip(1.0 + noise * hash_normal(self.seed, P_READ, self.reg_keys[rows], m, 7), 0.6, 1.4)
+        return self.hist[rows, m]
 
     # ---- simulation ---------------------------------------------------------------------------------------------
     def _simulate(self) -> None:
@@ -345,7 +352,12 @@ class M2CRun:
                 self._field(day)
                 if day in self.batches:
                     self._evening(day, *self.batches[day])
+                self._same_day_rpa()
+                self.books.bill(day)
+                self._same_day_rpa()
+                self.books.invoice(day)
                 self.open = [c for c in self.open if c.resolved is None]
+        self.books.collect()
         diff = {q: np.zeros(YEAR_DAYS + 2, dtype=np.int64) for q in cat.QUEUES}
         for case in self.cases:  # backlog at the end of each day, from each case's queue moves
             for (t0, q, _), nxt in zip(case.moves, [*case.moves[1:], None], strict=True):
@@ -442,6 +454,7 @@ class M2CRun:
             self.prev_t[acc] = t[clean]
             self.prev_normal[acc] = normal[clean]
             self.consec[acc] = 0
+            self.books.mark(acc, m)
         self.auto_accepted[day] += int(clean.sum())
         for k in np.flatnonzero(~clean):
             r = int(rows[k])
@@ -466,38 +479,49 @@ class M2CRun:
                             confidence=float(res.confidence[k]), truth=cat.TRUTH[int(cls[k])],
                             queue="SUPERVISOR" if d == 2 else "VEE_REVIEW")
 
-    def _raise(self, day: int, r: int, m: int, kind: str, *, disposition: int, impact: float, confidence: float,
-               truth: str, queue: str) -> None:
+    def new_case(self, *, day: int, r: int, m: int, kind: str, disposition: int, impact: float, confidence: float,
+                 truth: str, queue: str, t: float, cause_payload: dict) -> Case:
+        """Open a case in ``queue``: initiating event, EXCEPTION_QUEUED, pickup lag, and RPA when its type is covered."""
         idx = len(self.cases)
-        tw, p = self.town, self.cfg.process
-        case = Case(idx, f"CASE-{date_of(day).strftime('%y%m%d')}-{idx + 1:05d}", r, m, kind, day + 18.0 / 24,
-                    disposition, round(impact, 2), confidence, truth)
-        case.reads.append(m)
+        p = self.cfg.process
+        case = Case(idx, f"CASE-{date_of(day).strftime('%y%m%d')}-{idx + 1:05d}", r, m, kind, t, disposition,
+                    round(impact, 2), confidence, truth)
         self.cases.append(case)
         self.open.append(case)
         self.case_index[case.id] = case
-        self.case_of[r, m] = idx
-        self.open_case[r] = idx
-        if kind not in cat.MISSING_TYPES:
-            self.case_days.setdefault(r, []).append(float(day))
-        hour = 17.5 if kind in cat.MISSING_TYPES else 18.0
-        first = case.ev(day + hour / 24, kind, {"registerId": tw.reg_ids[r], "readId": self.read_id(r, m)}, None)
-        case.ev(day + 18.05 / 24, "EXCEPTION_QUEUED", {"queue": queue}, first)
-        case.move(day + 18.05 / 24, queue, "queued")
-        u = self._u(P_WORK, self.reg_keys[r], m, 1)
+        first = case.ev(t - 0.02 if kind in cat.MISSING_TYPES else t, kind, cause_payload, None)
+        case.ev(t + 0.002, "EXCEPTION_QUEUED", {"queue": queue}, first)
+        case.move(t + 0.002, queue, "queued")
+        key = self.reg_keys[r] + (7 if queue == "BILLING" else 0)
+        u = self._u(P_WORK, key, m, 1)
         lag = p.analyst_queue_days_min + int(u * (p.analyst_queue_days_max - p.analyst_queue_days_min + 1))
         case.eligible = add_bdays(day, lag if queue != "SUPERVISOR" else 1)
         self.series[queue][day, 0] += 1
         if kind in self.rpa_types and disposition != 2:
-            if float(self._u(P_WORK, self.reg_keys[r], m, 2)) < 0.5:
-                self._rpa(case, day + 19.0 / 24)
+            if float(self._u(P_WORK, key, m, 2)) < 0.5:
+                case.rpa_at = None
+                self._rpa_later.append((case, t + 1.0 / 24))
             else:
                 case.rpa_at = add_bdays(day, 1) + 7.0 / 24
                 self.rpa_due.setdefault(int(case.rpa_at), []).append(case)
+        return case
+
+    def _raise(self, day: int, r: int, m: int, kind: str, *, disposition: int, impact: float, confidence: float,
+               truth: str, queue: str) -> None:
+        case = self.new_case(day=day, r=r, m=m, kind=kind, disposition=disposition, impact=impact,
+                             confidence=confidence, truth=truth, queue=queue, t=day + 18.0 / 24,
+                             cause_payload={"registerId": self.town.reg_ids[r], "readId": self.read_id(r, m)})
+        case.reads.append(m)
+        self.case_of[r, m] = case.idx
+        self.open_case[r] = case.idx
+        if kind not in cat.MISSING_TYPES:
+            self.case_days.setdefault(r, []).append(float(day))
 
     # ---- resolution ---------------------------------------------------------------------------------------------
     def _proposal(self, case: Case) -> str:
         """What a careful analyst concludes after review (wrong with probability 1 − accuracy)."""
+        if case.doc >= 0:
+            return self.books.proposal(case)
         if case.type == "CONSECUTIVE_ESTIMATES":
             return "field_order"
         if case.type in cat.MISSING_TYPES:
@@ -508,8 +532,18 @@ class M2CRun:
             return "field_order" if case.truth == "clean" else "accept"
         return right
 
+    def _same_day_rpa(self) -> None:
+        todo, self._rpa_later = self._rpa_later, []
+        for case, t in todo:
+            self._rpa(case, t)
+
     def _rpa(self, case: Case, t: float) -> None:
         if case.resolved is not None or case.rpa_at == INF:
+            return
+        if case.doc >= 0:
+            case.ev(t, "AUTO_RESOLVED", {"action": "release bill"})
+            case.assignee = "RPA"
+            self._resolve(case, t, "release", actor="RPA")
             return
         if case.type == "CONSECUTIVE_ESTIMATES":
             case.ev(t, "AUTO_RESOLVED", {"action": "field_order"})
@@ -542,7 +576,7 @@ class M2CRun:
             return
         cap = p.analysts * p.analyst_hours_per_day * 60.0
         used = 0.0
-        todo = [c for c in self.open if c.resolved is None and c.queue in ("VEE_REVIEW", "ESTIMATION")
+        todo = [c for c in self.open if c.resolved is None and c.queue in ("VEE_REVIEW", "ESTIMATION", "BILLING")
                 and c.eligible <= day and c.rpa_at is None]
         for case in todo:
             minutes = p.review_minutes_min + float(self._u(P_WORK, self.reg_keys[case.r], case.month, 5)) * \
@@ -610,7 +644,13 @@ class M2CRun:
         case.ev(t, "USER_ACTION", {"actionId": a["id"], "action": a["type"], **({"value": a["value"]}
                                                                                 if "value" in a else {})})
         case.rpa_at = INF if case.rpa_at is not None else None  # your decision replaces a pending RPA run
-        if a["type"] == "field_order":
+        if case.doc >= 0 and a["type"] in ("override", "field_order"):
+            self.warnings.append(f"{a['id']}: {a['type']} does not apply to a billing block (accept, estimate, escalate)")
+            case.events.pop()
+            return
+        if case.doc >= 0 and a["type"] in ("accept", "estimate"):
+            self._resolve(case, t, "release" if a["type"] == "accept" else "rebill", actor="you")
+        elif a["type"] == "field_order":
             self._to_field(case, t)
         elif a["type"] == "escalate":
             case.proposal = case.proposal or self._proposal(case)
@@ -624,6 +664,12 @@ class M2CRun:
         tw = self.town
         r = case.r
         self.series[case.queue][int(t), 1] += 1
+        if case.doc >= 0:
+            self.books.resolve(case, t, action, actor)
+            case.resolved = t
+            case.outcome = action
+            case.move(t, None, "resolved")
+            return
         cause = len(case.events) - 1
         for n, m in enumerate(sorted(case.reads)):
             obs = self.obs[r, m]
@@ -680,8 +726,16 @@ class M2CRun:
             self.prev_t[r] = self.read_t[r, m]
             self.prev_normal[r] = self.normal_at[r, m]
             self.consec[r] = self.consec[r] + 1 if kind == 2 else 0
+        self.books.mark(r, m)
 
     # ---- identities -----------------------------------------------------------------------------------------
+    def next_bday(self, day: int, k: int = 1) -> int:
+        return add_bdays(day, k)
+
+    @staticmethod
+    def date_of(day: int):
+        return date_of(day)
+
     def read_id(self, r: int, m: int) -> str:
         return f"READ-{self.town.id}-{self.town.reg_ids[r]}-{date_of(int(self.town.read_day[r, m])).isoformat()}"
 

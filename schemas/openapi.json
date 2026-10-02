@@ -95,7 +95,7 @@
                 "type": "null"
               }
             ],
-            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee); see GET /api/m2c/settings.",
+            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing); see GET /api/m2c/settings.",
             "title": "Settings"
           },
           "town": {
@@ -192,7 +192,7 @@
                 "type": "null"
               }
             ],
-            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee); see GET /api/m2c/settings.",
+            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing); see GET /api/m2c/settings.",
             "title": "Settings"
           },
           "town": {
@@ -335,7 +335,7 @@
                 "type": "null"
               }
             ],
-            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee); see GET /api/m2c/settings.",
+            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing); see GET /api/m2c/settings.",
             "title": "Settings"
           },
           "town": {
@@ -390,7 +390,7 @@
                 "type": "null"
               }
             ],
-            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee); see GET /api/m2c/settings.",
+            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing); see GET /api/m2c/settings.",
             "title": "Settings"
           },
           "town": {
@@ -505,7 +505,7 @@
                 "type": "null"
               }
             ],
-            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee); see GET /api/m2c/settings.",
+            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing); see GET /api/m2c/settings.",
             "title": "Settings"
           },
           "sort": {
@@ -587,7 +587,7 @@
                 "type": "null"
               }
             ],
-            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee); see GET /api/m2c/settings.",
+            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing); see GET /api/m2c/settings.",
             "title": "Settings"
           },
           "town": {

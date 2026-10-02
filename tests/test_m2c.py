@@ -153,7 +153,7 @@ def test_hosted_m2c_api():
 
     client = TestClient(app)
     st = client.get("/api/m2c/settings").json()
-    assert set(st["schema"]["properties"]) == {"process", "anomalies", "reading", "vee"}
+    assert set(st["schema"]["properties"]) == {"process", "anomalies", "reading", "vee", "billing"}
     assert st["defaults"]["vee"]["accept_confidence"] == 0.75
     body = {"town": "ayr", "asOf": "2026-08-31", "settings": {"process": {"analysts": 1}}}
     s = client.post("/api/m2c/summary", json=body)
@@ -171,7 +171,69 @@ def test_hosted_m2c_api():
     assert client.post("/api/process/costs", json=body).json()["types"]
     assert client.post("/api/m2c/case", json={**body, "caseId": "CASE-nope"}).status_code == 404
     assert client.post("/api/m2c/summary", json={**body, "settings": {"vee": {"high_ratio": 0.1}}}).status_code == 422
-    assert client.post("/api/m2c/summary", json={**body, "settings": {"billing": {}}}).status_code == 422
+    assert client.post("/api/m2c/summary", json={**body, "settings": {"tariffs": {}}}).status_code == 422
     late = {**body, "actions": [{"day": "2026-03-02", "type": "accept", "caseId": row["caseId"]},
                                 {"day": "2026-03-01", "type": "accept", "caseId": row["caseId"]}]}
     assert client.post("/api/m2c/summary", json=late).status_code == 422
+
+
+def test_bill_math_by_hand():
+    from utilsim.m2c.billing import charges, lines
+
+    res = {"fixedMonthly": 36.5, "energyBlocks": [{"up_to": 600.0, "price": 0.098}, {"up_to": None, "price": 0.116}],
+           "variableDelivery": 0.042, "netMeteringCredit": 0.098, "taxRate": 0.13}
+    month = 365 / 12
+    comps, sub, tax = charges(res, "electric", np.array([750.0, -40.0]), np.array([100.0, 0.0]), np.zeros(2),
+                              np.full(2, month), 1e9, 3.5, np.array([True, False]))
+    # 36.50 fixed + 600 × 0.098 + 150 × 0.116 + 750 × 0.042 − 100 × 0.098 = 134.40; HST 13 % = 17.47.
+    assert sub[0] == 134.40 and tax[0] == 17.47
+    assert [ln["type"] for ln in lines(comps, 0)] == ["fixed", "energy", "energy", "delivery", "credit"]
+    assert sub[1] == 30.90 and tax[1] == 4.02  # 36.50 − 40 kWh × 0.14 true-up credit
+    # A 30-day period with a 10 % volumetric increase after day 14: blocks and volumes split 14/16 by days.
+    comps, sub, _ = charges(res, "electric", np.array([750.0]), np.zeros(1), np.array([290.0]), np.array([320.0]),
+                            304.0, 10.0, np.array([False]))
+    split = {ln["description"]: ln for ln in lines(comps, 0)}
+    assert split["Variable delivery"]["quantity"] == 350.0 and split["Variable delivery (new rates)"]["rate"] == 0.0462
+    assert sub[0] == round(sum(ln["amount"] for ln in lines(comps, 0)), 2) == 149.59
+    water = {"fixedMonthly": 18.0, "pricePerM3": 2.15, "wastewaterRatio": 1.05, "taxRate": 0.13}
+    _, sub, tax = charges(water, "water", np.array([10.0]), np.zeros(1), np.zeros(1), np.full(1, month), 1e9, 0,
+                          np.array([False]))
+    assert sub[0] == 18.0 + 21.5 + 22.58 and tax[0] == round((18.0 + 21.5 + 22.58) * 0.13, 2)
+
+
+def test_billing_invoices_payments_and_collections(ayr):
+    bk, tw = ayr.books, ayr.town
+    live = [d for d in bk.docs if d["reversed"] is None]
+    assert len(live) > 0.95 * len(tw.inst_ids) * 11
+    assert all(d["released"] is not None or d["case"] >= 0 for d in live)
+    # Rate-class errors are blocked, fixed and rebilled at the right rate.
+    fixed = [c for c in ayr.cases if c.type == "RATE_CLASS" and c.outcome == "fix_rate"]
+    assert fixed
+    for c in fixed:
+        old = bk.docs[c.doc]
+        new = bk.docs[bk.doc_of[old["inst"], old["month"]]]
+        assert old["reversed"] is not None and new["replaces"] == old["k"] and new["rate"] == tw.inst_rate[old["inst"]]
+    # Invoices consolidate an account's documents of the day; the ledger reconciles.
+    assert any(len(inv["docs"]) > 1 for inv in bk.invoices)
+    for inv in bk.invoices[:500]:
+        assert inv["total"] == round(sum(bk.docs[k]["total"] for k in inv["docs"]), 2)
+        assert inv["due"] - inv["issued"] == ayr.cfg.customers_billing.due_days
+    acct = bk.invoices[0]["account"]
+    entries = bk.ledger[acct]
+    assert bk.balance(acct, 400) == round(sum(a for _, _, a, _ in entries), 2)
+    # Dunning only for unpaid invoices; no disconnection notices in the winter moratorium.
+    from utilsim.m2c.books import _winter
+
+    for inv in bk.invoices:
+        for t, kind in inv["dunning"]:
+            assert inv.get("paid") is None or inv["paid"] > t or kind == "PAYMENT_REJECTED"
+            if kind == "DISCONNECT_NOTICE":  # the moratorium covers electricity and water, not gas
+                utilities = {str(tw.commodity[bk.main[bk.docs[k]["inst"]]]) for k in inv["docs"]}
+                assert not (_winter(date_of(int(t))) and utilities & {"electric", "water"})
+    s = views.summary(ayr, "2026-12-31")["billing"]
+    assert s["invoices"] and 0 < s["collected"] <= s["invoiced"] and s["billingError"] >= 0
+    p = views.premise(ayr, tw.premise_ids[0], as_of="2026-12-31")
+    assert p["billingDocuments"] and p["invoices"] and p["accounts"]
+    doc = p["billingDocuments"][0]
+    assert doc["totalAmount"] == round(doc["subtotal"] + doc["tax"], 2) and doc["lines"]
+    assert any(r["billStatus"] == "billed" and r["invoiceId"] for r in p["reads"])

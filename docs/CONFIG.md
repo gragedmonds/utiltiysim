@@ -349,3 +349,25 @@ Validation, estimation and editing: the five-test battery, confidence and dispos
 | `escalate_impact` | `150.0` | 0–10000 | $ | Escalate a doubtful read when its bill impact exceeds this. *Affects: supervisor workload.* |
 | `estimation` | `prior_year` |  |  | Estimation method for missing or rejected reads. |
 | `history_noise` | `0.1` | 0–0.5 |  | (advanced) Spread of prior-year history around this year's normal usage. |
+
+## Billing & collections
+
+Bill checks, tariff versions, invoicing, payments and dunning.
+
+| Field | Default | Range | Unit | Description |
+|---|---|---|---|---|
+| `rate_change_date` | `2026-11-01` |  |  | Date a new tariff version takes effect (volumetric prices). |
+| `rate_change_pct` | `3.5` | -50–100 | % | Volumetric price change in the new tariff version. *Affects: bills after the change, proration.* |
+| `high_bill_ratio` | `2.5` | 1.1–20 |  | Block a bill above this multiple of its expected amount (prior-year use at current prices). *Affects: billing blocks, analyst workload.* |
+| `high_bill_min` | `150.0` | 0–5000 | $ | …and at least this much above the expected amount. |
+| `first_bill_limit` | `600.0` | 0–10000 | $ | (advanced) Block a bill with no expected use (vacant, new) above this total. |
+| `credit_review` | `75.0` | 0–5000 | $ | (advanced) Block a bill that is a credit larger than this. |
+| `data_error_rate` | `3.0` | 0–200 |  | Installations with a wrong rate class in billing master data (per 1,000 per year). *Affects: rate-class billing blocks.* |
+| `print_lag_days` | `1` | 0–10 | d | (advanced) Days from invoice creation to issue. |
+| `pad_reject_rate` | `0.015` | 0–0.5 |  | Pre-authorized debits returned for insufficient funds. *Affects: payment rejections, collections.* |
+| `nsf_fee` | `20.0` | 0–100 | $ | (advanced) Fee for a returned payment. |
+| `late_fee_pct` | `1.5` | 0–5 | % | Late payment charge on overdue amounts (per notice). |
+| `reminder_days` | `7` | 1–60 | d | Days after the due date for a reminder. |
+| `notice_days` | `21` | 1–90 | d | Days after the due date for an overdue notice and late fee. |
+| `disconnect_days` | `45` | 5–180 | d | Days after the due date for a disconnection notice. *Affects: disconnection notices.* |
+| `winter_moratorium` | `True` |  |  | No disconnection notices for electricity and water from Nov 15 to Apr 30 (Ontario). |

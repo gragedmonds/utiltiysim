@@ -38,14 +38,32 @@ EVENTS: dict[str, tuple[str, str, str, float, float, float]] = {
     "ESTIMATE_CREATED": ("Estimate created", "🧮", "vee", 0, 0.25, 0),
     "READ_ADJUSTED": ("Read adjusted", "📝", "vee", 0, 0.05, 0),
     "READ_HELD": ("Read held by open case", "⏸️", "vee", 0, 0, 0),
+    # Billing, invoicing, payments and collections.
+    "HIGH_BILL": ("High bill", "💸", "billing", 0, 0.25, 0),
+    "BILL_CREDIT": ("Large credit", "🧾", "billing", 0, 0.25, 0),
+    "RATE_CLASS": ("Billing block: rate class", "🏷️", "billing", 0, 0.25, 0),
+    "BILL_CREATED": ("Billing document", "🧾", "billing", 0, 0.05, 0),
+    "BILL_RELEASED": ("Bill released", "✅", "billing", 0, 0.05, 0),
+    "BILL_REVERSED": ("Bill reversed", "↩️", "billing", 0, 0.5, 0),
+    "REBILL": ("Rebilled", "🔁", "billing", 0, 0.5, 0),
+    "RATE_FIXED": ("Rate class corrected", "🏷️", "billing", 4, 0, 0),
+    "INVOICE_CREATED": ("Invoice created", "📨", "invoice", 0, 0.35, 0),
+    "PAYMENT_RECEIVED": ("Payment received", "💳", "payment", 0, 0.1, 0),
+    "PAYMENT_REJECTED": ("Payment rejected", "⛔", "payment", 0, 0.5, 20),
+    "DUNNING_REMINDER": ("Reminder", "✉️", "collections", 0, 0.5, 0),
+    "DUNNING_NOTICE": ("Overdue notice and late fee", "⚠️", "collections", 0, 1.0, 5),
+    "DISCONNECT_NOTICE": ("Disconnection notice", "🔌", "collections", 0, 2.0, 15),
+    "MORATORIUM_HOLD": ("Winter moratorium hold", "❄️", "collections", 0, 0, 0),
     "READ_RELEASED": ("Released to billing", "📤", "billing", 0, 0.05, 0),
 }
 EDGE_TYPES = ("caused_by", "triggered", "resulted_in", "blocked_by", "resolved_by", "escalated_to", "required_for",
               "compensated_by")
 
 # Exception types in the order an RPA programme automates them (process.rpa_coverage picks the first share).
-EXCEPTIONS = ("COMM_FAIL", "NO_ACCESS", "NO_READ", "ZERO_USAGE", "LOW_USAGE", "PERIOD_LENGTH", "ERRATIC",
-              "HIGH_USAGE", "VACANT_CONSUMING", "REGISTER_REGRESSION", "CONSECUTIVE_ESTIMATES")
+EXCEPTIONS = ("COMM_FAIL", "NO_ACCESS", "NO_READ", "ZERO_USAGE", "BILL_CREDIT", "LOW_USAGE", "PERIOD_LENGTH",
+              "ERRATIC", "HIGH_USAGE", "VACANT_CONSUMING", "REGISTER_REGRESSION", "CONSECUTIVE_ESTIMATES",
+              "RATE_CLASS", "HIGH_BILL")
+BILL_TYPES = ("HIGH_BILL", "BILL_CREDIT", "RATE_CLASS")
 MISSING_TYPES = ("COMM_FAIL", "NO_ACCESS", "NO_READ", "CONSECUTIVE_ESTIMATES")
 
 QUEUES = {
@@ -53,6 +71,7 @@ QUEUES = {
     "ESTIMATION": "Missing reads",
     "SUPERVISOR": "Escalations",
     "FIELD": "Field orders",
+    "BILLING": "Billing blocks",
 }
 
 # Simulated SAP MR validation codes → VEE v5 severity categories. Real MRIndependantValidation semantics plug in here.

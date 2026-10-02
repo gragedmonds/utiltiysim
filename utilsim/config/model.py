@@ -434,6 +434,34 @@ class VeeConfig(BaseModel):
                              advanced=True)
 
 
+class BillingConfig(BaseModel):
+    model_config = group("Billing & collections", 16, "Bill checks, tariff versions, invoicing, payments and dunning.",
+                         applies="run")
+    rate_change_date: str = F("2026-11-01", "Date a new tariff version takes effect (volumetric prices).")
+    rate_change_pct: float = F(3.5, "Volumetric price change in the new tariff version.", unit="%", ge=-50, le=100,
+                               effects=["bills after the change", "proration"])
+    high_bill_ratio: float = F(2.5, "Block a bill above this multiple of its expected amount (prior-year use at "
+                               "current prices).", ge=1.1, le=20, effects=["billing blocks", "analyst workload"])
+    high_bill_min: float = F(150.0, "…and at least this much above the expected amount.", unit="$", ge=0, le=5000)
+    first_bill_limit: float = F(600.0, "Block a bill with no expected use (vacant, new) above this total.", unit="$",
+                                ge=0, le=10000, advanced=True)
+    credit_review: float = F(75.0, "Block a bill that is a credit larger than this.", unit="$", ge=0, le=5000,
+                             advanced=True)
+    data_error_rate: float = F(3.0, "Installations with a wrong rate class in billing master data (per 1,000 per "
+                               "year).", ge=0, le=200, effects=["rate-class billing blocks"])
+    print_lag_days: int = F(1, "Days from invoice creation to issue.", unit="d", ge=0, le=10, advanced=True)
+    pad_reject_rate: float = F(0.015, "Pre-authorized debits returned for insufficient funds.", ge=0, le=0.5,
+                               effects=["payment rejections", "collections"])
+    nsf_fee: float = F(20.0, "Fee for a returned payment.", unit="$", ge=0, le=100, advanced=True)
+    late_fee_pct: float = F(1.5, "Late payment charge on overdue amounts (per notice).", unit="%", ge=0, le=5)
+    reminder_days: int = F(7, "Days after the due date for a reminder.", unit="d", ge=1, le=60)
+    notice_days: int = F(21, "Days after the due date for an overdue notice and late fee.", unit="d", ge=1, le=90)
+    disconnect_days: int = F(45, "Days after the due date for a disconnection notice.", unit="d", ge=5, le=180,
+                             effects=["disconnection notices"])
+    winter_moratorium: bool = F(True, "No disconnection notices for electricity and water from Nov 15 to Apr 30 "
+                                "(Ontario).")
+
+
 class ScenarioConfig(BaseModel):
     model_config = group("Scenario", 13, "Demonstration scenario on the live clock.", applies="run")
     name: Literal["normal", "solar_noon", "leak", "substation_outage"] = F(
@@ -467,6 +495,7 @@ class SimConfig(BaseModel):
     scenario: ScenarioConfig = Field(default_factory=ScenarioConfig)
     reading: ReadingConfig = Field(default_factory=ReadingConfig)
     vee: VeeConfig = Field(default_factory=VeeConfig)
+    billing: BillingConfig = Field(default_factory=BillingConfig)
 
     @model_validator(mode="after")
     def _check(self) -> SimConfig:

@@ -1,12 +1,12 @@
 # Meter-to-cash (M2C)
 
-Reads, VEE and exception work queues for every premise, replayed by the engine for calendar 2026. Billing documents,
-invoices, payments and dunning are next (PR B) and reuse the same run, settings and actions.
+Reads, VEE, exception work queues, billing, invoicing, payments and collections for every premise, replayed by the
+engine for calendar 2026.
 
 ## Run model
 
 A run is stateless and deterministic: `(town, settings, actions)` gives the same year every time.
-- `settings` overrides the run-scoped config groups `process`, `anomalies`, `reading` and `vee`. They never change
+- `settings` overrides the run-scoped config groups `process`, `anomalies`, `reading`, `vee` and `billing`. They never change
   the town id. `GET /api/m2c/settings` returns their JSON Schema, with units, bounds, effects and advanced flags.
 - `actions` are analyst decisions from the viewer: `{id, day, type, caseId, value?}`.
   - `type` is one of `accept`, `override` (with a register value), `estimate`, `field_order` or `escalate`.
@@ -36,6 +36,8 @@ Each business day goes in this order:
 5. **Field crews** complete up to `field_orders_per_day` orders. A meter fault gets a meter exchange (and the meter is
    fixed); otherwise the crew takes a special read.
 6. **Evening batch** for the portions read today: reads, then VEE at 18:00, then exceptions.
+   - 19:30: billing documents for every installation period whose reads are all released.
+   - 20:00: invoices that consolidate each account's released documents.
 7. **RPA** resolves exception types covered by `rpa_coverage`, taken in the order of `catalog.EXCEPTIONS`. Half are
    resolved the same evening; the rest at 07:00 the next business day.
 
@@ -82,6 +84,64 @@ Confidence is `1 − 2·Σ risk`. The disposition is decided in this order:
 
 The real SAP `MRIndependantValidation` codes plug into `catalog.CODES`. `/api/vee/export` writes
 `vee-input-fixture/1.1` (truth stripped) for an external VEE engine such as m2c.vee.
+
+## Billing, invoices, payments and collections
+
+The calculator is `billing.py`, vectorised per tariff; the state lives in `books.py`.
+
+**Charges** follow the snapshot's tariffs (`RES-E/G/W`, and `COM-*` with an electric demand charge):
+- fixed charges and electric blocks are prorated by days over an average month;
+- volumetric prices change by `billing.rate_change_pct` from `billing.rate_change_date`, and a period that straddles
+  the change is split by days;
+- net-metered exports are credited;
+- a negative quantity after an over-estimate is credited as a true-up;
+- HST is added;
+- every line is rounded to the cent.
+
+Each document also carries its total at true consumption (`truthTotal`); summed, these give the billing error.
+
+**Billing blocks** go to the `BILLING` queue:
+- `HIGH_BILL`: above `high_bill_ratio` × the expected bill (prior-year use at current prices) and at least
+  `high_bill_min` above it;
+- `BILL_CREDIT`: a credit larger than `credit_review`;
+- `RATE_CLASS`: a wrong rate class in billing master data, seeded at `data_error_rate`.
+
+What analysts do with a block:
+- release it, with a customer callback when the use is real;
+- rebill it on an estimate when the read was wrong (a version 2 document replaces the reversed one);
+- fix the rate class and rebill.
+
+RPA covers `BILL_CREDIT`.
+
+**Invoices:** `INV-{account}-{date}` sums the account's documents released that day. It is issued
+`print_lag_days` later and due `customers_billing.due_days` after issue.
+
+**Payments** follow the account's method and its partner's payer profile:
+- pre-authorized debit: paid on the due date, or returned (`pad_reject_rate`, plus an NSF fee) and repaid later;
+- on-time payers: before the due date;
+- late payers: 3–40 days after it;
+- at-risk payers: half pay very late, half not in the year.
+
+**Dunning** applies to unpaid invoices:
+- a reminder at due + `reminder_days`;
+- an overdue notice with a `late_fee_pct` fee at due + `notice_days`;
+- a disconnection notice at due + `disconnect_days`.
+
+Disconnection notices for electricity and water are held from Nov 15 to Apr 30 (`winter_moratorium`). An account's
+ledger (invoices, payments, fees) gives its balance.
+
+The summary's `billing` block reports:
+- documents and blocked documents;
+- billed, invoiced and collected amounts;
+- receivable and overdue amounts;
+- days to invoice and days to pay;
+- billing and receivable carry;
+- billing error;
+- dunning counts.
+
+The premise view carries `billingDocuments` (with lines), `invoices` (with payments and dunning) and `accounts` (with
+balance and recent ledger). Reads show `billStatus` (`billed`, `billing_blocked`, `rebilled`), `billingDocumentId`,
+`invoiceId` and `invoiceStatus`.
 
 ## Endpoints
 

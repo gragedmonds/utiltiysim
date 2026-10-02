@@ -214,6 +214,165 @@
       "x-group": true,
       "x-order": 12
     },
+    "BillingConfig": {
+      "additionalProperties": false,
+      "description": "Bill checks, tariff versions, invoicing, payments and dunning.",
+      "properties": {
+        "credit_review": {
+          "default": 75.0,
+          "description": "Block a bill that is a credit larger than this.",
+          "maximum": 5000,
+          "minimum": 0,
+          "title": "Credit Review",
+          "type": "number",
+          "x-advanced": true,
+          "x-unit": "$"
+        },
+        "data_error_rate": {
+          "default": 3.0,
+          "description": "Installations with a wrong rate class in billing master data (per 1,000 per year).",
+          "maximum": 200,
+          "minimum": 0,
+          "title": "Data Error Rate",
+          "type": "number",
+          "x-effects": [
+            "rate-class billing blocks"
+          ]
+        },
+        "disconnect_days": {
+          "default": 45,
+          "description": "Days after the due date for a disconnection notice.",
+          "maximum": 180,
+          "minimum": 5,
+          "title": "Disconnect Days",
+          "type": "integer",
+          "x-effects": [
+            "disconnection notices"
+          ],
+          "x-unit": "d"
+        },
+        "first_bill_limit": {
+          "default": 600.0,
+          "description": "Block a bill with no expected use (vacant, new) above this total.",
+          "maximum": 10000,
+          "minimum": 0,
+          "title": "First Bill Limit",
+          "type": "number",
+          "x-advanced": true,
+          "x-unit": "$"
+        },
+        "high_bill_min": {
+          "default": 150.0,
+          "description": "…and at least this much above the expected amount.",
+          "maximum": 5000,
+          "minimum": 0,
+          "title": "High Bill Min",
+          "type": "number",
+          "x-unit": "$"
+        },
+        "high_bill_ratio": {
+          "default": 2.5,
+          "description": "Block a bill above this multiple of its expected amount (prior-year use at current prices).",
+          "maximum": 20,
+          "minimum": 1.1,
+          "title": "High Bill Ratio",
+          "type": "number",
+          "x-effects": [
+            "billing blocks",
+            "analyst workload"
+          ]
+        },
+        "late_fee_pct": {
+          "default": 1.5,
+          "description": "Late payment charge on overdue amounts (per notice).",
+          "maximum": 5,
+          "minimum": 0,
+          "title": "Late Fee Pct",
+          "type": "number",
+          "x-unit": "%"
+        },
+        "notice_days": {
+          "default": 21,
+          "description": "Days after the due date for an overdue notice and late fee.",
+          "maximum": 90,
+          "minimum": 1,
+          "title": "Notice Days",
+          "type": "integer",
+          "x-unit": "d"
+        },
+        "nsf_fee": {
+          "default": 20.0,
+          "description": "Fee for a returned payment.",
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Nsf Fee",
+          "type": "number",
+          "x-advanced": true,
+          "x-unit": "$"
+        },
+        "pad_reject_rate": {
+          "default": 0.015,
+          "description": "Pre-authorized debits returned for insufficient funds.",
+          "maximum": 0.5,
+          "minimum": 0,
+          "title": "Pad Reject Rate",
+          "type": "number",
+          "x-effects": [
+            "payment rejections",
+            "collections"
+          ]
+        },
+        "print_lag_days": {
+          "default": 1,
+          "description": "Days from invoice creation to issue.",
+          "maximum": 10,
+          "minimum": 0,
+          "title": "Print Lag Days",
+          "type": "integer",
+          "x-advanced": true,
+          "x-unit": "d"
+        },
+        "rate_change_date": {
+          "default": "2026-11-01",
+          "description": "Date a new tariff version takes effect (volumetric prices).",
+          "title": "Rate Change Date",
+          "type": "string"
+        },
+        "rate_change_pct": {
+          "default": 3.5,
+          "description": "Volumetric price change in the new tariff version.",
+          "maximum": 100,
+          "minimum": -50,
+          "title": "Rate Change Pct",
+          "type": "number",
+          "x-effects": [
+            "bills after the change",
+            "proration"
+          ],
+          "x-unit": "%"
+        },
+        "reminder_days": {
+          "default": 7,
+          "description": "Days after the due date for a reminder.",
+          "maximum": 60,
+          "minimum": 1,
+          "title": "Reminder Days",
+          "type": "integer",
+          "x-unit": "d"
+        },
+        "winter_moratorium": {
+          "default": true,
+          "description": "No disconnection notices for electricity and water from Nov 15 to Apr 30 (Ontario).",
+          "title": "Winter Moratorium",
+          "type": "boolean"
+        }
+      },
+      "title": "Billing & collections",
+      "type": "object",
+      "x-applies": "run",
+      "x-group": true,
+      "x-order": 16
+    },
     "CustomersBillingConfig": {
       "additionalProperties": false,
       "description": "Accounts, reading routes, calendars and tariffs.",
@@ -2344,6 +2503,9 @@
     },
     "anomalies": {
       "$ref": "#/$defs/AnomaliesConfig"
+    },
+    "billing": {
+      "$ref": "#/$defs/BillingConfig"
     },
     "customers_billing": {
       "$ref": "#/$defs/CustomersBillingConfig"

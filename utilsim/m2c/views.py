@@ -83,6 +83,9 @@ def summary(run: M2CRun, as_of: str | None = None) -> dict:
         else:
             open_now += 1
             bt["open"] += 1
+    billing, bill_costs = billing_kpis(run, T)
+    for k, v in bill_costs.items():
+        costs[k] += v
     rc = run.read_counts[: day + 1].sum(0)
     read_cost = float(rc @ np.array([c.reading.read_cost_ami, c.reading.read_cost_amr, c.reading.read_cost_manual]))
     costs = {k: round(v, 2) for k, v in costs.items()}
@@ -121,6 +124,7 @@ def summary(run: M2CRun, as_of: str | None = None) -> dict:
                     "precision": round(tp / (tp + fp), 3) if tp + fp else None,
                     "recall": round(tp / (tp + fn), 3) if tp + fn else None},
         },
+        "billing": billing,
         "queues": queues,
         "exceptions": {k: {**v, "label": cat.EVENTS[k][0], "icon": cat.EVENTS[k][1], "rpa": k in run.rpa_types}
                        for k, v in sorted(by_type.items(), key=lambda kv: -kv[1]["count"])},
@@ -267,6 +271,16 @@ def read_record(run: M2CRun, r: int, m: int, T: float, truth: bool = False) -> d
         "billStatus": "released_for_billing" if released else ("blocked" if case >= 0 else "pending"),
         "billingDocumentId": None, "invoiceId": None, "idempotencyKey": f"{tw.id}:{tw.reg_ids[r]}:{day}",
     }
+    k = int(run.books.doc_of[tw.inst_of[r], m])
+    if k >= 0 and run.books.docs[k]["created"] <= T:
+        doc = run.books.docs[k]
+        rec["billingDocumentId"] = run.books.doc_id(doc)
+        rec["billStatus"] = {"released": "billed", "blocked": "billing_blocked", "reversed": "rebilled"}.get(
+            doc_status(run, doc, T), "billing")
+        if doc["invoice"] >= 0 and run.books.invoices[doc["invoice"]]["created"] <= T:
+            inv = run.books.invoices[doc["invoice"]]
+            rec["invoiceId"] = inv["id"]
+            rec["invoiceStatus"] = invoice_status(inv, T)
     if released and run.status[r, m] in (2, 3):
         val = float(run.released[r, m])
         rec["revisions"] = [{"revision": 1, "readType": "estimated" if run.status[r, m] == 2 else "adjusted",
@@ -327,7 +341,19 @@ def premise(run: M2CRun, premise_id: str, *, as_of: str | None = None, truth: bo
                            "commodity": str(tw.commodity[r]), "direction": str(tw.direction[r]),
                            "unit": str(tw.unit[r]), "technology": str(tw.tech[r]), "mruId": tw.mru[r],
                            "portion": int(tw.portion[r])} for r in rows],
-            "reads": reads, "cases": cases, "billingDocuments": [], "invoices": []}
+            "reads": reads, "cases": cases, **_premise_billing(run, p, T, truth)}
+
+
+def _premise_billing(run: M2CRun, p: int, T: float, truth: bool) -> dict:
+    bk, tw = run.books, run.town
+    insts = sorted(set(tw.inst_of[tw.prem == p].tolist()))
+    docs = [doc_json(run, d, T, truth) for d in bk.docs if d["inst"] in insts and d["created"] <= T]
+    accounts = sorted({d["accountId"] for d in docs})
+    invoices = [invoice_json(run, inv, T) for inv in bk.invoices if inv["account"] in accounts and inv["created"] <= T]
+    return {"billingDocuments": docs, "invoices": invoices,
+            "accounts": [{"accountId": a, "balance": bk.balance(a, T),
+                          "ledger": [{"at": run.iso(t), "type": k, "amount": amt, "ref": ref}
+                                     for t, k, amt, ref in bk.ledger.get(a, []) if t <= T][-24:]} for a in accounts]}
 
 
 def case_view(run: M2CRun, case_id: str, *, as_of: str | None = None, truth: bool = False) -> dict:
@@ -369,9 +395,11 @@ def case_view(run: M2CRun, case_id: str, *, as_of: str | None = None, truth: boo
             "decision": decision(run, r, m), "read": read_record(run, r, m, T, truth),
             "heldReadIds": [run.read_id(r, j) for j in case.reads[1:] if run.read_t[r, j] <= T],
             "history": history, "events": events, "edges": edges,
-            "actions": [a for a in ("accept", "override", "estimate", "field_order", "escalate")
+            "actions": [a for a in (("accept", "estimate", "escalate") if case.doc >= 0 else
+                                    ("accept", "override", "estimate", "field_order", "escalate"))
                         if open_now and not (a == "escalate" and row["queue"] == "SUPERVISOR")
                         and not (a == "field_order" and row["queue"] == "FIELD")],
+            **({"billingDocument": doc_json(run, run.books.docs[case.doc], T, truth)} if case.doc >= 0 else {}),
             **({"truth": {"class": case.truth}} if truth else {})}
 
 
@@ -447,3 +475,112 @@ def costs(run: M2CRun, *, as_of: str | None = None) -> dict:
                      "avgDaysToRelease": round(float(np.mean(d)), 2) if d else None})
     return {"schemaVersion": "m2c-costs/1.0", "simulationId": run.simulation_id, "asOf": date_of(day).isoformat(),
             "carryRatePerDay": rate, "types": rows}
+
+
+# ---- billing ---------------------------------------------------------------------------------------------------
+def doc_status(run: M2CRun, doc: dict, T: float) -> str:
+    if doc["reversed"] is not None and doc["reversed"] <= T:
+        return "reversed"
+    if doc["released"] is not None and doc["released"] <= T:
+        return "released"
+    if doc["case"] >= 0:
+        return "blocked"
+    return "created"
+
+
+def doc_json(run: M2CRun, doc: dict, T: float, truth: bool = False) -> dict:
+    bk, tw = run.books, run.town
+    i, m = doc["inst"], doc["month"]
+    r = int(bk.main[i])
+    rows = tw.inst_rows[i]
+    inv = bk.invoices[doc["invoice"]] if doc["invoice"] >= 0 and bk.invoices[doc["invoice"]]["created"] <= T else None
+    ctr, acct = tw.contract_at(r, int(np.floor(run.read_t[r, m - 1])))
+    status = doc_status(run, doc, T)
+    tariff = tw.tariffs.get(doc["rate"], {})
+    out = {"id": bk.doc_id(doc), "schemaVersion": "billing-document/1.0", "contractId": ctr, "accountId": acct,
+           "installationId": tw.inst_ids[i], "premiseId": tw.premise_ids[tw.prem[r]], "commodity": str(tw.commodity[r]),
+           "rateCategory": doc["rate"], "periodStart": run.iso(run.read_t[r, m - 1]), "periodEnd": run.iso(run.read_t[r, m]),
+           "days": round(float(run.read_t[r, m] - run.read_t[r, m - 1]), 2),
+           "readIds": [run.read_id(int(x), m) for x in rows], "version": doc["version"],
+           "replaces": bk.doc_id(bk.docs[doc["replaces"]]) if doc["replaces"] >= 0 else None,
+           "estimated": bool(doc.get("estimated")), "billStatus": status, "status": status, "lines": bk.lines(doc),
+           "subtotal": doc["subtotal"], "tax": doc["tax"], "totalAmount": doc["total"],
+           "currency": tariff.get("currency", "CAD"), "createdAt": run.iso(doc["created"]),
+           "releasedAt": run.iso(doc["released"]) if doc["released"] is not None and doc["released"] <= T else None,
+           "reversedAt": run.iso(doc["reversed"]) if status == "reversed" else None,
+           "caseId": run.cases[doc["case"]].id if doc["case"] >= 0 else None, "invoiceId": inv["id"] if inv else None}
+    if truth:
+        out["truth"] = {"totalAmount": doc["truthTotal"], "expectedTotal": doc.get("expectedTotal")}
+    return out
+
+
+def invoice_status(inv: dict, T: float) -> str:
+    if inv["issued"] > T:
+        return "scheduled"
+    paid = inv.get("paid")
+    if paid is not None and paid <= T:
+        return "paid" if inv["total"] > 0 else "credit"
+    return "overdue" if inv["due"] < T else "open"
+
+
+def invoice_json(run: M2CRun, inv: dict, T: float) -> dict:
+    bk = run.books
+    return {"id": inv["id"], "schemaVersion": "invoice/1.0", "accountId": inv["account"],
+            "billingDocumentIds": [bk.doc_id(bk.docs[k]) for k in inv["docs"]],
+            "issuedAt": date_of(inv["issued"]).isoformat(), "dueAt": date_of(int(inv["due"])).isoformat(),
+            "totalAmount": inv["total"], "currency": "CAD", "invoiceStatus": invoice_status(inv, T),
+            "status": invoice_status(inv, T),
+            "paidAt": run.iso(inv["paid"]) if inv.get("paid") is not None and inv["paid"] <= T else None,
+            "payments": [{"at": run.iso(p["at"]), "amount": p["amount"], "status": p["status"]}
+                         for p in inv["payments"] if p["at"] <= T],
+            "dunning": [{"at": run.iso(t), "type": k, "label": cat.EVENTS[k][0]} for t, k in inv["dunning"] if t <= T]}
+
+
+def billing_kpis(run: M2CRun, T: float) -> tuple[dict, dict[str, float]]:
+    bk, c = run.books, run.cfg
+    rate = c.process.carry_rate_per_day
+    docs = [d for d in bk.docs if d["created"] <= T]
+    released = [d for d in docs if doc_status(run, d, T) == "released"]
+    costs = {"labor": 0.0, "system": 0.0, "cx": 0.0}
+
+    def charge(kind: str, n: int = 1) -> None:
+        for k, v in cat.cost(kind).items():
+            costs[k] += v * n
+
+    issued = [inv for inv in bk.invoices if inv["created"] <= T]
+    days_to_invoice, days_to_pay, carry, recv_carry, collected, overdue = [], [], 0.0, 0.0, 0.0, 0.0
+    dunning: dict[str, int] = {}
+    tw = run.town
+    for inv in issued:
+        charge("INVOICE_CREATED")
+        read_day = max(float(tw.read_day[bk.main[bk.docs[k]["inst"]], bk.docs[k]["month"]]) for k in inv["docs"])
+        days_to_invoice.append(inv["created"] - read_day)
+        carry += max(0.0, inv["created"] - read_day) * rate
+        paid = inv.get("paid")
+        end = paid if paid is not None and paid <= T else T
+        if inv["issued"] <= T:
+            recv_carry += max(0.0, end - inv["issued"]) * rate * c.process.receivable_carry_ratio
+        for p in inv["payments"]:
+            if p["at"] <= T:
+                charge("PAYMENT_RECEIVED" if p["status"] == "received" else "PAYMENT_REJECTED")
+                collected += p["amount"] if p["status"] == "received" else 0.0
+        if paid is not None and paid <= T:
+            days_to_pay.append(paid - inv["issued"])
+        elif inv["due"] < T and inv["total"] > 0:
+            overdue += inv["total"]
+        for t, k in inv["dunning"]:
+            if t <= T:
+                dunning[k] = dunning.get(k, 0) + 1
+                if k != "PAYMENT_REJECTED":
+                    charge(k)
+    receivable = sum(max(0.0, bk.balance(a, T)) for a in bk.ledger)
+    kpis = {"documents": len(docs), "blocked": sum(1 for d in docs if doc_status(run, d, T) == "blocked"),
+            "released": len(released), "billed": round(sum(d["total"] for d in released), 2),
+            "billingError": round(sum(abs(d["total"] - d["truthTotal"]) for d in released), 2),
+            "invoices": len(issued), "invoiced": round(sum(inv["total"] for inv in issued), 2),
+            "collected": round(collected, 2), "receivable": round(receivable, 2), "overdue": round(overdue, 2),
+            "avgDaysToInvoice": round(float(np.mean(days_to_invoice)), 2) if days_to_invoice else None,
+            "avgDaysToPay": round(float(np.mean(days_to_pay)), 2) if days_to_pay else None,
+            "billingCarry": round(carry, 2), "receivableCarry": round(recv_carry, 2), "dunning": dunning,
+            "rateChange": {"date": c.billing.rate_change_date, "pct": c.billing.rate_change_pct}}
+    return kpis, costs
