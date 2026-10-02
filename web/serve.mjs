@@ -6,7 +6,7 @@ const repo = fileURLToPath(new URL('../', import.meta.url));
 const roots = [['/examples/', path.join(repo, 'examples')], ['/packs/', path.join(repo, 'packs')],
   ['/', path.join(repo, 'packages/town-viewer/dist')]];
 const mime = {'.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json',
-  '.gz': 'application/gzip', '.md': 'text/markdown', '.png': 'image/png', '.svg': 'image/svg+xml', '.txt': 'text/plain'};
+  '.gz': 'application/gzip', '.md': 'text/markdown', '.png': 'image/png', '.svg': 'image/svg+xml', '.webp': 'image/webp', '.txt': 'text/plain'};
 http.createServer((req, res) => {
   try {
     const name = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);

@@ -15,6 +15,10 @@ How to read the tables:
 
 Every item also needs a **selected** and a **hover** look; the tables don't repeat them.
 
+> **Status (Oct 2026):** Astra's isometric art is now the map. [ISOMETRIC_MAP.md](ISOMETRIC_MAP.md) says which sprite
+> draws each item and what is still missing (valves, fuses, reclosers, collectors, wall meters, damaged variants).
+> The **Today** column below describes the 3D viewer, which is still available with `?map=3d`.
+
 ## 1. Ground and land
 
 | Asset | Data | Ayr / Cobourg | Variants and states | Today | Priority |

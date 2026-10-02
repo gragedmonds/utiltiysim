@@ -450,3 +450,4 @@ details.schema-group>.schema-field:last-child{margin-bottom:10px}
  .ws-tests th:first-child{width:auto}.ws-tests th,.ws-tests td:nth-child(2),.ws-tests td:nth-child(3){white-space:nowrap}.ws-tests td,.ws-tests th{padding:4px 5px}
  .vee-line{flex-wrap:wrap;gap:2px 10px}.vee-line>span{min-width:0;text-align:left}
 }
+.iso-map{cursor:grab;outline:none}.iso-map:focus-visible{outline:2px solid #7a5cd6;outline-offset:-2px}

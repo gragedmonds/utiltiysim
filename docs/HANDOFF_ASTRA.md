@@ -239,3 +239,10 @@ enablement from them. Identities are the engine's everywhere (premise, installat
 order), so the map and the Workspace share them; the fixture ids (`7100000318`, `MR-2026-0276`, `100004201`) go away.
 The Studio's "Schedule visit" maps to the order's basic start (save before release); there is no separate schedule
 action. A dispatched order shows on the map on its start date as a `field_order` job with `orderId`.
+
+## 11. The isometric map (your pixel art)
+
+The map tab now draws your sprite sheets: `iso-scene.js` (Canvas 2D, same calls as `TownScene`) and `iso-art.js`
+(which sprite draws which engine object). `scripts/bake_iso_atlas.py` bakes `assets/town/isometric` into
+`dist/iso/atlas.webp`, so replacing a sheet and re-running the bake updates the map. Sizes, anchors, facing rules
+and what is not drawn yet are in [ISOMETRIC_MAP.md](ISOMETRIC_MAP.md). The 3D map stays behind `?map=3d`.
