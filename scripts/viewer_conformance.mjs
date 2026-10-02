@@ -64,13 +64,17 @@ for (const [name, list] of frames) {
     return {nullFlowsKept: nulls, negativeFlows: negatives};
   });
 }
-check('loop flows stay null (unknown never becomes zero)', () => {
-  const r = new StateReceiver(inspection);
-  const {flow} = r.accept(snap.stateFrame);
+check('water loop flows arrive, and a null flow stays null (unknown never becomes zero)', () => {
   const loops = snap.networks.water.edges.filter(e => e.loop && e.enabled).map(e => e.id);
   if (!loops.length) return {loops: 0};
-  const bad = loops.filter(id => flow.water.edgeFlows.get(id) !== null);
-  if (bad.length) throw Error(`${bad.length} loop edges lost their null`);
+  const {flow} = new StateReceiver(inspection).accept(snap.stateFrame);
+  const missing = loops.filter(id => typeof flow.water.edgeFlows.get(id) !== 'number');
+  if (missing.length) throw Error(`${missing.length} loop edges have no flow`);
+  // An engine whose loop solve fell back sends null on its loops: the receiver must keep it null.
+  const w = snap.stateFrame.networks.water, i = w.edgeIds.indexOf(loops[0]);
+  const fallback = {...snap.stateFrame, networks: {...snap.stateFrame.networks, water: {...w, flows: w.flows.map((v, k) => k === i ? null : v)}}};
+  const kept = new StateReceiver(inspection).accept(fallback).flow.water.edgeFlows.get(loops[0]);
+  if (kept !== null) throw Error(`a null loop flow became ${kept}`);
   return {loops: loops.length};
 });
 check('outage frame isolates customers through disabled supply edges', () => {

@@ -1,6 +1,9 @@
-"""Radial hydraulics for water and gas: pressure at every node and service from the frame's flows (numpy only).
+"""Hydraulics for water and gas: loop flows, and pressure at every node and service (numpy only).
 
-Like ``sim.voltage``, this walks the frame's energized forest from the source.
+Like ``sim.voltage``, this walks the frame's energized forest from the source. The forest's flows balance every node;
+``looped`` then finds the flow on every other enabled pipe (the loops, ``sim.loops``) so that the loss around each
+cycle is zero, and adds it to the tree pipes along the cycle. Pressures are walked down the forest with those signed
+flows: a tree pipe can now carry water back up toward its parent, and then the grade rises along it.
 
 Water uses Hazen-Williams head loss. The hydraulic grade starts at the zone's elevated-tank overflow, held there by
 the pump station, and resets at the overflow of another zone's tank where a pipe enters that zone. Pressure is
@@ -9,26 +12,33 @@ grade minus ground elevation, in kPa. C factors: PVC 150, copper 140, ductile ir
 Gas has two tiers. Medium pressure starts at the city gate outlet and uses Weymouth (P₁² − P₂² ∝ Q²·L / d^(16/3),
 absolute pressures). Low pressure starts at a district regulator's outlet and uses Spitzglass (Δh ∝ Q²·L / d⁵, in
 inches of water column). Pressures are kPa gauge at the service inlet; a meter on a medium-pressure service has its
-own regulator, so the house still sees about 1.7 kPa.
-
-Loop edges carry no flow in the radial model, so pressures in looped areas are conservative (a little low).
+own regulator, so the house still sees about 1.7 kPa. A gas loop is solved within one tier only: a cycle whose path
+crosses a regulator, or mixes tiers, stays unsolved (null).
 """
 
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass
 
 import numpy as np
+
+from utilsim.sim.loops import Cycles, cycles
+from utilsim.sim.loops import solve as solve_loops
 
 C_FACTOR = {"PVC C900": 150.0, "copper": 140.0, "ductile iron": 130.0, "PCCP": 120.0}
 KPA_PER_M = 9.80665  # water: kPa per metre of head
 PSI_PER_KPA = 1 / 6.894757
 ATM_PSI = 14.7
 INWC_PER_KPA = 4.01865
+CF_PER_M3 = 35.3147
 TB, PB, T_GAS, SG = 520.0, 14.73, 520.0, 0.6  # Weymouth base conditions (°R, psia), flowing temperature, gravity
 WATER_MIN_KPA = 275.0  # 40 psi: the usual minimum service pressure at peak hour
 GAS_LP_MIN_KPA = 1.0  # about 4" w.c. at the meter inlet
 GAS_MP_MIN_KPA = 100.0
+HW_N = 1.852  # Hazen-Williams flow exponent (gas laws are quadratic)
+# Loop solve tolerance per tier, in its potential: metres of head (water), psia² (gas MP, ≈ 1 Pa), kPa (gas LP).
+LOOP_TOL = {0: 1e-4, 1: 1e-3, 2: 1e-5}
 
 
 @dataclass
@@ -39,6 +49,7 @@ class HydParams:
     elevation: np.ndarray  # per node (m)
     reset: np.ndarray  # per node: grade (water, m) or pressure (gas, kPa) a regulator/tank holds; nan if none
     root: float  # grade (m) or pressure (kPa) at the source side
+    domain: np.ndarray | None = None  # per node: tier of the pipes a held node feeds (−1 none); see ``looped``
 
     @classmethod
     def from_network(cls, utility: str, edges: list[dict], nodes: list[dict]) -> HydParams:
@@ -46,6 +57,7 @@ class HydParams:
         k, tier = np.zeros(n), np.full(n, -1, dtype=np.int8)
         elev = np.array([float(nd.get("elevationM") or 0.0) for nd in nodes])
         reset = np.full(m, np.nan)
+        domain = np.full(m, -1, dtype=np.int8)
         for j, e in enumerate(edges):
             if e.get("kind") == "supply":
                 continue
@@ -83,13 +95,36 @@ class HydParams:
                 za, zb = zone[a], zone[b]
                 if za is not None and zb is not None and za != zb and zb in tanks:
                     reset[b] = tanks[zb]
+            # A tank feeding the system (a source) floats at its own overflow.
+            for i, nd in enumerate(nodes):
+                if nd["kind"] == "elevated_tank" and nd.get("overflowElevationM"):
+                    reset[i] = float(nd["overflowElevationM"])
+            domain[:] = 0
         else:
             root = 0.0
             for i, nd in enumerate(nodes):
                 if nd["kind"] in ("city_gate_regulator", "district_regulator") and nd.get("outletKPa") is not None:
                     reset[i] = float(nd["outletKPa"])
                     root = max(root, reset[i]) if nd["kind"] == "city_gate_regulator" else root
-        return cls(utility, k, tier, elev, reset, float(root))
+                    domain[i] = 1 if nd["kind"] == "city_gate_regulator" else 2
+        return cls(utility, k, tier, elev, reset, float(root), domain)
+
+    def loss_coefficient(self) -> np.ndarray:
+        """Per edge ``r`` with flows in m³/h: the potential falls by ``r · Q · |Q|^(n−1)`` along the flow (water:
+        metres of head, n = 1.852; gas MP: psia², LP: kPa, n = 2)."""
+        if self.utility == "water":
+            return np.where(self.tier == 0, self.k / 3600.0 ** HW_N, 0.0)
+        return np.where(self.tier == 1, self.k * (24.0 * CF_PER_M3) ** 2,
+                        np.where(self.tier == 2, self.k * CF_PER_M3 ** 2 / INWC_PER_KPA, 0.0))
+
+    @property
+    def exponent(self) -> float:
+        return HW_N if self.utility == "water" else 2.0
+
+    def held(self, nodes: np.ndarray) -> np.ndarray:
+        """Grade (m) or pressure (kPa gauge) a held node (a source, pump station, regulator) keeps."""
+        r = self.reset[nodes]
+        return np.where(np.isnan(r), self.root, r)
 
 
 def solve(params: HydParams, forest, q_down: np.ndarray, meter: np.ndarray, n_premises: int) -> np.ndarray:
@@ -102,32 +137,104 @@ def solve(params: HydParams, forest, q_down: np.ndarray, meter: np.ndarray, n_pr
 
 
 def node_pressure(params: HydParams, forest, q_down: np.ndarray) -> np.ndarray:
-    """Pressure per node (kPa gauge; nan where unreached)."""
-    has = forest.pedge >= 0
+    """Pressure per node (kPa gauge; nan where unreached). ``q_down`` is each node's parent-edge flow (m³/h, positive
+    from the parent to the node): the radial flow beyond it, or the looped flow from ``looped``."""
     n = len(forest.parent)
     val = np.full(n, np.nan)  # water: grade (m); gas: pressure (kPa gauge)
-    for lvl in forest.levels:
-        root = forest.parent[lvl] < 0
-        val[lvl[root]] = params.root
-        child = lvl[~root & has[lvl]]
-        if not len(child):
-            continue
-        e = forest.pedge[child]
-        q = np.abs(q_down[child])
-        up = val[forest.parent[child]]
-        t = params.tier[e]
-        k = params.k[e]
+    if not forest.levels:
+        return val
+    has = forest.pedge >= 0
+    e = forest.pedge[has]
+    q = np.asarray(q_down, dtype=float)[has]
+    loss = np.zeros(n)  # per node, along its parent edge: m of head (water), psia² (gas MP), kPa (gas LP)
+    loss[has] = params.loss_coefficient()[e] * q * np.abs(q) ** (params.exponent - 1)
+    tier = np.full(n, -1, dtype=np.int8)
+    tier[has] = params.tier[e]
+    reset, parent = params.reset, forest.parent
+    val[forest.levels[0]] = params.held(forest.levels[0])  # the sources
+    for lvl in forest.levels[1:]:
+        up = val[parent[lvl]]
         if params.utility == "water":
-            nxt = up - np.where(t == 0, k * (q / 3600.0) ** 1.852, 0.0)
+            nxt = up - loss[lvl]
         else:
-            p_abs = up * PSI_PER_KPA + ATM_PSI
-            mp = np.sqrt(np.maximum(p_abs ** 2 - k * (q * 24.0 * 35.3147) ** 2, ATM_PSI ** 2))
-            mp_kpa = (mp - ATM_PSI) / PSI_PER_KPA
-            lp_kpa = up - k * (q * 35.3147) ** 2 / INWC_PER_KPA
-            nxt = np.where(t == 1, mp_kpa, np.where(t == 2, np.maximum(lp_kpa, 0.0), up))
-        r = params.reset[child]
-        val[child] = np.where(np.isnan(r), nxt, r)
+            t = tier[lvl]
+            mp = np.sqrt(np.maximum((up * PSI_PER_KPA + ATM_PSI) ** 2 - loss[lvl], ATM_PSI ** 2))
+            nxt = np.where(t == 1, (mp - ATM_PSI) / PSI_PER_KPA, np.where(t == 2, np.maximum(up - loss[lvl], 0.0), up))
+        r = reset[lvl]
+        val[lvl] = np.where(np.isnan(r), nxt, r)
     return (val - params.elevation) * KPA_PER_M if params.utility == "water" else val
+
+
+@dataclass
+class LoopResult:
+    flow: np.ndarray  # per node: flow in its parent edge, loops included (m³/h, positive parent → node)
+    chords: np.ndarray  # edges solved as loops
+    q: np.ndarray  # flow per chord (m³/h, positive from → to)
+    iterations: int
+    residual: float  # worst loop equation left, in each chord's potential (m of head, psia², kPa)
+    converged: bool
+
+
+def _depth(forest) -> np.ndarray:
+    depth = np.full(len(forest.parent), -1, dtype=np.int64)
+    for i, lvl in enumerate(forest.levels):
+        depth[lvl] = i
+    return depth
+
+
+def _cycles(params: HydParams, forest, a: np.ndarray, b: np.ndarray, candidates: np.ndarray) -> Cycles:
+    """Cycles for the candidate chords that one potential describes end to end: the chord, both ends' held nodes
+    and every tree pipe between them share one tier (gas loops never cross a regulator)."""
+    held = ~np.isnan(params.reset) | (forest.parent < 0)
+    cyc = cycles(forest.parent, _depth(forest), a, b, np.flatnonzero(candidates), held)
+    if not len(cyc.chords):
+        return cyc
+    dom = params.domain[cyc.fixed] if params.domain is not None else np.zeros(len(cyc.ends), dtype=np.int8)
+    tier = params.tier[cyc.chords].astype(np.int64)
+    tier = np.where(tier >= 0, tier, dom[cyc.ca])  # a pipe without a loss model joins its ends' tier
+    pos = np.arange(len(cyc.flat)) - cyc.start[cyc.owner] + 1
+    et = params.tier[forest.pedge[cyc.touched[cyc.flat]]].astype(np.int64)
+    use = (pos > cyc.fixed_depth[cyc.owner]) & (et >= 0)
+    lo = np.full(len(cyc.ends), 99, dtype=np.int64)
+    hi = np.full(len(cyc.ends), -1, dtype=np.int64)
+    np.minimum.at(lo, cyc.owner[use], et[use])
+    np.maximum.at(hi, cyc.owner[use], et[use])
+
+    def end_ok(x: np.ndarray) -> np.ndarray:
+        return (dom[x] == tier) & ((hi[x] < 0) | ((lo[x] == tier) & (hi[x] == tier)))
+
+    return cyc.subset((tier >= 0) & end_ok(cyc.ca) & end_ok(cyc.cb))
+
+
+def looped(params: HydParams, forest, q_down: np.ndarray, a: np.ndarray, b: np.ndarray,
+           candidates: np.ndarray) -> LoopResult | None:
+    """Loop flows for the ``candidates`` (bool per edge: enabled, off the forest, both ends reached), on top of the
+    radial ``q_down``. ``None`` when nothing can be solved. The cycle structure is cached on the forest, so the
+    candidates must follow from the forest alone (as in ``FlowModel.flows``)."""
+    cache = getattr(forest, "cache", None)
+    cyc = cache.get("cycles") if cache is not None else None
+    if cyc is None:
+        cyc = _cycles(params, forest, a, b, candidates)
+        if cache is not None:
+            cache["cycles"] = cyc
+    if not len(cyc.chords):
+        return None
+    r = params.loss_coefficient()
+    tier = params.tier[cyc.chords].astype(np.int64)
+    dom = params.domain[cyc.fixed] if params.domain is not None else np.zeros(len(cyc.ends), dtype=np.int8)
+    tier = np.where(tier >= 0, tier, dom[cyc.ca])
+    held = params.held(cyc.fixed)
+    pot = np.where(tier == 1, (held[cyc.ca] * PSI_PER_KPA + ATM_PSI) ** 2, held[cyc.ca]) \
+        - np.where(tier == 1, (held[cyc.cb] * PSI_PER_KPA + ATM_PSI) ** 2, held[cyc.cb])
+    tol = np.array([LOOP_TOL[int(t)] for t in tier])
+    sol = solve_loops(cyc, q_down[cyc.touched], r[forest.pedge[cyc.touched]], r[cyc.chords], params.exponent,
+                      pot, tol)
+    flow = q_down.astype(float).copy()
+    flow[cyc.touched] = sol.flow
+    if not sol.converged:
+        warnings.warn(f"{params.utility} loop flows did not converge ({sol.iterations} iterations, worst loop "
+                      f"residual {sol.residual:.3g}); using radial flows", RuntimeWarning, stacklevel=3)
+    return LoopResult(flow, cyc.chords, sol.q, sol.iterations, sol.residual, sol.converged)
 
 
 def orifice_m3h(pressure_kpa: float, diameter_in: float, opening: float, cd: float = 0.6) -> float:

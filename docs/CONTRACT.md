@@ -105,8 +105,10 @@ Overhead edges have a vertex at every pole, so a pole per vertex is correct.
 * `networks.{u}`: `unit` (`kW` electric, `m3/h` water and gas), `edgeIds` (snapshot order), `flows` (one per edge),
   `enabled` (one per edge), `sourceFlow`. Every edge appears exactly once.
 * **Flow sign:** positive runs `from → to`; negative electric flow is export toward the grid.
-* **`null` means unavailable, never zero.** In M1, enabled loop edges are `null` (looped water/gas hydraulics and
-  electric load flow are M2); disabled edges are `0`; `sourceFlow` is `null` if unknown.
+* **`null` means unavailable, never zero.** Enabled water and gas loop edges carry their solved flow (looped
+  hydraulics, see NETWORK_RULES); a loop is `null` only in a frame whose loop solve did not converge (the frame then
+  keeps the radial flows and pressures), or for a gas loop whose cycle crosses a regulator. Enabled electric
+  non-forest edges are `null` (no meshed load flow); disabled edges are `0`; `sourceFlow` is `null` if unknown.
 * `premises`: `ids` (every premise, snapshot order) and `electric`/`water`/`gas` arrays aligned with it; `null`
   where the premise has no such service.
 * `clock`: `simTime` (identical string), `timezone` (IANA), `localTime`, `sunElevationDeg`, `sunAzimuthDeg`
@@ -223,8 +225,8 @@ null if still out at the end of the day; the meter-to-cash run's `outages`), `re
 Frames from `/api/sim/frame` add `premises.unsupplied` (`{electric: [premiseId…], …}`) when anyone is without supply.
 Every frame also carries the radial power flow: `networks.electric.loading` per edge (apparent power over capacity),
 `networks.electric.lossesKW`, and `premises.voltage` (service voltage on a 120 V base, null when unsupplied).
-They also carry `premises.pressure.water` and `premises.pressure.gas`: service pressure in kPa gauge from the radial
-hydraulics. It is null when the premise is unsupplied or not served.
+They also carry `premises.pressure.water` and `premises.pressure.gas`: service pressure in kPa gauge from the
+hydraulics, loops included. It is null when the premise is unsupplied or not served.
 
 Back-feed closes a tie only if the feeder picking up the load stays within `tieMaxLoading` (1.3, the emergency
 rating) and every customer keeps at least `tieMinVoltage` (110 V), checked hourly across the repair. Otherwise the
