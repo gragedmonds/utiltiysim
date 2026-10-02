@@ -27,3 +27,22 @@ test('job state follows the engine route by time, parks on site and returns',()=
  const site=ops.jobState(job,120);assert.equal(site.status,'on_site');assert.ok(site.agent);
  assert.equal(ops.jobState(job,133).status,'returning');assert.equal(ops.jobState(job,140).status,'completed');
 });
+
+test('reading rounds: a walker leaves the van parked; a drive-by van drives its round',()=>{
+ const ops=new EngineOperations({id:'town-x',facilities:[]},{townRef:'x'});
+ const base={startAt:0,arrivalAt:10,returnStartAt:110,endAt:120,route:[{x:0,z:0},{x:10,z:0}],routeTimes:[0,10],returnRoute:[{x:10,z:0},{x:0,z:0}],returnTimes:[0,10],
+  walkRoute:[{x:10,z:0},{x:10,z:50},{x:10,z:100}],walkTimes:[0,50,100],workSeconds:100,roadPoint:{x:10,z:0},visitPoint:{x:10,z:0}};
+ const walk=ops.jobState({...base,kind:'meter_reading',mode:'walk'},60);
+ assert.equal(walk.status,'on_site');assert.equal(walk.position.x,10);assert.equal(walk.position.z,0);assert.ok(Math.abs(walk.agent.z-50)<1e-9);
+ const drive=ops.jobState({...base,kind:'meter_reading',mode:'drive'},85);
+ assert.equal(drive.agent,undefined);assert.ok(Math.abs(drive.position.z-75)<1e-9);
+});
+
+test('the run day is part of the request; a new day starts an empty command list; the meter-to-cash run rides along',async()=>{
+ const log=[];globalThis.fetch=fakeFetch(log);
+ const ops=new EngineOperations({id:'town-x',facilities:[]},{api:'/api',townRef:'ayr',m2c:()=>({actions:[{id:'A1'}]})});
+ ops.time=100;await ops.command('dispatch',{targetId:'P-1'});
+ assert.deepEqual(log.at(-1).body.m2c,{actions:[{id:'A1'}]});assert.equal(log.at(-1).body.date,null);
+ assert.equal(await ops.setDate('2026-03-04'),true);assert.equal(ops.commands.length,0);assert.equal(log.at(-1).body.date,'2026-03-04');
+ assert.equal(await ops.setDate('2026-03-04'),false);
+});

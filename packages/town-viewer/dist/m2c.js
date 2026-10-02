@@ -29,10 +29,10 @@ export class EngineM2C{
  lastActionDay(){return this.actions.at(-1)?.day||null;}
  canAct(){const last=this.lastActionDay();return !last||!this.asOf||this.asOf>=last;}
  // Appends a decision on the current view date and checks it with the engine; a refused action is removed again.
- async act(type,caseId,value=null){
+ async act(type,caseId,value=null,extra={}){
   if(!this.asOf)throw Error('Pick a view date first.');
   if(!this.canAct())throw Error(`Actions are append-only: move the date to ${this.lastActionDay()} or later.`);
-  const a={id:'ACT-'+(this.actions.length+1),day:this.asOf,type,caseId};if(value!=null&&value!=='')a.value=Number(value);
+  const a={id:'ACT-'+(this.actions.length+1),day:this.asOf,type,...(caseId?{caseId}:{}),...extra};if(value!=null&&value!=='')a.value=Number(value);
   this.actions.push(a);
   try{await this.summary();}catch(e){if(!e.superseded){this.actions.pop();throw e;}}
   this.save();return a;
@@ -40,5 +40,7 @@ export class EngineM2C{
  setAsOf(day){this.asOf=day||null;this.save();}
  setSettings(overrides){this.settings=overrides&&Object.keys(overrides).length?overrides:null;this.save();}
  reset(){this.actions=[];this.save();}
+ // The run identity the operations timeline needs for this day's field orders.
+ context(){return {settings:this.settings||undefined,actions:this.actions};}
  export(){return {schemaVersion:'viewer-m2c-run/1.0',townId:this.townId,town:this.townRef,settings:this.settings,actions:this.actions,asOf:this.asOf};}
 }
