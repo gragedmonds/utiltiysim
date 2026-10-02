@@ -225,6 +225,13 @@ Frames from `/api/sim/frame` add `premises.unsupplied` (`{electric: [premiseIdâ€
 time order and nothing decides using a later command, so **appending a command never changes events, jobs or routes
 that happened before it** (events after it may be renumbered). The viewer sends commands with `at` â‰¥ the last one.
 
+## Meter-to-cash (reads, VEE, work queues)
+
+`utilsim/m2c/` replays a year of reads, VEE decisions and exception work queues for a run of `(town, settings,
+actions)`; see [M2C.md](M2C.md) for the model, settings and endpoints. Reads keep `meter-read/1.1` with additive
+fields (`veeStatus`, `veeDecisionId`, `veeConfidence`, `caseId`, `billStatus`, `registerRegression`, `revisions[]`).
+Read, VEE and bill statuses stay distinct. Truth is returned only when a request asks for it (`truth: true`).
+
 ## Reads
 
 `meter-read/1.1` keeps observation, VEE, bill and invoice state in separate fields:

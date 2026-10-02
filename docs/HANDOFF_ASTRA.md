@@ -92,3 +92,22 @@ engine towns. `dist/engine-operations.js` implements your `DemoOperations` inter
   large towns); every main is drawn as a 1-pixel line too, so networks stay visible at town zoom. Phones run a light
   quality profile (`quality.js`) with WebGL context-loss recovery.
 
+
+## 7. Meter-to-cash worklists in your viewer (rev 5)
+
+These are in your package and follow your patterns:
+- **`#/worklists` page** (`worklists.js`): queues with aging and backlog sparklines, a KPI strip, a paged case table,
+  and a case panel. The panel shows the five VEE tests with rationale, the read history chart, the Activity
+  Sequence trace and the actions.
+- **Engine client** (`m2c.js`): keeps the run's settings overrides and your append-only actions in `localStorage`,
+  and drops late replies by channel.
+- **Settings tab** "Meter-to-cash" (`schema-form.js`): rendered from the engine's JSON Schema.
+- **Map:** a "Cases on map" toggle uses `setMarkers` for premises with open cases. The house Billing tab shows the
+  engine's reads (read, VEE and bill status) and links to the house's cases.
+
+The routes are a table in `focus-ui.js` (`PAGES`). Opening a pack keeps a deep-linked `#/worklists` or `#/settings`
+page on the first load. Design passes welcome, especially:
+- the queue cards;
+- the confidence gauge;
+- how a held read is shown;
+- the history chart's colours (estimated, adjusted, flagged).
