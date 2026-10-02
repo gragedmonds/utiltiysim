@@ -62,7 +62,9 @@ Each business day goes in this order:
      - meter fault: field order;
      - real usage (leak, vacant consumption): accept, then a customer callback.
    - An escalate disposition, or a bill impact at or above `vee.escalate_impact`, goes to `SUPERVISOR`.
-4. **Supervisors** approve escalations, within capacity.
+4. **Supervisors** approve escalations every business day, up to `supervisors × supervisor_hours_per_day ÷
+   supervisor_minutes` (3 a day by default). An escalation becomes eligible 1–4 business days after it is raised
+   (their pickup lag), oldest first. A case you own waits for you.
 5. **Field crews** complete up to `field_orders_per_day` orders. A meter fault gets a meter exchange (and the meter is
    fixed); otherwise the crew takes a special read.
 6. **Evening batch** for the portions read today: reads, then VEE at 18:00, then exceptions.
@@ -90,12 +92,12 @@ ids: Field Work `CASE-{yymmdd}-F{nnnn}` and invoice holds `CASE-{yymmdd}-H{nnnn}
 | `billing_run` | Billing blocks (`HIGH_BILL`, `BILL_CREDIT`, `RATE_CLASS`, `TRUE_UP`) |
 | `studio` | Your Field Work and invoice hold cases |
 
-**Missing reads explain themselves.** A missing-read case (and its read's VEE decision) carries `cause`:
-`{code, label, reasonCode, reason, lastGaspAt? | outageSince?}`. `code` is `power_outage` (with the AMI last gasp
-time), `collector_outage` (with the outage start), `comm_fail` (AMI head-end or drive-by), `no_access` or
-`no_read_document`; `reason` is one line that names it ("No read: the meter lost power at 00:00 on 2026-03-03 (AMI
-last gasp) and was still without power at the 02:00 read."). The five VEE tests stay `not_applicable`, each saying
-what it would have checked. A case with no read value offers `estimate`, `field_order` and `escalate` only.
+**Missing reads explain themselves.** A missing-read case (its read record and its VEE decision too) carries
+`cause`: `{code, label, reasonCode, reason}`, plus `outageStart` and `outageEnd` for an outage. `code` is
+`power_outage` (with `lastGaspAt`), `collector_outage` (with `outageSince`), `comm_fail` (AMI head-end or drive-by),
+`no_access` or `no_read_document`; `reason` is one line that names it ("No read: the meter lost power at 00:00 on
+2026-03-03 (AMI last gasp) and was still without power at the 02:00 read (back at 04:00 on 2026-03-03)."). The five
+VEE tests stay `not_applicable`, each saying what it would have checked. A case with no read value offers `estimate`, `field_order` and `escalate` only.
 
 **What a decision needs.** Case views (`work-case/1.0`) carry:
 - `expected`: `{registerValue, consumption}`, the expected register (previous register + expected use) and use;
@@ -150,8 +152,14 @@ Anomalies follow `anomalies.*` (per 1,000 meters per year). Each keeps its groun
 | Process | missing documents, consecutive-estimate episodes | Reads not obtained |
 
 The June reads equal the snapshot's `sampleReads` exactly. Reads are `meter-read/1.1`, with these additive fields:
-`veeStatus`, `veeDecisionId`, `veeConfidence`, `caseId`, `billStatus`, `registerRegression` and `revisions[]`.
-Estimated and adjusted values are revisions; the original observation is kept.
+`veeStatus`, `veeDecisionId`, `veeConfidence`, `caseId`, `billStatus`, `registerRegression`, `registerDelta`, `cause`
+and `revisions[]`. Estimated and adjusted values are revisions; the original observation is kept.
+- A lower register near the top of its dial (previous above 80 % of it, new below 20 %) is a rollover:
+  `rolloverFlag: true` and the consumption wraps.
+- Any other lower register went backwards: `registerRegression: true`, `consumption: null` and the negative
+  `registerDelta` (observed − previous register). No consumption is ever priced as a wrap that is not a rollover.
+- A missed read carries `reasonCode` and `cause` (see "Cases"); an outage adds `outageStart` and `outageEnd`, so a
+  reading screen can show "missed: power outage 01:00–03:20".
 
 ## VEE (v5 shape)
 
@@ -161,7 +169,9 @@ There are five tests per read, each with a risk contribution of 0–0.25 and a r
    - `SIM-T01` / `SIM-T02`: tolerance high / low;
    - `SIM-Z01`: zero consumption;
    - `SIM-C01`: cascade (the register went backwards);
-   - `SIM-L01`: lifecycle (a move inside the period).
+   - `SIM-L01`: lifecycle (a move inside the period);
+   - `SIM-T03`, `SIM-E01`, `SIM-D01`: the diagnosis of a persistent-low, erratic or period-length exception (their
+     risk is carried by the consistency or temporal test), so every value exception has a code.
 2. **Temporal validity**: period length.
 3. **Consistency**: an erratic ratio against prior-year history; true-ups after estimates.
 4. **Process corroboration**: implausible-value cases on the register in the last 180 days. They strengthen
@@ -210,6 +220,11 @@ What analysts do with a block:
 RPA covers `BILL_CREDIT` at the default coverage, but releases a `HIGH_BILL` or `BILL_CREDIT` outsort only up to
 `outsort_auto_release_max` (default $500, either sign); a larger one waits for an analyst (or you). No RPA rule
 covers `TRUE_UP`. All three are in the "Billing Outsorts" category.
+
+`billing_queue_worked_by` (default `analysts`) decides who works the `BILLING` queue. Set it to `you` to practise
+outsort release: no analyst and no RPA touches a billing block, so every `HIGH_BILL`, `BILL_CREDIT`, `TRUE_UP` and
+`RATE_CLASS` case waits for your `accept`, `estimate` (rebill) or `escalate`. Bills behind them wait too, so days to
+invoice and billing carry grow.
 
 **Estimated bills.** A billing document built on an estimated read says so: `estimated: true` and
 `estimatedReadIds` (a rebill on an estimate is estimated too). An invoice carries `estimated` and
@@ -410,4 +425,6 @@ which service and when; the viewer keeps them per operations day and sends them 
   minutes per customer served, use lost and AMI last gasps, per utility. A premise view lists its `outages`.
 
 The morning's field orders for a day never depend on that day's own outages, so linking the two runs cannot loop.
+The day's read outcomes and its `meterToCash` cycle do include them: a pole broken at 01:40 shows on the card as
+missed AMI reads, and its comm-fail cases and held bills match the Workspace.
 A day's outages stay after you move the map to another day or reload; "Reset engine run" clears them.

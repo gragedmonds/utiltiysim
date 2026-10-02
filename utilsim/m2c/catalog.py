@@ -137,6 +137,10 @@ CODES = {
     "SIM-Z01": ("zero consumption", "Zero consumption at an occupied premise"),
     "SIM-P01": ("process", "Too many consecutive estimates"),
     "SIM-L01": ("lifecycle", "Move-in or move-out inside the read period"),
+    # Diagnoses for the exceptions the consistency and temporal tests raise (no tolerance code of their own).
+    "SIM-T03": ("tolerance", "Consumption persistently below the trend share of expected"),
+    "SIM-E01": ("consistency", "Consumption erratic against the register's history"),
+    "SIM-D01": ("temporal", "Read period shorter or longer than plausible"),
 }
 CODE_LIST = tuple(CODES)
 TESTS = ("SAP VEE diagnosis", "Temporal validity", "Consistency checks", "Process corroboration", "Context signals")

@@ -183,8 +183,11 @@ class Books:
         bad = int(np.max(run.truth_cls[run.town.inst_rows[i], m]))
         off = abs(doc["total"] - doc["truthTotal"]) > max(5.0, 0.1 * abs(doc["truthTotal"]))
         truth = cat.TRUTH[bad] if off and bad in (1, 2) else ("physics" if bad == 3 else "clean")
-        # RPA releases small outsorts only; a large one (and any true-up block) needs a person.
-        rpa = kind not in cat.OUTSORTS or abs(doc["total"]) <= run.cfg.billing.outsort_auto_release_max
+        # RPA releases small outsorts only; a large one (and any true-up block) needs a person. With the queue left to
+        # you (billing_queue_worked_by), no automation touches it.
+        b = run.cfg.billing
+        rpa = b.billing_queue_worked_by == "analysts" and (kind not in cat.OUTSORTS or
+                                                           abs(doc["total"]) <= b.outsort_auto_release_max)
         case = run.new_case(day=int(t), r=r, m=m, kind=kind, disposition=-1, impact=impact,
                             confidence=float("nan"), truth=truth, queue="BILLING", t=t, cause_payload={
                                 "billingDocumentId": self.doc_id(doc), "total": doc["total"],

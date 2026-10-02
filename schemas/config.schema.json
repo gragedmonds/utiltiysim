@@ -223,6 +223,21 @@
       "additionalProperties": false,
       "description": "Bill checks, tariff versions, invoicing, payments and dunning.",
       "properties": {
+        "billing_queue_worked_by": {
+          "default": "analysts",
+          "description": "Who works the BILLING queue (high bills, large credits, true-ups, rate-class errors): the simulated analysts and RPA, or only you. With 'you', no analyst or RPA touches a billing block, so every outsort waits in the Studio for your release, rebill or escalation.",
+          "enum": [
+            "analysts",
+            "you"
+          ],
+          "title": "Billing Queue Worked By",
+          "type": "string",
+          "x-effects": [
+            "billing blocks",
+            "days to invoice",
+            "billing carry"
+          ]
+        },
         "credit_review": {
           "default": 75.0,
           "description": "Block a bill that is a credit larger than this.",

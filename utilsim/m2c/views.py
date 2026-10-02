@@ -247,8 +247,9 @@ CAUSES = {"NO_READ": ("no_read_document", "No read document"), OUTAGE_REASON: ("
 
 
 def missing_cause(run: M2CRun, r: int, m: int) -> dict | None:
-    """Why read ``(r, m)`` is missing: ``{code, label, reasonCode, reason, lastGaspAt? | outageSince?}`` (None when the
-    read came in). ``reason`` is one line that names the cause."""
+    """Why read ``(r, m)`` is missing: ``{code, label, reasonCode, reason}``, plus ``lastGaspAt`` (power) or
+    ``outageSince`` (collector) and ``outageStart``, ``outageEnd`` for an outage; None when the read came in.
+    ``reason`` is one line that names the cause."""
     if m <= 0 or not np.isnan(run.obs[r, m]):
         return None
     reason = str(run.reason[r, m])
@@ -257,13 +258,16 @@ def missing_cause(run: M2CRun, r: int, m: int) -> dict | None:
     hhmm = run.clock(t)[:5]
     out: dict = {"code": code, "label": label, "reasonCode": reason or None}
     if code in ("power_outage", "collector_outage"):
-        t0 = float(run._dark(np.array([r]), np.array([t]), comms=code == "collector_outage")[0])
-        when = run.clock(t0) if np.isfinite(t0) else "before the read"
-        if np.isfinite(t0):
-            out["lastGaspAt" if code == "power_outage" else "outageSince"] = run.iso(t0)
+        span = run.outage_span(r, t, comms=code == "collector_outage")
+        when, back = (run.clock(span[0]), run.clock(span[1])) if span else ("before the read", None)
+        if span:
+            out["lastGaspAt" if code == "power_outage" else "outageSince"] = run.iso(span[0])
+            out.update(outageStart=run.iso(span[0]), outageEnd=run.iso(span[1]))
         text = (f"the meter lost power at {when} (AMI last gasp) and was still without power at the {hhmm} read"
                 if code == "power_outage" else
                 f"the AMI collector serving the meter was down from {when}, so the head-end got no {hhmm} read")
+        if back:
+            text += f" (back at {back})"
     elif reason == "SIM_TELEMETRY_FAILURE":
         text = f"the AMI head-end got no {hhmm} billing read from the meter within its retry window (comm fail)"
     elif reason == "SIM_DRIVE_BY_MISSED":
@@ -485,14 +489,17 @@ def read_record(run: M2CRun, r: int, m: int, T: float, truth: bool = False) -> d
         "scheduledReadAt": run.iso(run.read_t[r, m]), "readAt": None if missing else run.iso(run.read_t[r, m]),
         "previousReadAt": run.iso(run.prev_t_at_read[r, m]), "previousRegisterValue": _r3(run.prev_at_read[r, m]),
         "registerValue": None if missing else _r3(run.obs[r, m]),
-        # As a meter data system records it: a lower register is taken as a rollover (VEE then judges it).
-        "consumption": None if missing else _r3(run.cons[r, m] % 10.0 ** int(tw.digits[r])),
+        # A lower register near the top of the dial is a rollover (consumption wraps); any other lower register went
+        # backwards: no consumption (null) and registerRegression, with the negative registerDelta.
+        "consumption": None if missing or run.cons[r, m] < 0 else _r3(run.cons[r, m]),
+        "registerDelta": None if missing else _r3(run.obs[r, m] - run.prev_at_read[r, m]),
         "multiplier": int(tw.multiplier[r]), "registerDigits": int(tw.digits[r]),
-        "rolloverFlag": bool(not missing and run.obs[r, m] < run.prev_at_read[r, m]),
+        "rolloverFlag": bool(not missing and run.obs[r, m] < run.prev_at_read[r, m] and run.cons[r, m] >= 0),
         "registerRegression": bool(not missing and run.cons[r, m] < 0),
         "readType": "missing" if missing else "actual", "readStatus": "missing" if missing else "received",
         "readReason": "periodic", "source": cat.SOURCE[str(tw.tech[r])], "mruId": tw.mru[r],
-        "reasonCode": run.reason[r, m] or None if missing else None, "consecutiveEstimates": int(run.consec_at[r, m]),
+        "reasonCode": run.reason[r, m] or None if missing else None, "cause": missing_cause(run, r, m),
+        "consecutiveEstimates": int(run.consec_at[r, m]),
         "occupied": bool(tw.occupied[p]), "sapValidationCode": cat.CODE_LIST[code] if code >= 0 else None,
         "veeStatus": vee_status(run, r, m, T), "veeDecisionId": f"VEE-{rid}",
         "veeConfidence": None if np.isnan(run.conf[r, m]) else round(float(run.conf[r, m]), 3),

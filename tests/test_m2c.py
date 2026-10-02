@@ -334,7 +334,7 @@ def outage(ayr, ayr_town):
     ami = sorted({tw.premise_ids[tw.prem[r]] for r in rows if tw.tech[r] == "AMI" and tw.commodity[r] == "electric"})
     outages = [{"day": iso(d), "utility": "electric", "start": 0, "end": 4 * 3600, "premiseIds": ami[:5]},
                {"day": iso(d), "utility": "ami", "start": 0, "end": 4 * 3600, "premiseIds": ami[5:8]}]
-    return d, M2CRun(ayr_town, outages=outages)
+    return d, M2CRun(ayr_town, outages=outages), outages
 
 
 def qa_case(run: M2CRun):
@@ -374,7 +374,7 @@ def test_an_action_on_a_case_that_is_not_open_is_refused_and_says_when(ayr_town,
 
 
 def test_case_ids_are_content_derived_and_survive_an_earlier_outage(ayr, outage):
-    d, out = outage
+    d, out, _ = outage
     key = lambda c: (c.type, c.r, c.month, round(c.created * 1440))  # noqa: E731
     before, after = {key(c): c for c in ayr.cases}, {key(c): c for c in out.cases}
     added = [c for k, c in after.items() if k not in before]
@@ -544,3 +544,76 @@ def test_queue_sorted_by_created_is_newest_first_and_pages_add_up():
         {"day": "2026-08-31", "type": "escalate", "caseId": late["caseId"]}]})
     assert r.status_code == 422, r.text
     assert f"{late['caseId']} was raised at" in r.json()["detail"] and "work it from 2026-09-01" in r.json()["detail"]
+
+
+def test_the_days_cycle_on_the_map_includes_the_days_own_outages(ayr, outage):
+    from api._m2c import m2c_day
+
+    d, full, outages = outage
+    hit = set(outages[0]["premiseIds"] + outages[1]["premiseIds"])
+    orders, outcomes, cycle = m2c_day("ayr", iso(d), {"outages": outages})
+    assert hit <= set(cycle["ami"]["missed"])  # the 01:40-style pole break shows on the card as missed reads
+    assert cycle == views.day_cycle(full, d)  # the same day the Workspace shows (VEE, bills, invoices too)
+    # The morning's field orders still never depend on the day's own outages.
+    assert orders == m2c_day("ayr", iso(d), {})[0]
+    base = set(views.day_cycle(ayr, d)["ami"]["missed"])  # the day without its outages
+    assert hit - base and set(cycle["ami"]["missed"]) == base | hit
+
+
+def test_a_backwards_read_record_has_no_rollover_consumption(ayr):
+    c = qa_case(ayr)
+    rec = views.read_record(ayr, c.r, c.month, 400.0)
+    assert rec["consumption"] is None and rec["registerRegression"] and not rec["rolloverFlag"]
+    assert rec["registerDelta"] == -35561.985
+    cv = views.case_view(ayr, c.id, as_of="2026-07-09")
+    row = views.worklist(ayr, None, as_of="2026-07-09", search=c.id)["rows"][0]
+    assert row["consumption"] == cv["consumption"] == -35561.985 and row["impact"] == cv["impact"]
+    tests = [t["rationale"] for t in cv["decision"]["tests"]]
+    assert "went backwards from the last actual read" in tests[0] and "no period use" in tests[2]
+    # A real rollover still wraps.
+    tw = ayr.town
+    mod = 10.0 ** tw.digits
+    wrap = np.argwhere((ayr.obs[:, 1:] < ayr.prev_at_read[:, 1:]) & (ayr.cons[:, 1:] >= 0)
+                       & (ayr.prev_at_read[:, 1:] > 0.8 * mod[:, None]))
+    for r, j in wrap[:3]:
+        rec = views.read_record(ayr, int(r), int(j) + 1, 400.0)
+        assert rec["rolloverFlag"] and not rec["registerRegression"] and rec["consumption"] > 0
+
+
+def test_every_value_exception_carries_a_validation_code(ayr):
+    for c in ayr.cases:
+        if c.doc < 0 and c.work is None and c.type not in cat.MISSING_TYPES:
+            assert ayr.code[c.r, c.month] >= 0, (c.id, c.type)
+    low = next(c for c in ayr.cases if c.type == "PERSISTENT_LOW")
+    row = views.worklist(ayr, None, as_of="2026-12-31", status="all", search=low.id)["rows"][0]
+    assert row["sapValidationCode"] in ("SIM-T03", "SIM-T02", "SIM-L01") and "·" in row["validationText"]
+
+
+def test_a_read_missed_in_an_outage_says_so_on_the_read_record(outage):
+    from utilsim.m2c import lookups
+
+    d, run, outages = outage
+    tw = run.town
+    r = next(int(r) for r in np.flatnonzero(tw.prem == tw.premise_index[outages[0]["premiseIds"][0]])
+             if tw.commodity[r] == "electric" and tw.direction[r] == "import")
+    m = next(j for j in range(1, 13) if int(tw.read_day[r, j]) == d)
+    rec = views.read_record(run, r, m, 400.0)
+    assert rec["reasonCode"] == "SIM_POWER_OUTAGE" and rec["cause"]["code"] == "power_outage"
+    assert rec["cause"]["outageStart"] == run.iso(d) and rec["cause"]["outageEnd"] == run.iso(d + 4 / 24)
+    assert "(back at 04:00 on" in rec["cause"]["reason"]
+    doc = lookups.read_document(run, run.read_id(r, m), as_of="2026-12-31")
+    assert doc["read"]["cause"] == rec["cause"]
+    assert next(h for h in doc["history"] if h["readId"] == run.read_id(r, m))["cause"]["code"] == "power_outage"
+
+
+def test_the_billing_queue_can_be_left_to_you(ayr_town):
+    run = M2CRun(ayr_town, {"billing": {"billing_queue_worked_by": "you"}})
+    bills = [c for c in run.cases if c.doc >= 0]
+    assert {c.type for c in bills} >= {"HIGH_BILL", "BILL_CREDIT", "RATE_CLASS"}
+    assert all(c.resolved is None and c.rpa_at is None for c in bills)
+    c = next(c for c in bills if c.type == "HIGH_BILL")
+    cv = views.case_view(run, c.id, as_of=iso(int(c.created) + 1))
+    assert cv["actions"] == ["accept", "estimate", "escalate"] and cv["category"] == "Billing Outsorts"
+    done = M2CRun(ayr_town, {"billing": {"billing_queue_worked_by": "you"}},
+                  [{"day": iso(int(c.created) + 1), "type": "accept", "caseId": c.id, "note": "Pool filled"}])
+    assert done.case_index[c.id].outcome == "release" and done.case_index[c.id].by == "you"

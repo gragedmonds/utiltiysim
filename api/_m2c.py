@@ -325,19 +325,24 @@ def m2c_day(town: str, day: str, m2c: dict) -> tuple[list[dict], dict[str, dict]
     """What the meter-to-cash run puts on an operations day: its field orders, its walked/drive-by read outcomes and
     the day's cycle (AMI collection, VEE batch, bills, invoices).
 
-    Outages from ``day`` itself or later are left out: they come from this operations run, and the morning's work
-    orders cannot depend on what happens later that day."""
+    The field orders leave out outages from ``day`` itself or later: those come from this operations run, and the
+    morning's work orders cannot depend on what happens later that day. The read outcomes and the cycle are what
+    meter-to-cash records that day, so they come from the run with every outage (the one the Workspace shows): a pole
+    broken at 01:40 shows as missed AMI reads, comm-fail cases and the bills they hold back."""
     try:
         d = parse_day(day, -1)
-        req = RunRequest(town=town, settings=m2c.get("settings"), actions=m2c.get("actions") or [],
-                         outages=[o for o in m2c.get("outages") or [] if parse_day(o.get("day"), YEAR_DAYS) < d],
-                         seed=m2c.get("seed"))
+        outages = m2c.get("outages") or []
+        base = {"town": town, "settings": m2c.get("settings"), "actions": m2c.get("actions") or [],
+                "seed": m2c.get("seed")}
+        req = RunRequest(**base, outages=[o for o in outages if parse_day(o.get("day"), YEAR_DAYS) < d])
+        full = RunRequest(**base, outages=outages) if len(req.outages) < len(outages) else req
     except ValidationError as exc:
         raise HTTPException(422, orjson.loads(exc.json(include_url=False))) from exc
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
     run = run_for(req, strict=False)  # a stored action list always replays here; refusals belong to /api/m2c/*
-    return _field_orders(run, d), read_outcomes(run, d), views.day_cycle(run, d)
+    seen = run if full is req else run_for(full, strict=False)
+    return _field_orders(run, d), read_outcomes(seen, d), views.day_cycle(seen, d)
 
 
 RANK = {"read": 0, "flagged": 1, "missed": 2}

@@ -561,6 +561,11 @@ class BillingConfig(BaseModel):
     outsort_auto_release_max: float = F(500.0, "RPA may release a high-bill or large-credit outsort only up to this "
                                         "bill amount (either sign); a larger one waits for an analyst.", unit="$",
                                         ge=0, le=100000, effects=["analyst workload", "billing errors"])
+    billing_queue_worked_by: Literal["analysts", "you"] = F(
+        "analysts", "Who works the BILLING queue (high bills, large credits, true-ups, rate-class errors): the "
+        "simulated analysts and RPA, or only you. With 'you', no analyst or RPA touches a billing block, so every "
+        "outsort waits in the Studio for your release, rebill or escalation.",
+        effects=["billing blocks", "days to invoice", "billing carry"])
     trueup_max_ratio: float = F(3.0, "Block a bill whose estimate true-up (a negative period quantity) is larger than "
                                 "this multiple of the period's expected use; an analyst decides it.", unit="×", ge=1,
                                 le=50, advanced=True, effects=["billing blocks", "billing errors"])

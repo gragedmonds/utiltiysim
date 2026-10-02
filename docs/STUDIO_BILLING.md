@@ -95,11 +95,16 @@ A refused action returns **HTTP 422**. Its `detail` is a string, or for order re
 - **Record (`m2c-read-document/1.0`):**
   - The reading itself is `read` (`meter-read`: `registerValue`, `previousRegisterValue`, `consumption`,
     `readType`, `readStatus`, `readReason`, `veeStatus`, `sapValidationCode`, `billStatus`, …).
+  - A missed read has `reasonCode` and `cause {code, label, reason, outageStart?, outageEnd?, …}`: show e.g.
+    "missed: power outage 01:00–03:20" from `cause.label`, `outageStart` and `outageEnd`, or `cause.reason`.
+  - A register that went backwards (not a rollover) has `consumption: null`, `registerRegression: true` and the
+    negative `registerDelta`; `rolloverFlag` is true only for a real rollover.
   - Its VEE decision is `decision`: `tests[]` (`test`, `outcome`, `contribution`, `rationale`), `confidence`,
     `disposition`, `expectedConsumption`.
   - Linked records: `installationId`, `contractId`, `accountId`, `businessPartnerId`, `premiseId`, `address`,
     `meterId`, `registerId`, `case`, `order`.
-  - The register's other readings are `history[]` (`readId`, `readDate`, `registerValue`, `readType`, `veeStatus`).
+  - The register's other readings are `history[]` (`readId`, `readDate`, `registerValue`, `readType`, `veeStatus`,
+    `cause` for a missed one).
 
 Astra's navigation rules hold. A reading opened from Billing Details may go back to it. Installation, contract and
 billing pages reached from a standalone reading go through the installation query.
@@ -136,6 +141,9 @@ billing pages reached from a standalone reading go through the installation quer
   `billing.outsort_auto_release_max` ($500 by default, Config → Billing & collections); larger outsorts, and every
   `TRUE_UP` block (an estimate true-up beyond `billing.trueup_max_ratio` × the period's expected use), wait in the
   queue for an analyst or you.
+- **Practising outsort release.** Set the run setting `billing.billing_queue_worked_by` to `you` (Config → Billing &
+  collections). No analyst or RPA then works the BILLING queue, so every high bill, credit, true-up and rate-class
+  block waits for you. The default, `analysts`, keeps the calibrated run.
 
 ### Field service orders
 

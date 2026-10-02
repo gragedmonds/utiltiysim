@@ -489,6 +489,14 @@ class M2CRun:
         np.add.at(hours, pos, (tc - a) * 24.0)
         return loss, hours
 
+    def outage_span(self, r: int, t: float, comms: bool = False) -> tuple[float, float] | None:
+        """(start, end) of the outage (``comms``: collector outage) covering register ``r`` at ``t``, if any."""
+        ptr, t0, t1 = (self.c_ptr, self.c_t0, self.c_t1) if comms else (self.o_ptr, self.o_t0, self.o_t1)
+        for s in range(int(ptr[r]), int(ptr[r + 1])):
+            if t0[s] <= t < t1[s]:
+                return float(t0[s]), float(t1[s])
+        return None
+
     def _dark(self, rows: np.ndarray, t: np.ndarray, comms: bool = False) -> np.ndarray:
         """When the outage (``comms``: collector outage) covering ``t`` began, per register (nan if none)."""
         out = np.full(len(rows), np.nan)
@@ -846,7 +854,9 @@ class M2CRun:
             return
         cap = p.analysts * p.analyst_hours_per_day * 60.0
         used = 0.0
-        todo = [c for c in self.open if c.resolved is None and c.queue in ("VEE_REVIEW", "ESTIMATION", "BILLING")
+        queues = ("VEE_REVIEW", "ESTIMATION", "BILLING") if self.cfg.billing.billing_queue_worked_by == "analysts" \
+            else ("VEE_REVIEW", "ESTIMATION")  # billing blocks wait for you
+        todo = [c for c in self.open if c.resolved is None and c.queue in queues
                 and c.eligible <= day and c.rpa_at is None and c.owner is None]
         for case in todo:
             minutes = p.review_minutes_min + float(self._u(P_WORK, self.reg_keys[case.r], case.month, 5)) * \
