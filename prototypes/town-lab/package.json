@@ -1,0 +1,9 @@
+{
+ "name":"utility-town-prototype",
+ "version":"1.0.0",
+ "private":true,
+ "type":"module",
+ "scripts":{"postinstall":"node scripts/vendor.mjs","start":"node scripts/serve.mjs","test":"node --test tests/model.test.mjs"},
+ "dependencies":{"three":"0.186.1"},
+ "engines":{"node":">=20"}
+}
