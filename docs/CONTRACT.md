@@ -225,6 +225,12 @@ Frames from `/api/sim/frame` add `premises.unsupplied` (`{electric: [premiseIdâ€
 time order and nothing decides using a later command, so **appending a command never changes events, jobs or routes
 that happened before it** (events after it may be renumbered). The viewer sends commands with `at` â‰¥ the last one.
 
+A gas main break ends with a relight sweep:
+- once the main is back, `relight` crews visit every shut premise, nearest first, with at least `relightCrews`
+  crews and one per `relightPerCrew` premises (mutual aid);
+- each premise stays in `premises.unsupplied.gas` until relit (`premise.relit` events);
+- the timeline reports relight progress in 5-minute steps (`stateChanges[].awaitingRelight`), while frames are exact.
+
 Scheduled work (see [M2C.md](M2C.md)) appears in the same timeline: the day's reading rounds (`meter_reading`,
 with `walkRoute`/`walkTimes`) and, when the request carries `m2c`, the run's field orders (`field_order`). Both run
 before commands on their own crews, so appending a command still never changes earlier jobs.

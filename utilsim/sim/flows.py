@@ -162,7 +162,10 @@ class FlowModel:
     # ---- flows -----------------------------------------------------------------------------------------------
     def flows(self, hour: float, scenario: str = "normal", target: str | None = None, *,
               disabled: dict[str, np.ndarray] | None = None,
-              injections: dict[str, dict[int, float]] | None = None) -> FlowResult:
+              injections: dict[str, dict[int, float]] | None = None,
+              premises_off: dict[str, np.ndarray] | None = None) -> FlowResult:
+        """``premises_off`` (bool per premise) takes premises off a commodity although the network reaches them
+        (e.g. gas meters shut until relit)."""
         inp = self.inputs
         ti = self.index.get(target) if target else None
         d = hourly(self.daily, inp.occupied, inp.has_gas, hour, scenario, ti, inp.leak_m3h)
@@ -174,6 +177,8 @@ class FlowModel:
             dead_meter = (net.meter >= 0) & ~f.reached
             lost = np.zeros(len(inp.premise_ids), dtype=bool)
             lost[net.meter[dead_meter]] = True
+            if premises_off is not None and u in premises_off:
+                lost |= premises_off[u]
             if lost.any():
                 homes[u] = np.where(lost, 0.0, homes[u])
             unsupplied[u] = lost

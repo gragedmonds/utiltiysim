@@ -30,7 +30,7 @@ from zoneinfo import ZoneInfo
 import numpy as np
 
 from utilsim.customers.calendar import scheduled_read_date
-from utilsim.ops.reading import reading_path, stops
+from utilsim.ops.reading import nearest_order, path_through, reading_path, stops
 from utilsim.ops.routing import Route, Router, access_point
 from utilsim.sim.state import run_sequence
 from utilsim.version import EVENT_SCHEMA_VERSION, READ_SCHEMA_VERSION
@@ -52,10 +52,15 @@ DEFAULTS = {
     "driveByKmh": 20.0,
     "meterDwellSeconds": 40,
     "fieldCrews": 2,  # meter shop crews working meter-to-cash field orders
+    "relightCrews": 4,  # gas techs relighting appliances after a gas main is restored (at least)
+    "relightPerCrew": 40,  # more crews (mutual aid) when an outage is large
+    "relightMinutes": 10,
 }
 CREWS = {"electric": ("ELEC", "electric_crews"), "water": ("WATER", "water_crews"), "gas": ("GAS", "gas_crews"),
-         "meter": ("TECH", "meter_techs"), "field": ("FIELD", None)}
+         "meter": ("TECH", "meter_techs"), "field": ("FIELD", "fieldCrews"), "relight": ("RELIGHT", "relightCrews")}
+RUN_CREWS = ("field", "relight")  # sized by run settings, not the town's operations config
 MAX_SEGMENT_EDGES = 4000
+RELIGHT_STEP = 300.0  # seconds; relight state changes are reported in these steps (frames stay exact)
 
 
 def _pts(points) -> list[dict]:
@@ -84,6 +89,7 @@ class _Interval:
     edges: list[int] = field(default_factory=list)
     leak: tuple[int, float] | None = None  # (node, m³/h)
     incident: str = ""
+    premises: list[int] = field(default_factory=list)  # premises off although supplied (gas awaiting relight)
 
 
 class Run:
@@ -102,7 +108,7 @@ class Run:
         self.router = Router(ops.roads, (o["speed_kmh_arterial"], o["speed_kmh_collector"], o["speed_kmh_local"]))
         self.depot_access = access_point(ops.roads, *ops.depot["access"]) if ops.depot["access"] else \
             ops.nearest_access(ops.depot["x"], ops.depot["z"])
-        size = {kind: int(o.get(key, 1)) if key else int(self.settings["fieldCrews"]) for kind, (_, key) in CREWS.items()}
+        size = {kind: int(self.settings[key] if kind in RUN_CREWS else o.get(key, 1)) for kind, (_, key) in CREWS.items()}
         self.crews = {kind: [{"id": f"{prefix}-{k + 1}", "free": -math.inf} for k in range(max(1, size[kind]))]
                       for kind, (prefix, _) in CREWS.items()}
         self.commands = self._normalise(commands)
@@ -339,6 +345,7 @@ class Run:
             valves = self._segment(u, f)
             inc["_valves"] = valves
             out = self._unsupplied(u, set(valves))
+            inc["_relight"] = out
             inc["unsupplied"]["afterIsolation"] = len(out)
             valve_ids = [q["id"] for q in net.equipment if q["kind"] == "valve" and net.edge_index.get(q.get("edgeId"))
                          in set(valves)]
@@ -352,6 +359,50 @@ class Run:
         self._event(restored, "service.restored", "incident", inc["id"], inc, job["id"], {"utility": u})
         self._finish_job(job, restored - arrival)
         self._close_intervals(inc)
+        if u == "gas":
+            self._relight(inc, inc["_relight"], restored, job["id"])
+
+    def _relight(self, inc: dict, pids: list[str], restored: float, cause: str) -> None:
+        """Gas back in the main does not mean gas at the stove: techs visit every shut premise, nearest first, and
+        each premise is supplied again once relit."""
+        ops, s, o = self.ops, self.settings, self.ops.ops
+        rows = nearest_order(ops, [ops.premise_index[p] for p in pids], inc["x"], inc["z"])
+        if not rows:
+            return
+        dwell = 60.0 * float(s["relightMinutes"])
+        speeds = (o["speed_kmh_arterial"], o["speed_kmh_collector"], o["speed_kmh_local"])
+        relit_all = restored
+        crews = max(int(s["relightCrews"]), math.ceil(len(rows) / max(1, int(s["relightPerCrew"]))))
+        while len(self.crews["relight"]) < crews:  # mutual aid joins the pool
+            self.crews["relight"].append({"id": f"RELIGHT-{len(self.crews['relight']) + 1}", "free": -math.inf})
+        for chunk in np.array_split(np.array(rows), max(1, min(crews, len(rows)))):
+            chunk = [int(x) for x in chunk]
+            first = ops.premises[chunk[0]]
+            job = self._job("relight", "relight", restored, access_point(ops.roads, *ops.premise_access[chunk[0]]),
+                            {"x": first["x"], "z": first["z"]}, cause, label=f"Relight {len(chunk)} premises",
+                            incident=inc)
+            got = path_through(ops, chunk, speeds, dwell) if len(chunk) > 1 else None
+            arrive = got[1] if got else [0.0]
+            if got:
+                job.update(mode="drive", walkRoute=_pts(got[0].points), walkTimes=_ts(got[0].times),
+                           walkLength=round(got[0].length_m, 1))
+            job["premiseIds"] = [ops.premise_ids[i] for i in chunk]
+            for i, a in zip(chunk, arrive, strict=True):
+                at = job["arrivalAt"] + a + dwell
+                relit_all = max(relit_all, at)
+                self.intervals.append(_Interval(restored, at, "gas", premises=[i], incident=inc["id"] + ":relight"))
+                self._event(at, "premise.relit", "premise", ops.premise_ids[i], inc, job["id"], {"jobId": job["id"]})
+            work = (arrive[-1] if got else 0.0) + dwell
+            last = chunk[-1]
+            back = self._route(access_point(ops.roads, *ops.premise_access[last]), self.depot_access)
+            job["workSeconds"] = round(work, 3)
+            job["returnStartAt"] = job["arrivalAt"] + work
+            job["endAt"] = job["returnStartAt"] + back.seconds
+            job["returnRoute"], job["returnTimes"] = _pts(back.points), _ts(back.times)
+            job["_crew"]["free"] = job["endAt"]
+            self._event(job["endAt"], "crew.returned", "crew", job["crewId"], inc, job["id"], {"jobId": job["id"]})
+        inc["relitAt"] = relit_all
+        self._event(relit_all, "relight.completed", "incident", inc["id"], inc, cause, {"premises": len(rows)})
 
     def _close_intervals(self, inc: dict) -> None:
         """(Re)write the incident's effect on the networks; a later repair replaces the open-ended version."""
@@ -460,18 +511,25 @@ class Run:
         self._event(job["endAt"], "crew.returned", "crew", job["crewId"], corr, job["id"], {"jobId": job["id"]})
 
     # ---- state -----------------------------------------------------------------------------------------------
-    def state_at(self, t: float) -> tuple[dict[str, np.ndarray], dict[str, dict[int, float]]]:
+    def state_at(self, t: float) -> tuple[dict[str, np.ndarray], dict[str, dict[int, float]], dict[str, np.ndarray]]:
         disabled = {u: np.zeros(len(self.ops.nets[u].a), dtype=bool) for u in UTILITIES}
         leaks: dict[str, dict[int, float]] = {u: {} for u in UTILITIES}
+        off = {u: np.zeros(len(self.ops.premise_ids), dtype=bool) for u in UTILITIES}
         for iv in self.intervals:
             if iv.start <= t < iv.end:
                 disabled[iv.utility][iv.edges] = True
+                off[iv.utility][iv.premises] = True
                 if iv.leak:
                     leaks[iv.utility][iv.leak[0]] = leaks[iv.utility].get(iv.leak[0], 0.0) + iv.leak[1]
-        return disabled, leaks
+        return disabled, leaks, off
 
     def change_times(self) -> list[float]:
-        ts = {iv.start for iv in self.intervals} | {iv.end for iv in self.intervals if math.isfinite(iv.end)}
+        """When the network state changes. Premise-by-premise relights are batched into 5-minute steps."""
+        ts = set()
+        for iv in self.intervals:
+            ts.add(iv.start)
+            if math.isfinite(iv.end):
+                ts.add(math.ceil(iv.end / RELIGHT_STEP) * RELIGHT_STEP if iv.premises else iv.end)
         return sorted(ts)
 
     def _unsupplied(self, u: str, edges: set[int]) -> list[str]:
@@ -503,10 +561,12 @@ class Run:
 
         changes = []
         for t in self.change_times():
-            disabled, leaks = self.state_at(t)
+            disabled, leaks, off = self.state_at(t)
+            out = {u: self.ops.unsupplied(u, disabled[u]) for u in UTILITIES if disabled[u].any()}
             changes.append({
                 "at": round(t, 3), "sequence": run_sequence(self._when(t), date.fromisoformat(self.day), self.tz),
-                "unsupplied": {u: self.ops.unsupplied(u, disabled[u]) for u in UTILITIES if disabled[u].any()},
+                "unsupplied": out,
+                "awaitingRelight": {u: int(off[u].sum()) for u in UTILITIES if off[u].any()},
                 "disabledEdgeIds": {u: [self.ops.nets[u].edge_ids[k] for k in np.flatnonzero(disabled[u])]
                                     for u in UTILITIES if disabled[u].any()},
                 "leaks": {u: [{"nodeId": self.ops.nets[u].node_ids[n], "m3h": q} for n, q in lk.items()]
@@ -521,8 +581,9 @@ class Run:
 
     def frame(self, at: float, *, include_premises: bool = True) -> dict:
         """Complete ``utility-state/1.0`` frame at ``at`` (seconds since local midnight of the run day)."""
-        disabled, leaks = self.state_at(at)
+        disabled, leaks, off = self.state_at(at)
         when = self._when(at)
         return self.ops.frames.frame(when, scenario=self.scenario, sim_id=self.simulation_id,
                                      sequence=run_sequence(when, date.fromisoformat(self.day), self.tz),
-                                     include_premises=include_premises, disabled=disabled, injections=leaks)
+                                     include_premises=include_premises, disabled=disabled, injections=leaks,
+                                     premises_off={u: m for u, m in off.items() if m.any()} or None)

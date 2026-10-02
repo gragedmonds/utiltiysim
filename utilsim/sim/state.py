@@ -102,7 +102,8 @@ class FrameBuilder:
     def frame(self, when: datetime, *, scenario: str = "normal", target: str | None = None,
               sequence: int | None = None, sim_id: str | None = None, include_premises: bool = True,
               disabled: dict[str, np.ndarray] | None = None,
-              injections: dict[str, dict[int, float]] | None = None) -> dict:
+              injections: dict[str, dict[int, float]] | None = None,
+              premises_off: dict[str, np.ndarray] | None = None) -> dict:
         """One complete frame. ``disabled`` (bool mask per utility) opens switches / closes valves on top of the
         built state; ``injections`` adds flow at nodes (a leak). Unsupplied premises are listed per utility."""
         ctx = self.ctx
@@ -113,7 +114,7 @@ class FrameBuilder:
             target = ctx.premise_ids[0]
         if sequence is None:
             sequence = run_sequence(when, local.date(), tz)
-        res = self.fm.flows(hour, scenario, target, disabled=disabled, injections=injections)
+        res = self.fm.flows(hour, scenario, target, disabled=disabled, injections=injections, premises_off=premises_off)
         sim_time = iso_utc(when)
         networks = {}
         for u in ("electric", "water", "gas"):

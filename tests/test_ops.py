@@ -235,3 +235,33 @@ def test_m2c_field_orders_become_crew_jobs_and_field_visits_settle_cases(ayr):
     summary = client.post("/api/m2c/summary", json={"town": "ayr", "settings": slow, "actions": [action],
                                                      "asOf": visit_day}).json()
     assert not summary["warnings"]
+
+
+def test_gas_main_break_relights_every_shut_premise(ayr, ayr_snapshot):
+    net = ayr.nets["gas"]
+    run = tl = None
+    for k in sorted(net.valve_edges):
+        if net.kind[k] != "distribution":
+            continue
+        x, z = net.points[k][0]
+        cmd = {"id": "G", "at": 9 * 3600, "type": "break_asset",
+               "payload": {"id": net.edge_ids[k], "kind": "main", "utility": "gas", "edgeId": net.edge_ids[k],
+                           "x": float(x), "z": float(z)}}
+        run = Run(ayr, [cmd])
+        tl = run.timeline()
+        if tl["incidents"] and tl["incidents"][0]["unsupplied"]["afterIsolation"] >= 3:
+            break
+    inc = tl["incidents"][0]
+    shut = inc["unsupplied"]["afterIsolation"]
+    relights = [j for j in tl["jobs"] if j["kind"] == "relight"]
+    assert relights and sum(len(j["premiseIds"]) for j in relights) == shut
+    assert all(j["crewId"].startswith("RELIGHT") and j["startAt"] >= inc["restoredAt"] for j in relights)
+    relit = {e["entityId"]: e["at"] for e in tl["events"] if e["eventType"] == "premise.relit"}
+    assert len(relit) == shut and min(relit.values()) > inc["restoredAt"]
+    middle = sorted(relit.values())[len(relit) // 2]
+    frame = run.frame(middle + 1)
+    validate_frame(ayr_snapshot, frame)
+    still = set(frame["premises"].get("unsupplied", {}).get("gas", []))
+    assert still and still == {p for p, t in relit.items() if t > middle + 1}
+    assert "unsupplied" not in run.frame(max(relit.values()) + 60)["premises"]
+    assert any(e["eventType"] == "relight.completed" for e in tl["events"])
