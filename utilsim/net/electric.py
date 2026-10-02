@@ -44,6 +44,8 @@ from utilsim.net.corridors import Corridors, RouteCosts, TurnRouter
 from utilsim.net.tables import SECONDARY, THREE_PHASE_KVA, coincidence, conductor_kva, pick_conductor
 from utilsim.sim.demand import design_kva
 
+LARGE_SERVICE_KVA = 150.0  # three-phase services above this design load are 347/600 V
+
 EXPRESS_LANE_M = 1.5  # an express circuit runs this much further out than the line it parallels, per lane
 MAX_TRUNK_PATHS = 48  # trunk branches routed per feeder (the rest of its demand is reached by laterals)
 
@@ -494,7 +496,7 @@ def build_electric(ctx: NetContext) -> Network:
                 design[v] > 0.8 * conductor_kva(pick_conductor(1e9, ec.primary_kv, 1, placement[v]), ec.primary_kv, 1)
             phases[v] = 3 if three else 1
             need = float(design[v])
-        cond[v], circuits[v] = sized(v, need)
+        cond[v], circuits[v] = sized(v, need * ec.conductor_planning_margin)
     for v in order[::-1]:
         p = parent[v]
         if p >= 0 and parent[p] >= 0:
@@ -643,7 +645,8 @@ def build_electric(ctx: NetContext) -> Network:
         n_tx += 1
         fname = fname_of[L.feeder[t]]
         ph = phase_letter.get(t, "A") if not three else "ABC"
-        sec_kv = 0.208 if three else ec.secondary_v / 1000.0
+        # Large three-phase customers take 347/600 V; small ones 120/208 V; houses 120/240 V split-phase.
+        sec_kv = (0.6 if gr["design"] > LARGE_SERVICE_KVA else 0.208) if three else ec.secondary_v / 1000.0
         tx = net.add_node(f"electric-TX-{n_tx:05d}", "transformer", txy, label=kind_lbl, ratingKVA=rating,
                           primaryKV=ec.primary_kv, secondaryKV=sec_kv, phases=3 if three else 1, phase=ph,
                           feeder=fname, mount="pole" if gr["overhead"] else "pad", customers=len(m),
@@ -661,9 +664,12 @@ def build_electric(ctx: NetContext) -> Network:
             else:
                 pts = np.array([txy, prem.row_xy[i], meter_e[i]])
             sec = SECONDARY[0 if kva[i] <= 40 else 1] if gr["overhead"] else SECONDARY[2 if kva[i] <= 50 else 3]
+            amps = float(kva[i]) / (math.sqrt(3) * sec_kv if three else sec_kv)
+            sets = max(1, math.ceil(amps / sec.ampacity_a - 1e-9))  # parallel cable sets for the design current
             net.add_edge("service", tx, mid, pts, placement=place, tier="service", voltageKV=sec_kv, phase=ph,
-                         phases=3 if three else 1, conductor=sec.label, feeder=fname, feederId=fname,
-                         designRole="service", designKVA=round(float(kva[i]), 2))
+                         phases=3 if three else 1, conductor=sec.label if sets == 1 else f"{sets} × {sec.label}",
+                         feeder=fname, feederId=fname, designRole="service", designKVA=round(float(kva[i]), 2),
+                         **({"circuits": sets} if sets > 1 else {}))
     ties = _ties(sg, L, corridors, phases, phase_letter, placement, ec)
     tie_ids: dict[int, list[str]] = {}
     for fa, fb, nodes, pcs, ph in ties:

@@ -35,7 +35,8 @@
         "ids": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
         "electric": {"$ref": "#/$defs/nullableNumbers"},
         "water": {"$ref": "#/$defs/nullableNumbers"},
-        "gas": {"$ref": "#/$defs/nullableNumbers"}
+        "gas": {"$ref": "#/$defs/nullableNumbers"},
+        "voltage": {"$ref": "#/$defs/nullableNumbers", "description": "Service voltage per premise on a 120 V base (ANSI C84.1 Range A is 114-126 V); null when unsupplied."}
       }
     },
     "clock": {
@@ -63,7 +64,9 @@
         "edgeIds": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
         "flows": {"$ref": "#/$defs/nullableNumbers"},
         "sourceFlow": {"type": ["number", "null"]},
-        "enabled": {"type": "array", "items": {"type": "boolean"}}
+        "enabled": {"type": "array", "items": {"type": "boolean"}},
+        "loading": {"$ref": "#/$defs/nullableNumbers", "description": "Electric only: apparent power over thermal capacity per edge, from the radial power flow (null where unknown or not energized)."},
+        "lossesKW": {"type": "number", "description": "Electric only: line and transformer losses (kW)."}
       }
     }
   },

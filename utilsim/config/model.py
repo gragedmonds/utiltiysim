@@ -192,6 +192,9 @@ class ElectricConfig(BaseModel):
                                            advanced=True)
     transformer_max_loading: float = F(1.3, "Allowed peak loading relative to nameplate.", ge=0.8, le=2.0,
                                        advanced=True)
+    conductor_planning_margin: float = F(1.25, "Primary conductors are sized for design load × this margin (winter "
+                                         "peaks, load growth).", ge=1.0, le=2.0,
+                                         effects=["primary conductor sizes", "loading in power flow"], advanced=True)
     max_houses_per_transformer_overhead: int = F(6, "Max houses on a pole-mount transformer.", ge=1, le=20)
     max_houses_per_transformer_underground: int = F(10, "Max houses on a pad-mount transformer.", ge=1, le=25)
     feeder_design_mva: float = F(6.0, "Design peak per feeder.", unit="MVA", ge=1, le=20,

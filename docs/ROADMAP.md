@@ -21,9 +21,10 @@ Done:
   live seasonal demand, frames (`clock.tempC`) and meter-reading conditions.
 - **Run-scoped settings** (`x-applies: run`): process, anomalies, reading, VEE, billing and scenario.
 - **Field movement:** walker and drive-by reading rounds on the operations day, with trajectories.
+- **Radial power flow:** voltage, loading, losses and solar reverse flow in every frame. Back-feed only closes a tie
+  the receiving feeder can carry.
 
 Next:
-- radial power flow: voltage, loading, losses, reverse flow;
 - looped hydraulics: water (HGL, pressure) and gas (P²), to fill today's `null` loop flows;
 - tank and pump control;
 - nightly AMI collection visualised;
@@ -63,14 +64,15 @@ Viewer (Astra's package):
 - Activity sequences explorer;
 - meter-to-cash settings tab rendered from the engine's schema;
 - billing tab from the engine;
-- daytime outage rings.
+- daytime outage rings;
+- main roads leaning commercial;
+- meter-to-cash on the map: reading-round outcomes, the day's cycle, outages feeding meter-to-cash, a VEE scorecard.
 
 Next:
 - road hierarchy and utility corridors ([CORRIDOR_ROUTING_REQUIREMENTS.md](CORRIDOR_ROUTING_REQUIREMENTS.md)):
   electric is done in generator 0.6.0 (corridors, turn-aware trunks, feeder territories, express sections,
   normally-open ties, corridor exports and routing metrics); still open: water/gas backbone-first routing, road
   `hierarchy` overrides and classification provenance, construction-transition rationale beyond `riser` assets;
-- main roads leaning commercial;
 - a visual Activity Sequence builder;
 - real-place import from the UI;
 - hosted 10,000-home towns (chunked snapshots, precomputed base runs).

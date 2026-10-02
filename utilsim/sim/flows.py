@@ -20,6 +20,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from utilsim.sim.shapes import hourly
+from utilsim.sim.voltage import ElecParams, VoltageResult, solve
 
 UTILITIES = ("electric", "water", "gas")
 
@@ -45,6 +46,7 @@ class FlowInputs:
     premise_ids: list[str]
     leak_m3h: float
     monthly: dict[str, np.ndarray] | None = None  # the same per month (12, n), from the weather year
+    elec: ElecParams | None = None  # impedances and ratings for the electric power flow (sim.voltage)
 
     @classmethod
     def from_town(cls, town) -> FlowInputs:
@@ -65,9 +67,12 @@ class FlowInputs:
                                  dtype=np.int64),
                 unit=net.unit)
         monthly = monthly_daily(UsageInputs.from_premises(town.prem), town.cfg)
+        el = town.networks["electric"]
+        elec = ElecParams.from_edges([{**e.attrs, "kind": e.kind, "lengthM": e.length} for e in el.edges],
+                                     [nd.kind for nd in el.nodes])
         return cls(nets, {k: v[6] for k, v in monthly.items()}, np.asarray(town.prem.attrs["occupied"], dtype=bool),
                    np.asarray(town.prem.attrs["has_gas"], dtype=bool), list(town.prem.ids), town.cfg.scenario.leak_m3h,
-                   monthly)
+                   monthly, elec)
 
 
 @dataclass
@@ -77,6 +82,7 @@ class FlowResult:
     homes: dict[str, np.ndarray]
     unit: dict[str, str]
     unsupplied: dict[str, np.ndarray] | None = None  # per commodity, bool per premise (no source reaches its meter)
+    voltage: VoltageResult | None = None  # electric power flow: voltages, loading, losses
 
 
 @dataclass
@@ -179,6 +185,7 @@ class FlowModel:
         d = hourly(daily, inp.occupied, inp.has_gas, hour, scenario, ti, inp.leak_m3h)
         source, edge_flows, unit, unsupplied = {}, {}, {}, {}
         homes = dict(d)
+        voltage = None
         for u, net in inp.nets.items():
             dis = None if disabled is None else disabled.get(u)
             cl = None if closed is None else closed.get(u)
@@ -212,4 +219,10 @@ class FlowModel:
             source[u] = float(sum(tot[int(s)] for s in net.sources))
             edge_flows[u] = ef
             unit[u] = net.unit
-        return FlowResult(source, edge_flows, homes, unit, unsupplied)
+            if u == "electric" and inp.elec is not None:
+                load = np.zeros(net.n_nodes)
+                load[m] = np.where(lost, 0.0, homes["loadKW"])[net.meter[m]]
+                for lvl in reversed(f.levels[1:]):
+                    np.add.at(load, f.parent[lvl], load[lvl])
+                voltage = solve(inp.elec, f, tot, load, net.meter, len(inp.premise_ids))
+        return FlowResult(source, edge_flows, homes, unit, unsupplied, voltage)

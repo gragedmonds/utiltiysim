@@ -221,6 +221,13 @@ time), `stateChanges` (times where supply changes, with unsupplied premise ids, 
 null if still out at the end of the day; the meter-to-cash run's `outages`), `reads`, `warnings`.
 
 Frames from `/api/sim/frame` add `premises.unsupplied` (`{electric: [premiseId…], …}`) when anyone is without supply.
+Every frame also carries the radial power flow: `networks.electric.loading` per edge (apparent power over capacity),
+`networks.electric.lossesKW`, and `premises.voltage` (service voltage on a 120 V base, null when unsupplied).
+
+Back-feed closes a tie only if the feeder picking up the load stays within `tieMaxLoading` (1.3, the emergency
+rating) and every customer keeps at least `tieMinVoltage` (110 V), checked hourly across the repair. Otherwise the
+incident lists `tiesDeclined` and a `backfeed.declined` event explains why. An accepted tie reports its `maxLoading`
+and `minVoltage`.
 
 **Determinism:** the same town, day, settings and commands give byte-identical timelines and frames. Commands run in
 time order and nothing decides using a later command, so **appending a command never changes events, jobs or routes

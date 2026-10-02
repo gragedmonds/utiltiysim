@@ -54,6 +54,8 @@ DEFAULTS = {
     "fieldCrews": 2,  # meter shop crews working meter-to-cash field orders
     "tieBackfeed": True,  # close a normally-open tie to restore customers downstream of an isolated fault
     "tieSwitchMinutes": 6,
+    "tieMaxLoading": 1.3,  # back-feed only if the receiving feeder stays within its emergency rating …
+    "tieMinVoltage": 110.0,  # … and every customer keeps at least this (V on a 120 V base, ANSI Range B)
     "relightCrews": 4,  # gas techs relighting appliances after a gas main is restored (at least)
     "relightPerCrew": 40,  # more crews (mutual aid) when an outage is large
     "relightMinutes": 10,
@@ -381,25 +383,52 @@ class Run:
         net = self.ops.nets["electric"]
         dis = np.zeros(len(net.a), dtype=bool)
         dis[f] = True
-        best = None
+        at = isolated + 60.0 * float(self.settings["tieSwitchMinutes"])
+        if at >= repaired:
+            return
+        options = []
         for k in sorted(net.tie_edges):
             cl = np.zeros(len(net.a), dtype=bool)
             cl[k] = True
             out = self.ops.unsupplied("electric", dis, cl)
-            if len(out) < len(still) and (best is None or len(out) < len(best[1])):
-                best = (k, out)
+            if len(out) < len(still):
+                options.append((len(out), k, cl, out))
+        best, declined = None, []
+        for _, k, cl, out in sorted(options, key=lambda o: (o[0], o[1])):  # most restored first
+            loading, low = self._backfeed_check(dis, cl, at, repaired)
+            if loading <= float(self.settings["tieMaxLoading"]) and low >= float(self.settings["tieMinVoltage"]):
+                best = (k, out, loading, low)
+                break
+            declined.append({"tieEdgeId": net.edge_ids[k], "maxLoading": round(loading, 3), "minVoltage": round(low, 1)})
+        if declined:
+            inc["tiesDeclined"] = declined
+            self._event(at, "backfeed.declined", "incident", inc["id"], inc, cause,
+                        {"ties": declined, "reason": "the receiving feeder would exceed its emergency rating or "
+                                                     "customers would drop below the voltage floor"})
         if best is None:
             return
-        k, out = best
-        at = isolated + 60.0 * float(self.settings["tieSwitchMinutes"])
-        if at >= repaired:
-            return
+        k, out, loading, low = best
         inc["unsupplied"]["afterBackfeed"] = len(out)
-        inc["tie"] = {"edgeId": net.edge_ids[k], "closedAt": at, "openedAt": repaired}
+        inc["tie"] = {"edgeId": net.edge_ids[k], "closedAt": at, "openedAt": repaired,
+                      "maxLoading": round(loading, 3), "minVoltage": round(low, 1)}
         self.intervals.append(_Interval(at, repaired, "electric", closed=[k], incident=inc["id"] + ":tie"))
         self._event(at, "tie.closed", "incident", inc["id"], inc, cause,
                     {"tieEdgeId": net.edge_ids[k], "restored": len(still) - len(out), "stillUnsupplied": len(out)})
         self._event(repaired, "tie.opened", "incident", inc["id"], inc, cause, {"tieEdgeId": net.edge_ids[k]})
+
+    def _backfeed_check(self, dis: np.ndarray, cl: np.ndarray, start: float, end: float) -> tuple[float, float]:
+        """Worst primary loading and lowest service voltage with a tie closed, hourly across the back-feed window."""
+        net, fm = self.ops.nets["electric"], self.ops.flow_model
+        primary = np.array([kd not in ("service", "transformer", "supply") for kd in net.kind])
+        month = date.fromisoformat(self.day).month
+        worst, low = 0.0, math.inf
+        for t in np.arange(start, end, 3600.0).tolist() + [end]:
+            v = fm.flows(t / 3600.0 % 24.0, month=month, disabled={"electric": dis}, closed={"electric": cl}).voltage
+            if v is None:
+                return 0.0, math.inf
+            worst = max(worst, float(np.nanmax(np.where(primary, v.loading, np.nan), initial=0.0)))
+            low = min(low, float(np.nanmin(v.premise_v, initial=math.inf)))
+        return worst, low
 
     def _relight(self, inc: dict, pids: list[str], restored: float, cause: str) -> None:
         """Gas back in the main does not mean gas at the stove: techs visit every shut premise, nearest first, and

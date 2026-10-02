@@ -136,6 +136,10 @@ class FrameBuilder:
             networks[u] = {"unit": UNITS[u], "edgeIds": ctx.edge_ids[u], "flows": _clean(flows),
                            "sourceFlow": round(float(src), 4) if np.isfinite(src) else None,
                            "enabled": [bool(x) for x in enabled]}
+            if u == "electric" and res.voltage is not None and scenario != "substation_outage":
+                # Radial power flow (sim.voltage): apparent power over capacity per edge, and total losses.
+                networks[u]["loading"] = _clean(np.where(enabled, res.voltage.loading, np.nan), 3)
+                networks[u]["lossesKW"] = round(res.voltage.losses_kw, 2)
         frame = {"schemaVersion": STATE_SCHEMA_VERSION, "townId": ctx.id,
                  "simulationId": sim_id or simulation_id(ctx, scenario, local.date().isoformat(), target),
                  "topologyRevision": ctx.topology, "indexRevision": ctx.index, "sequence": int(sequence),
@@ -147,6 +151,8 @@ class FrameBuilder:
             for u in ("electric", "water", "gas"):
                 v = np.where(ctx.served[u], res.homes[u], np.nan)
                 prem[u] = _clean(v, 5)
+            if res.voltage is not None and scenario != "substation_outage":
+                prem["voltage"] = _clean(res.voltage.premise_v, 1)  # service voltage on a 120 V base
             lost = {u: [ctx.premise_ids[i] for i in np.flatnonzero(m & ctx.served[u])]
                     for u, m in (res.unsupplied or {}).items() if (m & ctx.served[u]).any()}
             if lost:

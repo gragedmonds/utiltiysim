@@ -21,7 +21,8 @@ continuity (corridors, then local streets) and offsets are taken relative to the
 | Transformer sizes | 25, 50, 75, 100, 167 kVA (1φ); 75–2,500 kVA pads (3φ) for commercial, school, industry |
 | Overhead vs underground | per road edge (so construction changes only at junctions, with a `riser` at each change): districts built before 1978 overhead (poles every 42 m), arterials overhead before 2000; a street takes the older of the districts on its two sides |
 | Three-phase mains | every trunk and express section; laterals with subtree > 150 customers, any 3φ customer, any collector/arterial, or load beyond 1φ capacity |
-| Conductors | OH ACSR #2 / 1/0 / 4/0 / 336 / 477 / 795; UG AL 1/0 / 4/0 / 500 / 750 / 1000 (ampacity, R, X tabled) |
+| Conductors | OH ACSR #2 / 1/0 / 4/0 / 336 / 477 / 795; UG AL 1/0 / 4/0 / 500 / 750 / 1000 (ampacity, R, X tabled). Primary pieces are sized for design load × 1.25 (`conductor_planning_margin`: winter peaks, load growth) |
+| Services | houses 120/240 V split-phase (1/0 or 4/0 triplex overhead, 4/0 or 350 kcmil URD underground); three-phase customers 120/208 V, or 347/600 V above 150 kVA design load; parallel sets (`N × …`) until the design current fits |
 | Shared corridors | where a piece carries more than the largest cable can (the substation getaway and the street feeders share before they part), the largest cable runs in parallel: `parallelCables`, a duct bank underground or a multi-circuit pole line overhead |
 | Corridors | chains of arterial/collector road edges paired at each junction by heading continuity (≤ 35°, or ≤ 55° when both carry the same name); exported as `networks.electric.corridors` and `corridorId` on roads and edges |
 | Feeders | per substation max(2, ⌈CF·ΣP / 6 MVA⌉, ⌈customers / 1,200⌉), each its own circuit with a getaway cable and a recloser at its head; fuses at single-phase lateral taps |
@@ -32,6 +33,17 @@ continuity (corridors, then local streets) and offsets are taken relative to the
 | Substations | one per 25 MVA of town design load; 115 kV backbone in-and-out between substations |
 | Ties | normally-open (`normallyOpen: true`, `enabled: false`), one per pair of neighbouring feeders on a street piece between them: both ends three-phase first, then farthest along both feeders, then shortest. A feeder touching no other gets the shortest new line (≤ 800 m, `newLine: true`) to the nearest one |
 | Exceptions | trunk sections on local streets are listed in `meta.routingExceptions` with the reason (no corridor reaches the territory, or the trunk bridges corridors) |
+
+**Power flow** (`utilsim/sim/voltage.py`, every frame): linearised DistFlow on the energized radial forest.
+- Each edge drops `factor · (P·R + Q·X) / (1000 · V²)` per unit, with R and X from the tables, divided by parallel
+  circuits.
+- Single-phase primary uses line-to-neutral kV with factor 2, and services use 0.24 kV with factor 2.
+- Transformers drop `(P·1.1 % + Q·1.6 %)` on their rating.
+- The substation tap changer holds 1.03 pu. Loads run at power factor 0.95, and rooftop solar nets against load, so
+  reverse flow raises voltage.
+- Frames report `loading` per electric edge (S / capacity), `lossesKW`, and `premises.voltage` on a 120 V base.
+- On Ayr, a typical July evening stays within ANSI Range A (114–126 V) with losses near 3 %. A January evening
+  pushes transformers serving electric-heat streets past nameplate; the primary stays within rating.
 
 Routing metrics (`stats.electricRouting`, `utilsim.net.corridors.routing_metrics`): trunk km by road class and the
 corridor share, severe turns (≥ 60°) and corridor changes per trunk km, hierarchy-down/up and overhead↔underground
