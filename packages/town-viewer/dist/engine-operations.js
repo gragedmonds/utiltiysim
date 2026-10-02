@@ -27,15 +27,30 @@ export class EngineOperations{
  }
  // Operations settings from Configuration (crews, response times, back-feed limits); only what differs from the
  // engine defaults is sent, so the engine's defaults stay authoritative.
- setSettings(s){this.settings=s&&Object.keys(s).length?s:null;try{this.storage?.setItem(OPS_KEY+this.town.id,JSON.stringify(this.settings));}catch{}return this.refresh();}
+ setSettings(s){this.settings=s&&Object.keys(s).length?s:null;try{this.storage?.setItem(OPS_KEY+this.town.id,JSON.stringify(this.settings));}catch{}this.dropAhead();return this.refresh();}
  // ?town= makes the defaults this town's own (its crews, incident rates).
  async schema(){if(!this._schema){const r=await fetch(this.api+'/sim/settings/schema?town='+encodeURIComponent(this.townRef));if(!r.ok)throw Error('Engine '+r.status);this._schema=await r.json();}return this._schema;}
  // The meter-to-cash run (settings, actions) rides along so the day's field orders arrive as crew jobs.
  body(extra={}){const m2c=this.m2c();return JSON.stringify({town:this.townRef,date:this.date,commands:this.commands,...(this.settings?{settings:this.settings}:{}),...(m2c?{m2c}:{}),...extra});}
- async post(path,extra){const r=await fetch(this.api+path,{method:'POST',headers:{'Content-Type':'application/json'},body:this.body(extra)});if(!r.ok){let detail='';try{detail=(await r.json()).detail;}catch{}throw Error(`Engine ${r.status}${detail?': '+(typeof detail==='string'?detail:JSON.stringify(detail)):''}`);}return r.json();}
+ post(path,extra){return this.send(path,this.body(extra));}
+ async send(path,body){const r=await fetch(this.api+path,{method:'POST',headers:{'Content-Type':'application/json'},body});if(!r.ok){let detail='';try{detail=(await r.json()).detail;}catch{}throw Error(`Engine ${r.status}${detail?': '+(typeof detail==='string'?detail:JSON.stringify(detail)):''}`);}return r.json();}
  // Commands are appended at the current sim time (never earlier than the last one), then the timeline is refreshed.
- command(type,payload){const at=Math.max(this.time,this.commands.at(-1)?.at??0);const cmd={id:'CMD-'+(++this.sequence),at:Math.round(at*1000)/1000,type,payload};this.commands.push(cmd);return this.refresh().then(()=>cmd);}
- async refresh(){const ticket=++this.request;try{const tl=await this.post('/sim/timeline');if(ticket<this.applied)return;this.applied=ticket;this.apply(tl);this.error=null;}catch(e){this.error=e.message;throw e;}finally{this.onChange(this);}}
+ command(type,payload){const at=Math.max(this.time,this.commands.at(-1)?.at??0);const cmd={id:'CMD-'+(++this.sequence),at:Math.round(at*1000)/1000,type,payload};this.commands.push(cmd);this.dropAhead();return this.refresh().then(()=>cmd);}
+ refresh(){return this.adopt(this.post('/sim/timeline'));}
+ // One timeline request is current; an older reply that lands late is dropped.
+ async adopt(pending){const ticket=++this.request;try{const tl=await pending;if(ticket<this.applied)return;this.applied=ticket;this.apply(tl);this.error=null;}catch(e){this.error=e.message;throw e;}finally{this.onChange(this);}}
+ // Tomorrow's timeline, requested ahead of midnight so the playing clock rolls over without a pause: the request
+ // `refresh` would make for that day with no commands. It is kept with its request body (date, settings, m2c context,
+ // seed): if any of those change, or a command is issued, it is dropped and asked for again. Checked every ~2 s.
+ ensureAhead(date,now=0){const a=this.ahead;if(a&&a.date===date&&(a.failed?now-a.failed<10000:now-a.checked<2000))return a.promise;const body=this.body({date,commands:[]});if(a&&a.date===date&&a.body===body&&!a.failed){a.checked=now;return a.promise;}
+  const entry=this.ahead={date,body,tl:null,checked:now,failed:0};entry.promise=this.send('/sim/timeline',body).then(tl=>{entry.tl=tl;return tl;},e=>{entry.failed=now||1;throw e;});entry.promise.catch(()=>{});return entry.promise;}
+ prefetched(date){const a=this.ahead;return a&&a.date===date&&a.tl&&a.body===this.body({date,commands:[]})?a.tl:null;}
+ dropAhead(){this.ahead=null;}
+ // Midnight with the next day already here: start it at once (no request, no await). Its command list starts empty.
+ rollTo(date){const tl=this.prefetched(date);if(!tl)return false;this.ahead=null;this.date=date;this.commands=[];this.sequence=0;this.applied=++this.request;this.apply(tl);this.error=null;this.onChange(this);return true;}
+ // The run days between two dates, each with no commands (POST /api/sim/days): their interruptions reach the
+ // meter-to-cash run when the map advances a week or a month.
+ days(from,to){return this.post('/sim/days',{from,to,date:undefined,commands:undefined});}
  apply(tl){if(tl.meterToCash&&this.cycle)tl={...tl,meterToCash:this.cycle(tl.meterToCash,tl)};this.timeline=tl;this.simulationId=tl.simulationId;this.incidents=tl.incidents.map(i=>({...i,restoredAt:i.restoredAt??Infinity}));this.jobs=tl.jobs;this.events=tl.events;this.reads=tl.reads;this.stateChanges=tl.stateChanges;if(tl.depot)this.depot={x:tl.depot.x,z:tl.depot.z};}
  async breakAsset(target){const cmd=await this.command('break_asset',{id:target.id,kind:target.kind==='pole'?'pole':'main',utility:target.utility||'electric',edgeId:target.edgeId,x:target.x,z:target.z});return this.incidents.find(i=>i.commandId===cmd.id)||null;}
  async dispatch(target,incident=null){const cmd=await this.command('dispatch',incident?{incidentId:incident.id}:{targetId:target.id});const job=incident?this.jobs.find(j=>j.incidentId===incident.id):this.jobs.filter(j=>j.premiseId===target.id).at(-1);if(!job)throw Error(this.timeline?.warnings?.at(-1)||'The engine did not create a job.');return job;}
@@ -51,9 +66,11 @@ export class EngineOperations{
  // Changes at or before `time` that the current frame does not reflect yet (the engine's state change list).
  stateKey(time=this.time){let k=-1;for(let i=0;i<this.stateChanges.length;i++)if(this.stateChanges[i].at<=time)k=i;return k+':'+this.commands.length;}
  async frame(at,premises=true){return this.post('/sim/frame',{at,premises});}
- reset(){this.commands=[];this.sequence=0;return this.refresh();}
- // A different run day is a different run: its command list starts empty.
- setDate(date){if(date===this.date)return Promise.resolve(false);const had=this.commands.length;this.date=date;this.commands=[];this.sequence=0;return this.refresh().then(()=>had>0);}
+ reset(){this.commands=[];this.sequence=0;this.dropAhead();return this.refresh();}
+ // A different run day is a different run: its command list starts empty. A prefetch of that day still in flight
+ // (midnight came before it landed) is awaited instead of a second request.
+ setDate(date){if(date===this.date)return Promise.resolve(false);const had=this.commands.length;this.date=date;this.commands=[];this.sequence=0;const a=this.ahead;this.ahead=null;
+  const pending=a&&a.date===date&&!a.failed&&a.body===this.body({commands:[]})?a.promise:null;return this.adopt(pending||this.post('/sim/timeline')).then(()=>had>0);}
  export(){return {schemaVersion:'viewer-engine-operations/1.0',townId:this.town.id,town:this.townRef,commands:this.commands,timeline:this.timeline||null};}
 }
 // Who an incident leaves without supply, as its card says it: an electric fault trips customers out at once; a water or
@@ -68,3 +85,13 @@ export function incidentImpact(i,time=0){const u=i?.unsupplied||{},n=x=>Number(x
  return `Leaking · customers keep ${what} until a crew isolates it${u.afterIsolation?` (then ${who(u.afterIsolation)} lose supply)`:''}`;}
 // The next job of the day that has not started yet (a reading round, a field order), for an empty operations list.
 export function nextJob(jobs,time){return (jobs||[]).filter(j=>j.startAt>time).sort((a,b)=>a.startAt-b.startAt)[0]||null;}
+// Run-day arithmetic (YYYY-MM-DD). A month on is the same day of the next month, clamped to its length (31 Jan →
+// 28 Feb). The simulated year ends on 31 December 2026; `clampDay` holds a day there.
+export const YEAR_END='2026-12-31';
+export const addDays=(day,n)=>new Date(Date.parse(day+'T12:00:00Z')+n*86400000).toISOString().slice(0,10);
+export function addMonths(day,n=1){const [y,m,d]=day.split('-').map(Number),t=new Date(Date.UTC(y,m-1+n,1)),last=new Date(Date.UTC(t.getUTCFullYear(),t.getUTCMonth()+1,0)).getUTCDate();t.setUTCDate(Math.min(d,last));return t.toISOString().slice(0,10);}
+export const clampDay=(day,end=YEAR_END)=>day>end?end:day;
+export const dayLabel=day=>new Intl.DateTimeFormat('en-GB',{day:'numeric',month:'short',timeZone:'UTC'}).format(new Date(day+'T12:00:00Z'));
+// When to ask for tomorrow's timeline: past 22:00, or earlier when the day has under 8 real seconds left at this
+// clock speed (at 14,400× a day lasts 6 s, so the request goes out as the day starts).
+export const prefetchDue=(t,speed)=>t>=79200||(86400-t)/Math.max(1,speed)<=8;

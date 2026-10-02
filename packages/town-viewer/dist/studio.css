@@ -470,3 +470,10 @@ details.schema-group>.schema-field:last-child{margin-bottom:10px}
 .ws-col-small{font-size:12px}.gui-case-content>.clarification-table-toolbar{flex-wrap:wrap}.ws-col-table .fiori-link,.ws-col-small .fiori-link{white-space:nowrap}
 .ws-col-more{max-width:190px}.clarification-sidebar nav+div{margin-top:22px}
 @media(max-width:720px){.fiori-shell .ws-col-table{min-width:900px}.ws-period{margin-left:6px}}
+/* Time bar fast-forward (+1 day, +1 week, +1 month) as one group; on a phone it takes a second row of the bar. */
+.time-steps{display:flex;gap:4px;flex-shrink:0}.time-steps:not(:has(button:not([hidden]))){display:none}
+#next-week,#next-month{min-height:34px;padding:6px 10px;font:600 12px Inter,ui-sans-serif,sans-serif;flex-shrink:0;border:1px solid #d1dcc9;background:#fff;border-radius:7px;color:#2f4a3d;white-space:nowrap;cursor:pointer}
+#next-week:hover,#next-month:hover{background:#eef3e7}
+@media(max-width:600px){.time-bar:has(.time-steps button:not([hidden])){flex-wrap:wrap;row-gap:6px}.time-steps{flex-basis:100%;gap:6px}.time-steps button{flex:1;min-height:30px;padding:5px 4px}
+ /* The bar is 32px taller with that row: what sits above it moves up by as much. */
+ .focus-layout:has(.time-steps button:not([hidden])) .inspector{bottom:140px}.focus-layout:has(.time-steps button:not([hidden])) .operations-panel{bottom:128px}.focus-layout:has(.time-steps button:not([hidden])) .performance-panel{bottom:131px}body:has(.focus-layout .time-steps button:not([hidden])) #toast{bottom:142px}}
