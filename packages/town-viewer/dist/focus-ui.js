@@ -13,9 +13,12 @@ const paths={
  close:'<path d="m6 6 12 12M6 18 18 6"/>',back:'<path d="m10 5-7 7 7 7M3 12h18"/>',
  upload:'<path d="M12 16V3m-5 5 5-5 5 5M3 15v6h18v-6"/>',
  download:'<path d="M12 3v13m-5-5 5 5 5-5M3 15v6h18v-6"/>',
- book:'<path d="M12 5C9 3 6 3 3 4v16c3-1 6-1 9 1 3-2 6-2 9-1V4c-3-1-6-1-9 1Zm0 0v16"/>'
+ book:'<path d="M12 5C9 3 6 3 3 4v16c3-1 6-1 9 1 3-2 6-2 9-1V4c-3-1-6-1-9 1Zm0 0v16"/>',
+ inbox:'<path d="M3 13h5l1.5 3h5L16 13h5M5 5h14l2 8v6H3v-6Z"/>'
 };
-export function installFocusUI({getContext,onSettings,onScenario}){
+// Full-page views over the map, by hash: #/settings[/tab] and #/worklists[/QUEUE][/case/ID].
+const PAGES=[{id:'settings-page',re:/^#\/settings(?:\/(town|scenarios|data|m2c))?$/},{id:'worklists-page',re:/^#\/worklists(?:\/[A-Z_]+)?(?:\/case\/[\w.:-]+)?$/}];
+export function installFocusUI({getContext,onSettings,onScenario,onWorklists=()=>{},onSettingsTab=()=>{}}){
  const $=id=>document.getElementById(id), pairs=[['layers-toggle','layers-drawer'],['scenario-toggle','scenario-popover'],['data-toggle','data-popover'],['search-toggle','search-popover']];
  document.querySelectorAll('[data-icon]').forEach(el=>{el.insertAdjacentHTML('afterbegin',`<svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[el.dataset.icon]||''}</svg>`);});
  function closeTools(){for(const [button,panel] of pairs){$(panel).hidden=true;$(button).setAttribute('aria-expanded','false');}}
@@ -36,18 +39,22 @@ export function installFocusUI({getContext,onSettings,onScenario}){
   const supplied=config?.incidents;if(supplied){const pre=document.createElement('pre');pre.textContent=JSON.stringify(supplied,null,2);$('frequency-fields').append(pre);}
   $('frequency-note').textContent=supplied?'Supplied incident configuration is shown below. Editing needs the engine schema and update API.':'Frequency controls will be enabled when the engine provides its configuration schema and update endpoint.';
  }
- function route(){const match=window.location.hash.match(/^#\/settings(?:\/(town|scenarios|data))?$/),open=!!match,tab=match?.[1]||'town';
-  $('settings-page').hidden=!open;document.querySelector('.workspace').inert=open;document.querySelector('.topbar').inert=open;onSettings(open);
-  if(open){closeTools();$('performance-panel').open=false;refresh();document.querySelectorAll('[data-settings-pane]').forEach(el=>el.hidden=el.dataset.settingsPane!==tab);document.querySelectorAll('[data-settings-tab]').forEach(el=>{if(el.dataset.settingsTab===tab)el.setAttribute('aria-current','page');else el.removeAttribute('aria-current');});$('settings-back').focus();}
+ let current=null;
+ function route(){const hash=window.location.hash,page=PAGES.find(p=>p.re.test(hash))?.id||null,open=!!page,was=current;current=page;
+  for(const p of PAGES)$(p.id).hidden=p.id!==page;document.querySelector('.workspace').inert=open;document.querySelector('.topbar').inert=open;onSettings(open);
+  if(page==='settings-page'){const tab=hash.match(PAGES[0].re)[1]||'town';closeTools();$('performance-panel').open=false;refresh();document.querySelectorAll('[data-settings-pane]').forEach(el=>el.hidden=el.dataset.settingsPane!==tab);document.querySelectorAll('[data-settings-tab]').forEach(el=>{if(el.dataset.settingsTab===tab)el.setAttribute('aria-current','page');else el.removeAttribute('aria-current');});onSettingsTab(tab);if(was!==page)$('settings-back').focus();}
+  if(page==='worklists-page'){closeTools();$('performance-panel').open=false;if(was!==page)$('worklists-back').focus();}
+  onWorklists(page==='worklists-page',hash);
  }
  function settings(tab='town'){window.location.hash='/settings/'+tab;route();}
- function map(){window.location.hash='/town';route();$('settings-toggle').focus();}
- $('settings-toggle').onclick=()=>settings();$('settings-back').onclick=map;$('scenario-settings').onclick=()=>settings('scenarios');
+ function map(){const from=current;window.location.hash='/town';route();$(from==='worklists-page'?'worklists-toggle':'settings-toggle').focus();}
+ function worklists(){window.location.hash='/worklists';route();}
+ $('settings-toggle').onclick=()=>settings();$('settings-back').onclick=map;$('worklists-toggle').onclick=worklists;$('worklists-back').onclick=map;$('scenario-settings').onclick=()=>settings('scenarios');
  document.querySelectorAll('[data-settings-tab]').forEach(el=>el.onclick=()=>settings(el.dataset.settingsTab));
  document.querySelectorAll('[data-scenario-preset]').forEach(el=>el.onclick=()=>{onScenario(el.dataset.scenarioPreset);map();});
  $('settings-load-snapshot').onclick=()=>$('snapshot-file').click();
  for(const id of ['load-engine-example','load-snapshot-btn','export-btn','requirements-btn'])$(id).addEventListener('click',closeTools);
- document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeTools();if(!$('settings-page').hidden)map();}});
+ document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeTools();if(current&&!e.target.closest?.('input,select,textarea'))map();}});
  window.addEventListener('hashchange',route);route();
- return {refresh,map,closeTools};
+ return {refresh,map,closeTools,settings,worklists};
 }
