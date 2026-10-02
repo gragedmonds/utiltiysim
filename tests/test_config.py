@@ -62,3 +62,24 @@ def test_groups_say_whether_a_change_regenerates_the_town():
     base = SimConfig()
     assert base.model_copy(update={"scenario": base.scenario.model_copy(update={"hour": 19.0})}).town_id() == \
         base.town_id()
+
+
+def test_fields_say_when_a_run_setting_overrides_them_or_they_are_not_modelled():
+    from utilsim.ops.timeline import DEFAULTS, TOWN_SETTINGS
+
+    defs = config_schema()["$defs"]
+    hinted = {(g, f): p for g, d in defs.items() if d.get("x-group") for f, p in d["properties"].items()
+              if "x-status" in p or "x-run-setting" in p}
+    status = {k: p["x-status"] for k, p in hinted.items() if "x-status" in p}
+    assert status == {("HousingConfig", "semi_share"): "not-modelled",
+                      ("AmiConfig", "battery_life_years"): "not-modelled",
+                      ("AmiConfig", "comm_fail_rate"): "deprecated", ("ProcessConfig", "sequences"): "not-modelled",
+                      ("OperationsConfig", "drive_by_radius_m"): "not-modelled",
+                      ("OperationsConfig", "walker_meters_per_hour"): "deprecated"}
+    assert all(hinted[k]["x-status-reason"] for k in status)
+    assert hinted[("AmiConfig", "comm_fail_rate")]["x-deprecated"] == "reading.ami_missed_read"
+    runs = {k: p["x-run-setting"] for k, p in hinted.items() if "x-run-setting" in p}
+    assert set(runs.values()) <= set(DEFAULTS) and len(runs) == len(TOWN_SETTINGS) == 18
+    assert runs[("IncidentConfig", "manual_only")] == "randomIncidents"
+    assert runs[("WeatherConfig", "storm_days_per_year")] == "stormDaysPerYear"
+    assert len([f for g, f in runs if g == "IncidentConfig"]) == 7  # every incident rate is a live run default

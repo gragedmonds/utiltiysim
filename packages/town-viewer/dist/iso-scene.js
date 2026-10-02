@@ -1,0 +1,210 @@
+// The town map as a pre-baked isometric picture drawn from Astra's pixel art (iso/atlas.webp), in place of the 3D
+// models. Nothing is invented here: every house, facility, pole, pad transformer, hydrant, road, lot, park and network
+// line stands where the engine generated it, and iso-art.js picks each one's sprite from engine fields.
+//
+// The static picture (ground, lots, roads, networks, buildings, trees, poles and wires, outage rings, night windows,
+// labels) is baked into an off-screen canvas for the current view and zoom, with a margin for panning. It is re-baked
+// only when the view, the zoom or the engine state behind it changes. Each frame copies the bake and draws what
+// moves: crews, workers, incidents, read pulses, case markers, the selection and the hover label.
+//
+// IsoScene answers the same calls as the 3D TownScene, so the app, lenses, operations and workspace work unchanged.
+import {UTILITIES as UTILS,PALETTE,traceConnection,geometryOffset} from './adapter.js';
+import {bindPropertyPicking,bindContextPicking} from './picking.js';
+import {FrameMonitor} from './performance.js';
+import {PROFILES} from './quality.js';
+import {planDressing} from './town-dressing.js';
+import {READ_COLOR,PULSE_SECONDS,cycleGroups} from './operations-view.js';
+import {switchingIntervals,switchingAt,SWITCH_COLORS} from './switching-marks.js';
+import {streetWidth} from './roads.js';
+import {VIEWS,MATRIX,STUDY,facingOf,premiseArt,facilityArt,crewArt,spriteName,topRotation,project,unproject,hashUnit} from './iso-art.js';
+
+const hex=n=>'#'+n.toString(16).padStart(6,'0');
+const COLOR=Object.fromEntries(UTILS.map(u=>[u,hex(PALETTE[u])]));
+const CASING={electric:'#7a5410',water:'#0b5a63',gas:'#5c4387'};
+const UNSERVED='#8a948a',LOADING_BASE='#7f8c84',LOW_VOLTAGE='#8b5cf6',DEAD='#a1a6a2';
+const WIRE_H=9.6,DROP_H=4.2,MARGIN=.2,MAX_SCALE=34,LOD=4; // LOD: the small atlas is a quarter size
+const RING={electric:2.6,water:3.4,gas:4.2};
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+// Where the town actually is (premises and facilities), so the overview frames it rather than the generator's bounds.
+function contentExtent(t){let minX=Infinity,maxX=-Infinity,minZ=Infinity,maxZ=-Infinity;const add=(x,z)=>{if(x<minX)minX=x;if(x>maxX)maxX=x;if(z<minZ)minZ=z;if(z>maxZ)maxZ=z;};for(const h of t.premises)add(h.x,h.z);for(const f of t.facilities||[])add(f.x,f.z);if(!Number.isFinite(minX))return t.bounds;const pad=90;return {minX:minX-pad,maxX:maxX+pad,minZ:minZ-pad,maxZ:maxZ+pad};}
+// True within `d` metres of a premise or a street: street trees and gardens, not the empty land round the town.
+function nearTown(t,d){const cells=new Set(),key=(x,z)=>Math.floor(x/d)+':'+Math.floor(z/d);for(const h of t.premises)cells.add(key(h.x,h.z));for(const r of t.roads||[])for(let i=1;i<r.points.length;i++){const a=r.points[i-1],b=r.points[i],n=Math.ceil(Math.hypot(b.x-a.x,b.z-a.z)/(d/2));for(let k=0;k<=n;k++)cells.add(key(a.x+(b.x-a.x)*k/n,a.z+(b.z-a.z)*k/n));}return (x,z)=>{const i=Math.floor(x/d),j=Math.floor(z/d);for(let a=-1;a<=1;a++)for(let b=-1;b<=1;b++)if(cells.has((i+a)+':'+(j+b)))return true;return false;};}
+// A soft warm light: lit windows at night, drawn per supplied premise (an outage leaves its houses dark).
+function glowSprite(rgb){const c=document.createElement('canvas');c.width=c.height=48;const g=c.getContext('2d'),r=g.createRadialGradient(24,24,0,24,24,24);r.addColorStop(0,`rgba(${rgb},.95)`);r.addColorStop(.35,`rgba(${rgb},.45)`);r.addColorStop(1,`rgba(${rgb},0)`);g.fillStyle=r;g.fillRect(0,0,48,48);return c;}
+const VEHICLE_W={bucket_truck:11,water_truck:12,gas_truck:9.5,meter_van:8.5};
+// Where an engine facility without its own premise is drawn, and how big.
+const FACILITY_W={water_tower:[26,17],substation:[0,0],city_gate:[0,0],pump_station:[0,0],depot:[0,0],industrial:[0,0]};
+
+export class IsoScene{
+ constructor(container,onSelect,quality='full'){
+  this.kind='iso';this.el=container;this.onSelect=onSelect;this.quality=PROFILES[quality]||PROFILES.full;this.performanceMonitor=new FrameMonitor();this.benchmark=null;
+  this.layers={electric:true,water:false,gas:false};this.xray=true;this.play=true;this.dressingVisible=this.quality.streetscape;this.houseDetailMode=this.quality.houseDetail;
+  this.view='ne';this.lastIsoView='ne';this.scale=1;this.baseScale=1;this.pan=[0,0];this.width=1;this.height=1;this.dpr=1;this.dirty=true;this.hits=[];this.markers=[];this.lens=null;this.flowVersion=0;this.flowSig='';this.operationsView={vans:{count:0}};
+  this.canvas=document.createElement('canvas');this.canvas.className='iso-map';this.canvas.tabIndex=0;this.canvas.setAttribute('aria-label','Isometric town map. Drag to pan, scroll to zoom, R to rotate, T for plan view.');this.canvas.style.touchAction='none';container.append(this.canvas);this.ctx=this.canvas.getContext('2d');this.renderer={domElement:this.canvas};
+  this.abort=new AbortController();const signal=this.abort.signal;bindPropertyPicking(this.canvas,e=>this.pick(e),signal);bindContextPicking(this.canvas,e=>this.contextPick(e),signal);this.bindGestures(signal);
+  this.resizeObserver=new ResizeObserver(()=>this.resize());this.resizeObserver.observe(container);this.resize();
+  document.addEventListener('visibilitychange',()=>this.performanceMonitor.reset(),{signal});
+  this.loadAtlas();this.last=performance.now();this.animate(this.last);
+ }
+ // ---- atlas --------------------------------------------------------------------------------------------------------
+ async loadAtlas(){try{const url=new URL('./iso/atlas.json',import.meta.url),index=await (await fetch(url)).json(),image=new Image();image.src=new URL(index.image,url).href;await image.decode();const small=document.createElement('canvas');small.width=Math.ceil(image.naturalWidth/LOD);small.height=Math.ceil(image.naturalHeight/LOD);const g=small.getContext('2d');g.imageSmoothingQuality='high';g.drawImage(image,0,0,small.width,small.height);this.atlas={sprites:index.sprites,image,small};this.invalidate();}catch(e){this.atlasError=e.message;console.warn('Isometric atlas: '+e.message);}}
+ sprite(name){return this.atlas?.sprites[name]||null;}
+ // ---- town ---------------------------------------------------------------------------------------------------------
+ load(town,{demo=false}={}){
+  this.town=town;this.demo=demo;this.flow=null;this.selected=null;this.trace=null;this.hovered=null;this.operations=null;this.followJobId=null;this.lens=null;this.markers=[];this.switchIntervals=[];
+  const b=town.bounds;this.center=[(b.minX+b.maxX)/2,(b.minZ+b.maxZ)/2];this.premiseIndex=new Map(town.premises.map(h=>[h.id,h]));
+  this.townDressing={plan:planDressing(town,{demo}),setVisible:()=>{},stats(){return {trees:this.plan.trees.length,landmarks:this.plan.landmarks.length};}};
+  this.extent=contentExtent(town);this.buildRoads();this.buildNetworks();this.buildObjects();this.fit();if(this.width<700&&!this.needsFit)this.zoomBy(2,[this.width/2,this.height/2]);this.invalidate();
+ }
+ roadSegments(){if(this._roadSegs)return this._roadSegs;const s=[];for(const r of this.town.roads||[])for(let i=1;i<r.points.length;i++)s.push([r.points[i-1],r.points[i]]);return this._roadSegs=s;}
+ // The direction from a point to its nearest street: how facilities and invented landmarks face.
+ facingToRoad(x,z){let best=null,d2=Infinity;for(const [a,b] of this.roadSegments()){const dx=b.x-a.x,dz=b.z-a.z,l=dx*dx+dz*dz||1,t=clamp(((x-a.x)*dx+(z-a.z)*dz)/l,0,1),px=a.x+dx*t,pz=a.z+dz*t,d=(px-x)**2+(pz-z)**2;if(d<d2){d2=d;best=[px,pz];}}return best?Math.atan2(best[1]-z,best[0]-x):Math.PI/2;}
+ buildRoads(){this._roadSegs=null;const byWidth=new Map();for(const r of this.town.roads||[]){const w=Math.round(streetWidth(r)*2)/2;if(!byWidth.has(w))byWidth.set(w,{width:w,path:new Path2D(),centre:new Path2D(),major:false});const g=byWidth.get(w);r.points.forEach((p,i)=>i?g.path.lineTo(p.x,p.z):g.path.moveTo(p.x,p.z));if(['primary','secondary','trunk'].includes(r.class||r.roadClass)){g.major=true;r.points.forEach((p,i)=>i?g.centre.lineTo(p.x,p.z):g.centre.moveTo(p.x,p.z));}}this.roads=[...byWidth.values()].sort((a,b)=>a.width-b.width);
+  const poly=list=>{const p=new Path2D();for(const pts of list){if(!pts?.length)continue;pts.forEach((q,i)=>i?p.lineTo(q.x,q.z):p.moveTo(q.x,q.z));p.closePath();}return p;};
+  const lots=[[],[],[]];for(const lot of this.town.parcels||[])lots[Math.floor(hashUnit(lot.id)*3)].push(lot.polygon);this.lots=lots.map(poly);this.parks=poly((this.town.parks||[]).map(p=>p.polygon));
+  const drive=new Path2D();for(const h of this.town.premises){if(!h.front)continue;drive.moveTo(h.front.x,h.front.z);drive.lineTo(h.x,h.z);}this.drives=drive;
+ }
+ buildNetworks(){this.edges=new Map();this.nets={};for(const u of UTILS){const net=this.town.networks?.[u];if(!net)continue;const off=geometryOffset(this.town,u),mains=new Path2D(),services=new Path2D(),overhead=[],drops=[],segs=[];
+  for(const e of net.edges){const pts=e.points.map(p=>({x:p.x,z:p.z+off}));if(pts.length<2)continue;const rec={u,e,pts,overhead:e.placement==='overhead'};this.edges.set(e.id,rec);if(rec.overhead){(e.kind==='service'?drops:overhead).push(rec);if(e.kind!=='service')for(let i=1;i<pts.length;i++)segs.push([pts[i-1],pts[i],rec]);continue;}const path=e.kind==='service'?services:mains;pts.forEach((p,i)=>i?path.lineTo(p.x,p.z):path.moveTo(p.x,p.z));if(e.kind!=='service')for(let i=1;i<pts.length;i++)segs.push([pts[i-1],pts[i],rec]);}
+  this.nets[u]={mains,services,overhead,drops,segs};}}
+ edgePath(ids){const p=new Path2D();let n=0;for(const id of ids){const r=this.edges.get(id);if(!r||r.overhead)continue;r.pts.forEach((q,i)=>i?p.lineTo(q.x,q.z):p.moveTo(q.x,q.z));n++;}return n?p:null;}
+ buildObjects(){const t=this.town,objs=[],withPremise=new Set();
+  for(const h of t.premises){const facing=facingOf(h),family=premiseArt(h,facing);let w=h.width||10,d=h.depth||12;const fac=h.facilityId&&t.facilities?.find(f=>f.id===h.facilityId);if(['depot','industrial','pump_station'].includes(family)){w=Math.max(w,24);d=Math.max(d,24);}if(fac)withPremise.add(fac.id);
+   objs.push({type:'premise',premise:h,id:h.id,family,x:h.x,z:h.z,facing,iso:.866*(w+d)*.88,top:w*1.12,lift:STUDY.has(family)?.28:.25,label:fac?.label||(h.buildingType==='school'?'School':null)});}
+  for(const f of t.facilities||[]){if(f.premiseId||withPremise.has(f.id))continue;const family=facilityArt(f.kind);if(!family)continue;const xs=(f.polygon||[]).map(p=>p.x),zs=(f.polygon||[]).map(p=>p.z),w=xs.length?Math.max(...xs)-Math.min(...xs):30,d=zs.length?Math.max(...zs)-Math.min(...zs):30,span=Math.min(w,d)*.5,[iso,top]=FACILITY_W[family]?.[0]?FACILITY_W[family]:[.866*2*span,span];objs.push({type:'facility',facility:{...f,width:w,depth:d},id:f.id,family,x:f.x,z:f.z,facing:this.facingToRoad(f.x,f.z),iso,top,lift:.28,label:f.label||f.kind});}
+  // A pre-engine demo town's landmarks are visual only: draw them, never as customers.
+  for(const p of this.townDressing.plan.landmarks){if(p.premiseId||!p.visualOnly||p.kind==='park')continue;const family=p.kind==='industrial'?'industrial':'commercial',w=p.width||20,d=p.depth||20;objs.push({type:'landmark',landmark:p,id:p.id,family,x:p.x,z:p.z,facing:this.facingToRoad(p.x,p.z),iso:.866*(w+d),top:w,lift:.27,label:p.label});}
+  const e=t.networks?.electric,poles=(e?.equipment||[]).filter(q=>q.kind==='pole'&&Number.isFinite(q.x));if(!poles.length&&e){const seen=new Set();for(const ed of e.edges)if(ed.placement==='overhead'&&ed.kind!=='service')for(const p of ed.points){const k=p.x.toFixed(1)+':'+p.z.toFixed(1);if(!seen.has(k)){seen.add(k);poles.push({id:'POLE-'+seen.size,x:p.x,z:p.z,edgeId:ed.id});}}}
+  this.poles=poles;for(const p of poles)objs.push({type:'pole',pole:p,id:p.id,family:'pole',x:p.x,z:p.z,facing:0,height:11.5,top:2.4,lift:.02,ax:.42});
+  const overheadEdges=new Set((e?.edges||[]).filter(x=>x.placement==='overhead').map(x=>x.id));
+  for(const n of e?.nodes||[])if(n.kind==='transformer'&&(n.mount?n.mount==='pad':!overheadEdges.has(n.parentEdgeId)))objs.push({type:'equipment',id:n.id,node:n,utility:'electric',family:'pad',x:n.x,z:n.z,facing:this.facingToRoad(n.x,n.z),iso:3.6,top:2.6,lift:.24});
+  for(const q of t.networks?.water?.equipment||[])if(q.kind==='hydrant'&&Number.isFinite(q.x))objs.push({type:'equipment',id:q.id,node:q,utility:'water',family:'hydrant',x:q.x,z:q.z,facing:0,iso:1.25,top:1.1,lift:.08});
+  this.objects=objs;const near=nearTown(t,150);this.trees=this.townDressing.plan.trees.filter(p=>near(p.x,p.z)).map(p=>({type:'tree',x:p.x,z:p.z,family:'tree',iso:2.5*p.radius,top:2.3*p.radius,lift:.04,id:null}));this.sorted={};}
+ depthOrder(){if(this.sorted[this.view])return this.sorted[this.view];const [,,c,d]=MATRIX[this.view],list=[...this.objects,...(this.dressingVisible?this.trees:[])].map(o=>[c*o.x+d*o.z,o]);list.sort((a,b)=>a[0]-b[0]);return this.sorted[this.view]=list.map(x=>x[1]);}
+ // ---- camera -------------------------------------------------------------------------------------------------------
+ resize(){const r=this.el.getBoundingClientRect();if(!r.width||!r.height)return;const untouched=this.scale===this.baseScale&&!this.pan[0]&&!this.pan[1];this.width=r.width;this.height=r.height;this.dpr=Math.min(globalThis.devicePixelRatio||1,this.quality.maxPixelRatio||1.75);this.canvas.width=Math.round(r.width*this.dpr);this.canvas.height=Math.round(r.height*this.dpr);this.canvas.style.width=r.width+'px';this.canvas.style.height=r.height+'px';if(this.town&&(this.needsFit||untouched))this.fit();this.invalidate();}
+ toScreen(x,z,h=0,pan=this.pan,scale=this.scale){const [sx,sy]=project(this.view,x-this.center[0],z-this.center[1],h);return [this.width/2+pan[0]+sx*scale,this.height/2+pan[1]+sy*scale];}
+ toWorld(px,py){const [x,z]=unproject(this.view,(px-this.width/2-this.pan[0])/this.scale,(py-this.height/2-this.pan[1])/this.scale);return [x+this.center[0],z+this.center[1]];}
+ fit(){if(!this.town)return;if(this.width<40||this.height<40){this.needsFit=true;return;}this.needsFit=false;const b=this.extent,c=[[b.minX,b.minZ],[b.maxX,b.minZ],[b.maxX,b.maxZ],[b.minX,b.maxZ]].map(([x,z])=>project(this.view,x-this.center[0],z-this.center[1]));const w=Math.max(...c.map(p=>p[0]))-Math.min(...c.map(p=>p[0])),h=Math.max(...c.map(p=>p[1]))-Math.min(...c.map(p=>p[1]));this.baseScale=Math.max(.02,Math.min((this.width-30)/w,(this.height-30)/h));this.scale=this.baseScale;this.pan=[0,0];this.invalidate();}
+ centreOn(x,z,scale=this.scale){this.scale=clamp(scale,this.baseScale*.6,MAX_SCALE);const [sx,sy]=project(this.view,x-this.center[0],z-this.center[1]);this.pan=[-sx*this.scale,-sy*this.scale];this.invalidate();}
+ home(){this.followJobId=null;this.fit();}
+ // Plan view toggles a straight-down map; rotate() steps the camera a quarter turn round the town.
+ top(){const centre=this.toWorld(this.width/2,this.height/2),k=this.scale/this.baseScale;if(this.view==='top')this.view=this.lastIsoView;else{this.lastIsoView=this.view;this.view='top';}this.fit();this.centreOn(centre[0],centre[1],this.baseScale*k);this.onViewChange?.();}
+ rotate(step=1){const centre=this.toWorld(this.width/2,this.height/2),k=this.scale/this.baseScale,from=this.view==='top'?this.lastIsoView:this.view;this.view=VIEWS[(VIEWS.indexOf(from)+step+4)%4];this.lastIsoView=this.view;this.fit();this.centreOn(centre[0],centre[1],this.baseScale*k);this.onViewChange?.();}
+ zoom(f,anchor=[this.width/2,this.height/2]){this.zoomBy(1/f,anchor);}
+ zoomBy(k,anchor){const w=this.toWorld(...anchor);this.scale=clamp(this.scale*k,this.baseScale*.6,MAX_SCALE);const p=this.toScreen(...w);this.pan[0]+=anchor[0]-p[0];this.pan[1]+=anchor[1]-p[1];this.zoomedAt=performance.now();this.invalidate();}
+ focusLandmark(p){this.followJobId=null;this.centreOn(p.x,p.z,Math.max(this.scale,2.2));}
+ followJob(job){this.followJobId=job.id;const p=this.operations?.jobState(job).position||this.operations?.depot;if(p)this.centreOn(p.x,p.z,Math.max(this.scale,3));}
+ bindGestures(signal){const c=this.canvas,pts=new Map();let pinch=0,drag=null;
+  c.addEventListener('wheel',e=>{e.preventDefault();const r=c.getBoundingClientRect();this.followJobId=null;this.zoomBy(Math.exp(-e.deltaY*.0015),[e.clientX-r.left,e.clientY-r.top]);},{passive:false,signal});
+  c.addEventListener('pointerdown',e=>{c.focus({preventScroll:true});this.onInteraction?.();if(e.button!==0&&e.pointerType==='mouse')return;c.setPointerCapture?.(e.pointerId);pts.set(e.pointerId,[e.clientX,e.clientY]);drag=[e.clientX,e.clientY];if(pts.size===2){const [a,b]=[...pts.values()];pinch=Math.hypot(a[0]-b[0],a[1]-b[1]);}},{signal});
+  c.addEventListener('pointermove',e=>{const old=pts.get(e.pointerId),r=c.getBoundingClientRect();if(!old){this.hoverAt=[e.clientX-r.left,e.clientY-r.top];this.hoverDirty=true;return;}pts.set(e.pointerId,[e.clientX,e.clientY]);if(pts.size===2){const [a,b]=[...pts.values()],d=Math.hypot(a[0]-b[0],a[1]-b[1]);if(pinch)this.zoomBy(d/pinch,[(a[0]+b[0])/2-r.left,(a[1]+b[1])/2-r.top]);pinch=d;return;}if(Math.hypot(e.clientX-drag[0],e.clientY-drag[1])>3)this.followJobId=null;this.pan[0]+=e.clientX-old[0];this.pan[1]+=e.clientY-old[1];this.hovered=null;this.invalidate(false);},{signal});
+  const up=e=>{pts.delete(e.pointerId);if(pts.size<2)pinch=0;};c.addEventListener('pointerup',up,{signal});c.addEventListener('pointercancel',up,{signal});c.addEventListener('pointerleave',()=>{if(this.hovered){this.hovered=null;this.hoverAt=null;this.dirty=true;}},{signal});
+  // Map keys work whenever the map is showing and nobody is typing: no need to click the canvas first.
+  document.addEventListener('keydown',e=>{if(this.suspended||!this.town||e.ctrlKey||e.metaKey||e.altKey||e.target.closest?.('input,select,textarea,[contenteditable],dialog')||!this.canvas.offsetParent)return;if(e.target!==c&&e.target!==document.body&&!['r','R','t','T'].includes(e.key))return;const k=e.key;if(k==='r'||k==='R'){this.rotate(k==='R'?-1:1);}else if(k==='t'||k==='T')this.top();else if(k==='+'||k==='=')this.zoom(.8);else if(k==='-')this.zoom(1.25);else if(k.startsWith('Arrow')){this.pan[0]+=k==='ArrowLeft'?60:k==='ArrowRight'?-60:0;this.pan[1]+=k==='ArrowUp'?60:k==='ArrowDown'?-60:0;this.invalidate(false);}else if(k==='Enter'){const [x,z]=this.toWorld(this.width/2,this.height/2);let best=null,d=Infinity;for(const h of this.town?.premises||[]){const q=(h.x-x)**2+(h.z-z)**2;if(q<d){d=q;best=h;}}if(best)this.onSelect({home:best});}else return;e.preventDefault();},{signal});}
+ // ---- state from the app -------------------------------------------------------------------------------------------
+ invalidate(rebake=true){this.dirty=true;if(rebake)this.stale=true;}
+ setLayers(layers){this.layers={...layers};this.invalidate();this.onViewChange?.();}
+ setXray(v){this.xray=v;this.invalidate();}
+ setDressing(v){this.dressingVisible=v;this.sorted={};this.invalidate();}
+ setHouseDetail(mode){if(!['auto','simple'].includes(mode))throw Error('Unknown detail mode.');this.houseDetailMode=mode;}
+ setFlows(flow){this.flow=flow;let sig='';for(const u of UTILS){const out=flow?.[u]?.unavailable;sig+=u+(out?.size||0)+':';if(out?.size)for(const id of out)sig+=id.slice(-3);const en=flow?.[u]?.edgeEnabled;if(en)for(const [id,on] of en)if(!on)sig+=id.slice(-4);}sig+='v'+(flow?.lowVoltage?.size||0);if(sig!==this.flowSig){this.flowSig=sig;this.flowVersion++;this.invalidate();}if(this.selected&&this.selectUtility)this.retrace();this.onViewChange?.();}
+ setClock(clock){if(!clock)return;const e=clock.sunElevationDeg,dark=Number.isFinite(e)?clamp((4-e)/14,0,1):0,k=Math.round(dark*10)/10;if(k!==this.night){this.night=k;this.invalidate();}}
+ setOperations(ops){this.operations=ops;this.followJobId=null;this.switchIntervals=[];this.switchSource=null;this.invalidate();}
+ setMarkers(items=[]){this.markers=items.filter(p=>Number.isFinite(p.x)&&Number.isFinite(p.z));this.dirty=true;}
+ setLens(built){this.lens=built||null;this.lensVersion=(this.lensVersion||0)+1;this.invalidate();}
+ select(home,u='electric',focus=false){this.selected=home;this.selectUtility=u;this.retrace();if(focus)this.centreOn(home.x,home.z,Math.max(this.scale,7));this.invalidate();}
+ retrace(){const h=this.selected,u=this.selectUtility;const ids=!h||this.layers?.[u]===false?[]:traceConnection(this.town,h.id,u,this.flow?.[u]?.edgeEnabled).edges.map(e=>e.id),key=u+ids.join();if(key!==this.traceKey){this.traceKey=key;this.trace={u,ids:new Set(ids)};this.invalidate();}}
+ clearSelection(){this.selected=null;this.trace=null;this.traceKey='';this.invalidate();}
+ useLite(){if(this.quality.name==='lite')return false;this.quality=PROFILES.lite;this.resize();return true;}
+ // ---- picking ------------------------------------------------------------------------------------------------------
+ hitAt(px,py,filter=()=>true){if(this.stale||this.scale!==this.bake?.scale)this.rebake();const dx=this.pan[0]-this.bake.pan[0],dy=this.pan[1]-this.bake.pan[1];for(let i=this.hits.length-1;i>=0;i--){const h=this.hits[i];if(!filter(h.obj))continue;const x=px-dx-h.x,y=py-dy-h.y;if(x>=h.w*.12&&x<=h.w*.88&&y>=h.h*.08&&y<=h.h)return h.obj;}return null;}
+ nearestPremise(px,py,within=12){let best=null,d=within*within;for(const h of this.town?.premises||[]){const [x,y]=this.toScreen(h.x,h.z),q=(x-px)**2+(y-py)**2;if(q<d){d=q;best=h;}}return best;}
+ local(e){const r=this.canvas.getBoundingClientRect();return [e.clientX-r.left,e.clientY-r.top];}
+ pick(e){if(!this.town)return;const [px,py]=this.local(e),o=this.hitAt(px,py,o=>o.type!=='tree');if(o?.type==='landmark'){this.onSelect({landmark:o.landmark});return;}if(o?.type==='facility'){this.onSelect({landmark:{...o.facility,label:o.label,visualOnly:false}});return;}if(o?.type==='pole'||o?.type==='equipment'){this.onSelect({asset:o.utility||'electric',nodeId:o.node?.nodeId||(o.family==='pad'?o.id:null)});return;}const home=o?.premise||this.nearestPremise(px,py);if(home)this.onSelect({home});}
+ contextPick(e){if(!this.town)return;const [px,py]=this.local(e);let pole=null,d=100;if(this.layers.electric!==false)for(const p of this.poles){const [x,y]=this.toScreen(p.x,p.z),q=Math.min((x-px)**2+(y-py)**2,(x-px)**2+(y-WIRE_H*this.scaleY()-py)**2);if(q<d){d=q;pole=p;}}if(!pole&&this.layers.electric!==false){const o=this.hitAt(px,py,o=>o.type==='pole');pole=o?.pole||null;}
+  if(pole){this.onContext?.({event:e,target:{...pole,kind:'pole',utility:'electric'}});return;}
+  const o=this.hitAt(px,py,o=>o.type==='premise'),home=o?.premise||this.nearestPremise(px,py,8);if(home){this.onContext?.({event:e,target:{...home,kind:'house'}});return;}
+  let best=null,bd=10;for(const u of UTILS){if(!this.layers[u]||!this.nets[u])continue;for(const [a,b,rec] of this.nets[u].segs){const h=rec.overhead?WIRE_H:0,[ax,ay]=this.toScreen(a.x,a.z,h),[bx,by]=this.toScreen(b.x,b.z,h),dx=bx-ax,dy=by-ay,t=clamp(((px-ax)*dx+(py-ay)*dy)/(dx*dx+dy*dy||1),0,1),dist=Math.hypot(px-ax-dx*t,py-ay-dy*t);if(dist<bd){bd=dist;best={id:rec.e.id,edgeId:rec.e.id,utility:u,kind:'main',x:a.x+(b.x-a.x)*t,z:a.z+(b.z-a.z)*t-geometryOffset(this.town,u)};}}}
+  this.onContext?.({event:e,target:best});}
+ scaleY(){return this.view==='top'?0:this.scale;}
+ // ---- bake: the static picture ---------------------------------------------------------------------------------------
+ stateKey(){const o=this.operations,sw=o?switchingAt(this.switches(o),o.time):null,broken=o?o.incidents.filter(i=>i.kind==='broken_pole'&&o.active(i)).map(i=>i.assetId).join():'';this.switchState=sw;this.broken=new Set(broken?broken.split(','):[]);
+  return [this.view,this.width,this.height,UTILS.map(u=>this.layers[u]?1:0).join(''),this.xray,this.dressingVisible,this.flowVersion,this.lensVersion,sw?.key,broken,this.traceKey,this.night,!!this.atlas].join('|');}
+ switches(o){if(o.incidents!==this.switchSource||o.incidents?.length!==this.switchLength||o.events!==this.switchEvents){this.switchSource=o.incidents;this.switchLength=o.incidents?.length;this.switchEvents=o.events;this.switchIntervals=switchingIntervals(o);}return this.switchIntervals;}
+ rebake(){if(!this.town)return;const W=this.width,H=this.height,m=Math.round(Math.max(W,H)*MARGIN),cd=Math.min(this.dpr,1.5),c=this.bakeCanvas||(this.bakeCanvas=document.createElement('canvas')),cw=Math.ceil((W+2*m)*cd),ch=Math.ceil((H+2*m)*cd);if(c.width!==cw||c.height!==ch){c.width=cw;c.height=ch;}
+  const g=c.getContext('2d');g.setTransform(1,0,0,1,0,0);g.clearRect(0,0,cw,ch);this.bake={pan:[...this.pan],scale:this.scale,view:this.view,m,cd,key:this.stateKey()};this.stale=false;this.hits=[];this.drawn=0;
+  const screen=()=>g.setTransform(cd,0,0,cd,m*cd,m*cd);screen();this.clip=[-m,-m,W+m,H+m];
+  this.drawGround(g);this.drawNetworks(g);this.drawGroundMarks(g);screen();this.drawObjects(g);this.drawWires(g);this.drawNight(g);this.drawLabels(g);}
+ world(g,h=0){const [a,b,c,d]=MATRIX[this.view],s=this.scale,{cd,m,pan}=this.bake,[cx,cz]=this.center,y=this.view==='top'?0:h;g.setTransform(cd*s*a,cd*s*c,cd*s*b,cd*s*d,cd*(m+this.width/2+pan[0]-s*(a*cx+b*cz)),cd*(m+this.height/2+pan[1]-s*(c*cx+d*cz)-s*y));}
+ drawGround(g){const b=this.extent,pad=40;this.world(g);g.fillStyle='#a8bd86';g.fillRect(b.minX-pad,b.minZ-pad,b.maxX-b.minX+2*pad,b.maxZ-b.minZ+2*pad);g.strokeStyle='#8fa56f';g.lineWidth=3;g.strokeRect(b.minX-pad,b.minZ-pad,b.maxX-b.minX+2*pad,b.maxZ-b.minZ+2*pad);
+  g.fillStyle='#93b06c';g.fill(this.parks);g.strokeStyle='#7d9a5c';g.lineWidth=.8;g.stroke(this.parks);
+  ['#b4c690','#afc28b','#b9ca96'].forEach((c,i)=>{g.fillStyle=c;g.fill(this.lots[i]);});if(this.scale>.9){g.strokeStyle='#9db27f';g.lineWidth=.3;for(const l of this.lots)g.stroke(l);}
+  g.lineCap='round';g.lineJoin='round';g.strokeStyle='#d7d2be';g.lineWidth=3;g.stroke(this.drives);
+  for(const r of this.roads){g.strokeStyle='#d9d6c6';g.lineWidth=r.width+4.6;g.stroke(r.path);}for(const r of this.roads){g.strokeStyle='#a9aa9a';g.lineWidth=r.width+1.1;g.stroke(r.path);}for(const r of this.roads){g.strokeStyle='#7c8481';g.lineWidth=r.width;g.stroke(r.path);g.strokeStyle='#868d89';g.lineWidth=Math.max(.5,r.width-1.6);g.stroke(r.path);}
+  if(this.scale>.6)for(const r of this.roads)if(r.major){g.strokeStyle='#d6c37f';g.lineWidth=.35;g.setLineDash([3.5,5.5]);g.stroke(r.centre);g.setLineDash([]);}}
+ drawNetworks(g){this.world(g);g.lineCap='round';g.lineJoin='round';const lens=this.lens,neutral=lens?.lens==='voltage'&&lens.available;
+  for(const u of UTILS){if(!this.layers[u]||!this.nets[u])continue;const n=this.nets[u],thin=this.scale<.8;if(this.xray){g.globalAlpha=.85;g.strokeStyle=COLOR[u];g.lineWidth=thin?.9:.4;g.stroke(n.services);g.globalAlpha=1;}g.strokeStyle=CASING[u];g.lineWidth=thin?3.2:1.6;g.stroke(n.mains);g.strokeStyle=u==='electric'&&neutral?LOADING_BASE:COLOR[u];g.lineWidth=thin?2:1;g.stroke(n.mains);
+   const dead=[];const en=this.flow?.[u]?.edgeEnabled;if(en)for(const [id,on] of en)if(!on)dead.push(id);const p=dead.length&&this.edgePath(dead);if(p){g.strokeStyle=DEAD;g.lineWidth=thin?2.4:1.3;g.setLineDash([2.5,2]);g.stroke(p);g.setLineDash([]);}}
+  if(this.layers.electric)for(const [id,color] of lens?.lines||[]){const p=this.edgePath([id]);if(p){g.strokeStyle=color;g.lineWidth=this.scale<.8?3:1.8;g.stroke(p);}}
+  const sw=this.switchState;if(sw){for(const e of sw.edges)if(this.layers[e.utility]){const p=this.edgePath([e.edgeId]);if(p){g.strokeStyle=SWITCH_COLORS.valve;g.lineWidth=1.9;g.stroke(p);}}if(this.layers.electric)for(const [list,color] of [[sw.ties,SWITCH_COLORS.tie],[sw.devices,SWITCH_COLORS.device]])for(const x of list){const p=this.edgePath([x.edgeId]);if(p){g.strokeStyle=color;g.lineWidth=1.9;g.stroke(p);}}}
+  if(this.trace){const p=this.edgePath(this.trace.ids);if(p){g.strokeStyle='#fffbe8';g.lineWidth=this.scale<.8?5:3;g.stroke(p);g.strokeStyle=this.selected?.services?.[this.trace.u]?COLOR[this.trace.u]:UNSERVED;g.lineWidth=this.scale<.8?3:1.8;g.stroke(p);}}}
+ ring(g,x,z,r,color,width=.8,fill=null){g.beginPath();g.arc(x,z,r,0,Math.PI*2);if(fill){g.fillStyle=fill;g.fill();}if(color){g.strokeStyle=color;g.lineWidth=width;g.stroke();}}
+ drawGroundMarks(g){this.world(g);const at=id=>{const h=this.premiseIndex.get(id);return h?(h.front||h):null;},grow=Math.max(1,1.6/this.scale);
+  for(const u of UTILS){if(!this.layers[u])continue;for(const id of this.flow?.[u]?.unavailable||[]){const p=at(id);if(p)this.ring(g,p.x,p.z,RING[u]*grow,COLOR[u],.9*grow);}}
+  if(this.layers.electric)for(const id of this.flow?.lowVoltage||[]){const p=at(id);if(p)this.ring(g,p.x,p.z,1.8*grow,LOW_VOLTAGE,.7*grow);}
+  for(const [id,color] of this.lens?.entries||[]){const p=at(id);if(p&&color)this.ring(g,p.x,p.z,2.4*grow,null,0,color);}
+  for(const a of this.lens?.assets||[])if(a.color)this.ring(g,a.x,a.z,4*grow,a.color,1.1*grow);
+  const sw=this.switchState;if(sw){const eq=new Map();for(const u of UTILS)for(const q of this.town.networks?.[u]?.equipment||[])if(q.id)eq.set(q.id,q);const mid=id=>{const r=this.edges.get(id);if(!r)return null;const p=r.pts[Math.floor(r.pts.length/2)];return p;};for(const v of sw.valves){const q=this.layers[v.utility]&&eq.get(v.id);if(q)this.ring(g,q.x,q.z,4*grow,SWITCH_COLORS.valve,1.2*grow);}if(this.layers.electric)for(const [list,color] of [[sw.ties,SWITCH_COLORS.tie],[sw.devices,SWITCH_COLORS.device]])for(const x of list){const p=mid(x.edgeId);if(p)this.ring(g,p.x,p.z,4*grow,color,1.2*grow);}}}
+ // One sprite at ground point (x, z): `iso` metres wide in the three-quarter views, `top` in plan view.
+ drawSprite(g,o,name,{alpha=1,tilt=0}={}){const r=this.sprite(name);if(!r)return null;const top=this.view==='top',[px,py]=this.toScreen(o.x,o.z,0,this.bake.pan);const w=(top?o.top:o.height?o.height*r[2]/r[3]:o.iso)*this.scale,h=w*r[3]/r[2];
+  let x,y;if(top){x=px-w/2;y=py-h/2;}else{x=px-w*(o.ax??.5);y=py-h+(o.lift??.25)*w;}const [x0,y0,x1,y1]=this.clip;if(x>x1||y>y1||x+w<x0||y+h<y0)return null;
+  if(w<2){if(o.type==='tree')return null;if(o.type==='premise'||o.type==='landmark'||o.type==='facility'){g.fillStyle=o.family==='commercial'?'#a0705a':'#8a7f78';g.fillRect(px-1,py-2,2,2);}else return null;return {x:px-2,y:py-3,w:4,h:4};}
+  const small=w*LOD<r[2]*.9&&this.atlas.small,img=small?this.atlas.small:this.atlas.image,k=small?1/LOD:1;g.imageSmoothingEnabled=w<r[2];g.globalAlpha=alpha;
+  if(top||tilt){g.save();g.translate(top?px:x+w*(o.ax??.5),top?py:y+h);g.rotate(top?topRotation(o.family,o.facing):tilt);g.drawImage(img,r[0]*k,r[1]*k,r[2]*k,r[3]*k,top?-w/2:-w*(o.ax??.5),top?-h/2:-h,w,h);g.restore();}else g.drawImage(img,r[0]*k,r[1]*k,r[2]*k,r[3]*k,x,y,w,h);g.globalAlpha=1;this.drawn++;return {x,y,w,h};}
+ drawObjects(g){if(!this.atlas)return;const top=this.view==='top';
+  for(const o of this.depthOrder()){if(o.type==='pole'&&!this.layers.electric&&this.scale<1.5)continue;if(o.type==='equipment'&&!this.layers[o.utility]&&this.scale<3)continue;if(o.type==='equipment'&&this.scale<1.2)continue;if(o.type==='pole'&&this.scale<.7)continue;
+   const name=o.type==='tree'?'tree.'+(top?'top':'iso'):o.type==='pole'||o.type==='equipment'?o.family+'.'+(top?'top':'iso'):spriteName(o.family,this.view,o.facing);
+   const tilt=o.type==='pole'&&this.broken.has(o.id)?1.05:0,box=this.drawSprite(g,o,name,{tilt});if(box&&o.type!=='tree')this.hits.push({obj:o,...box});}}
+ drawWires(g){if(!this.layers.electric||!this.nets.electric)return;const top=this.view==='top',pan=this.bake.pan,s=this.scale;g.lineCap='round';g.strokeStyle=top?'#4d544c':'#3b4139';g.lineWidth=Math.max(.6,.05*s);g.beginPath();
+  const span=(a,b,ha,hb)=>{const p=this.toScreen(a.x,a.z,ha,pan),q=this.toScreen(b.x,b.z,hb,pan),sag=top?0:Math.min(2.2,Math.max(.3,Math.hypot(a.x-b.x,a.z-b.z)*.012))*s;g.moveTo(p[0],p[1]);g.quadraticCurveTo((p[0]+q[0])/2,(p[1]+q[1])/2+sag,q[0],q[1]);};
+  for(const rec of this.nets.electric.overhead){for(let i=1;i<rec.pts.length;i++)span(rec.pts[i-1],rec.pts[i],WIRE_H,WIRE_H);}
+  if(s>1.4)for(const rec of this.nets.electric.drops){const p=rec.pts;span(p[0],p.at(-1),WIRE_H,DROP_H);}g.stroke();
+  if(this.trace){g.strokeStyle=COLOR.electric;g.lineWidth=Math.max(1.6,.16*s);g.beginPath();for(const id of this.trace.ids){const rec=this.edges.get(id);if(!rec?.overhead)continue;const p=rec.pts;if(rec.e.kind==='service')span(p[0],p.at(-1),WIRE_H,DROP_H);else for(let i=1;i<p.length;i++)span(p[i-1],p[i],WIRE_H,WIRE_H);}g.stroke();}}
+ drawNight(g){const k=this.night||0;if(k<.05)return;const {cd}=this.bake;g.save();g.setTransform(1,0,0,1,0,0);g.fillStyle=`rgba(14,22,48,${.62*k})`;g.fillRect(0,0,this.bakeCanvas.width,this.bakeCanvas.height);g.restore();
+  const out=this.flow?.electric?.unavailable,pan=this.bake.pan,w=Math.max(3,2.6*this.scale),glow=this.glow||(this.glow=glowSprite('255,200,120'));g.globalCompositeOperation='lighter';g.globalAlpha=.85*k;for(const h of this.town.premises){if(out?.has(h.id)||h.occupied===false)continue;const [x,y]=this.toScreen(h.x,h.z,1.6,pan);if(x<this.clip[0]||y<this.clip[1]||x>this.clip[2]||y>this.clip[3])continue;g.drawImage(glow,x-w,y-w*.7,w*2,w*1.4);}g.globalAlpha=1;
+  if(this.layers.electric&&this.scale>.8){g.fillStyle=`rgba(255,226,150,${.5*k})`;g.beginPath();const r=Math.max(1,1.1*this.scale);for(const p of this.poles){if(this.broken.has(p.id))continue;const [x,y]=this.toScreen(p.x,p.z,8.4,pan);g.moveTo(x+r,y);g.arc(x,y,r,0,Math.PI*2);}g.fill();}g.globalCompositeOperation='source-over';}
+ drawLabels(g){if(this.scale<.15)return;const pan=this.bake.pan,seen=new Set(),size=clamp(10+this.scale*.6,10,14);g.font=`600 ${size}px system-ui,sans-serif`;g.textAlign='center';g.textBaseline='middle';g.lineJoin='round';
+  if(this.scale>=.55)for(const r of this.town.roads||[]){if(!r.name||/^unnamed/i.test(r.name)||seen.has(r.name)||(r.lengthM??r.length??0)<(this.scale>2?60:160))continue;const pts=r.points,mid=Math.floor((pts.length-1)/2),a=this.toScreen(pts[mid].x,pts[mid].z,0,pan),b=this.toScreen(pts[mid+1].x,pts[mid+1].z,0,pan);if(Math.hypot(b[0]-a[0],b[1]-a[1])<20)continue;const x=(a[0]+b[0])/2,y=(a[1]+b[1])/2;if(x<this.clip[0]||y<this.clip[1]||x>this.clip[2]||y>this.clip[3])continue;seen.add(r.name);let ang=Math.atan2(b[1]-a[1],b[0]-a[0]);if(ang>Math.PI/2)ang-=Math.PI;if(ang<-Math.PI/2)ang+=Math.PI;g.save();g.translate(x,y);g.rotate(ang);g.lineWidth=3.5;g.strokeStyle='rgba(255,252,238,.85)';g.strokeText(r.name,0,0);g.fillStyle='#3f4d45';g.fillText(r.name,0,0);g.restore();}
+  const placed=[],free=(x,y,w)=>{const r=[x-w/2-4,y-9,x+w/2+4,y+9];if(placed.some(q=>r[0]<q[2]&&q[0]<r[2]&&r[1]<q[3]&&q[1]<r[3]))return false;placed.push(r);return true;};for(const o of this.objects){const label=o.label;if(!label)continue;const [x,y]=this.toScreen(o.x,o.z,this.view==='top'?0:22,pan);if(!free(x,y,g.measureText(label).width))continue;g.lineWidth=3.5;g.strokeStyle='rgba(255,252,238,.9)';g.strokeText(label,x,y);g.fillStyle='#24382e';g.fillText(label,x,y);}}
+ // ---- each frame: copy the bake, then what moves --------------------------------------------------------------------
+ active(){const o=this.operations;if(!o)return false;const t=o.time;if(o.jobs.some(j=>j.startAt<=t&&t<j.endAt))return true;if(o.incidents.some(i=>o.active(i)))return true;return cycleGroups(o.timeline?.meterToCash).some(([at])=>t>=at&&t<at+PULSE_SECONDS);}
+ render(now){const c=this.ctx;if(!this.town)return;if(this.stateKey()!==this.bake?.key)this.stale=true;const b=this.bake,k=b?this.scale/b.scale:1,dx=b?this.pan[0]-b.pan[0]:0,dy=b?this.pan[1]-b.pan[1]:0,settled=now-(this.zoomedAt||0)>140;
+  if(!b||this.stale||b.view!==this.view||(k!==1&&(settled||k<.5||k>2))||Math.abs(dx)>b.m*.85||Math.abs(dy)>b.m*.85)this.rebake();
+  const B=this.bake,kk=this.scale/B.scale,W=this.width,H=this.height;c.setTransform(this.dpr,0,0,this.dpr,0,0);c.fillStyle='#dfe1d6';c.fillRect(0,0,W,H);c.imageSmoothingEnabled=true;
+  const x0=W/2+this.pan[0]+kk*(-B.m-W/2-B.pan[0]),y0=H/2+this.pan[1]+kk*(-B.m-H/2-B.pan[1]);c.drawImage(this.bakeCanvas,x0,y0,this.bakeCanvas.width/B.cd*kk,this.bakeCanvas.height/B.cd*kk);
+  if(kk!==1)return;this.drawDynamic(c,now);this.dirty=false;}
+ drawDynamic(c,now){const o=this.operations,s=this.scale,top=this.view==='top',at=id=>{const h=this.premiseIndex.get(id);return h?(h.front||h):null;},px=(x,z,h=0)=>this.toScreen(x,z,h);let vans=0;
+  if(o){const t=o.time;
+   for(const [time,ids,color] of cycleGroups(o.timeline?.meterToCash)){if(t<time||t>=time+PULSE_SECONDS)continue;const f=(t-time)/PULSE_SECONDS,r=Math.max(2,(2+5*f)*s);c.strokeStyle=color;c.globalAlpha=1-f*.8;c.lineWidth=1.5;c.beginPath();for(const id of ids){const p=at(id);if(!p)continue;const [x,y]=px(p.x,p.z);if(x<-20||y<-20||x>this.width+20||y>this.height+20)continue;c.moveTo(x+r,y);c.ellipse(x,y,r,top?r:r*.58,0,0,Math.PI*2);}c.stroke();c.globalAlpha=1;}
+   for(const job of o.jobs){if(!job.stops||job.startAt>t)continue;for(const st of job.stops){if(st.at>t)break;const p=at(st.premiseId);if(!p)continue;const [x,y]=px(p.x,p.z),r=Math.max(2.5,1.6*s);c.fillStyle=READ_COLOR[st.outcome]||READ_COLOR.none;c.beginPath();c.ellipse(x,y,r,top?r:r*.58,0,0,Math.PI*2);c.fill();}}
+   const pulse=.5+.5*Math.sin(now/260);for(const i of o.incidents){if(!o.active(i))continue;const [x,y]=px(i.x,i.z),r=Math.max(7,(5+2*pulse)*s);if(i.utility==='water'){c.fillStyle='rgba(60,140,200,.45)';c.beginPath();c.ellipse(x,y,r*.8,top?r*.8:r*.45,0,0,Math.PI*2);c.fill();c.strokeStyle='#cfefff';c.lineWidth=Math.max(1.5,.3*s);c.beginPath();for(let j=-1;j<=1;j++){c.moveTo(x+j*2,y);c.quadraticCurveTo(x+j*6,y-r*1.1,x+j*9,y-r*.3);}c.stroke();}c.strokeStyle='#e1784d';c.lineWidth=2.2;c.beginPath();c.ellipse(x,y,r,top?r:r*.58,0,0,Math.PI*2);c.stroke();}
+   for(const job of o.jobs){const st=o.jobState(job);if(['future','completed'].includes(st.status)||!st.position)continue;vans++;const p=st.position,family=crewArt(job.crewKind||(job.kind==='repair'?job.utility:'meter')),heading=Number.isFinite(p.angle)?p.angle:Math.atan2(p.dz||0,p.dx||1),v={x:p.x,z:p.z,family,facing:heading,iso:VEHICLE_W[family]||9,top:3.2,lift:.3};this.drawLive(c,v,spriteName(family,this.view,heading),top?heading-Math.PI/2:0);
+    if(st.agent){const [x,y]=px(st.agent.x,st.agent.z),r=Math.max(2.2,.45*s);c.fillStyle='#465d60';c.fillRect(x-r*.6,y-r*2.6,r*1.2,r*2.2);c.fillStyle='#f1c85c';c.beginPath();c.arc(x,y-r*3,r*.75,0,Math.PI*2);c.fill();}}}
+  this.operationsView.vans.count=vans;
+  const bob=Math.sin(now/300)*2;for(const m of this.markers){const [x,y]=px(m.x,m.z,top?0:12),r=Math.max(4,1.4*s);c.fillStyle='#d77545';c.strokeStyle='#fff6e6';c.lineWidth=1.5;c.beginPath();c.moveTo(x,y-r*1.6+bob);c.lineTo(x+r,y+bob);c.lineTo(x,y+r*1.6+bob);c.lineTo(x-r,y+bob);c.closePath();c.fill();c.stroke();}
+  for(const [h,color,width] of [[this.hovered&&this.hovered!==this.selected?this.hovered:null,'rgba(255,246,195,.9)',2],[this.selected,this.selected?.services?.[this.selectUtility]?COLOR[this.selectUtility]:UNSERVED,3]]){if(!h)continue;const [x,y]=px(h.x,h.z),r=Math.max(9,.75*Math.max(h.width||10,h.depth||10)*s);c.strokeStyle=color;c.lineWidth=width;c.beginPath();c.ellipse(x,y,r,top?r:r*.58,0,0,Math.PI*2);c.stroke();}
+  if(this.hovered&&this.hoverAt){const h=this.hovered,text=h.address?(h.address+(h.street&&!h.address.includes(h.street)?' · '+h.street:'')):h.id;c.font='500 12px system-ui,sans-serif';const w=c.measureText(text).width+20,x=clamp(this.hoverAt[0]-w/2,8,this.width-w-8),y=Math.max(8,this.hoverAt[1]-42);c.fillStyle='#253e32';c.beginPath();c.roundRect?c.roundRect(x,y,w,26,6):c.rect(x,y,w,26);c.fill();c.fillStyle='#fffdf4';c.textAlign='left';c.textBaseline='middle';c.fillText(text,x+10,y+13);}}
+ // A moving object drawn straight to the screen (crews), with the same sizing as the baked sprites.
+ drawLive(c,o,name,rotation=0){const r=this.sprite(name);if(!r)return;const top=this.view==='top',[px,py]=this.toScreen(o.x,o.z),w=Math.max(top?10:16,(top?o.top:o.iso)*this.scale),h=w*r[3]/r[2],small=w*LOD<r[2]*.9,img=small?this.atlas.small:this.atlas.image,k=small?1/LOD:1;c.imageSmoothingEnabled=w<r[2];if(top){c.save();c.translate(px,py);c.rotate(rotation);c.drawImage(img,r[0]*k,r[1]*k,r[2]*k,r[3]*k,-w/2,-h/2,w,h);c.restore();}else c.drawImage(img,r[0]*k,r[1]*k,r[2]*k,r[3]*k,px-w/2,py-h+o.lift*w,w,h);}
+ updateHover(){if(!this.hoverDirty||!this.town||!this.atlas)return;this.hoverDirty=false;const p=this.hoverAt;const o=p&&this.bake&&this.scale===this.bake.scale?this.hitAt(p[0],p[1],o=>o.type==='premise'):null,h=o?.premise||null;if(h!==this.hovered){this.hovered=h;this.canvas.style.cursor=h?'pointer':'grab';this.dirty=true;}else if(h)this.dirty=true;}
+ animate(now){if(this.destroyed)return;this.raf=requestAnimationFrame(t=>this.animate(t));if(this.suspended){this.performanceMonitor.reset();this.last=now;return;}this.performanceMonitor.push(now,!document.hidden);const delta=Math.min((now-this.last)/1000,.05);this.last=now;this.onAnimation?.(delta,now);
+  if(this.followJobId&&this.operations){const job=this.operations.jobs.find(j=>j.id===this.followJobId),st=job&&this.operations.jobState(job);if(!st||['completed','future'].includes(st.status)||!st.position)this.followJobId=null;else{const [x,y]=this.toScreen(st.position.x,st.position.z);this.pan[0]+=(this.width/2-x)*.16;this.pan[1]+=(this.height/2-y)*.16;this.dirty=true;}}
+  this.updateHover();if(this.dirty||this.active()||(this.zoomedAt&&now-this.zoomedAt<400)||(this.selected&&this.markers.length)||this.markers.length)this.render(now);}
+ // ---- the 3D scene's performance hooks, for the settings page ---------------------------------------------------------
+ geometryStats(){return {sprites:this.objects?.length||0,trees:this.trees?.length||0,propertyTriangles:0,parts:{},houseModels:{},instancedBatches:0};}
+ performanceState(){return {live:this.performanceMonitor.latest,triangles:0,drawCalls:this.drawn||0,points:0,pixelRatio:this.dpr,viewport:{width:this.width,height:this.height},shadows:false,houseDetail:this.houseDetailMode,streetscapeVisible:this.dressingVisible,benchmark:null,lastBenchmark:this.lastBenchmark||null,renderer:'isometric'};}
+ startBenchmark(){return Promise.reject(Error('The frame-rate test measures the 3D map; open it with ?map=3d.'));}
+ cancelBenchmark(){}
+ destroy(){this.destroyed=true;cancelAnimationFrame(this.raf);this.abort.abort();this.resizeObserver.disconnect();this.canvas.remove();}
+}

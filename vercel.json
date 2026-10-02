@@ -28,7 +28,7 @@
   "functions": {
     "api/index.py": {
       "maxDuration": 60,
-      "excludeFiles": "{out,web,docs,tests,examples,packages,scripts,data,prototypes,schemas}/**"
+      "excludeFiles": "{out,web,docs,assets,tests,examples,packages,scripts,prototypes,schemas}/**"
     }
   },
   "rewrites": [

@@ -18,7 +18,11 @@ from utilsim.version import GENERATOR_VERSION
 
 
 def F(default: Any, description: str, *, unit: str | None = None, ge: float | None = None,
-      le: float | None = None, advanced: bool = False, effects: list[str] | None = None, **kw: Any):
+      le: float | None = None, advanced: bool = False, effects: list[str] | None = None,
+      not_modelled: str | None = None, deprecated: tuple[str, str] | None = None, **kw: Any):
+    """A config field with its UI hints. ``not_modelled``: why the engine does not use it yet (``x-status:
+    not-modelled`` + ``x-status-reason``). ``deprecated``: (replacement, reason) for a field another setting replaces
+    (``x-status: deprecated``, ``x-deprecated``, ``x-status-reason``). A viewer shows both disabled with the reason."""
     extra: dict[str, Any] = {}
     if unit:
         extra["x-unit"] = unit
@@ -26,6 +30,10 @@ def F(default: Any, description: str, *, unit: str | None = None, ge: float | No
         extra["x-advanced"] = True
     if effects:
         extra["x-effects"] = effects
+    if not_modelled:
+        extra.update({"x-status": "not-modelled", "x-status-reason": not_modelled})
+    if deprecated:
+        extra.update({"x-status": "deprecated", "x-deprecated": deprecated[0], "x-status-reason": deprecated[1]})
     return Field(default, description=description, ge=ge, le=le, json_schema_extra=extra or None, **kw)
 
 
@@ -58,7 +66,8 @@ class SeedsConfig(BaseModel):
                                advanced=True)
     weather: str | None = F(None, "Override seed for weather series (re-roll storms, keep the town).", advanced=True)
     incidents: str | None = F(None, "Override seed for incident hazards.", advanced=True)
-    anomalies: str | None = F(None, "Override seed for meter/read anomalies.", advanced=True)
+    anomalies: str | None = F(None, "Override seed for the meter-to-cash run (missed reads, anomalies, analyst work, "
+                              "bill checks); a request's run seed overrides it per run.", advanced=True)
 
     def for_(self, subsystem: str) -> str:
         v = getattr(self, subsystem, None)
@@ -144,7 +153,9 @@ class HousingConfig(BaseModel):
     two_storey_share: EraValues = F(EraValues(pre_1945=0.7, postwar=0.25, modern=0.75),
                                     "Share of two-storey houses by era.")
     semi_share: EraValues = F(EraValues(pre_1945=0.25, postwar=0.08, modern=0.18),
-                              "Share of lots built as semi-detached/townhouse pairs.", advanced=True)
+                              "Share of lots built as semi-detached/townhouse pairs.", advanced=True,
+                              not_modelled="Every residential lot is built as a detached house; semi-detached and "
+                                           "townhouse pairs are not generated yet.")
     occupancy_rate: float = F(0.955, "Share of premises occupied at simulation start.", ge=0.5, le=1.0,
                               effects=["vacant consumption", "VEE vacancy signals", "move-ins"])
     rental_share: float = F(0.28, "Share of premises that are rentals (more contract turnover).", ge=0, le=1,
@@ -239,9 +250,12 @@ class ElectricConfig(BaseModel):
     overhead_before_year: int = F(1978, "Districts built before this year are overhead (poles); later underground.",
                                   ge=1850, le=2030, effects=["poles", "lightning exposure", "storm outages"])
     pole_spacing_m: float = F(42.0, "Pole span on overhead lines.", unit="m", ge=20, le=90, advanced=True)
-    voltage_min_pu: float = F(0.95, "Lower service voltage limit (CSA CAN3-C235 / ANSI Range A).", ge=0.85, le=1.0,
-                              advanced=True)
-    voltage_max_pu: float = F(1.05, "Upper service voltage limit.", ge=1.0, le=1.15, advanced=True)
+    voltage_min_pu: float = F(0.95, "Lower service voltage limit (CSA CAN3-C235 / ANSI Range A). Frames report it "
+                              "on a 120 V base (premises.voltageLimits) with the premises below it; less 4 V it is "
+                              "the default floor for back-feeding through a tie.", ge=0.85, le=1.0, advanced=True,
+                              effects=["low-voltage premises", "voltage lens", "back-feed voltage floor"])
+    voltage_max_pu: float = F(1.05, "Upper service voltage limit (premises.voltageLimits in frames).", ge=1.0,
+                              le=1.15, advanced=True, effects=["high-voltage premises", "voltage lens"])
 
 
 class GasConfig(BaseModel):
@@ -270,9 +284,12 @@ class GasConfig(BaseModel):
     calorific_mj_per_m3: float = F(37.5, "Higher heating value used for energy conversion (therm/kWh display and "
                                    "billing).", unit="MJ/m3", ge=30, le=45,
                                    effects=["gas bill energy", "therm/kWh conversion"])
-    base_pressure_kpa: float = F(101.325, "Base pressure for standard volume.", unit="kPa", ge=90, le=110,
-                                 advanced=True)
-    base_temperature_c: float = F(15.0, "Base temperature for standard volume.", unit="C", ge=0, le=25, advanced=True)
+    base_pressure_kpa: float = F(101.559771, "Base pressure for standard volume: the Weymouth base pressure in gas "
+                                 "main sizing and pressures (default 14.73 psia).", unit="kPa", ge=90, le=110,
+                                 advanced=True, effects=["gas main sizes", "gas pressures"])
+    base_temperature_c: float = F(15.738889, "Base temperature for standard volume: the Weymouth base temperature "
+                                  "(default 520 °R, about 60 °F).", unit="C", ge=0, le=25, advanced=True,
+                                  effects=["gas main sizes", "gas pressures"])
 
 
 class WaterConfig(BaseModel):
@@ -292,10 +309,13 @@ class WaterConfig(BaseModel):
     collector_main_mm: int = F(300, "Minimum main on collector roads.", unit="mm", ge=150, le=600, advanced=True)
     arterial_main_mm: int = F(400, "Minimum transmission main on arterials leaving the pump station.", unit="mm",
                               ge=200, le=900, advanced=True)
-    hw_c_new: float = F(130.0, "Hazen-Williams C for PVC/ductile iron.", ge=60, le=150, advanced=True)
-    hw_c_old: float = F(100.0, "Hazen-Williams C for unlined cast iron.", ge=40, le=140, advanced=True)
-    cast_iron_before_year: int = F(1960, "Districts built before this year have cast-iron mains.", ge=1850, le=2000,
-                                   effects=["main break rate", "head loss"])
+    hw_c_new: float = F(130.0, "Hazen-Williams C for PVC/ductile iron mains.", ge=60, le=150, advanced=True,
+                        effects=["head loss", "service pressure"])
+    hw_c_old: float = F(100.0, "Hazen-Williams C for unlined cast iron mains.", ge=40, le=140, advanced=True,
+                        effects=["head loss", "service pressure"])
+    cast_iron_before_year: int = F(1960, "Mains along streets built before this year are unlined cast iron (the "
+                                   "concrete trunk excepted).", ge=1850, le=2000,
+                                   effects=["cast-iron mains", "main break rate (×2)", "head loss"])
     tank_overflow_above_ground_m: float = F(42.0, "Elevated tank overflow height above the highest service in its "
                                             "zone.", unit="m", ge=20, le=80, effects=["service pressure"])
     zone_band_m: float = F(28.0, "Elevation band per pressure zone.", unit="m", ge=10, le=60, advanced=True)
@@ -321,9 +341,15 @@ class AmiConfig(BaseModel):
                                    advanced=True)
     meter_digits_water: int = F(6, "Register digits on water meters.", ge=4, le=9, advanced=True)
     meter_digits_gas: int = F(5, "Register digits on gas meters.", ge=4, le=9, advanced=True)
-    battery_life_years: float = F(15.0, "AMR/AMI endpoint battery life.", unit="yr", ge=3, le=30, advanced=True)
+    battery_life_years: float = F(15.0, "AMR/AMI endpoint battery life.", unit="yr", ge=3, le=30, advanced=True,
+                                  not_modelled="Endpoint batteries never run down in the simulation; meters carry "
+                                               "batteryInstallYear for reference.")
     comm_fail_rate: float = F(0.004, "Nightly probability an AMI meter fails to report.", ge=0, le=0.2,
-                              effects=["estimated reads", "consecutive estimates"])
+                              effects=["estimated reads", "consecutive estimates"],
+                              deprecated=("reading.ami_missed_read",
+                                          "Meter-to-cash misses AMI reads per billing read after the head end's "
+                                          "retries (Meter reading › AMI missed read, a run setting); AMI collector "
+                                          "outages add clustered misses."))
 
 
 class SeasonTemp(BaseModel):
@@ -350,7 +376,10 @@ class WeatherConfig(BaseModel):
 
 
 class IncidentConfig(BaseModel):
-    model_config = group("Incidents & hazards", 8, "What goes wrong, how often. Rates are per year.")
+    model_config = group("Incidents & hazards", 8, "What goes wrong, how often. Rates are per year. Each operations "
+                         "day draws its background incidents at these rates; they are the defaults of the operations "
+                         "run's random-incident settings (x-run-setting), so a run can change them without a new "
+                         "town.")
     gas_service_leaks_per_1000: float = F(1.2, "Leaks per 1,000 gas services per year.", ge=0, le=50)
     gas_main_leaks_per_100km: float = F(8.0, "Leaks per 100 km of gas main per year.", ge=0, le=200)
     water_main_breaks_per_100km: float = F(14.0, "Main breaks per 100 km per year (×2 for cast iron).", ge=0, le=200,
@@ -360,26 +389,36 @@ class IncidentConfig(BaseModel):
     transformer_failures_per_1000: float = F(3.0, "Transformer failures per 1,000 units per year (×3 when "
                                              "overloaded).", ge=0, le=100)
     collector_outages_per_year: float = F(2.0, "AMI collector outages per year (town-wide).", ge=0, le=50)
-    manual_only: bool = F(False, "Disable random hazards; only manually injected incidents occur.")
+    manual_only: bool = F(False, "Disable random hazards; only manually injected incidents occur (the run's "
+                          "\"Random incidents\" switch defaults to the opposite).", effects=["background incidents"])
 
 
 class OperationsConfig(BaseModel):
-    model_config = group("Field operations", 9, "Fleet, shifts, response targets and vehicle movement.")
+    model_config = group("Field operations", 9, "Fleet, shifts, response targets and vehicle movement. Crews, readers, "
+                         "the shift and the gas target are the defaults of the operations run settings "
+                         "(x-run-setting), so a run can change them without a new town.")
     gas_crews: int = F(2, "Gas emergency crews.", ge=0, le=20, effects=["leak response time"])
     electric_crews: int = F(3, "Electric trouble crews.", ge=0, le=30, effects=["outage duration", "SAIDI"])
     water_crews: int = F(2, "Water distribution crews.", ge=0, le=20)
     meter_techs: int = F(2, "Meter technicians (exchanges, investigations).", ge=0, le=20)
     meter_vans: int = F(2, "Drive-by AMR reading vans.", ge=0, le=20, effects=["AMR read completion"])
     meter_walkers: int = F(3, "Manual meter readers.", ge=0, le=40, effects=["manual read completion", "no-access"])
-    shift_start_hour: float = F(7.0, "Day shift start.", unit="h", ge=0, le=23)
-    shift_end_hour: float = F(15.5, "Day shift end.", unit="h", ge=1, le=24)
+    shift_start_hour: float = F(7.0, "Day shift start. Non-emergency work (AMI collector repairs) waits for the day "
+                                "shift; emergencies are worked around the clock.", unit="h", ge=0, le=23,
+                                effects=["collector outage length"])
+    shift_end_hour: float = F(15.5, "Day shift end.", unit="h", ge=1, le=24, effects=["collector outage length"])
     gas_response_target_min: float = F(60.0, "Target response to a gas odour call.", unit="min", ge=10, le=240)
     speed_kmh_arterial: float = F(50.0, "Driving speed on arterials.", unit="km/h", ge=10, le=100, advanced=True)
     speed_kmh_collector: float = F(40.0, "Driving speed on collectors.", unit="km/h", ge=10, le=80, advanced=True)
     speed_kmh_local: float = F(30.0, "Driving speed on local streets.", unit="km/h", ge=5, le=60, advanced=True)
     drive_by_radius_m: float = F(120.0, "AMR van reads meters within this distance.", unit="m", ge=20, le=500,
-                                 advanced=True)
-    walker_meters_per_hour: float = F(45.0, "Manual reads per walker-hour.", ge=5, le=150, advanced=True)
+                                 advanced=True,
+                                 not_modelled="Drive-by rounds pass the route's premises at the drive-by speed; "
+                                              "radio range is not modelled.")
+    walker_meters_per_hour: float = F(45.0, "Manual reads per walker-hour.", ge=5, le=150, advanced=True,
+                                      deprecated=("walkKmh, meterDwellSeconds",
+                                                  "A walked round's length follows its route at the run's walking "
+                                                  "speed and time at each meter (Operations › Reading rounds)."))
 
 
 class RateBlock(BaseModel):
@@ -416,7 +455,9 @@ class CustomersBillingConfig(BaseModel):
 class ProcessConfig(BaseModel):
     model_config = group("Meter-to-cash process", 11, "Work queues, automation, workforce, costs and carrying cost.",
                          applies="run")
-    sequences: str = F("builtin", "Activity sequence library: 'builtin' or a path to a YAML file.")
+    sequences: str = F("builtin", "Activity sequence library: 'builtin' or a path to a YAML file.",
+                       not_modelled="Only the built-in activity sequences exist; a YAML sequence library is not read "
+                                    "yet.")
     rpa_coverage: float = F(0.35, "Share of exception types with an RPA/auto-resolve rule.", ge=0, le=1,
                             effects=["analyst workload", "days to invoice", "carrying cost"])
     analyst_queue_days_min: int = F(1, "Minimum queue wait before an analyst picks up an exception.", ge=1, le=10)
@@ -517,6 +558,17 @@ class BillingConfig(BaseModel):
                                 ge=0, le=10000, advanced=True)
     credit_review: float = F(75.0, "Block a bill that is a credit larger than this.", unit="$", ge=0, le=5000,
                              advanced=True)
+    outsort_auto_release_max: float = F(500.0, "RPA may release a high-bill or large-credit outsort only up to this "
+                                        "bill amount (either sign); a larger one waits for an analyst.", unit="$",
+                                        ge=0, le=100000, effects=["analyst workload", "billing errors"])
+    billing_queue_worked_by: Literal["analysts", "you"] = F(
+        "analysts", "Who works the BILLING queue (high bills, large credits, true-ups, rate-class errors): the "
+        "simulated analysts and RPA, or only you. With 'you', no analyst or RPA touches a billing block, so every "
+        "outsort waits in the Studio for your release, rebill or escalation.",
+        effects=["billing blocks", "days to invoice", "billing carry"])
+    trueup_max_ratio: float = F(3.0, "Block a bill whose estimate true-up (a negative period quantity) is larger than "
+                                "this multiple of the period's expected use; an analyst decides it.", unit="×", ge=1,
+                                le=50, advanced=True, effects=["billing blocks", "billing errors"])
     data_error_rate: float = F(3.0, "Installations with a wrong rate class in billing master data (per 1,000 per "
                                "year).", ge=0, le=200, effects=["rate-class billing blocks"])
     print_lag_days: int = F(1, "Days from invoice creation to issue.", unit="d", ge=0, le=10, advanced=True)
@@ -615,7 +667,15 @@ RUN_GROUPS = tuple(k for k, f in SimConfig.model_fields.items()
 
 
 def config_schema() -> dict[str, Any]:
-    """JSON Schema with UI hints for the settings page."""
+    """JSON Schema with UI hints for the settings page. A town field that is the default of an operations run setting
+    names it in ``x-run-setting`` (a key of ``GET /api/sim/settings/schema``): change it per run there, or here for a
+    new town."""
+    from utilsim.ops.timeline import TOWN_SETTINGS
+
     schema = SimConfig.model_json_schema()
     schema["x-generator-version"] = GENERATOR_VERSION
+    defs = schema["$defs"]
+    for key, (path, _) in TOWN_SETTINGS.items():
+        group, field = path.split(".")
+        defs[SimConfig.model_fields[group].annotation.__name__]["properties"][field]["x-run-setting"] = key
     return schema

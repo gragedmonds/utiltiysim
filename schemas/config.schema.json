@@ -38,6 +38,8 @@
           "title": "Battery Life Years",
           "type": "number",
           "x-advanced": true,
+          "x-status": "not-modelled",
+          "x-status-reason": "Endpoint batteries never run down in the simulation; meters carry batteryInstallYear for reference.",
           "x-unit": "yr"
         },
         "collector_radius_m": {
@@ -60,10 +62,13 @@
           "minimum": 0,
           "title": "Comm Fail Rate",
           "type": "number",
+          "x-deprecated": "reading.ami_missed_read",
           "x-effects": [
             "estimated reads",
             "consecutive estimates"
-          ]
+          ],
+          "x-status": "deprecated",
+          "x-status-reason": "Meter-to-cash misses AMI reads per billing read after the head end's retries (Meter reading › AMI missed read, a run setting); AMI collector outages add clustered misses."
         },
         "meter_digits_electric": {
           "default": 6,
@@ -218,6 +223,21 @@
       "additionalProperties": false,
       "description": "Bill checks, tariff versions, invoicing, payments and dunning.",
       "properties": {
+        "billing_queue_worked_by": {
+          "default": "analysts",
+          "description": "Who works the BILLING queue (high bills, large credits, true-ups, rate-class errors): the simulated analysts and RPA, or only you. With 'you', no analyst or RPA touches a billing block, so every outsort waits in the Studio for your release, rebill or escalation.",
+          "enum": [
+            "analysts",
+            "you"
+          ],
+          "title": "Billing Queue Worked By",
+          "type": "string",
+          "x-effects": [
+            "billing blocks",
+            "days to invoice",
+            "billing carry"
+          ]
+        },
         "credit_review": {
           "default": 75.0,
           "description": "Block a bill that is a credit larger than this.",
@@ -310,6 +330,19 @@
           "x-advanced": true,
           "x-unit": "$"
         },
+        "outsort_auto_release_max": {
+          "default": 500.0,
+          "description": "RPA may release a high-bill or large-credit outsort only up to this bill amount (either sign); a larger one waits for an analyst.",
+          "maximum": 100000,
+          "minimum": 0,
+          "title": "Outsort Auto Release Max",
+          "type": "number",
+          "x-effects": [
+            "analyst workload",
+            "billing errors"
+          ],
+          "x-unit": "$"
+        },
         "pad_reject_rate": {
           "default": 0.015,
           "description": "Pre-authorized debits returned for insufficient funds.",
@@ -359,6 +392,20 @@
           "title": "Reminder Days",
           "type": "integer",
           "x-unit": "d"
+        },
+        "trueup_max_ratio": {
+          "default": 3.0,
+          "description": "Block a bill whose estimate true-up (a negative period quantity) is larger than this multiple of the period's expected use; an analyst decides it.",
+          "maximum": 50,
+          "minimum": 1,
+          "title": "Trueup Max Ratio",
+          "type": "number",
+          "x-advanced": true,
+          "x-effects": [
+            "billing blocks",
+            "billing errors"
+          ],
+          "x-unit": "×"
         },
         "winter_moratorium": {
           "default": true,
@@ -926,21 +973,31 @@
         },
         "voltage_max_pu": {
           "default": 1.05,
-          "description": "Upper service voltage limit.",
+          "description": "Upper service voltage limit (premises.voltageLimits in frames).",
           "maximum": 1.15,
           "minimum": 1.0,
           "title": "Voltage Max Pu",
           "type": "number",
-          "x-advanced": true
+          "x-advanced": true,
+          "x-effects": [
+            "high-voltage premises",
+            "voltage lens"
+          ]
         },
         "voltage_min_pu": {
           "default": 0.95,
-          "description": "Lower service voltage limit (CSA CAN3-C235 / ANSI Range A).",
+          "description": "Lower service voltage limit (CSA CAN3-C235 / ANSI Range A). Frames report it on a 120 V base (premises.voltageLimits) with the premises below it; less 4 V it is the default floor for back-feeding through a tie.",
           "maximum": 1.0,
           "minimum": 0.85,
           "title": "Voltage Min Pu",
           "type": "number",
-          "x-advanced": true
+          "x-advanced": true,
+          "x-effects": [
+            "low-voltage premises",
+            "voltage lens",
+            "back-feed voltage floor"
+          ],
+          "x-run-setting": "tieMinVoltage"
         }
       },
       "title": "Electric distribution",
@@ -992,23 +1049,31 @@
           ]
         },
         "base_pressure_kpa": {
-          "default": 101.325,
-          "description": "Base pressure for standard volume.",
+          "default": 101.559771,
+          "description": "Base pressure for standard volume: the Weymouth base pressure in gas main sizing and pressures (default 14.73 psia).",
           "maximum": 110,
           "minimum": 90,
           "title": "Base Pressure Kpa",
           "type": "number",
           "x-advanced": true,
+          "x-effects": [
+            "gas main sizes",
+            "gas pressures"
+          ],
           "x-unit": "kPa"
         },
         "base_temperature_c": {
-          "default": 15.0,
-          "description": "Base temperature for standard volume.",
+          "default": 15.738889,
+          "description": "Base temperature for standard volume: the Weymouth base temperature (default 520 °R, about 60 °F).",
           "maximum": 25,
           "minimum": 0,
           "title": "Base Temperature C",
           "type": "number",
           "x-advanced": true,
+          "x-effects": [
+            "gas main sizes",
+            "gas pressures"
+          ],
           "x-unit": "C"
         },
         "calorific_mj_per_m3": {
@@ -1287,7 +1352,9 @@
             "pre_1945": 0.25
           },
           "description": "Share of lots built as semi-detached/townhouse pairs.",
-          "x-advanced": true
+          "x-advanced": true,
+          "x-status": "not-modelled",
+          "x-status-reason": "Every residential lot is built as a detached house; semi-detached and townhouse pairs are not generated yet."
         },
         "setback_m": {
           "$ref": "#/$defs/EraValues",
@@ -1332,7 +1399,7 @@
     },
     "IncidentConfig": {
       "additionalProperties": false,
-      "description": "What goes wrong, how often. Rates are per year.",
+      "description": "What goes wrong, how often. Rates are per year. Each operations day draws its background incidents at these rates; they are the defaults of the operations run's random-incident settings (x-run-setting), so a run can change them without a new town.",
       "properties": {
         "collector_outages_per_year": {
           "default": 2.0,
@@ -1340,7 +1407,8 @@
           "maximum": 50,
           "minimum": 0,
           "title": "Collector Outages Per Year",
-          "type": "number"
+          "type": "number",
+          "x-run-setting": "collectorOutagesPerYear"
         },
         "gas_main_leaks_per_100km": {
           "default": 8.0,
@@ -1348,7 +1416,8 @@
           "maximum": 200,
           "minimum": 0,
           "title": "Gas Main Leaks Per 100Km",
-          "type": "number"
+          "type": "number",
+          "x-run-setting": "gasMainLeaksPer100km"
         },
         "gas_service_leaks_per_1000": {
           "default": 1.2,
@@ -1356,13 +1425,18 @@
           "maximum": 50,
           "minimum": 0,
           "title": "Gas Service Leaks Per 1000",
-          "type": "number"
+          "type": "number",
+          "x-run-setting": "gasServiceLeaksPer1000"
         },
         "manual_only": {
           "default": false,
-          "description": "Disable random hazards; only manually injected incidents occur.",
+          "description": "Disable random hazards; only manually injected incidents occur (the run's \"Random incidents\" switch defaults to the opposite).",
           "title": "Manual Only",
-          "type": "boolean"
+          "type": "boolean",
+          "x-effects": [
+            "background incidents"
+          ],
+          "x-run-setting": "randomIncidents"
         },
         "overhead_faults_per_km_storm_day": {
           "default": 0.015,
@@ -1375,7 +1449,8 @@
             "outages",
             "SAIDI/SAIFI",
             "zero-usage reads"
-          ]
+          ],
+          "x-run-setting": "overheadFaultsPerKmStormDay"
         },
         "transformer_failures_per_1000": {
           "default": 3.0,
@@ -1383,7 +1458,8 @@
           "maximum": 100,
           "minimum": 0,
           "title": "Transformer Failures Per 1000",
-          "type": "number"
+          "type": "number",
+          "x-run-setting": "transformerFailuresPer1000"
         },
         "water_main_breaks_per_100km": {
           "default": 14.0,
@@ -1395,7 +1471,8 @@
           "x-effects": [
             "water outages",
             "crew workload"
-          ]
+          ],
+          "x-run-setting": "waterMainBreaksPer100km"
         }
       },
       "title": "Incidents & hazards",
@@ -1406,7 +1483,7 @@
     },
     "OperationsConfig": {
       "additionalProperties": false,
-      "description": "Fleet, shifts, response targets and vehicle movement.",
+      "description": "Fleet, shifts, response targets and vehicle movement. Crews, readers, the shift and the gas target are the defaults of the operations run settings (x-run-setting), so a run can change them without a new town.",
       "properties": {
         "drive_by_radius_m": {
           "default": 120.0,
@@ -1416,6 +1493,8 @@
           "title": "Drive By Radius M",
           "type": "number",
           "x-advanced": true,
+          "x-status": "not-modelled",
+          "x-status-reason": "Drive-by rounds pass the route's premises at the drive-by speed; radio range is not modelled.",
           "x-unit": "m"
         },
         "electric_crews": {
@@ -1428,7 +1507,8 @@
           "x-effects": [
             "outage duration",
             "SAIDI"
-          ]
+          ],
+          "x-run-setting": "electricCrews"
         },
         "gas_crews": {
           "default": 2,
@@ -1439,7 +1519,8 @@
           "type": "integer",
           "x-effects": [
             "leak response time"
-          ]
+          ],
+          "x-run-setting": "gasCrews"
         },
         "gas_response_target_min": {
           "default": 60.0,
@@ -1448,6 +1529,7 @@
           "minimum": 10,
           "title": "Gas Response Target Min",
           "type": "number",
+          "x-run-setting": "gasResponseTargetMinutes",
           "x-unit": "min"
         },
         "meter_techs": {
@@ -1456,7 +1538,8 @@
           "maximum": 20,
           "minimum": 0,
           "title": "Meter Techs",
-          "type": "integer"
+          "type": "integer",
+          "x-run-setting": "meterTechs"
         },
         "meter_vans": {
           "default": 2,
@@ -1467,7 +1550,8 @@
           "type": "integer",
           "x-effects": [
             "AMR read completion"
-          ]
+          ],
+          "x-run-setting": "meterVans"
         },
         "meter_walkers": {
           "default": 3,
@@ -1479,7 +1563,8 @@
           "x-effects": [
             "manual read completion",
             "no-access"
-          ]
+          ],
+          "x-run-setting": "meterWalkers"
         },
         "shift_end_hour": {
           "default": 15.5,
@@ -1488,15 +1573,23 @@
           "minimum": 1,
           "title": "Shift End Hour",
           "type": "number",
+          "x-effects": [
+            "collector outage length"
+          ],
+          "x-run-setting": "shiftEndHour",
           "x-unit": "h"
         },
         "shift_start_hour": {
           "default": 7.0,
-          "description": "Day shift start.",
+          "description": "Day shift start. Non-emergency work (AMI collector repairs) waits for the day shift; emergencies are worked around the clock.",
           "maximum": 23,
           "minimum": 0,
           "title": "Shift Start Hour",
           "type": "number",
+          "x-effects": [
+            "collector outage length"
+          ],
+          "x-run-setting": "shiftStartHour",
           "x-unit": "h"
         },
         "speed_kmh_arterial": {
@@ -1536,7 +1629,10 @@
           "minimum": 5,
           "title": "Walker Meters Per Hour",
           "type": "number",
-          "x-advanced": true
+          "x-advanced": true,
+          "x-deprecated": "walkKmh, meterDwellSeconds",
+          "x-status": "deprecated",
+          "x-status-reason": "A walked round's length follows its route at the run's walking speed and time at each meter (Operations › Reading rounds)."
         },
         "water_crews": {
           "default": 2,
@@ -1544,7 +1640,8 @@
           "maximum": 20,
           "minimum": 0,
           "title": "Water Crews",
-          "type": "integer"
+          "type": "integer",
+          "x-run-setting": "waterCrews"
         }
       },
       "title": "Field operations",
@@ -1685,7 +1782,9 @@
           "default": "builtin",
           "description": "Activity sequence library: 'builtin' or a path to a YAML file.",
           "title": "Sequences",
-          "type": "string"
+          "type": "string",
+          "x-status": "not-modelled",
+          "x-status-reason": "Only the built-in activity sequences exist; a YAML sequence library is not read yet."
         },
         "supervisor_hours_per_day": {
           "default": 2.0,
@@ -1945,7 +2044,7 @@
             }
           ],
           "default": null,
-          "description": "Override seed for meter/read anomalies.",
+          "description": "Override seed for the meter-to-cash run (missed reads, anomalies, analyst work, bill checks); a request's run seed overrides it per run.",
           "title": "Anomalies",
           "x-advanced": true
         },
@@ -2507,13 +2606,14 @@
         },
         "cast_iron_before_year": {
           "default": 1960,
-          "description": "Districts built before this year have cast-iron mains.",
+          "description": "Mains along streets built before this year are unlined cast iron (the concrete trunk excepted).",
           "maximum": 2000,
           "minimum": 1850,
           "title": "Cast Iron Before Year",
           "type": "integer",
           "x-effects": [
-            "main break rate",
+            "cast-iron mains",
+            "main break rate (×2)",
             "head loss"
           ]
         },
@@ -2562,21 +2662,29 @@
         },
         "hw_c_new": {
           "default": 130.0,
-          "description": "Hazen-Williams C for PVC/ductile iron.",
+          "description": "Hazen-Williams C for PVC/ductile iron mains.",
           "maximum": 150,
           "minimum": 60,
           "title": "Hw C New",
           "type": "number",
-          "x-advanced": true
+          "x-advanced": true,
+          "x-effects": [
+            "head loss",
+            "service pressure"
+          ]
         },
         "hw_c_old": {
           "default": 100.0,
-          "description": "Hazen-Williams C for unlined cast iron.",
+          "description": "Hazen-Williams C for unlined cast iron mains.",
           "maximum": 140,
           "minimum": 40,
           "title": "Hw C Old",
           "type": "number",
-          "x-advanced": true
+          "x-advanced": true,
+          "x-effects": [
+            "head loss",
+            "service pressure"
+          ]
         },
         "hydrant_spacing_commercial_m": {
           "default": 90.0,
@@ -2757,7 +2865,8 @@
           "x-effects": [
             "lightning outages",
             "estimated reads"
-          ]
+          ],
+          "x-run-setting": "stormDaysPerYear"
         },
         "summer": {
           "$ref": "#/$defs/SeasonTemp",
@@ -2856,5 +2965,5 @@
   },
   "title": "SimConfig",
   "type": "object",
-  "x-generator-version": "0.7.0"
+  "x-generator-version": "0.8.0"
 }

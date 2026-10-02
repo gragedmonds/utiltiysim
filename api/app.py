@@ -12,19 +12,20 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import Response
-from pydantic import BaseModel, Field
 
 from api._m2c import router as m2c_router
-from api._ops import SNAPSHOT_SOURCES, pack_index
 from api._ops import router as ops_router
+from api._towns import health as health_body
+from api._towns import ready_town as _town
+from api._towns import router as towns_router
 from api.store import store
-from utilsim.config import SCENARIOS, SimConfig, config_schema, list_presets, load_preset
+from utilsim.config import SCENARIOS
 from utilsim.config.presets import deep_merge
 from utilsim.io.geojson import LAYERS, layer
-from utilsim.io.tables import TABLES, table_rows, to_csv_text, to_parquet_bytes
+from utilsim.io.tables import table_rows, to_csv_text, to_parquet_bytes
 from utilsim.process.fixtures import VARIANTS, fixture, variant
 from utilsim.sim.flows import FlowModel
-from utilsim.version import GENERATOR_VERSION, SCHEMA_VERSION
+from utilsim.version import GENERATOR_VERSION
 
 app = FastAPI(title="utilsim", version=GENERATOR_VERSION,
               description="Seeded utility-town engine: geography, networks, customers, simulation, meter-to-cash.")
@@ -33,7 +34,7 @@ app.add_middleware(CORSMiddleware, allow_origins=os.environ.get("CORS_ORIGINS", 
                    allow_methods=["*"], allow_headers=["*"])
 app.include_router(ops_router)  # operations (also the hosted engine's API, api/index.py)
 app.include_router(m2c_router)  # meter-to-cash: reads, VEE, work queues
-SNAPSHOT_SOURCES.append(lambda tid: store.snapshot(tid) if store.status(tid) == "ready" else None)
+app.include_router(towns_router)  # generated towns (POST /api/towns), also a snapshot source for the two above
 
 
 def J(data: Any, status: int = 200) -> Response:
@@ -41,31 +42,11 @@ def J(data: Any, status: int = 200) -> Response:
                     media_type="application/json")
 
 
-class TownRequest(BaseModel):
-    preset: str = Field("whitby_small", description="Base preset.")
-    seed: str | None = Field(None, description="Master seed override.")
-    houses: int | None = Field(None, ge=20, le=10_000)
-    scenario: str | None = None
-    overrides: dict[str, Any] | None = Field(None, description="Deep-merged SimConfig overrides.")
-    config: dict[str, Any] | None = Field(None, description="A complete SimConfig (wins over preset/overrides).")
-
-
-def _town(tid: str):
-    st = store.status(tid)
-    if st == "building":
-        raise HTTPException(409, f"town {tid} is still building")
-    if st == "failed":
-        raise HTTPException(500, store.error(tid))
-    town = store.get(tid)
-    if town is None:
-        raise HTTPException(404, f"unknown town {tid}; POST /api/towns first")
-    return town
-
-
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "generatorVersion": GENERATOR_VERSION, "schemaVersion": SCHEMA_VERSION,
-            "towns": [t["preset"] for t in pack_index()["towns"]]}
+    """Status, versions, towns (pack presets, then ready generated town ids, with details in ``generated``) and
+    ``capabilities`` (``generate``: this engine can build new towns with ``POST /api/towns``)."""
+    return J(health_body("local"))
 
 
 @app.get("/api/schemas/{name}.json")
@@ -79,71 +60,12 @@ def get_published_schema(name: str):
     return J(load(name))
 
 
-@app.get("/api/config/schema")
-def get_schema():
-    return J(config_schema())
-
-
-@app.get("/api/config/presets")
-def get_presets():
-    return J({"towns": list_presets(), "scenarios": sorted(SCENARIOS)})
-
-
 @app.get("/api/sources")
 def get_sources():
     """Frozen street extracts (real places) with attribution and the presets built on them."""
     from utilsim.gen.sources import list_sources
 
     return J({"sources": list_sources()})
-
-
-@app.get("/api/config/presets/{name}")
-def get_preset(name: str):
-    try:
-        return J(load_preset(name).model_dump(mode="json"))
-    except KeyError as exc:
-        raise HTTPException(404, str(exc)) from exc
-
-
-@app.post("/api/towns")
-def create_town(req: TownRequest):
-    try:
-        if req.config:
-            cfg = SimConfig.model_validate(req.config)
-        else:
-            cfg = load_preset(req.preset, overrides=req.overrides, seed=req.seed, houses=req.houses,
-                              scenario=req.scenario)
-    except (KeyError, ValueError) as exc:
-        raise HTTPException(422, str(exc)) from exc
-    tid, status = store.submit(cfg)
-    body = {"townId": tid, "status": status}
-    if status == "failed":
-        body["error"] = store.error(tid)
-        return J(body, 422)
-    return J(body, 201 if status == "ready" else 202)
-
-
-@app.get("/api/towns/{tid}")
-def get_town(tid: str):
-    st = store.status(tid)
-    if st in ("building", "failed", "unknown"):
-        return J({"townId": tid, "status": st, "error": store.error(tid)}, 404 if st == "unknown" else 200)
-    town = _town(tid)
-    from utilsim.io.snapshot import town_stats
-
-    minx, miny, maxx, maxy = town.bounds
-    return J({"townId": tid, "status": "ready", "generatorVersion": GENERATOR_VERSION, "schemaVersion": SCHEMA_VERSION,
-              "seed": town.cfg.seeds.master, "houses": int(town.prem.residential.sum()), "premises": len(town.prem),
-              "bounds": {"minX": minx, "maxX": maxx, "minZ": -maxy, "maxZ": -miny},
-              "origin": {"lat": town.geo.origin_lat, "lon": town.geo.origin_lon}, "source": town.geo.source,
-              "layers": LAYERS, "tables": TABLES, "stats": town_stats(town)})
-
-
-@app.get("/api/towns/{tid}/snapshot.json")
-def get_snapshot(tid: str, profile: Literal["full", "viewer"] = "full"):
-    _town(tid)
-    return Response(store.snapshot_gz(tid, profile), media_type="application/json",
-                    headers={"Content-Encoding": "gzip"})
 
 
 @app.get("/api/towns/{tid}/layers/{name}.geojson")

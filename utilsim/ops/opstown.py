@@ -9,13 +9,14 @@ and the inputs for flows and frames. Pure numpy + stdlib: no scipy, shapely or g
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from functools import cached_property
 
 import numpy as np
 
 from utilsim.config.model import SimConfig
 from utilsim.sim.flows import SOURCE_KINDS, FlowInputs, FlowModel, NetInputs
 from utilsim.sim.hydraulics import HydParams
-from utilsim.sim.state import FrameBuilder, FrameContext
+from utilsim.sim.state import FrameBuilder, FrameContext, voltage_limits
 from utilsim.sim.usage import UsageInputs, monthly_daily
 from utilsim.sim.voltage import ElecParams
 from utilsim.sim.weather import daily_temps
@@ -55,6 +56,9 @@ class NetOps:
     valve_edges: set[int]
     tie_edges: set[int] = field(default_factory=set)  # normally-open ties between feeders (back-feed)
     diameter_in: np.ndarray | None = None  # pipe inside diameter per edge (water and gas)
+    length: np.ndarray | None = None  # metres per edge
+    material: list | None = None  # per edge (pipes), else None
+    placement: list | None = None  # per edge: overhead | underground
     edge_index: dict[str, int] = field(default_factory=dict)
     node_index: dict[str, int] = field(default_factory=dict)
 
@@ -86,6 +90,19 @@ class OpsTown:
                       "access": (self.roads.index[depot["roadId"]], float(depot.get("t", 0.0)))
                       if depot.get("roadId") in self.roads.index else None}
         self.nets = {u: self._net(u, snap["networks"][u]) for u in UTILITIES}
+        # AMI collectors and the premises whose AMI meters report through each (full snapshots carry meters' links).
+        sp_premise = {sp["id"]: sp["premiseId"] for sp in snap.get("servicePoints") or []}
+        on: dict[str, set[str]] = {}
+        meters: dict[str, int] = {}
+        for m in snap.get("meters") or []:
+            col = (m.get("ami") or {}).get("collectorId")
+            if col and sp_premise.get(m.get("servicePointId")):
+                on.setdefault(col, set()).add(sp_premise[m["servicePointId"]])
+                meters[col] = meters.get(col, 0) + 1
+        self.collectors = [{"id": c["id"], "x": float(c["x"]), "z": float(c["z"]),
+                            "premiseIds": sorted(on.get(c["id"], ())), "meters": meters.get(c["id"], 0)}
+                           for c in (snap.get("amiNetwork") or {}).get("collectors") or []]
+        self._peak: dict[int, np.ndarray] = {}
         self.last_reads = {}
         for r in snap.get("sampleReads") or []:
             key = (r["premiseId"], r["commodity"], r.get("direction", "import"))
@@ -102,8 +119,8 @@ class OpsTown:
             monthly=monthly_daily(UsageInputs.from_snapshot(snap), self.sim_config),
             elec=ElecParams.from_edges(snap["networks"]["electric"]["edges"],
                                        [nd["kind"] for nd in snap["networks"]["electric"]["nodes"]]),
-            hyd={u: HydParams.from_network(u, snap["networks"][u]["edges"], snap["networks"][u]["nodes"])
-                 for u in ("water", "gas")})
+            hyd={u: HydParams.from_network(u, snap["networks"][u]["edges"], snap["networks"][u]["nodes"],
+                                           self.sim_config) for u in ("water", "gas")})
         self.context = FrameContext(
             id=self.id, topology=snap["topologyRevision"], index=snap["indexRevision"], timezone=self.timezone,
             origin_lat=float(origin["lat"]), origin_lon=float(origin["lon"]), premise_ids=self.premise_ids,
@@ -111,7 +128,7 @@ class OpsTown:
             enabled={u: self.flow_inputs.nets[u].enabled.copy() for u in UTILITIES},
             supply=np.array([e["kind"] == "supply" for e in snap["networks"]["electric"]["edges"]]),
             served={"electric": np.ones(n, dtype=bool), "water": np.ones(n, dtype=bool), "gas": has_gas},
-            temps=daily_temps(self.sim_config))
+            temps=daily_temps(self.sim_config), voltage_limits=voltage_limits(self.sim_config))
         self.flow_model = FlowModel(self.flow_inputs)
         self.frames = FrameBuilder(self.context, self.flow_model)
 
@@ -169,6 +186,9 @@ class OpsTown:
             parent_edge=parent, equipment=eq, fuse_edges=fuses, recloser_edges=reclosers, valve_edges=valves)
         no.edge_index, no.node_index = edge_index, node_index
         no.diameter_in = np.array([float(e.get("diameterIn") or float(e.get("sizeMm") or 0) / 25.4) for e in edges])
+        no.length = np.array([float(e.get("lengthM") or 0.0) for e in edges])
+        no.material = [e.get("material") for e in edges]
+        no.placement = [e.get("placement") for e in edges]
         no.tie_edges = {k for k, e in enumerate(edges) if e.get("normallyOpen") or (e.get("enabled") is False
                                                                                     and e["kind"] != "service")}
         return no
@@ -186,6 +206,30 @@ class OpsTown:
                             for n in nodes], dtype=np.int64),
             sources=np.array([i for i, n in enumerate(nodes) if n["kind"] in SOURCE_KINDS], dtype=np.int64),
             unit=net["unit"])
+
+    @cached_property
+    def run_defaults(self) -> dict:
+        """Operations run settings for this town (its crews, shift, targets and limits; ``ops.timeline``)."""
+        from utilsim.ops.timeline import run_defaults
+
+        return run_defaults(self.sim_config)
+
+    @cached_property
+    def exposure(self):
+        """What can fail here (``ops.hazards``): mains, services, transformers, overhead primary, collectors."""
+        from utilsim.ops.hazards import Exposure
+
+        return Exposure.of(self)
+
+    def peak_loading(self, month: int) -> np.ndarray:
+        """Electric edge loading (apparent power / rating) at the evening peak of a day in ``month``."""
+        if month not in self._peak:
+            from utilsim.ops.hazards import PEAK_HOUR
+
+            v = self.flow_model.flows(PEAK_HOUR, month=month).voltage
+            self._peak[month] = np.nan_to_num(v.loading, nan=0.0) if v is not None else \
+                np.zeros(len(self.nets["electric"].a))
+        return self._peak[month]
 
     # ---- helpers ---------------------------------------------------------------------------------------------
     def nearest_node(self, u: str, edge: int, x: float, z: float) -> int:

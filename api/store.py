@@ -13,11 +13,10 @@ from pathlib import Path
 import orjson
 
 from utilsim.config.model import SimConfig
-from utilsim.gen.pipeline import generate
-from utilsim.io.snapshot import build_snapshot
 
-CACHE_DIR = Path(os.environ.get("UTILSIM_CACHE", ".utilsim_cache"))
-SYNC_LIMIT = int(os.environ.get("UTILSIM_SYNC_HOUSES", "2000"))
+SERVERLESS = bool(os.environ.get("VERCEL"))  # a function invocation cannot leave a build running after it returns
+CACHE_DIR = Path(os.environ.get("UTILSIM_CACHE", "/tmp/utilsim-cache" if SERVERLESS else ".utilsim_cache"))
+SYNC_LIMIT = int(os.environ.get("UTILSIM_SYNC_HOUSES", str(10**9) if SERVERLESS else "2000"))
 MAX_TOWNS = int(os.environ.get("UTILSIM_MAX_TOWNS", "4"))
 
 
@@ -46,8 +45,22 @@ class TownStore:
             self._jobs[tid] = self._pool.submit(self._build, tid, cfg)
         return tid, "building"
 
+    def build(self, cfg: SimConfig) -> str:
+        """Build ``cfg`` now (in this request) unless it is ready; returns its status."""
+        tid = cfg.town_id()
+        with self._lock:
+            self._configs[tid] = cfg
+        if tid not in self._towns:
+            self._build(tid, cfg)
+        return self.status(tid)
+
+    def config(self, tid: str) -> SimConfig | None:
+        return self._configs.get(tid)
+
     def _build(self, tid: str, cfg: SimConfig) -> None:
         try:
+            from utilsim.gen.pipeline import generate  # the generation stack, loaded on first use
+
             town = generate(cfg)
             with self._lock:
                 self._towns[tid] = town
@@ -71,6 +84,13 @@ class TownStore:
             return "evicted"
         return "unknown"
 
+    def ready(self) -> list[dict]:
+        """Generated towns in memory, oldest first: ``{townId, name, seed, houses}``."""
+        with self._lock:
+            towns = list(self._towns.items())
+        return [{"townId": tid, "name": t.cfg.name, "seed": t.cfg.seeds.master, "houses": t.cfg.town.houses}
+                for tid, t in towns]
+
     def error(self, tid: str) -> str | None:
         return self._errors.get(tid)
 
@@ -90,6 +110,8 @@ class TownStore:
             data = path.read_bytes()
         else:
             town = self.get(tid)
+            from utilsim.io.snapshot import build_snapshot
+
             data = gzip.compress(orjson.dumps(build_snapshot(town, detail=profile)), 6, mtime=0)
             try:
                 path.parent.mkdir(parents=True, exist_ok=True)

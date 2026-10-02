@@ -19,6 +19,7 @@ import numpy as np
 from utilsim.io.revisions import index_revision, topology_revision
 from utilsim.sim.astro import moon_phase, sun_position
 from utilsim.sim.flows import FlowModel
+from utilsim.sim.voltage import BASE_V
 from utilsim.sim.weather import START as WEATHER_START
 from utilsim.sim.weather import daily_temps
 from utilsim.version import REPLAY_SCHEMA_VERSION, STATE_SCHEMA_VERSION
@@ -73,6 +74,7 @@ class FrameContext:
     supply: np.ndarray  # electric supply edges (substation_outage disables them)
     served: dict[str, np.ndarray]  # premise has the service
     temps: np.ndarray | None = None  # daily mean temperature, index 0 = 2025-12-01 (sim.weather)
+    voltage_limits: tuple[float, float] | None = None  # service voltage limits (V, 120 V base) from the config
 
     @classmethod
     def from_town(cls, town) -> FrameContext:
@@ -86,7 +88,14 @@ class FrameContext:
                    enabled={u: np.array([e.enabled for e in nt.edges]) for u, nt in town.networks.items()},
                    supply=np.array([e.kind == "supply" for e in town.networks["electric"].edges]),
                    served={"electric": np.ones(n, dtype=bool), "water": np.ones(n, dtype=bool),
-                           "gas": np.asarray(a["has_gas"], dtype=bool)}, temps=daily_temps(town.cfg))
+                           "gas": np.asarray(a["has_gas"], dtype=bool)}, temps=daily_temps(town.cfg),
+                   voltage_limits=voltage_limits(town.cfg))
+
+
+def voltage_limits(cfg) -> tuple[float, float]:
+    """The town's service voltage limits on a 120 V base (``electric.voltage_min_pu`` / ``voltage_max_pu``; ANSI
+    C84.1 Range A, 114–126 V, by default)."""
+    return round(cfg.electric.voltage_min_pu * BASE_V, 2), round(cfg.electric.voltage_max_pu * BASE_V, 2)
 
 
 class FrameBuilder:
@@ -154,6 +163,11 @@ class FrameBuilder:
                 prem[u] = _clean(v, 5)
             if res.voltage is not None and scenario != "substation_outage":
                 prem["voltage"] = _clean(res.voltage.premise_v, 1)  # service voltage on a 120 V base
+                if ctx.voltage_limits is not None:  # what the town counts as in range (lens, low-voltage flags)
+                    lo, hi = ctx.voltage_limits
+                    v = res.voltage.premise_v
+                    prem["voltageLimits"] = {"min": lo, "max": hi, "low": int(np.sum(v < lo)),
+                                             "high": int(np.sum(v > hi))}
             if res.pressure:  # service pressure, kPa gauge (sim.hydraulics)
                 prem["pressure"] = {u: _clean(np.where(ctx.served[u], v, np.nan), 2) for u, v in res.pressure.items()}
             lost = {u: [ctx.premise_ids[i] for i in np.flatnonzero(m & ctx.served[u])]

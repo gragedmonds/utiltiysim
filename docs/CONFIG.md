@@ -10,11 +10,14 @@ generated from `GET /api/config/schema`, which carries these UI hints on every f
 | `x-effects` | What changes downstream when this value changes (show as a tooltip / "affects" chips) |
 | `x-group`, `x-order` | Group cards and their order on the page |
 | `x-applies` (on a group) | `town`: part of the town id, so changing it generates a new town (new `townId`, revisions and ids); `run`: applies to a simulation run of the same town (no regeneration) |
+| `x-run-setting` | This town value is the default of an operations run setting with that key (`GET /api/sim/settings/schema?town=`): change it per run there without generating a new town |
+| `x-status`, `x-status-reason` | `not-modelled`: the engine does not use the field yet (show it disabled with the reason); `deprecated`: another setting replaces it, named in `x-deprecated` |
 
 Presets (`GET /api/config/presets`) are YAML overrides deep-merged on the defaults. The town id is a hash of the
-generation-relevant config plus the generator version, so every combination is reproducible. Only `scenario` is
-run-scoped today; weather, incidents, operations, process and anomalies become run-scoped when the M2/M3 clock
-uses them (their groups will then say `x-applies: run`).
+generation-relevant config plus the generator version, so every combination is reproducible. The run-scoped groups
+(`x-applies: run`: scenario, process, anomalies, reading, VEE, billing) are the meter-to-cash run's settings
+(`GET /api/m2c/settings`). Crews, the day shift, the gas response target, incident rates and storm days stay in the
+town groups but are only defaults: the operations run settings (`x-run-setting`) override them per run.
 
 ## Knock-on chains worth demonstrating
 
@@ -26,6 +29,8 @@ uses them (their groups will then say `x-applies: run`).
 | `electric.overhead_before_year` ↑ | More overhead districts → poles, pole-mount transformers, lightning exposure (M3 outages) |
 | `gas.scheme` = `mp` | No low-pressure core, no district regulators, ¾" services with regulators everywhere |
 | `water.fire_flow_residential_lps` ↑ | Larger distribution mains everywhere (fire flow governs sizing) |
+| `water.cast_iron_before_year` ↑ | More unlined cast-iron mains along the older streets: more head loss (`hw_c_old`) and twice the background main-break rate |
+| `incidents.*` / `weather.storm_days_per_year` ↑ (or the run's random-incident settings) | More background incidents on operations days: crews busier, more interruptions, more outage-explained estimates in meter-to-cash |
 | `town.terrain_relief_m` ↑ | Second pressure zone, second elevated tank, PRV/booster equipment at zone boundaries |
 | `ami.ami_route_share` ↓ | More AMR van and manual walker routes; more estimated reads (M3) |
 | `customers_billing.mru_target_meters` ↓ | More, smaller meter reading routes |
@@ -45,7 +50,7 @@ Master seed and optional per-subsystem re-rolls.
 | `households` | `None` |  |  | (advanced) Override seed for household attributes (occupants, solar, EV, heating). |
 | `weather` | `None` |  |  | (advanced) Override seed for weather series (re-roll storms, keep the town). |
 | `incidents` | `None` |  |  | (advanced) Override seed for incident hazards. |
-| `anomalies` | `None` |  |  | (advanced) Override seed for meter/read anomalies. |
+| `anomalies` | `None` |  |  | (advanced) Override seed for the meter-to-cash run (missed reads, anomalies, analyst work, bill checks); a request's run seed overrides it per run. |
 
 ## Town & geography
 
@@ -92,7 +97,7 @@ Lots, buildings and the people and appliances inside them.
 | `lot_depth_m` | `pre_1945=36.0, postwar=35.0, modern=33.0` |  | m | Mean lot depth by era. |
 | `setback_m` | `pre_1945=6.0, postwar=7.5, modern=6.5` |  | m | (advanced) Front setback by era. |
 | `two_storey_share` | `pre_1945=0.7, postwar=0.25, modern=0.75` |  |  | Share of two-storey houses by era. |
-| `semi_share` | `pre_1945=0.25, postwar=0.08, modern=0.18` |  |  | (advanced) Share of lots built as semi-detached/townhouse pairs. |
+| `semi_share` | `pre_1945=0.25, postwar=0.08, modern=0.18` |  |  | (advanced) Share of lots built as semi-detached/townhouse pairs. **Not modelled yet:** Every residential lot is built as a detached house; semi-detached and townhouse pairs are not generated yet. |
 | `occupancy_rate` | `0.955` | 0.5–1.0 |  | Share of premises occupied at simulation start. *Affects: vacant consumption, VEE vacancy signals, move-ins.* |
 | `rental_share` | `0.28` | 0–1 |  | Share of premises that are rentals (more contract turnover). *Affects: move-in/out frequency, contract history.* |
 | `household_size_weights` | `[0.28, 0.34, 0.15, 0.15, 0.06, 0.02]` |  |  | (advanced) Relative frequency of households with 1..6 occupants. |
@@ -144,8 +149,8 @@ Bulk supply, substations, feeders, transformers, services.
 | `tie_max_length_m` | `800.0` | 0–5000 | m | (advanced) Longest new line built to tie a feeder that touches no other feeder. *Affects: tie switches.* |
 | `overhead_before_year` | `1978` | 1850–2030 |  | Districts built before this year are overhead (poles); later underground. *Affects: poles, lightning exposure, storm outages.* |
 | `pole_spacing_m` | `42.0` | 20–90 | m | (advanced) Pole span on overhead lines. |
-| `voltage_min_pu` | `0.95` | 0.85–1.0 |  | (advanced) Lower service voltage limit (CSA CAN3-C235 / ANSI Range A). |
-| `voltage_max_pu` | `1.05` | 1.0–1.15 |  | (advanced) Upper service voltage limit. |
+| `voltage_min_pu` | `0.95` | 0.85–1.0 |  | (advanced) Lower service voltage limit (CSA CAN3-C235 / ANSI Range A). Frames report it on a 120 V base (premises.voltageLimits) with the premises below it; less 4 V it is the default floor for back-feeding through a tie. *Affects: low-voltage premises, voltage lens, back-feed voltage floor.* *Default of the operations run setting `tieMinVoltage`.* |
+| `voltage_max_pu` | `1.05` | 1.0–1.15 |  | (advanced) Upper service voltage limit (premises.voltageLimits in frames). *Affects: high-voltage premises, voltage lens.* |
 
 ## Natural gas
 
@@ -165,8 +170,8 @@ City gate, mains, regulators and services.
 | `min_main_mm` | `50` | 25–150 | mm | Smallest distribution main (2-inch PE). |
 | `valve_spacing_m` | `800.0` | 100–3000 | m | (advanced) Maximum spacing of main valves on feeders. |
 | `calorific_mj_per_m3` | `37.5` | 30–45 | MJ/m3 | Higher heating value used for energy conversion (therm/kWh display and billing). *Affects: gas bill energy, therm/kWh conversion.* |
-| `base_pressure_kpa` | `101.325` | 90–110 | kPa | (advanced) Base pressure for standard volume. |
-| `base_temperature_c` | `15.0` | 0–25 | C | (advanced) Base temperature for standard volume. |
+| `base_pressure_kpa` | `101.559771` | 90–110 | kPa | (advanced) Base pressure for standard volume: the Weymouth base pressure in gas main sizing and pressures (default 14.73 psia). *Affects: gas main sizes, gas pressures.* |
+| `base_temperature_c` | `15.738889` | 0–25 | C | (advanced) Base temperature for standard volume: the Weymouth base temperature (default 520 °R, about 60 °F). *Affects: gas main sizes, gas pressures.* |
 
 ## Water distribution
 
@@ -184,9 +189,9 @@ Supply, pumping, storage, mains, hydrants and services.
 | `min_main_mm` | `150` | 100–300 | mm | Smallest main where hydrants are attached. |
 | `collector_main_mm` | `300` | 150–600 | mm | (advanced) Minimum main on collector roads. |
 | `arterial_main_mm` | `400` | 200–900 | mm | (advanced) Minimum transmission main on arterials leaving the pump station. |
-| `hw_c_new` | `130.0` | 60–150 |  | (advanced) Hazen-Williams C for PVC/ductile iron. |
-| `hw_c_old` | `100.0` | 40–140 |  | (advanced) Hazen-Williams C for unlined cast iron. |
-| `cast_iron_before_year` | `1960` | 1850–2000 |  | Districts built before this year have cast-iron mains. *Affects: main break rate, head loss.* |
+| `hw_c_new` | `130.0` | 60–150 |  | (advanced) Hazen-Williams C for PVC/ductile iron mains. *Affects: head loss, service pressure.* |
+| `hw_c_old` | `100.0` | 40–140 |  | (advanced) Hazen-Williams C for unlined cast iron mains. *Affects: head loss, service pressure.* |
+| `cast_iron_before_year` | `1960` | 1850–2000 |  | Mains along streets built before this year are unlined cast iron (the concrete trunk excepted). *Affects: cast-iron mains, main break rate (×2), head loss.* |
 | `tank_overflow_above_ground_m` | `42.0` | 20–80 | m | Elevated tank overflow height above the highest service in its zone. *Affects: service pressure.* |
 | `zone_band_m` | `28.0` | 10–60 | m | (advanced) Elevation band per pressure zone. |
 | `hydrant_spacing_m` | `150.0` | 50–300 | m | Hydrant spacing on residential mains. |
@@ -208,8 +213,8 @@ Meter technology mix, AMI collectors and nightly collection.
 | `meter_digits_electric` | `6` | 4–9 |  | (advanced) Register digits on electric meters (rollover at 10^digits). |
 | `meter_digits_water` | `6` | 4–9 |  | (advanced) Register digits on water meters. |
 | `meter_digits_gas` | `5` | 4–9 |  | (advanced) Register digits on gas meters. |
-| `battery_life_years` | `15.0` | 3–30 | yr | (advanced) AMR/AMI endpoint battery life. |
-| `comm_fail_rate` | `0.004` | 0–0.2 |  | Nightly probability an AMI meter fails to report. *Affects: estimated reads, consecutive estimates.* |
+| `battery_life_years` | `15.0` | 3–30 | yr | (advanced) AMR/AMI endpoint battery life. **Not modelled yet:** Endpoint batteries never run down in the simulation; meters carry batteryInstallYear for reference. |
+| `comm_fail_rate` | `0.004` | 0–0.2 |  | Nightly probability an AMI meter fails to report. *Affects: estimated reads, consecutive estimates.* **Deprecated** (use `reading.ami_missed_read`): Meter-to-cash misses AMI reads per billing read after the head end's retries (Meter reading › AMI missed read, a run setting); AMI collector outages add clustered misses. |
 
 ## Weather
 
@@ -222,44 +227,44 @@ Seeded daily weather. Drives magnitudes and volumes, never process structure.
 | `summer` | `mean_c=21.5, sd_c=4.0, min_c=10.0, max_c=37.0` |  |  | Summer (Jun 21–Sep 20). |
 | `fall` | `mean_c=9.5, sd_c=6.5, min_c=-10.0, max_c=28.0` |  |  | Fall (Sep 21–Dec 20). |
 | `persistence` | `0.7` | 0–0.98 |  | (advanced) Day-to-day AR(1) persistence of temperature anomalies. |
-| `storm_days_per_year` | `28.0` | 0–120 |  | Thunderstorm days per year (mostly May–Sep). *Affects: lightning outages, estimated reads.* |
+| `storm_days_per_year` | `28.0` | 0–120 |  | Thunderstorm days per year (mostly May–Sep). *Affects: lightning outages, estimated reads.* *Default of the operations run setting `stormDaysPerYear`.* |
 | `heating_base_c` | `15.0` | 5–22 | C | (advanced) Heating starts below this temperature. |
 | `cooling_base_c` | `22.0` | 15–30 | C | (advanced) Cooling starts above this temperature. |
 
 ## Incidents & hazards
 
-What goes wrong, how often. Rates are per year.
+What goes wrong, how often. Rates are per year. Each operations day draws its background incidents at these rates; they are the defaults of the operations run's random-incident settings (x-run-setting), so a run can change them without a new town.
 
 | Field | Default | Range | Unit | Description |
 |---|---|---|---|---|
-| `gas_service_leaks_per_1000` | `1.2` | 0–50 |  | Leaks per 1,000 gas services per year. |
-| `gas_main_leaks_per_100km` | `8.0` | 0–200 |  | Leaks per 100 km of gas main per year. |
-| `water_main_breaks_per_100km` | `14.0` | 0–200 |  | Main breaks per 100 km per year (×2 for cast iron). *Affects: water outages, crew workload.* |
-| `overhead_faults_per_km_storm_day` | `0.015` | 0–1 |  | Overhead primary faults per km per storm day. *Affects: outages, SAIDI/SAIFI, zero-usage reads.* |
-| `transformer_failures_per_1000` | `3.0` | 0–100 |  | Transformer failures per 1,000 units per year (×3 when overloaded). |
-| `collector_outages_per_year` | `2.0` | 0–50 |  | AMI collector outages per year (town-wide). |
-| `manual_only` | `False` |  |  | Disable random hazards; only manually injected incidents occur. |
+| `gas_service_leaks_per_1000` | `1.2` | 0–50 |  | Leaks per 1,000 gas services per year. *Default of the operations run setting `gasServiceLeaksPer1000`.* |
+| `gas_main_leaks_per_100km` | `8.0` | 0–200 |  | Leaks per 100 km of gas main per year. *Default of the operations run setting `gasMainLeaksPer100km`.* |
+| `water_main_breaks_per_100km` | `14.0` | 0–200 |  | Main breaks per 100 km per year (×2 for cast iron). *Affects: water outages, crew workload.* *Default of the operations run setting `waterMainBreaksPer100km`.* |
+| `overhead_faults_per_km_storm_day` | `0.015` | 0–1 |  | Overhead primary faults per km per storm day. *Affects: outages, SAIDI/SAIFI, zero-usage reads.* *Default of the operations run setting `overheadFaultsPerKmStormDay`.* |
+| `transformer_failures_per_1000` | `3.0` | 0–100 |  | Transformer failures per 1,000 units per year (×3 when overloaded). *Default of the operations run setting `transformerFailuresPer1000`.* |
+| `collector_outages_per_year` | `2.0` | 0–50 |  | AMI collector outages per year (town-wide). *Default of the operations run setting `collectorOutagesPerYear`.* |
+| `manual_only` | `False` |  |  | Disable random hazards; only manually injected incidents occur (the run's "Random incidents" switch defaults to the opposite). *Affects: background incidents.* *Default of the operations run setting `randomIncidents`.* |
 
 ## Field operations
 
-Fleet, shifts, response targets and vehicle movement.
+Fleet, shifts, response targets and vehicle movement. Crews, readers, the shift and the gas target are the defaults of the operations run settings (x-run-setting), so a run can change them without a new town.
 
 | Field | Default | Range | Unit | Description |
 |---|---|---|---|---|
-| `gas_crews` | `2` | 0–20 |  | Gas emergency crews. *Affects: leak response time.* |
-| `electric_crews` | `3` | 0–30 |  | Electric trouble crews. *Affects: outage duration, SAIDI.* |
-| `water_crews` | `2` | 0–20 |  | Water distribution crews. |
-| `meter_techs` | `2` | 0–20 |  | Meter technicians (exchanges, investigations). |
-| `meter_vans` | `2` | 0–20 |  | Drive-by AMR reading vans. *Affects: AMR read completion.* |
-| `meter_walkers` | `3` | 0–40 |  | Manual meter readers. *Affects: manual read completion, no-access.* |
-| `shift_start_hour` | `7.0` | 0–23 | h | Day shift start. |
-| `shift_end_hour` | `15.5` | 1–24 | h | Day shift end. |
-| `gas_response_target_min` | `60.0` | 10–240 | min | Target response to a gas odour call. |
+| `gas_crews` | `2` | 0–20 |  | Gas emergency crews. *Affects: leak response time.* *Default of the operations run setting `gasCrews`.* |
+| `electric_crews` | `3` | 0–30 |  | Electric trouble crews. *Affects: outage duration, SAIDI.* *Default of the operations run setting `electricCrews`.* |
+| `water_crews` | `2` | 0–20 |  | Water distribution crews. *Default of the operations run setting `waterCrews`.* |
+| `meter_techs` | `2` | 0–20 |  | Meter technicians (exchanges, investigations). *Default of the operations run setting `meterTechs`.* |
+| `meter_vans` | `2` | 0–20 |  | Drive-by AMR reading vans. *Affects: AMR read completion.* *Default of the operations run setting `meterVans`.* |
+| `meter_walkers` | `3` | 0–40 |  | Manual meter readers. *Affects: manual read completion, no-access.* *Default of the operations run setting `meterWalkers`.* |
+| `shift_start_hour` | `7.0` | 0–23 | h | Day shift start. Non-emergency work (AMI collector repairs) waits for the day shift; emergencies are worked around the clock. *Affects: collector outage length.* *Default of the operations run setting `shiftStartHour`.* |
+| `shift_end_hour` | `15.5` | 1–24 | h | Day shift end. *Affects: collector outage length.* *Default of the operations run setting `shiftEndHour`.* |
+| `gas_response_target_min` | `60.0` | 10–240 | min | Target response to a gas odour call. *Default of the operations run setting `gasResponseTargetMinutes`.* |
 | `speed_kmh_arterial` | `50.0` | 10–100 | km/h | (advanced) Driving speed on arterials. |
 | `speed_kmh_collector` | `40.0` | 10–80 | km/h | (advanced) Driving speed on collectors. |
 | `speed_kmh_local` | `30.0` | 5–60 | km/h | (advanced) Driving speed on local streets. |
-| `drive_by_radius_m` | `120.0` | 20–500 | m | (advanced) AMR van reads meters within this distance. |
-| `walker_meters_per_hour` | `45.0` | 5–150 |  | (advanced) Manual reads per walker-hour. |
+| `drive_by_radius_m` | `120.0` | 20–500 | m | (advanced) AMR van reads meters within this distance. **Not modelled yet:** Drive-by rounds pass the route's premises at the drive-by speed; radio range is not modelled. |
+| `walker_meters_per_hour` | `45.0` | 5–150 |  | (advanced) Manual reads per walker-hour. **Deprecated** (use `walkKmh, meterDwellSeconds`): A walked round's length follows its route at the run's walking speed and time at each meter (Operations › Reading rounds). |
 
 ## Customers & billing
 
@@ -291,7 +296,7 @@ Work queues, automation, workforce, costs and carrying cost.
 
 | Field | Default | Range | Unit | Description |
 |---|---|---|---|---|
-| `sequences` | `builtin` |  |  | Activity sequence library: 'builtin' or a path to a YAML file. |
+| `sequences` | `builtin` |  |  | Activity sequence library: 'builtin' or a path to a YAML file. **Not modelled yet:** Only the built-in activity sequences exist; a YAML sequence library is not read yet. |
 | `rpa_coverage` | `0.35` | 0–1 |  | Share of exception types with an RPA/auto-resolve rule. *Affects: analyst workload, days to invoice, carrying cost.* |
 | `analyst_queue_days_min` | `1` | 1–10 |  | Minimum queue wait before an analyst picks up an exception. |
 | `analyst_queue_days_max` | `3` | 1–20 |  | Maximum queue wait. |
@@ -386,6 +391,9 @@ Bill checks, tariff versions, invoicing, payments and dunning.
 | `high_bill_min` | `150.0` | 0–5000 | $ | …and at least this much above the expected amount. |
 | `first_bill_limit` | `600.0` | 0–10000 | $ | (advanced) Block a bill with no expected use (vacant, new) above this total. |
 | `credit_review` | `75.0` | 0–5000 | $ | (advanced) Block a bill that is a credit larger than this. |
+| `outsort_auto_release_max` | `500.0` | 0–100000 | $ | RPA may release a high-bill or large-credit outsort only up to this bill amount (either sign); a larger one waits for an analyst. *Affects: analyst workload, billing errors.* |
+| `billing_queue_worked_by` | `analysts` |  |  | Who works the BILLING queue (high bills, large credits, true-ups, rate-class errors): the simulated analysts and RPA, or only you. With 'you', no analyst or RPA touches a billing block, so every outsort waits in the Studio for your release, rebill or escalation. *Affects: billing blocks, days to invoice, billing carry.* |
+| `trueup_max_ratio` | `3.0` | 1–50 | × | (advanced) Block a bill whose estimate true-up (a negative period quantity) is larger than this multiple of the period's expected use; an analyst decides it. *Affects: billing blocks, billing errors.* |
 | `data_error_rate` | `3.0` | 0–200 |  | Installations with a wrong rate class in billing master data (per 1,000 per year). *Affects: rate-class billing blocks.* |
 | `print_lag_days` | `1` | 0–10 | d | (advanced) Days from invoice creation to issue. |
 | `pad_reject_rate` | `0.015` | 0–0.5 |  | Pre-authorized debits returned for insufficient funds. *Affects: payment rejections, collections.* |

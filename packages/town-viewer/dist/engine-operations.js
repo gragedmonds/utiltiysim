@@ -15,11 +15,12 @@ function interpolate(points,times,t){
 function seg(points,i,f=0){const a=points[i],b=points[Math.min(i+1,points.length-1)],len=Math.hypot(b.x-a.x,b.z-a.z)||1;return {x:a.x+(b.x-a.x)*f,z:a.z+(b.z-a.z)*f,dx:(b.x-a.x)/len,dz:(b.z-a.z)/len};}
 const OPS_KEY='utility-town-ops-settings:';
 // Schema-form overrides ({group:{key:value}}) ↔ timeline settings: groups marked x-flat hold top-level keys.
-export function toOpsSettings(overrides,schema){const out={};for(const [g,vals] of Object.entries(overrides||{})){if(schema?.properties?.[g]?.['x-flat'])Object.assign(out,vals);else out[g]={...(out[g]||{}),...vals};}return out;}
-export function opsFormValues(settings,schema){const out={};for(const [g,gs] of Object.entries(schema?.properties||{})){out[g]={};for(const k of Object.keys(gs.properties||{})){const v=gs['x-flat']?settings?.[k]:settings?.[g]?.[k];if(v!==undefined)out[g][k]=v;}}return out;}
+export function toOpsSettings(overrides,schema){const out={},defs=schema?.$defs||{};for(const [g,vals] of Object.entries(overrides||{})){const g0=schema?.properties?.[g];if((g0?.$ref?{...defs[g0.$ref.split('/').pop()],...g0}:g0)?.['x-flat'])Object.assign(out,vals);else out[g]={...(out[g]||{}),...vals};}return out;}
+export function opsFormValues(settings,schema){const out={},defs=schema?.$defs||{};for(const [g,g0] of Object.entries(schema?.properties||{})){const gs=g0?.$ref?{...defs[g0.$ref.split('/').pop()],...g0}:g0;out[g]={};for(const k of Object.keys(gs.properties||{})){const v=gs['x-flat']?settings?.[k]:settings?.[g]?.[k];if(v!==undefined)out[g][k]=v;}}return out;}
 export class EngineOperations{
- constructor(town,{api='/api',townRef,date=null,onChange=()=>{},m2c=()=>null,storage=globalThis.localStorage}={}){
-  this.engine=true;this.town=town;this.api=api;this.townRef=townRef||town.id;this.date=date;this.onChange=onChange;this.m2c=m2c;
+ // `cycle(meterToCash, timeline)` may adjust the linked run's day for the map (the day's own outages; see m2c.js).
+ constructor(town,{api='/api',townRef,date=null,onChange=()=>{},m2c=()=>null,cycle=null,storage=globalThis.localStorage}={}){
+  this.engine=true;this.town=town;this.api=api;this.townRef=townRef||town.id;this.date=date;this.onChange=onChange;this.m2c=m2c;this.cycle=cycle;
   this.commands=[];this.jobs=[];this.incidents=[];this.events=[];this.reads=[];this.stateChanges=[];this.time=8*3600;this.sequence=0;this.request=0;this.applied=0;this.error=null;
   const depot=(town.facilities||[]).find(f=>f.kind==='depot');this.depot=depot?{x:depot.x,z:depot.z}:{x:0,z:0};
   this.storage=storage;try{this.settings=JSON.parse(storage?.getItem(OPS_KEY+town.id)||'null');}catch{this.settings=null;}
@@ -27,14 +28,15 @@ export class EngineOperations{
  // Operations settings from Configuration (crews, response times, back-feed limits); only what differs from the
  // engine defaults is sent, so the engine's defaults stay authoritative.
  setSettings(s){this.settings=s&&Object.keys(s).length?s:null;try{this.storage?.setItem(OPS_KEY+this.town.id,JSON.stringify(this.settings));}catch{}return this.refresh();}
- async schema(){if(!this._schema){const r=await fetch(this.api+'/sim/settings/schema');if(!r.ok)throw Error('Engine '+r.status);this._schema=await r.json();}return this._schema;}
+ // ?town= makes the defaults this town's own (its crews, incident rates).
+ async schema(){if(!this._schema){const r=await fetch(this.api+'/sim/settings/schema?town='+encodeURIComponent(this.townRef));if(!r.ok)throw Error('Engine '+r.status);this._schema=await r.json();}return this._schema;}
  // The meter-to-cash run (settings, actions) rides along so the day's field orders arrive as crew jobs.
  body(extra={}){const m2c=this.m2c();return JSON.stringify({town:this.townRef,date:this.date,commands:this.commands,...(this.settings?{settings:this.settings}:{}),...(m2c?{m2c}:{}),...extra});}
  async post(path,extra){const r=await fetch(this.api+path,{method:'POST',headers:{'Content-Type':'application/json'},body:this.body(extra)});if(!r.ok){let detail='';try{detail=(await r.json()).detail;}catch{}throw Error(`Engine ${r.status}${detail?': '+(typeof detail==='string'?detail:JSON.stringify(detail)):''}`);}return r.json();}
  // Commands are appended at the current sim time (never earlier than the last one), then the timeline is refreshed.
  command(type,payload){const at=Math.max(this.time,this.commands.at(-1)?.at??0);const cmd={id:'CMD-'+(++this.sequence),at:Math.round(at*1000)/1000,type,payload};this.commands.push(cmd);return this.refresh().then(()=>cmd);}
  async refresh(){const ticket=++this.request;try{const tl=await this.post('/sim/timeline');if(ticket<this.applied)return;this.applied=ticket;this.apply(tl);this.error=null;}catch(e){this.error=e.message;throw e;}finally{this.onChange(this);}}
- apply(tl){this.timeline=tl;this.simulationId=tl.simulationId;this.incidents=tl.incidents.map(i=>({...i,restoredAt:i.restoredAt??Infinity}));this.jobs=tl.jobs;this.events=tl.events;this.reads=tl.reads;this.stateChanges=tl.stateChanges;if(tl.depot)this.depot={x:tl.depot.x,z:tl.depot.z};}
+ apply(tl){if(tl.meterToCash&&this.cycle)tl={...tl,meterToCash:this.cycle(tl.meterToCash,tl)};this.timeline=tl;this.simulationId=tl.simulationId;this.incidents=tl.incidents.map(i=>({...i,restoredAt:i.restoredAt??Infinity}));this.jobs=tl.jobs;this.events=tl.events;this.reads=tl.reads;this.stateChanges=tl.stateChanges;if(tl.depot)this.depot={x:tl.depot.x,z:tl.depot.z};}
  async breakAsset(target){const cmd=await this.command('break_asset',{id:target.id,kind:target.kind==='pole'?'pole':'main',utility:target.utility||'electric',edgeId:target.edgeId,x:target.x,z:target.z});return this.incidents.find(i=>i.commandId===cmd.id)||null;}
  async dispatch(target,incident=null){const cmd=await this.command('dispatch',incident?{incidentId:incident.id}:{targetId:target.id});const job=incident?this.jobs.find(j=>j.incidentId===incident.id):this.jobs.filter(j=>j.premiseId===target.id).at(-1);if(!job)throw Error(this.timeline?.warnings?.at(-1)||'The engine did not create a job.');return job;}
  active(i,time=this.time){return time>=i.createdAt&&time<i.restoredAt;}
@@ -54,3 +56,15 @@ export class EngineOperations{
  setDate(date){if(date===this.date)return Promise.resolve(false);const had=this.commands.length;this.date=date;this.commands=[];this.sequence=0;return this.refresh().then(()=>had>0);}
  export(){return {schemaVersion:'viewer-engine-operations/1.0',townId:this.town.id,town:this.townRef,commands:this.commands,timeline:this.timeline||null};}
 }
+// Who an incident leaves without supply, as its card says it: an electric fault trips customers out at once; a water or
+// gas main keeps supplying while it leaks, until a crew closes its valves; an AMI collector outage stops meters
+// reporting, not service.
+export function incidentImpact(i,time=0){const u=i?.unsupplied||{},n=x=>Number(x||0).toLocaleString('en-CA'),who=x=>`${n(x)} customer${x===1?'':'s'}`;
+ if(i?.utility==='ami'||i?.kind==='collector_outage')return `${i.premiseIds?.length?who(i.premiseIds.length)+': ':''}AMI meters cannot report; service continues`;
+ if(i?.utility==='electric'||u.atFault)return `${n(u.atFault)} out at the fault · ${n(u.afterIsolation)} after isolation${i.tie&&u.afterBackfeed!=null?` · ${n(u.afterBackfeed)} once the tie closed`:''}`;
+ const what=i?.utility||'supply',restored=Number.isFinite(i?.restoredAt)&&i.restoredAt<=time,isolated=i?.isolatedAt!=null&&i.isolatedAt<=time;
+ if(restored)return u.afterIsolation?`${who(u.afterIsolation)} ${u.afterIsolation===1?'was':'were'} without ${what} while it was isolated`:'Repaired without cutting anyone off';
+ if(isolated)return u.afterIsolation?`Isolated · ${who(u.afterIsolation)} without ${what} until the repair`:'Isolated without cutting anyone off';
+ return `Leaking · customers keep ${what} until a crew isolates it${u.afterIsolation?` (then ${who(u.afterIsolation)} lose supply)`:''}`;}
+// The next job of the day that has not started yet (a reading round, a field order), for an empty operations list.
+export function nextJob(jobs,time){return (jobs||[]).filter(j=>j.startAt>time).sort((a,b)=>a.startAt-b.startAt)[0]||null;}

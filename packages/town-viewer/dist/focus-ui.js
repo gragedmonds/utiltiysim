@@ -8,7 +8,7 @@ const paths={
  layers:'<path d="m3 8 9-5 9 5-9 5Zm0 5 9 5 9-5M3 18l9 5 9-5"/>',
  sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/>',
  map:'<path d="m3 5 6-2 6 2 6-2v16l-6 2-6-2-6 2Zm6-2v16m6-14v16"/>',
- plan:'<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 11h18M11 3v18"/>',
+ plan:'<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 11h18M11 3v18"/>',rotate:'<path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4v5h-5"/>',
  plus:'<path d="M12 5v14M5 12h14"/>',minus:'<path d="M5 12h14"/>',
  close:'<path d="m6 6 12 12M6 18 18 6"/>',back:'<path d="m10 5-7 7 7 7M3 12h18"/>',
  upload:'<path d="M12 16V3m-5 5 5-5 5 5M3 15v6h18v-6"/>',
@@ -31,9 +31,11 @@ export function installFocusUI({getContext,onSettings,onScenario,onWorklists=()=
  $('layers-close').onclick=()=>{closeTools();$('layers-toggle').focus();};$('scenario-close').onclick=()=>{closeTools();$('scenario-toggle').focus();};
  $('performance-panel').addEventListener('toggle',()=>{if($('performance-panel').open)closeTools();});
  function refresh(){
-  const {town,mode}=getContext(),imported=mode==='snapshot';if(!town)return;
+  const {town,mode,engine}=getContext(),imported=mode==='snapshot';if(!town)return;
   document.querySelectorAll('[data-scenario-preset]').forEach(el=>el.disabled=imported);
-  $('preset-availability').textContent=imported?'This snapshot is read-only. Scenario commands need the engine connection.':'Preview one event at a time in the browser demo.';
+  $('preset-availability').textContent=engine?'Presets preview the browser demo. On the engine, break a pole or main from the map (right-click) and dispatch crews.':imported?'This snapshot is read-only. Scenario commands need the engine connection.':'Preview one event at a time in the browser demo.';
+  // The engine's incident settings come from its operations schema (above); these demo sliders are not used there.
+  $('frequency-card').hidden=!!engine;const pc=document.getElementById('presets-card');if(pc)pc.hidden=!!engine;
   $('generator-context').hidden=!imported;
   const config=town.config||town.configuration;
   $('engine-config-preview').textContent=JSON.stringify(config||{mode,seed:town.seed,homes:town.count,source:town.source?.name||'Frozen Whitby street extract'},null,2);

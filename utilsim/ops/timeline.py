@@ -1,8 +1,17 @@
-"""Operations timeline: what happens after a user breaks an asset or asks for a field visit.
+"""Operations timeline: what happens after a user breaks an asset or asks for a field visit, and what breaks on its
+own that day.
 
 Stateless and deterministic. The input is the whole command list of a run (the viewer resends it each time). Commands
 are replayed in time order with first-come-first-served crews, so appending a later command never changes what
 earlier commands produced (incidents, jobs, routes, events, frames).
+
+Unless ``settings.randomIncidents`` is false (the town's ``incidents.manual_only``), the day also has background
+incidents drawn at the town's yearly rates (``ops.hazards``): main breaks, gas leaks, failed transformers, storm line
+faults and AMI collector outages. They are fixed for the (town, run seed, day), carry ``source: "background"`` and ids
+``INC-BG-n`` (a user's incidents stay ``INC-n``), and are worked exactly like a user's ``break_asset``.
+
+Settings (``run_defaults``) are the timings in ``BASE`` plus what the town's config supplies: crews, readers, the day
+shift, the gas response target, the back-feed voltage floor and the incident rates.
 
 Commands use the viewer's shape: ``{id, at, type, payload}`` with ``at`` in seconds since local midnight of the run
 day and ``type``:
@@ -29,6 +38,7 @@ from zoneinfo import ZoneInfo
 
 import numpy as np
 
+from utilsim.config.model import SimConfig
 from utilsim.customers.calendar import scheduled_read_date
 from utilsim.ops.reading import nearest_order, path_through, reading_path, stops
 from utilsim.ops.routing import Route, Router, access_point
@@ -38,15 +48,17 @@ from utilsim.version import EVENT_SCHEMA_VERSION, READ_SCHEMA_VERSION
 
 TIMELINE_VERSION = "utility-timeline/1.0"
 UTILITIES = ("electric", "water", "gas")
-DEFAULTS = {
+BASE = {
     "autoDispatch": True,
-    "detectSeconds": {"electric": 60, "water": 720, "gas": 360},  # AMI last gasp; pressure alarm; odour calls
+    # AMI last gasp; pressure alarm; odour calls; the AMI head end's alarm for a silent collector
+    "detectSeconds": {"electric": 60, "water": 720, "gas": 360, "ami": 1800},
     "mobiliseMinutes": 8,
     "isolateMinutes": {"electric": 10, "water": 20, "gas": 15},
-    "repairMinutes": {"broken_pole": 120, "line_fault": 60, "water_main_break": 150, "gas_leak": 120},
+    "repairMinutes": {"broken_pole": 120, "line_fault": 60, "water_main_break": 150, "gas_leak": 120,
+                      "gas_service_leak": 90, "transformer_failure": 180, "collector_outage": 60},
     "flushMinutes": 20,
     "visitMinutes": 15,
-    "leakM3h": {"water": 40.0, "gas": 25.0},  # fixed leak rates, used when leakOpening is 0
+    "leakM3h": {"water": 40.0, "gas": 25.0, "gas_service": 3.0},  # fixed leak rates, used when leakOpening is 0
     "leakOpening": {"water": 0.05, "gas": 0.0},  # a water break opens this share of the pipe's bore (orifice flow)
     "meterReading": True,  # the day's walked and drive-by reading rounds
     "readerStartHour": {"MANUAL": 8.0, "AMR": 9.0},
@@ -57,14 +69,44 @@ DEFAULTS = {
     "tieBackfeed": True,  # close a normally-open tie to restore customers downstream of an isolated fault
     "tieSwitchMinutes": 6,
     "tieMaxLoading": 1.3,  # back-feed only if the receiving feeder stays within its emergency rating …
-    "tieMinVoltage": 110.0,  # … and every customer keeps at least this (V on a 120 V base, ANSI Range B)
     "relightCrews": 4,  # gas techs relighting appliances after a gas main is restored (at least)
     "relightPerCrew": 40,  # more crews (mutual aid) when an outage is large
     "relightMinutes": 10,
 }
-CREWS = {"electric": ("ELEC", "electric_crews"), "water": ("WATER", "water_crews"), "gas": ("GAS", "gas_crews"),
-         "meter": ("TECH", "meter_techs"), "field": ("FIELD", "fieldCrews"), "relight": ("RELIGHT", "relightCrews")}
-RUN_CREWS = ("field", "relight")  # sized by run settings, not the town's operations config
+EMERGENCY_MARGIN_V = 4.0  # ANSI C84.1: the Range B (emergency) service minimum is 4 V below Range A (120 V base)
+# Run settings whose default is the town's config (``x-town`` in the settings schema): key -> (config path, value).
+TOWN_SETTINGS = {
+    "electricCrews": ("operations.electric_crews", lambda c: max(1, c.operations.electric_crews)),
+    "waterCrews": ("operations.water_crews", lambda c: max(1, c.operations.water_crews)),
+    "gasCrews": ("operations.gas_crews", lambda c: max(1, c.operations.gas_crews)),
+    "meterTechs": ("operations.meter_techs", lambda c: max(1, c.operations.meter_techs)),
+    "meterWalkers": ("operations.meter_walkers", lambda c: max(1, c.operations.meter_walkers)),
+    "meterVans": ("operations.meter_vans", lambda c: max(1, c.operations.meter_vans)),
+    "shiftStartHour": ("operations.shift_start_hour", lambda c: c.operations.shift_start_hour),
+    "shiftEndHour": ("operations.shift_end_hour", lambda c: c.operations.shift_end_hour),
+    "gasResponseTargetMinutes": ("operations.gas_response_target_min", lambda c: c.operations.gas_response_target_min),
+    # … and every customer keeps at least this (V, 120 V base): the town's lower service limit less the margin
+    "tieMinVoltage": ("electric.voltage_min_pu",
+                      lambda c: round(c.electric.voltage_min_pu * 120.0 - EMERGENCY_MARGIN_V, 1)),
+    # Background incidents (ops.hazards): on unless the town is manual-only, at the town's rates.
+    "randomIncidents": ("incidents.manual_only", lambda c: not c.incidents.manual_only),
+    "waterMainBreaksPer100km": ("incidents.water_main_breaks_per_100km",
+                                lambda c: c.incidents.water_main_breaks_per_100km),
+    "gasMainLeaksPer100km": ("incidents.gas_main_leaks_per_100km", lambda c: c.incidents.gas_main_leaks_per_100km),
+    "gasServiceLeaksPer1000": ("incidents.gas_service_leaks_per_1000",
+                               lambda c: c.incidents.gas_service_leaks_per_1000),
+    "transformerFailuresPer1000": ("incidents.transformer_failures_per_1000",
+                                   lambda c: c.incidents.transformer_failures_per_1000),
+    "overheadFaultsPerKmStormDay": ("incidents.overhead_faults_per_km_storm_day",
+                                    lambda c: c.incidents.overhead_faults_per_km_storm_day),
+    "collectorOutagesPerYear": ("incidents.collector_outages_per_year",
+                                lambda c: c.incidents.collector_outages_per_year),
+    "stormDaysPerYear": ("weather.storm_days_per_year", lambda c: c.weather.storm_days_per_year),
+}
+# Crew pools per kind: (id prefix, the run setting that sizes it); reading rounds: (reader id prefix, setting).
+CREWS = {"electric": ("ELEC", "electricCrews"), "water": ("WATER", "waterCrews"), "gas": ("GAS", "gasCrews"),
+         "meter": ("TECH", "meterTechs"), "field": ("FIELD", "fieldCrews"), "relight": ("RELIGHT", "relightCrews")}
+READERS = {"MANUAL": ("WALKER", "meterWalkers"), "AMR": ("VAN", "meterVans")}
 MAX_SEGMENT_EDGES = 4000
 RELIGHT_STEP = 300.0  # seconds; relight state changes are reported in these steps (frames stay exact)
 
@@ -87,6 +129,18 @@ def _merge(base: dict, over: dict | None) -> dict:
     return out
 
 
+def run_defaults(cfg: SimConfig | None = None) -> dict:
+    """Operations run settings for a town: the timings above plus what its config supplies (crews, readers, shift,
+    gas response target, back-feed voltage floor). Without a town, the config defaults."""
+    cfg = cfg or SimConfig()
+    out = _merge(BASE, None)
+    out.update({k: fn(cfg) for k, (_, fn) in TOWN_SETTINGS.items()})
+    return out
+
+
+DEFAULTS = run_defaults()
+
+
 @dataclass
 class _Interval:
     start: float
@@ -102,25 +156,29 @@ class _Interval:
 class Run:
     def __init__(self, ops, commands: list[dict], *, day: str | None = None, settings: dict | None = None,
                  scenario: str = "normal", field_orders: list[dict] | None = None,
-                 read_outcomes: dict[str, dict] | None = None, m2c_cycle: dict | None = None):
+                 read_outcomes: dict[str, dict] | None = None, m2c_cycle: dict | None = None,
+                 seed: str | None = None):
         self.ops = ops
         self.day = day or ops.scenario_date
         self.scenario = scenario
-        self.settings = _merge(DEFAULTS, settings)
+        self.settings = _merge(ops.run_defaults, settings)
         self.tz = ZoneInfo(ops.timezone)
         d = date.fromisoformat(self.day)
         self.midnight = datetime(d.year, d.month, d.day, tzinfo=self.tz)
-        h = hashlib.blake2b(f"{ops.id}|{scenario}|{self.day}|None".encode(), digest_size=5).hexdigest()
+        self.seed = (seed or "").strip() or None  # the run seed: re-rolls the day's background incidents
+        h = hashlib.blake2b(f"{ops.id}|{scenario}|{self.day}|{self.seed}".encode(), digest_size=5).hexdigest()
         self.simulation_id = f"run-{scenario}-{self.day}-{h}"
         o = ops.ops
         self.router = Router(ops.roads, (o["speed_kmh_arterial"], o["speed_kmh_collector"], o["speed_kmh_local"]))
         self.depot_access = access_point(ops.roads, *ops.depot["access"]) if ops.depot["access"] else \
             ops.nearest_access(ops.depot["x"], ops.depot["z"])
-        size = {kind: int(self.settings[key] if kind in RUN_CREWS else o.get(key, 1)) for kind, (_, key) in CREWS.items()}
-        self.crews = {kind: [{"id": f"{prefix}-{k + 1}", "free": -math.inf} for k in range(max(1, size[kind]))]
-                      for kind, (prefix, _) in CREWS.items()}
+        self.crews = {kind: [{"id": f"{prefix}-{k + 1}", "free": -math.inf}
+                             for k in range(max(1, int(self.settings[key])))] for kind, (prefix, key) in CREWS.items()}
+        self.readers: dict[str, float] = {}  # reader -> back at the depot (one reader's rounds on a day queue)
         self.commands = self._normalise(commands)
+        self.background, self.hazards = self._background(d)
         self.incidents: list[dict] = []
+        self._user_incidents = 0
         self.jobs: list[dict] = []
         self.events: list[dict] = []
         self.reads: list[dict] = []
@@ -129,9 +187,10 @@ class Run:
         self._routes: dict[tuple, Route] = {}
         self.read_outcomes = read_outcomes  # premise id -> the meter-to-cash read on this day (when linked)
         self.m2c_cycle = m2c_cycle  # the linked run's day: AMI collection, VEE batch, bills, invoices
-        # Scheduled work first (fixed for the day, own crews), so appending a command never changes it.
+        # Scheduled work first (fixed for the day, own crews), so appending a command never changes it. Background
+        # incidents are fixed for the day too; they and the commands share the crews in time order.
         self._schedule(field_orders or [])
-        for cmd in self.commands:
+        for cmd in sorted([*self.background, *self.commands], key=lambda c: (c["at"], c["_k"])):
             self._apply(cmd)
         self.events.sort(key=lambda e: (e["at"], e["_order"]))
         for k, e in enumerate(self.events):
@@ -158,17 +217,21 @@ class Run:
             return
         rows = stops(ops, mru["id"])
         first, last = rows[0], (rows[0] if walk else rows[-1])
-        start = float(s["readerStartHour"][tech]) * 3600 + (k % 6) * 300
+        planned = float(s["readerStartHour"][tech]) * 3600 + (k % 6) * 300
         route = self._route(self.depot_access, access_point(ops.roads, *ops.premise_access[first]))
         back = route.reversed() if walk else self._route(access_point(ops.roads, *ops.premise_access[last]),
                                                          self.depot_access)
         p = ops.premises[first]
-        crew = mru["readerId"] or f"READER-{mru['id']}"
+        # Readers take routes in turn (route k → reader k mod n, as the town assigns them); a reader with two rounds
+        # on one day starts the second when back from the first.
+        prefix, key = READERS[tech]
+        crew = f"{prefix}-{k % max(1, int(s[key])) + 1:02d}"
+        start = max(planned, self.readers.get(crew, -math.inf))
         job = {"id": f"READ-{mru['id']}", "kind": "meter_reading", "mode": "walk" if walk else "drive",
                "crewId": crew, "crewKind": "reader", "utility": "electric", "targetId": mru["id"], "premiseId": None,
                "incidentId": None, "mruId": mru["id"], "meters": len(rows),
                "label": f"{mru['name']} · {'walked' if walk else 'drive-by'} · {len(rows)} premises",
-               "requestedAt": start, "startAt": start, "arrivalAt": start + route.seconds,
+               "requestedAt": planned, "startAt": start, "arrivalAt": start + route.seconds,
                "route": _pts(route.points), "routeTimes": _ts(route.times), "routeLength": round(route.length_m, 1),
                "visitPoint": {"x": p["x"], "z": p["z"]}, "roadPoint": _pts(route.points[-1:])[0],
                "walkRoute": _pts(path.points), "walkTimes": _ts(path.times),
@@ -181,8 +244,9 @@ class Run:
         job["returnStartAt"] = job["arrivalAt"] + path.seconds
         job["endAt"] = job["returnStartAt"] + back.seconds
         job["returnRoute"], job["returnTimes"] = _pts(back.points), _ts(back.times)
+        self.readers[crew] = job["endAt"]
         self.jobs.append(job)
-        self._event(start, "workorder.created", "workorder", job["id"], job, mru["id"],
+        self._event(planned, "workorder.created", "workorder", job["id"], job, mru["id"],
                     {"kind": "meter_reading", "mruId": mru["id"], "technology": tech, "meters": len(rows)})
         self._event(start, "crew.dispatched", "crew", crew, job, job["id"], {"jobId": job["id"]})
         self._event(job["arrivalAt"], "reading.started", "mru", mru["id"], job, job["id"], {"mode": job["mode"]})
@@ -224,9 +288,36 @@ class Run:
         out.sort(key=lambda c: (c["at"], c["_k"]))
         return out
 
+    def _background(self, d: date) -> tuple[list[dict], dict]:
+        """The day's background incidents (``ops.hazards``) as replayable items, and what the day expected. The draws
+        come from the town's incident seed, plus the run seed when the request names one."""
+        cfg = self.ops.sim_config
+        if not self.settings["randomIncidents"]:
+            return [], {"enabled": False}
+        from utilsim.ops.hazards import draw
+
+        seed = cfg.seeds.for_("incidents") + (f"|{self.seed}" if self.seed else "")
+        items, info = draw(self.ops, d, self.settings, seed)
+        out = []
+        for n, b in enumerate(items, start=1):
+            net = self.ops.nets.get(b["utility"])
+            payload = {"utility": b["utility"], "x": b["x"], "z": b["z"], "incident": b["kind"]}
+            if "edge" in b:
+                payload.update(id=net.edge_ids[b["edge"]], kind="main", edgeId=net.edge_ids[b["edge"]])
+            else:
+                payload.update(id=b["collector"]["id"], collector=b["collector"])
+            out.append({"id": f"BG-{n}", "incidentId": f"INC-BG-{n}", "at": round(b["at"], 3), "type": "background",
+                        "payload": payload, "_k": -len(items) + n})  # before a command at the same instant
+        return out, {"enabled": True, **info, "incidentIds": [b["incidentId"] for b in out]}
+
     def _apply(self, cmd: dict) -> None:
         p = cmd["payload"]
-        if cmd["type"] == "break_asset":
+        if cmd["type"] == "background":
+            if p["incident"] == "collector_outage":
+                self._collector_down(cmd, p)
+            else:
+                self._break(cmd, p)
+        elif cmd["type"] == "break_asset":
             self._break(cmd, p)
         elif p.get("incidentId"):
             inc = next((i for i in self.incidents if i["id"] == p["incidentId"]), None)
@@ -265,10 +356,16 @@ class Run:
         for i in self.incidents:  # breaking something already broken does nothing
             if i["edgeId"] == edge_id and i["utility"] == u and i["createdAt"] <= t0 < i["restoredAt"]:
                 return
-        kind = "broken_pole" if p.get("kind") == "pole" else {"electric": "line_fault", "water": "water_main_break",
-                                                              "gas": "gas_leak"}[u]
-        inc = {"id": f"INC-{len(self.incidents) + 1}", "commandId": cmd["id"], "assetId": asset or edge_id, "kind": kind,
-               "utility": u, "edgeId": edge_id, "x": round(float(x), 2), "z": round(float(z), 2), "createdAt": t0,
+        background = cmd["type"] == "background"
+        kind = p["incident"] if background else "broken_pole" if p.get("kind") == "pole" else \
+            {"electric": "line_fault", "water": "water_main_break", "gas": "gas_leak"}[u]
+        if background:
+            iid = cmd["incidentId"]
+        else:  # a user's incidents count on their own, so background incidents never renumber them
+            self._user_incidents += 1
+            iid = f"INC-{self._user_incidents}"
+        inc = {"id": iid, "commandId": None if background else cmd["id"], "source": "background" if background
+               else "user", "assetId": asset or edge_id, "kind": kind, "utility": u, "edgeId": edge_id, "x": round(float(x), 2), "z": round(float(z), 2), "createdAt": t0,
                "detectedAt": None, "isolatedAt": None, "restoredAt": math.inf, "jobId": None, "device": None,
                "unsupplied": {"atFault": 0, "afterIsolation": 0}, "_f": f}
         self.incidents.append(inc)
@@ -277,10 +374,11 @@ class Run:
                      "kind": kind})
         detect = t0 + float(self.settings["detectSeconds"][u])
         if u == "electric":
-            dev = self._protective_device(net, f)
+            # A failed transformer blows its own primary fuse; other faults trip the nearest upstream device.
+            dev = f if kind == "transformer_failure" else self._protective_device(net, f)
             inc["device"] = {"edgeId": net.edge_ids[dev],
-                             "kind": "fuse" if dev in net.fuse_edges else "recloser" if dev in net.recloser_edges
-                             else "conductor"}
+                             "kind": "transformer_fuse" if kind == "transformer_failure" else "fuse"
+                             if dev in net.fuse_edges else "recloser" if dev in net.recloser_edges else "conductor"}
             inc["_dev"] = dev
             inc["_trip"] = t0 + 0.2
             out = self._unsupplied(u, {f, dev})
@@ -291,8 +389,9 @@ class Run:
                         {"utility": u, "premiseIds": out, "count": len(out)})
         else:
             node = self.ops.nearest_node(u, f, x, z)
-            q = float(self.settings["leakM3h"][u])
-            opening = float((self.settings.get("leakOpening") or {}).get(u) or 0.0)
+            service = net.kind[f] == "service"  # a leaking service line, not a main
+            q = float(self.settings["leakM3h"].get(f"{u}_service" if service else u, self.settings["leakM3h"][u]))
+            opening = 0.0 if service else float((self.settings.get("leakOpening") or {}).get(u) or 0.0)
             if opening > 0 and self.ops.flow_inputs.hyd and u in self.ops.flow_inputs.hyd:
                 q = self._leak_rate(u, node, f, t0, opening) or q
             inc["_leak"] = (node, q)
@@ -306,6 +405,36 @@ class Run:
             self._repair(inc, detect + 60 * float(self.settings["mobiliseMinutes"]), cmd["id"])
         else:
             self._close_intervals(inc)
+
+    def _collector_down(self, cmd: dict, p: dict) -> None:
+        """An AMI collector goes silent: its meters cannot report (the meter-to-cash run misses their reads while it
+        is down) and service goes on. The head end raises an alarm; a meter technician repairs it in the day shift."""
+        col, t0 = p["collector"], cmd["at"]
+        for i in self.incidents:
+            if i["assetId"] == col["id"] and i["createdAt"] <= t0 < i["restoredAt"]:
+                return
+        inc = {"id": cmd["incidentId"], "commandId": None, "source": "background", "assetId": col["id"],
+               "kind": "collector_outage", "utility": "ami", "edgeId": None, "x": round(col["x"], 2),
+               "z": round(col["z"], 2), "createdAt": t0, "detectedAt": None, "isolatedAt": None, "restoredAt": math.inf,
+               "jobId": None, "device": None, "unsupplied": {"atFault": 0, "afterIsolation": 0},
+               "premiseIds": col["premiseIds"], "meters": col["meters"]}
+        self.incidents.append(inc)
+        self._event(t0, "collector.offline", "ami_collector", col["id"], inc, cmd["id"],
+                    {"incidentId": inc["id"], "collectorId": col["id"], "premises": len(col["premiseIds"]),
+                     "meters": col["meters"]})
+        inc["detectedAt"] = detect = t0 + float(self.settings["detectSeconds"]["ami"])
+        self._event(detect, "incident.detected", "incident", inc["id"], inc, cmd["id"],
+                    {"utility": "ami", "by": "head-end alarm"})
+        if self.settings["autoDispatch"]:
+            self._repair(inc, self._on_shift(detect) + 60 * float(self.settings["mobiliseMinutes"]), cmd["id"])
+
+    def _on_shift(self, t: float) -> float:
+        """The first moment at or after ``t`` inside the day shift (non-emergency work waits for it)."""
+        a, b = 3600.0 * float(self.settings["shiftStartHour"]), 3600.0 * float(self.settings["shiftEndHour"])
+        if a >= b:
+            return t
+        day, r = divmod(t, 86400.0)
+        return t if a <= r < b else day * 86400.0 + a if r < a else (day + 1) * 86400.0 + a
 
     @staticmethod
     def _protective_device(net, f: int) -> int:
@@ -348,6 +477,17 @@ class Run:
     def _repair(self, inc: dict, request: float, cause: str) -> None:
         u, s = inc["utility"], self.settings
         target = self.ops.nearest_access(inc["x"], inc["z"])
+        if u == "ami":  # a meter technician brings the collector back; nothing to isolate
+            job = self._job("meter", "repair", request, target, {"x": inc["x"], "z": inc["z"]}, cause,
+                            label="AMI collector", incident=inc)
+            restored = job["arrivalAt"] + 60 * float(s["repairMinutes"]["collector_outage"])
+            inc.update(jobId=job["id"], restoredAt=restored)
+            self._event(restored, "repair.completed", "incident", inc["id"], inc, job["id"], {"kind": inc["kind"]})
+            self._event(restored, "collector.online", "ami_collector", inc["assetId"], inc, job["id"],
+                        {"incidentId": inc["id"], "collectorId": inc["assetId"]})
+            self._event(restored, "service.restored", "incident", inc["id"], inc, job["id"], {"utility": u})
+            self._finish_job(job, restored - job["arrivalAt"])
+            return
         job = self._job(u, "repair", request, target, {"x": inc["x"], "z": inc["z"]}, cause,
                         label=inc["kind"].replace("_", " "), incident=inc)
         arrival = job["arrivalAt"]
@@ -355,6 +495,10 @@ class Run:
         repaired = isolated + 60 * float(s["repairMinutes"][inc["kind"]])
         restored = repaired + (60 * float(s["flushMinutes"]) if u == "water" else 0.0)
         inc.update(jobId=job["id"], isolatedAt=isolated, restoredAt=restored)
+        if u == "gas":  # an odour call should have a crew on site within the target
+            minutes = (arrival - inc["detectedAt"]) / 60.0
+            target = float(s["gasResponseTargetMinutes"])
+            inc["response"] = {"minutes": round(minutes, 1), "targetMinutes": target, "met": minutes <= target}
         net = self.ops.nets[u]
         f = inc["_f"]
         if u == "electric":
@@ -366,7 +510,7 @@ class Run:
             if restored_now and s["tieBackfeed"]:
                 self._backfeed(inc, f, restored_now, isolated, repaired, job["id"])
         else:
-            valves = self._segment(u, f)
+            valves = [f] if net.kind[f] == "service" else self._segment(u, f)  # a service: its own shut-off
             inc["_valves"] = valves
             out = self._unsupplied(u, set(valves))
             inc["_relight"] = out
@@ -500,6 +644,8 @@ class Run:
 
     def _close_intervals(self, inc: dict) -> None:
         """(Re)write the incident's effect on the networks; a later repair replaces the open-ended version."""
+        if inc["utility"] == "ami":  # a silent collector changes no network
+            return
         u, f, iid = inc["utility"], inc["_f"], inc["id"]
         self.intervals = [iv for iv in self.intervals if iv.incident != iid]
         t0, iso, end = inc["createdAt"], inc["isolatedAt"] or math.inf, inc["restoredAt"]
@@ -684,10 +830,17 @@ class Run:
         interruptions = [{"utility": u, "start": round(t0, 3), "end": round(t1, 3) if math.isfinite(t1) else None,
                           "premiseIds": [self.ops.premise_ids[p] for p in sorted(ps)]}
                          for (u, t0, t1), ps in sorted(spans.items(), key=lambda kv: (kv[0][1], kv[0][2], kv[0][0]))]
+        # A silent AMI collector: service goes on, but its premises' AMI meters cannot report (utility "ami").
+        interruptions += [{"utility": "ami", "start": round(i["createdAt"], 3),
+                           "end": round(i["restoredAt"], 3) if math.isfinite(i["restoredAt"]) else None,
+                           "premiseIds": i["premiseIds"], "collectorId": i["assetId"], "incidentId": i["id"]}
+                          for i in self.incidents if i["kind"] == "collector_outage" and i["premiseIds"]]
+        interruptions.sort(key=lambda x: (x["start"], math.inf if x["end"] is None else x["end"], x["utility"]))
         return {"schemaVersion": TIMELINE_VERSION, "townId": self.ops.id, "simulationId": self.simulation_id,
                 "topologyRevision": self.ops.context.topology, "indexRevision": self.ops.context.index,
-                "date": self.day, "timezone": self.ops.timezone, "settings": self.settings,
+                "date": self.day, "timezone": self.ops.timezone, "seed": self.seed, "settings": self.settings,
                 "depot": {"id": self.ops.depot["id"], "x": self.ops.depot["x"], "z": self.ops.depot["z"]},
+                "background": self.hazards,
                 "commands": [{k: v for k, v in c.items() if k != "_k"} for c in self.commands],
                 "incidents": [clean(i) for i in self.incidents], "jobs": [clean(j) for j in self.jobs],
                 "events": self.events, "stateChanges": changes, "interruptions": interruptions, "reads": self.reads,

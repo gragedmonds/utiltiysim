@@ -5,9 +5,17 @@ engine for calendar 2026.
 
 ## Run model
 
-A run is stateless and deterministic: `(town, settings, actions, outages)` gives the same year every time.
+A run is stateless and deterministic: `(town, settings, actions, outages, seed)` gives the same year every time.
 - `settings` overrides the run-scoped config groups `process`, `anomalies`, `reading`, `vee` and `billing`. They never change
-  the town id. `GET /api/m2c/settings` returns their JSON Schema, with units, bounds, effects and advanced flags.
+  the town id. `GET /api/m2c/settings` returns their JSON Schema, with units, bounds, effects and advanced flags
+  (`?town=` takes the defaults from that town).
+- `seed` (optional, top level, at most 64 characters) re-rolls the run on the same town: every random draw of the run
+  (missed reads, anomalies and their onsets, analyst pickup and review, bill checks, payments) comes from
+  `"{seed}:m2c"` instead of the town's `"{seeds.anomalies or seeds.master}:m2c"`. Blank, `null` or the town's own seed is the town's
+  run, exactly as before the field existed (same `simulationId`). The routes, read days, meters and customers never
+  change. `GET /api/m2c/settings` returns `seed: {type, maxLength: 64, default: <town seed>, title, description}`,
+  so a form can show "blank = town seed"; summaries echo `seed` (`null` for the town's run). Operations requests
+  pass it inside `m2c` (`m2c: {settings, actions, outages, seed}`), and every run cache key includes it.
 - `actions` are analyst decisions from the viewer: `{id, day, type, caseId, value?, note?}`.
   - `type` is one of `accept`, `override` (with a register value), `estimate`, `field_order` or `escalate`.
   - The Utility Studio adds field service orders (`order_save`, `order_release`, `order_dispatch`,
@@ -17,10 +25,21 @@ A run is stateless and deterministic: `(town, settings, actions, outages)` gives
   - A refused action is HTTP 422 with a clear `detail` (for an order form, an object with `fieldErrors`), so the
     viewer can roll it back. Only the newest action is refused this way; an earlier one that no longer applies
     (settings or outages changed the run under it) is skipped with a warning, so a stored list always replays.
+  - An action works a case only if the case is open when the action lands (09:00). Otherwise it is refused, and the
+    message says why and when:
+    - a case raised later that day (VEE at 18:00, billing at 19:30) or on a later day: `CASE-… was raised at 18:00
+      on 2026-07-06; work it from 2026-07-07` (rows and case views carry this date as `actionableFrom`);
+    - a case already resolved: `CASE-… was already completed by RPA at 19:00 on 2026-07-06` (or by analyst AN-01,
+      supervisor SUP-01, field crew FIELD-1, you);
+    - a case id the run does not have: `case CASE-… does not exist in this run`.
+  - Decisions a case does not take are refused too: `accept` on a register that went backwards (see "Backwards
+    registers"), `override` or `field_order` on a billing block, a release while the account is on hold, any
+    decision on a Field Work or hold case.
 - `field_read` (`{day, premiseId, at}`, no `caseId`) is a field visit made on the map. The tech reads the
   premise's meters, and each of its open read cases settles on the spot: a faulty meter is exchanged, otherwise a
   special read gives the real register value.
-- `outages` are service interruptions from the operations simulator: `{day, utility, start, end, premiseIds}`, with
+- `outages` are service interruptions from the operations simulator: `{day, utility, start, end, premiseIds}`
+  (`utility` `electric`, `water`, `gas`, or `ami` for an AMI collector outage), with
   start and end in seconds since local midnight of `day` (end may pass midnight, up to a week). An operations
   timeline reports them as `interruptions`. See "Outages from the map" below.
 - Views read the finished year *as of* a date (`asOf`, default: the town's scenario date).
@@ -43,14 +62,66 @@ Each business day goes in this order:
      - meter fault: field order;
      - real usage (leak, vacant consumption): accept, then a customer callback.
    - An escalate disposition, or a bill impact at or above `vee.escalate_impact`, goes to `SUPERVISOR`.
-4. **Supervisors** approve escalations, within capacity.
+4. **Supervisors** approve escalations every business day, up to `supervisors × supervisor_hours_per_day ÷
+   supervisor_minutes` (3 a day by default). An escalation becomes eligible 1–4 business days after it is raised
+   (their pickup lag), oldest first. A case you own waits for you.
 5. **Field crews** complete up to `field_orders_per_day` orders. A meter fault gets a meter exchange (and the meter is
    fixed); otherwise the crew takes a special read.
 6. **Evening batch** for the portions read today: reads, then VEE at 18:00, then exceptions.
    - 19:30: billing documents for every installation period whose reads are all released.
    - 20:00: invoices that consolidate each account's released documents.
 7. **RPA** resolves exception types covered by `rpa_coverage`, taken in the order of `catalog.EXCEPTIONS`. Half are
-   resolved the same evening; the rest at 07:00 the next business day.
+   resolved the same evening; the rest at 07:00 the next business day. RPA never resolves a `TRUE_UP` block, nor a
+   `HIGH_BILL` or `BILL_CREDIT` outsort above `billing.outsort_auto_release_max`: those wait for a person.
+
+## Cases
+
+**Ids.** An engine case is `CASE-{yymmdd}-{code}`: the date it was raised and six characters (Crockford base 32) of a
+hash of what it is about (exception type, register, read period, creation minute). A case keeps its id when
+anything else in the run changes (an outage on an earlier day, another anomaly rate), so stored actions keep naming
+the same case. A collision takes the next salt of the hash (deterministic). The cases you open keep their action-keyed
+ids: Field Work `CASE-{yymmdd}-F{nnnn}` and invoice holds `CASE-{yymmdd}-H{nnnn}`.
+
+**Who raised it.** Every row and case view carries `createdBy` and `createdByLabel`:
+
+| `createdBy` | Cases |
+|---|---|
+| `ami_head_end` | AMI reads that did not arrive (comm fail, power outage, collector outage) |
+| `meter_reading_route` | Walked (no access) and drive-by reads that were missed |
+| `vee_batch` | Value exceptions, consecutive estimates, periods with no read document |
+| `billing_run` | Billing blocks (`HIGH_BILL`, `BILL_CREDIT`, `RATE_CLASS`, `TRUE_UP`) |
+| `studio` | Your Field Work and invoice hold cases |
+
+**Missing reads explain themselves.** A missing-read case (its read record and its VEE decision too) carries
+`cause`: `{code, label, reasonCode, reason}`, plus `outageStart` and `outageEnd` for an outage. `code` is
+`power_outage` (with `lastGaspAt`), `collector_outage` (with `outageSince`), `comm_fail` (AMI head-end or drive-by),
+`no_access` or `no_read_document`; `reason` is one line that names it ("No read: the meter lost power at 00:00 on
+2026-03-03 (AMI last gasp) and was still without power at the 02:00 read (back at 04:00 on 2026-03-03)."). The five
+VEE tests stay `not_applicable`, each saying what it would have checked. A case with no read value offers `estimate`, `field_order` and `escalate` only.
+
+**What a decision needs.** Case views (`work-case/1.0`) carry:
+- `expected`: `{registerValue, consumption}`, the expected register (previous register + expected use) and use;
+- `registerDelta` (observed − previous register), `registerWentBackwards` (below the last actual read and not a
+  rollover) and `previousEstimated` (the previous register was an estimate, so a negative delta alone is a true-up);
+- `released` once resolved: `{registerValue, consumption, method, by, at}`, what billing used. `method` is `as_read`,
+  `corrected`, `estimated` or `field_read`; `by` is `RPA`, `AN-nn`, `SUP-nn`, `FIELD-n` or `you`. A billing case adds
+  `billingDocumentId` and `totalAmount`;
+- `readHistory`: the register's periods to date (up to 13, oldest first), each `{readId, date, register,
+  consumption, type, estimated, method, veeStatus, caseId}`;
+- `actionableFrom`, `cause`, `createdBy`;
+- `actions` and `studioActions`: only what the engine accepts from an action dated the view's day (empty while the
+  case is not open at 09:00 that day).
+
+Worklist rows carry `actionableFrom`, `createdBy`, `createdByLabel`, `cause`, `registerDelta`,
+`registerWentBackwards`, `previousEstimated` and `releasedMethod` as well.
+
+**Backwards registers.** A register below its last actual read (as read, corrected or field read; not an estimate),
+and not a plausible rollover, is never released as read:
+- simulated analysts, supervisors, RPA and field visits estimate it or send a field order;
+- your `accept` is refused ("estimate it, correct the value (override) or send a field order");
+- a read below the previous *estimate* only is a true-up of that estimate and can be accepted.
+
+Your `override` value is yours to give; billing still checks the true-up it causes.
 
 ## Weather
 
@@ -81,8 +152,14 @@ Anomalies follow `anomalies.*` (per 1,000 meters per year). Each keeps its groun
 | Process | missing documents, consecutive-estimate episodes | Reads not obtained |
 
 The June reads equal the snapshot's `sampleReads` exactly. Reads are `meter-read/1.1`, with these additive fields:
-`veeStatus`, `veeDecisionId`, `veeConfidence`, `caseId`, `billStatus`, `registerRegression` and `revisions[]`.
-Estimated and adjusted values are revisions; the original observation is kept.
+`veeStatus`, `veeDecisionId`, `veeConfidence`, `caseId`, `billStatus`, `registerRegression`, `registerDelta`, `cause`
+and `revisions[]`. Estimated and adjusted values are revisions; the original observation is kept.
+- A lower register near the top of its dial (previous above 80 % of it, new below 20 %) is a rollover:
+  `rolloverFlag: true` and the consumption wraps.
+- Any other lower register went backwards: `registerRegression: true`, `consumption: null` and the negative
+  `registerDelta` (observed − previous register). No consumption is ever priced as a wrap that is not a rollover.
+- A missed read carries `reasonCode` and `cause` (see "Cases"); an outage adds `outageStart` and `outageEnd`, so a
+  reading screen can show "missed: power outage 01:00–03:20".
 
 ## VEE (v5 shape)
 
@@ -92,7 +169,9 @@ There are five tests per read, each with a risk contribution of 0–0.25 and a r
    - `SIM-T01` / `SIM-T02`: tolerance high / low;
    - `SIM-Z01`: zero consumption;
    - `SIM-C01`: cascade (the register went backwards);
-   - `SIM-L01`: lifecycle (a move inside the period).
+   - `SIM-L01`: lifecycle (a move inside the period);
+   - `SIM-T03`, `SIM-E01`, `SIM-D01`: the diagnosis of a persistent-low, erratic or period-length exception (their
+     risk is carried by the consistency or temporal test), so every value exception has a code.
 2. **Temporal validity**: period length.
 3. **Consistency**: an erratic ratio against prior-year history; true-ups after estimates.
 4. **Process corroboration**: implausible-value cases on the register in the last 180 days. They strengthen
@@ -125,18 +204,31 @@ The calculator is `billing.py`, vectorised per tariff; the state lives in `books
 
 Each document also carries its total at true consumption (`truthTotal`); summed, these give the billing error.
 
-**Billing blocks** go to the `BILLING` queue:
+**Billing blocks** go to the `BILLING` queue, checked in this order:
+- `TRUE_UP`: an estimate true-up (a negative period quantity) larger than `trueup_max_ratio` (default 3) × the
+  period's expected use (at least 30 kWh or 1 m³): more credit than any over-estimate could explain;
+- `RATE_CLASS`: a wrong rate class in billing master data, seeded at `data_error_rate`;
 - `HIGH_BILL`: above `high_bill_ratio` × the expected bill (prior-year use at current prices) and at least
   `high_bill_min` above it;
-- `BILL_CREDIT`: a credit larger than `credit_review`;
-- `RATE_CLASS`: a wrong rate class in billing master data, seeded at `data_error_rate`.
+- `BILL_CREDIT`: a credit larger than `credit_review`.
 
 What analysts do with a block:
 - release it, with a customer callback when the use is real;
 - rebill it on an estimate when the read was wrong (a version 2 document replaces the reversed one);
 - fix the rate class and rebill.
 
-RPA covers `BILL_CREDIT`.
+RPA covers `BILL_CREDIT` at the default coverage, but releases a `HIGH_BILL` or `BILL_CREDIT` outsort only up to
+`outsort_auto_release_max` (default $500, either sign); a larger one waits for an analyst (or you). No RPA rule
+covers `TRUE_UP`. All three are in the "Billing Outsorts" category.
+
+`billing_queue_worked_by` (default `analysts`) decides who works the `BILLING` queue. Set it to `you` to practise
+outsort release: no analyst and no RPA touches a billing block, so every `HIGH_BILL`, `BILL_CREDIT`, `TRUE_UP` and
+`RATE_CLASS` case waits for your `accept`, `estimate` (rebill) or `escalate`. Bills behind them wait too, so days to
+invoice and billing carry grow.
+
+**Estimated bills.** A billing document built on an estimated read says so: `estimated: true` and
+`estimatedReadIds` (a rebill on an estimate is estimated too). An invoice carries `estimated` and
+`estimatedBillingDocumentIds`, so premise and installation views show which bills and invoices rest on estimates.
 
 **Invoices:** `INV-{account}-{date}` sums the account's documents released that day. It is issued
 `print_lag_days` later and due `customers_billing.due_days` after issue.
@@ -231,7 +323,7 @@ keeps the queue it was resolved from). `POST /api/process/queue` filters by `cat
 |---|---|
 | MR Implausibles | Value exceptions (`HIGH_USAGE`, `LOW_USAGE`, `ZERO_USAGE`, `ERRATIC`, …), in `VEE_REVIEW` or `SUPERVISOR` |
 | Meter Read Follow-Up | Missing reads: `COMM_FAIL`, `NO_ACCESS`, `NO_READ`, `CONSECUTIVE_ESTIMATES` (`ESTIMATION`, or escalated) |
-| Billing Outsorts | Billing blocks `HIGH_BILL`, `BILL_CREDIT` |
+| Billing Outsorts | Billing blocks `HIGH_BILL`, `BILL_CREDIT`, `TRUE_UP` |
 | Billing Errors | Billing blocks `RATE_CLASS` (wrong rate class in master data) |
 | Invoice Outsorts | Your invoice holds (`INVOICE_HOLD` cases) |
 | Field Work | Any case in the `FIELD` queue, and your field service orders (`FIELD_SERVICE` cases) |
@@ -260,11 +352,11 @@ opening each case.
 
 | Endpoint | Returns |
 |---|---|
-| `GET /api/m2c/settings` | Schema, defaults, queues, exception vocabulary, action types, clarification categories |
+| `GET /api/m2c/settings?town=` | Schema, defaults (the town's with `?town=`), the run `seed` (default: the town seed), queues, exception vocabulary, action types, clarification categories |
 | `GET /api/m2c/vocabulary?town=` | `m2c-vocabulary/1.0`: the field service order form as data (fields with label, tab, required, kind, bounds and choices; the town's planning plant; component units; stages and system status), action types, queues and categories |
 | `POST /api/m2c/summary` | `m2c-summary/1.0`: KPIs, cost (labour, system, CX, reads), carry, VEE precision/recall against truth, `billing`, `reliability`, `weather`, queues with aging and daily opened/closed/backlog, exception mix, RPA rules, one status per premise |
-| `POST /api/process/queue` | Paged worklist: `queue` (incl. `BILLING`), `category`, `assignee`, `status`, `sort` (`age`, `impact`, `confidence`, `created`), `page`, `pageSize` ≤ 200, `type`, `commodity`, `search` (case, address, premise, account, meter or order id) |
-| `POST /api/m2c/case` | `work-case/1.0`: the case, its VEE decision, the read, 12-month history, events (`event/1.0`) with causal edges, allowed decisions (`actions`) and Studio actions (`studioActions`), `notes`, linked `orders`, the account's `invoiceHold`, and for a Field Work case its `order` (`truth: true` adds ground truth) |
+| `POST /api/process/queue` | Paged worklist: `queue` (incl. `BILLING`), `category`, `assignee`, `status`, `sort` (`age` oldest first, `impact`, `confidence`, `created` newest first; ties by case id, so pages never overlap), `page`, `pageSize` ≤ 200, `type`, `commodity`, `search` (case, address, premise, account, meter or order id). `total` counts every matching row |
+| `POST /api/m2c/case` | `work-case/1.0`: the case, its VEE decision, the read, 12-month history and `readHistory`, `expected`, `released`, the register check, `cause`, `createdBy`, `actionableFrom`, events (`event/1.0`) with causal edges, allowed decisions (`actions`) and Studio actions (`studioActions`), `notes`, linked `orders`, the account's `invoiceHold`, and for a Field Work case its `order` (`truth: true` adds ground truth); see "Cases" |
 | `POST /api/m2c/order` | `m2c-order/1.0`: a field service order (`field-order/1.0`: form, stage, SAP system status, history, source, reference installation/meter/contract, crew visit) by `orderId`, or the order of a `sourceCaseId` / `readId` (`order: null` and a `proposal` when there is none) |
 | `POST /api/m2c/installation` | `m2c-installation/1.0` for one `installationId` (see "Lookups") |
 | `POST /api/m2c/read-document` | `m2c-read-document/1.0` for one `readId` |
@@ -313,7 +405,7 @@ map to that day and follows the van, and a field visit on the map is reported ba
 
 ### Outages from the map
 
-Break a pole or a main on the map and the outage reaches meter-to-cash. The timeline's `interruptions` list who lost
+Break a pole or a main on the map, or let a background incident happen, and the outage reaches meter-to-cash. The timeline's `interruptions` list who lost
 which service and when; the viewer keeps them per operations day and sends them as the run's `outages`. In the run:
 - **Use stops:** each register loses its normal consumption for the hours without service (an electric outage also
   stops PV export), so the following reads, bills and true-ups are lower.
@@ -323,8 +415,16 @@ which service and when; the viewer keeps them per operations day and sends them 
 - **VEE knows:** with `vee.oms_events` (default on), the hours without service lower the expected use, and the
   context test's rationale names them. Turn it off to see what an outage does to low-usage flags when VEE is not
   told.
+- **Silent collectors:** an outage with `utility: "ami"` is an AMI collector outage from operations (a background
+  incident; see CONTRACT.md "Background incidents"). Service goes on and nothing stops flowing, but every AMI meter
+  (any commodity) at its premises misses a read that falls inside it (`reasonCode` `SIM_COLLECTOR_OUTAGE`); the
+  `COMM_FAIL` case is caused by an `AMI_COLLECTOR_OUTAGE` event. A collector that fails in the evening is repaired in
+  the next day shift, so the night's 02:00 reads are the ones it costs. It is not in `reliability`; a premise view
+  lists it among its `outages` with `utility: "ami"`, `collectorOutage: true` and no use lost.
 - **Reliability:** the summary's `reliability` reports interruptions, customers interrupted, customer-minutes, SAIDI
   minutes per customer served, use lost and AMI last gasps, per utility. A premise view lists its `outages`.
 
 The morning's field orders for a day never depend on that day's own outages, so linking the two runs cannot loop.
+The day's read outcomes and its `meterToCash` cycle do include them: a pole broken at 01:40 shows on the card as
+missed AMI reads, and its comm-fail cases and held bills match the Workspace.
 A day's outages stay after you move the map to another day or reload; "Reset engine run" clears them.
