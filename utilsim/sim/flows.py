@@ -1,25 +1,26 @@
 """Instantaneous flows on the networks (the prototype's semantics, vectorised).
 
 Each meter node carries its premise's demand; every forest edge carries the signed sum of everything downstream of it
-(positive = from → to). Loop edges are not solved by this radial aggregation: an enabled loop edge reports NaN
-(exported as ``null`` = unavailable) and a disabled one reports 0. The looped hydraulic and power-flow solves arrive
-in M2 behind the same interface.
+(positive = from → to). On water and gas, every other enabled edge between reached nodes is then solved as a loop
+(``sim.hydraulics.looped``): its flow balances the losses around its cycle and is added to the tree edges along it.
+If that solve does not converge the frame keeps the radial flows (with a warning). Electric non-forest edges and gas
+loops that cross a regulator report NaN (exported as ``null`` = unavailable); a disabled edge reports 0.
 
 Switching and faults (``disabled`` edges, leak ``injections``) use a *repaired* forest: a 0-1 BFS from the sources
 over enabled edges where each node's original parent edge costs 0 and any other enabled edge (loop, tie) costs 1,
 ties broken by edge index. Unaffected parts keep their parents and signs; a loop or tie promoted into the forest
-carries a number; enabled non-forest edges stay NaN; disabled edges and de-energised islands carry 0, and meters
-that no source reaches draw nothing (``unsupplied``). With nothing extra disabled this is exactly the construction
-forest. Pure numpy (no scipy/shapely), so it runs in the hosted engine."""
+carries a number; enabled non-forest edges are loops (above); disabled edges and de-energised islands carry 0, and
+meters that no source reaches draw nothing (``unsupplied``). With nothing extra disabled this is exactly the
+construction forest. Pure numpy (no scipy/shapely), so it runs in the hosted engine."""
 
 from __future__ import annotations
 
 from collections import deque
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 
-from utilsim.sim.hydraulics import HydParams, node_pressure
+from utilsim.sim.hydraulics import HydParams, looped, node_pressure
 from utilsim.sim.shapes import hourly
 from utilsim.sim.voltage import ElecParams, VoltageResult, solve
 
@@ -82,8 +83,9 @@ class FlowInputs:
 
 
 def _edge_dict(e, net) -> dict:
-    """A generated edge in the snapshot's shape (what ``sim.voltage`` and ``sim.hydraulics`` read)."""
-    d = {**e.attrs, "kind": e.kind, "lengthM": e.length, "id": e.id, "from": net.nodes[e.a].id,
+    """A generated edge in the snapshot's shape (what ``sim.voltage`` and ``sim.hydraulics`` read), with the length
+    rounded as the snapshot rounds it, so a town and its snapshot solve the same network."""
+    d = {**e.attrs, "kind": e.kind, "lengthM": round(float(e.length), 2), "id": e.id, "from": net.nodes[e.a].id,
          "to": net.nodes[e.b].id}
     if e.size_mm and "sizeMm" not in d:
         d["sizeMm"] = e.size_mm
@@ -104,6 +106,7 @@ class FlowResult:
     voltage: VoltageResult | None = None  # electric power flow: voltages, loading, losses
     pressure: dict[str, np.ndarray] | None = None  # water and gas: kPa per premise (sim.hydraulics)
     node_pressure: dict[str, np.ndarray] | None = None  # the same per network node
+    loops: dict[str, dict] | None = None  # water and gas loop solve: chords, iterations, residual, converged
 
 
 @dataclass
@@ -114,6 +117,8 @@ class _Forest:
     levels: list[np.ndarray]  # nodes by depth, sources first
     reached: np.ndarray  # bool per node
     in_forest: np.ndarray  # bool per edge
+    roots: np.ndarray  # sources that feed something (a standby tank does not)
+    cache: dict = field(default_factory=dict)  # per-forest structures (the loop solve's cycles)
 
 
 class FlowModel:
@@ -186,7 +191,8 @@ class FlowModel:
         sign[has] = np.where(net.a[pedge[has]] == parent[has], 1.0, -1.0)
         in_forest = np.zeros(len(net.a), dtype=bool)
         in_forest[pedge[has]] = True
-        f = _Forest(parent, pedge, sign, levels, reached, in_forest)
+        roots = np.array([s for s in sorted(int(x) for x in net.sources) if s in children], dtype=np.int64)
+        f = _Forest(parent, pedge, sign, levels, reached, in_forest, roots)
         if len(self._cache) > 64:
             self._cache.clear()
         self._cache[key] = f
@@ -206,7 +212,7 @@ class FlowModel:
         d = hourly(daily, inp.occupied, inp.has_gas, hour, scenario, ti, inp.leak_m3h)
         source, edge_flows, unit, unsupplied = {}, {}, {}, {}
         homes = dict(d)
-        voltage, pressure, nodes_p = None, {}, {}
+        voltage, pressure, nodes_p, loops = None, {}, {}, {}
         for u, net in inp.nets.items():
             dis = None if disabled is None else disabled.get(u)
             cl = None if closed is None else closed.get(u)
@@ -251,8 +257,23 @@ class FlowModel:
                     np.add.at(load, f.parent[lvl], load[lvl])
                 voltage = solve(inp.elec, f, tot, load, net.meter, len(inp.premise_ids))
             if inp.hyd is not None and u in inp.hyd:
-                nodes_p[u] = node_pressure(inp.hyd[u], f, tot)
+                # Loops: every other enabled edge between reached nodes, except those at a standby source.
+                cand = ~off & ~f.in_forest & f.reached[net.a] & f.reached[net.b] & (net.a != net.b)
+                standby = root.copy()
+                standby[f.roots] = False
+                cand &= ~standby[net.a] & ~standby[net.b]
+                q_node = tot
+                lr = looped(inp.hyd[u], f, tot, net.a, net.b, cand) if cand.any() else None
+                if lr is not None:
+                    loops[u] = {"chords": len(lr.chords), "iterations": lr.iterations, "residual": lr.residual,
+                                "converged": lr.converged}
+                    if lr.converged:
+                        q_node = lr.flow
+                        ef[f.pedge[kids]] = q_node[kids] * f.sign[kids]
+                        ef[lr.chords] = lr.q
+                nodes_p[u] = node_pressure(inp.hyd[u], f, q_node)
                 pressure[u] = np.full(len(inp.premise_ids), np.nan)
                 mr = (net.meter >= 0) & f.reached
                 pressure[u][net.meter[mr]] = nodes_p[u][mr]
-        return FlowResult(source, edge_flows, homes, unit, unsupplied, voltage, pressure or None, nodes_p or None)
+        return FlowResult(source, edge_flows, homes, unit, unsupplied, voltage, pressure or None, nodes_p or None,
+                          loops or None)

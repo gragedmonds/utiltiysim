@@ -1,9 +1,10 @@
 """Complete state frames (``utility-state/1.0``) and replays (``utility-replay/1.0``).
 
-M1 frames are static solver output: radial aggregation of the deterministic demand model at the frame time.
-Rules (match the viewer receiver): every edge of every network is listed with an explicit id; ``flows[i] > 0`` runs
-from → to, ``< 0`` to → from, ``0`` is a calculated zero, ``null`` is unavailable (enabled loop edges until the M2
-looped solve); a disabled edge has 0 or null; premises list every premise with ``null`` where a commodity is not
+Frames are static solver output for the deterministic demand model at the frame time: radial aggregation, the water
+and gas loop solve (``sim.loops``), power flow and hydraulics. Rules (match the viewer receiver): every edge of every
+network is listed with an explicit id; ``flows[i] > 0`` runs from → to, ``< 0`` to → from, ``0`` is a calculated
+zero, ``null`` is unavailable (an enabled electric tie, or a water/gas loop whose solve did not converge); a disabled
+edge has 0 or null; premises list every premise with ``null`` where a commodity is not
 served; the clock carries the same ``simTime`` string as the frame."""
 
 from __future__ import annotations

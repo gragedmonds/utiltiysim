@@ -26,9 +26,11 @@ Done:
 - **Radial hydraulics:** water service pressure (Hazen-Williams from the tank grade) and two-tier gas pressure
   (Weymouth and Spitzglass) in every frame. Elevated tanks feed when the supply path is cut, and main breaks leak at
   orifice flow.
+- **Looped hydraulics:** water and gas loop flows (Newton on the loop equations, `sim/loops.py`) in every frame, so
+  loop edges carry numbers and service pressures come from the looped grades.
 
 Next:
-- looped hydraulics, to fill today's `null` loop flows; tank levels over a day;
+- tank levels over a day (a tank is a fixed grade today);
 - tank and pump control;
 - nightly AMI collection visualised;
 - frames over WebSocket.

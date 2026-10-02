@@ -15,7 +15,7 @@ requires, and CI proves it against your actual `dist/adapter.js`. Field names an
 Smoke results (your receiver, unchanged): `scripts/viewer_conformance.mjs` passes 11/11 on the example and on a
 freshly generated town, in CI (`viewer` job, after your own `npm test`):
 `inspectSnapshot` OK; a trace reaches a source for every service; customer profile finds account, partner, meters
-and reads; embedded, replay and scenario frames are accepted; enabled water loops stay `null`; the outage isolates
+and reads; embedded, replay and scenario frames are accepted; enabled water loops carry flows and a `null` flow stays `null`; the outage isolates
 electric but not water; tampered-revision, foreign-town and duplicate-sequence frames are rejected. The headless
 browser smoke loads the snapshot through `#snapshot-file`, shows ENGINE SNAPSHOT, applies the replay, finds a
 premise by search and opens its profile with no console errors.

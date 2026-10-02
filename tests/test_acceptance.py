@@ -126,8 +126,13 @@ def _conservation(town, res):
         out_of = np.zeros(len(net.nodes))
         into = np.zeros(len(net.nodes))
         for k, e in enumerate(net.edges):
-            if e.loop:
+            if e.loop and u == "electric":
                 assert np.isnan(ef[k]) if e.enabled else ef[k] == 0
+                continue
+            if e.loop and u == "water":
+                assert np.isfinite(ef[k]) if e.enabled else ef[k] == 0  # water loops are solved (sim.loops)
+            if np.isnan(ef[k]):  # a gas loop across a regulator stays unsolved
+                assert u == "gas" and e.loop and e.enabled
                 continue
             out_of[e.a] += ef[k]
             into[e.b] += ef[k]
@@ -157,18 +162,21 @@ def test_flow_balance_solar_reversal_and_outage(town480):
     assert out.source["water"] > 0 and out.source["gas"] > 0
 
 
-def test_leak_raises_only_the_target_path(town480):
+def test_leak_reaches_the_target_through_the_mains(town480):
     fm = FlowModel(town480)
     target = town480.prem.ids[10]
     base = fm.flows(8.0)
     leak = fm.flows(8.0, "leak", target)
+    _conservation(town480, leak)
     assert leak.source["water"] - base.source["water"] == pytest.approx(0.65, abs=1e-9)
+    # The leak's own service carries it; other services are untouched. In the looped mains the extra 0.65 m³/h splits
+    # between the paths around each loop (sim.loops), so no main carries more than all of it.
     path = {e.id for e in _trace(town480.networks["water"], f"water-N-{target}")}
     delta = leak.edge_flows["water"] - base.edge_flows["water"]
     for k, e in enumerate(town480.networks["water"].edges):
-        if e.loop:
-            continue
-        assert delta[k] == pytest.approx(0.65 if e.id in path else 0.0, abs=1e-9)
+        if e.kind == "service":
+            assert delta[k] == pytest.approx(0.65 if e.id in path else 0.0, abs=1e-9)
+        assert abs(delta[k]) <= 0.65 + 1e-9
     for u in ("electric", "gas"):
         assert np.allclose(leak.edge_flows[u], base.edge_flows[u], equal_nan=True)
 

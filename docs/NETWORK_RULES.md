@@ -50,7 +50,8 @@ corridor share, severe turns (≥ 60°) and corridor changes per trunk km, hiera
 transitions along trunk continuations, express km, feeders, ties, corridor components (`disconnectedCorridorComponents`
 counts arterial/collector islands beyond the first). The same numbers are reported for all primary (`primary`).
 
-**Hydraulics** (`utilsim/sim/hydraulics.py`, every frame): radial, on the same forest as the flows.
+**Hydraulics** (`utilsim/sim/hydraulics.py`, `utilsim/sim/loops.py`, every frame): the frame's forest plus its
+loops. Pressures are walked down the forest from the held grades with the looped flows.
 
 Water:
 - Hazen-Williams head loss, with C 150 for PVC, 140 for copper, 130 for ductile iron and 120 for concrete.
@@ -63,15 +64,38 @@ Gas:
 - Low-pressure pipes use Spitzglass, starting from a district regulator's outlet.
 - Low-pressure services stay between 1.5 and 1.74 kPa at a January peak.
 
+Loops (water and gas):
+- Every enabled loop edge between two supplied nodes is a chord of the frame's forest. It closes one cycle: the chord
+  plus the tree path between its ends. The radial flows already balance every node. A chord's flow is added along
+  the tree path to one end and taken off along the path to the other, so continuity holds for any chord flows, and
+  the chord flows are the only unknowns.
+- Each chord gives one energy equation: the potential falls from end to end by the chord's own loss. The potential is
+  grade (water), P² (medium-pressure gas) or pressure (low-pressure gas). A node's potential comes down from the
+  nearest held node above it: the source, the pump station, a zone boundary or a regulator. When a chord's ends hang
+  from different held nodes, its equation runs between them and carries their difference (a pseudo-loop). This is
+  how the tank and the pump station share the load after a trunk cut.
+- Damped Newton runs from zero chord flow in every frame, with a dense chords × chords Jacobian built from the
+  forest's paths. It stops at 1e-4 m of head (water), 1e-3 psia² (MP gas) or 1e-5 kPa (LP gas) around every loop.
+  That takes 2–6 iterations on Ayr (44 water and 43 gas loops) and Cobourg (170 and 153). The cost is about 3 ms per
+  frame on Ayr and 20 ms on Cobourg.
+- If the solve does not converge, the frame keeps the radial flows and pressures, its loops stay `null`, and a
+  warning is raised.
+- A gas loop is solved within one tier. A cycle that crosses a regulator stays `null` (none in the packs today).
+- Loops lift the worst-served premises. At the 07:30 peak, Cobourg's lowest water pressure rises from 372 to
+  391 kPa, and the demand-weighted pressure rises in every town (the network dissipates less energy). A premise on
+  the high side of a loop can drop a little, by up to 6 kPa on Cobourg, because it now feeds the loop. Ayr's
+  loops sit in well-fed areas, so its minimum (409 kPa) and median (486 kPa) are unchanged.
+
 Elevated tanks are standby sources. The supply's built forest wins wherever it still connects, so in normal
 operation a tank neither fills nor drains. When the path from the pump station is cut, the tank feeds what it can
-reach. Its level is not tracked.
+reach, at its own overflow grade. Its level is not tracked.
 
 A water main break leaks like an orifice: `leakOpening` (5 %) of the bore open, at the local pressure, which the leak
 itself pulls down (damped iterations). That gives about 390 m³/h on a 16" main and 100 m³/h on an 8" one. A gas
 break keeps the fixed `leakM3h`.
 
-Known limit: loops carry no flow in the radial model, so looped areas read a little low.
+Known limits: a tank holds its overflow grade (no level over the day), and a pump station holds its zone's grade
+(no pump curve).
 
 ## Gas (defaults: 414 kPa / 60 psig MP, 1.74 kPa / 7" w.c. LP)
 

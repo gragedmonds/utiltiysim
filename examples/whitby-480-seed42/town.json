@@ -116,14 +116,14 @@
       "exceptions": 0
     },
     "timingsS": {
-      "roads": 0.032,
-      "land_use": 1.741,
-      "buildings": 0.363,
-      "electric": 0.121,
-      "water": 0.192,
-      "gas": 0.119,
-      "customers": 0.451,
-      "total": 3.019
+      "roads": 0.031,
+      "land_use": 1.537,
+      "buildings": 0.291,
+      "electric": 0.137,
+      "water": 0.187,
+      "gas": 0.115,
+      "customers": 0.322,
+      "total": 2.62
     }
   },
   "validation": {
