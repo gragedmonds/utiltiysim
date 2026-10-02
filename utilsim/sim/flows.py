@@ -111,10 +111,13 @@ class FlowModel:
             self._orig_pe[u] = pe
 
     # ---- topology --------------------------------------------------------------------------------------------
-    def forest(self, u: str, disabled: np.ndarray | None = None) -> _Forest:
-        """Repaired forest for a disabled-edge mask (``None`` = as built). Cached per mask."""
+    def forest(self, u: str, disabled: np.ndarray | None = None, closed: np.ndarray | None = None) -> _Forest:
+        """Repaired forest for a disabled-edge mask (``None`` = as built), with normally-open switches in ``closed``
+        closed. Cached per mask."""
         net = self.inputs.nets[u]
-        off = ~net.enabled if disabled is None else (~net.enabled | disabled)
+        off = ~net.enabled if closed is None else (~net.enabled & ~closed)
+        if disabled is not None:
+            off = off | disabled
         key = (u, np.packbits(off).tobytes())
         hit = self._cache.get(key)
         if hit is not None:
@@ -166,7 +169,8 @@ class FlowModel:
     def flows(self, hour: float, scenario: str = "normal", target: str | None = None, *,
               disabled: dict[str, np.ndarray] | None = None,
               injections: dict[str, dict[int, float]] | None = None,
-              premises_off: dict[str, np.ndarray] | None = None, month: int | None = None) -> FlowResult:
+              premises_off: dict[str, np.ndarray] | None = None, month: int | None = None,
+              closed: dict[str, np.ndarray] | None = None) -> FlowResult:
         """``premises_off`` (bool per premise) takes premises off a commodity although the network reaches them
         (e.g. gas meters shut until relit)."""
         inp = self.inputs
@@ -176,8 +180,12 @@ class FlowModel:
         source, edge_flows, unit, unsupplied = {}, {}, {}, {}
         homes = dict(d)
         for u, net in inp.nets.items():
-            f = self.forest(u, None if disabled is None else disabled.get(u))
-            off = ~net.enabled if disabled is None or u not in disabled else (~net.enabled | disabled[u])
+            dis = None if disabled is None else disabled.get(u)
+            cl = None if closed is None else closed.get(u)
+            f = self.forest(u, dis, cl)
+            off = ~net.enabled if cl is None else (~net.enabled & ~cl)
+            if dis is not None:
+                off = off | dis
             dead_meter = (net.meter >= 0) & ~f.reached
             lost = np.zeros(len(inp.premise_ids), dtype=bool)
             lost[net.meter[dead_meter]] = True

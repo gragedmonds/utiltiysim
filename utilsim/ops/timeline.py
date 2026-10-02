@@ -52,6 +52,8 @@ DEFAULTS = {
     "driveByKmh": 20.0,
     "meterDwellSeconds": 40,
     "fieldCrews": 2,  # meter shop crews working meter-to-cash field orders
+    "tieBackfeed": True,  # close a normally-open tie to restore customers downstream of an isolated fault
+    "tieSwitchMinutes": 6,
     "relightCrews": 4,  # gas techs relighting appliances after a gas main is restored (at least)
     "relightPerCrew": 40,  # more crews (mutual aid) when an outage is large
     "relightMinutes": 10,
@@ -90,6 +92,7 @@ class _Interval:
     leak: tuple[int, float] | None = None  # (node, m³/h)
     incident: str = ""
     premises: list[int] = field(default_factory=list)  # premises off although supplied (gas awaiting relight)
+    closed: list[int] = field(default_factory=list)  # normally-open ties closed (back-feed)
 
 
 class Run:
@@ -341,6 +344,8 @@ class Run:
             self._event(isolated, "fault.isolated", "incident", inc["id"], inc, job["id"],
                         {"openedEdgeId": net.edge_ids[f], "reclosedDeviceEdgeId": inc["device"]["edgeId"],
                          "stillUnsupplied": len(restored_now)})
+            if restored_now and s["tieBackfeed"]:
+                self._backfeed(inc, f, restored_now, isolated, repaired, job["id"])
         else:
             valves = self._segment(u, f)
             inc["_valves"] = valves
@@ -361,6 +366,32 @@ class Run:
         self._close_intervals(inc)
         if u == "gas":
             self._relight(inc, inc["_relight"], restored, job["id"])
+
+    def _backfeed(self, inc: dict, f: int, still: list[str], isolated: float, repaired: float, cause: str) -> None:
+        """Close the normally-open tie that restores the most customers cut off downstream of the isolated fault;
+        open it again when the repair is done."""
+        net = self.ops.nets["electric"]
+        dis = np.zeros(len(net.a), dtype=bool)
+        dis[f] = True
+        best = None
+        for k in sorted(net.tie_edges):
+            cl = np.zeros(len(net.a), dtype=bool)
+            cl[k] = True
+            out = self.ops.unsupplied("electric", dis, cl)
+            if len(out) < len(still) and (best is None or len(out) < len(best[1])):
+                best = (k, out)
+        if best is None:
+            return
+        k, out = best
+        at = isolated + 60.0 * float(self.settings["tieSwitchMinutes"])
+        if at >= repaired:
+            return
+        inc["unsupplied"]["afterBackfeed"] = len(out)
+        inc["tie"] = {"edgeId": net.edge_ids[k], "closedAt": at, "openedAt": repaired}
+        self.intervals.append(_Interval(at, repaired, "electric", closed=[k], incident=inc["id"] + ":tie"))
+        self._event(at, "tie.closed", "incident", inc["id"], inc, cause,
+                    {"tieEdgeId": net.edge_ids[k], "restored": len(still) - len(out), "stillUnsupplied": len(out)})
+        self._event(repaired, "tie.opened", "incident", inc["id"], inc, cause, {"tieEdgeId": net.edge_ids[k]})
 
     def _relight(self, inc: dict, pids: list[str], restored: float, cause: str) -> None:
         """Gas back in the main does not mean gas at the stove: techs visit every shut premise, nearest first, and
@@ -511,17 +542,20 @@ class Run:
         self._event(job["endAt"], "crew.returned", "crew", job["crewId"], corr, job["id"], {"jobId": job["id"]})
 
     # ---- state -----------------------------------------------------------------------------------------------
-    def state_at(self, t: float) -> tuple[dict[str, np.ndarray], dict[str, dict[int, float]], dict[str, np.ndarray]]:
+    def state_at(self, t: float) -> tuple[dict, dict, dict, dict]:
+        """(disabled edges, leaks, premises off, closed ties) per utility at ``t``."""
         disabled = {u: np.zeros(len(self.ops.nets[u].a), dtype=bool) for u in UTILITIES}
         leaks: dict[str, dict[int, float]] = {u: {} for u in UTILITIES}
         off = {u: np.zeros(len(self.ops.premise_ids), dtype=bool) for u in UTILITIES}
+        closed = {u: np.zeros(len(self.ops.nets[u].a), dtype=bool) for u in UTILITIES}
         for iv in self.intervals:
             if iv.start <= t < iv.end:
                 disabled[iv.utility][iv.edges] = True
                 off[iv.utility][iv.premises] = True
+                closed[iv.utility][iv.closed] = True
                 if iv.leak:
                     leaks[iv.utility][iv.leak[0]] = leaks[iv.utility].get(iv.leak[0], 0.0) + iv.leak[1]
-        return disabled, leaks, off
+        return disabled, leaks, off, closed
 
     def change_times(self) -> list[float]:
         """When the network state changes. Premise-by-premise relights are batched into 5-minute steps."""
@@ -561,8 +595,9 @@ class Run:
 
         changes = []
         for t in self.change_times():
-            disabled, leaks, off = self.state_at(t)
-            out = {u: self.ops.unsupplied(u, disabled[u]) for u in UTILITIES if disabled[u].any()}
+            disabled, leaks, off, closed = self.state_at(t)
+            out = {u: self.ops.unsupplied(u, disabled[u], closed[u] if closed[u].any() else None)
+                   for u in UTILITIES if disabled[u].any()}
             changes.append({
                 "at": round(t, 3), "sequence": run_sequence(self._when(t), date.fromisoformat(self.day), self.tz),
                 "unsupplied": out,
@@ -581,9 +616,10 @@ class Run:
 
     def frame(self, at: float, *, include_premises: bool = True) -> dict:
         """Complete ``utility-state/1.0`` frame at ``at`` (seconds since local midnight of the run day)."""
-        disabled, leaks, off = self.state_at(at)
+        disabled, leaks, off, closed = self.state_at(at)
         when = self._when(at)
         return self.ops.frames.frame(when, scenario=self.scenario, sim_id=self.simulation_id,
                                      sequence=run_sequence(when, date.fromisoformat(self.day), self.tz),
                                      include_premises=include_premises, disabled=disabled, injections=leaks,
-                                     premises_off={u: m for u, m in off.items() if m.any()} or None)
+                                     premises_off={u: m for u, m in off.items() if m.any()} or None,
+                                     closed={u: m for u, m in closed.items() if m.any()} or None)

@@ -51,6 +51,7 @@ class NetOps:
     fuse_edges: set[int]
     recloser_edges: set[int]
     valve_edges: set[int]
+    tie_edges: set[int] = field(default_factory=set)  # normally-open ties between feeders (back-feed)
     edge_index: dict[str, int] = field(default_factory=dict)
     node_index: dict[str, int] = field(default_factory=dict)
 
@@ -160,6 +161,8 @@ class OpsTown:
             points=[np.array([[p["x"], p["z"]] for p in e["points"]], dtype=float) for e in edges],
             parent_edge=parent, equipment=eq, fuse_edges=fuses, recloser_edges=reclosers, valve_edges=valves)
         no.edge_index, no.node_index = edge_index, node_index
+        no.tie_edges = {k for k, e in enumerate(edges) if e.get("normallyOpen") or (e.get("enabled") is False
+                                                                                    and e["kind"] != "service")}
         return no
 
     def _net_inputs(self, u: str, net: dict) -> NetInputs:
@@ -202,9 +205,9 @@ class OpsTown:
         i = int(np.argmin(np.hypot(q[:, 0] - x, q[:, 1] - z)))
         return int(s[i, 4]), float(s[i, 5] + t[i] * np.sqrt(ln2[i]))
 
-    def unsupplied(self, u: str, disabled: np.ndarray | None) -> list[str]:
-        """Premise ids whose meter no source reaches with ``disabled`` edges open."""
-        f = self.flow_model.forest(u, disabled)
+    def unsupplied(self, u: str, disabled: np.ndarray | None, closed: np.ndarray | None = None) -> list[str]:
+        """Premise ids whose meter no source reaches with ``disabled`` edges open (and ``closed`` ties closed)."""
+        f = self.flow_model.forest(u, disabled, closed)
         meter = self.flow_inputs.nets[u].meter
         lost = (meter >= 0) & ~f.reached
         return [self.premise_ids[i] for i in sorted(set(meter[lost].tolist()))]
