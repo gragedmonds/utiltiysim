@@ -14,12 +14,16 @@ const paths={
  upload:'<path d="M12 16V3m-5 5 5-5 5 5M3 15v6h18v-6"/>',
  download:'<path d="M12 3v13m-5-5 5 5 5-5M3 15v6h18v-6"/>',
  book:'<path d="M12 5C9 3 6 3 3 4v16c3-1 6-1 9 1 3-2 6-2 9-1V4c-3-1-6-1-9 1Zm0 0v16"/>',
- inbox:'<path d="M3 13h5l1.5 3h5L16 13h5M5 5h14l2 8v6H3v-6Z"/>'
+ inbox:'<path d="M3 13h5l1.5 3h5L16 13h5M5 5h14l2 8v6H3v-6Z"/>',
+ cog:'<path d="m10 2-.7 2.8-2.1 1.2-2.8-.8-2 3.5 2.1 2v2.6l-2.1 2 2 3.5 2.8-.8 2.1 1.2.7 2.8h4l.7-2.8 2.1-1.2 2.8.8 2-3.5-2.1-2v-2.6l2.1-2-2-3.5-2.8.8L14.7 4.8 14 2ZM16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0"/>'
 };
 // Full-page views over the map, by hash: #/settings[/tab] and #/worklists[/QUEUE][/case/ID].
-const PAGES=[{id:'settings-page',re:/^#\/settings(?:\/(town|scenarios|data|m2c))?$/},{id:'worklists-page',re:/^#\/worklists(?:\/[A-Z_]+)?(?:\/case\/[\w.:-]+)?$/}];
+const PAGES=[{id:'settings-page',re:/^#\/(?:settings|config)(?:\/(town|scenarios|data|m2c))?$/},{id:'worklists-page',re:/^#\/worklists(?:\/[A-Z_]+)?(?:\/case\/[\w.:-]+)?$/}];
 PAGES.push({id:'process-page',re:/^#\/process(?:\/(?:[1-9]|1[0-2])(?:\/[\w.:-]+)?)?$/}); // #/process[/MONTH[/EVENT]]: Activity sequences
-export function installFocusUI({getContext,onSettings,onScenario,onWorklists=()=>{},onSettingsTab=()=>{},onProcess=()=>{}}){
+PAGES.push({id:'workspace-page',re:/^#\/workspace(?:\/[\w.:%-]+)*$/}); // #/workspace/<transaction>[/...]: Utility Studio SAP transactions
+// Utility Studio navigation: Map and Workspace are the primary destinations; Configuration is the cog.
+const NAV={'workspace-page':'nav-workspace','worklists-page':'nav-workspace','process-page':'nav-workspace'};
+export function installFocusUI({getContext,onSettings,onScenario,onWorklists=()=>{},onSettingsTab=()=>{},onProcess=()=>{},onWorkspace=()=>{}}){
  const $=id=>document.getElementById(id), pairs=[['layers-toggle','layers-drawer'],['scenario-toggle','scenario-popover'],['data-toggle','data-popover'],['search-toggle','search-popover']];
  document.querySelectorAll('[data-icon]').forEach(el=>{el.insertAdjacentHTML('afterbegin',`<svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[el.dataset.icon]||''}</svg>`);});
  function closeTools(){for(const [button,panel] of pairs){$(panel).hidden=true;$(button).setAttribute('aria-expanded','false');}}
@@ -42,16 +46,21 @@ export function installFocusUI({getContext,onSettings,onScenario,onWorklists=()=
  }
  let current=null;
  function route(){const hash=window.location.hash,page=PAGES.find(p=>p.re.test(hash))?.id||null,open=!!page,was=current;current=page;
-  for(const p of PAGES)$(p.id).hidden=p.id!==page;document.querySelector('.workspace').inert=open;document.querySelector('.topbar').inert=open;onSettings(open);
+  for(const p of PAGES)$(p.id).hidden=p.id!==page;document.querySelector('.workspace').inert=open;onSettings(open);
+  for(const a of document.querySelectorAll('.studio-tabs a'))a.removeAttribute('aria-current');
+  $(page?NAV[page]||'':'nav-map')?.setAttribute('aria-current','page');
+  if(page==='settings-page')$('settings-toggle').setAttribute('aria-current','page');else $('settings-toggle').removeAttribute('aria-current');
+  for(const id of ['search-toggle','data-toggle'])$(id).hidden=open;
   if(page==='settings-page'){const tab=hash.match(PAGES[0].re)[1]||'town';closeTools();$('performance-panel').open=false;refresh();document.querySelectorAll('[data-settings-pane]').forEach(el=>el.hidden=el.dataset.settingsPane!==tab);document.querySelectorAll('[data-settings-tab]').forEach(el=>{if(el.dataset.settingsTab===tab)el.setAttribute('aria-current','page');else el.removeAttribute('aria-current');});onSettingsTab(tab);if(was!==page)$('settings-back').focus();}
   if(page==='worklists-page'){closeTools();$('performance-panel').open=false;if(was!==page)$('worklists-back').focus();}
   onWorklists(page==='worklists-page',hash);
   if(page==='process-page'){closeTools();$('performance-panel').open=false;if(was!==page)$('process-back').focus();}onProcess(page==='process-page',hash);
+  if(page==='workspace-page'){closeTools();$('performance-panel').open=false;}onWorkspace(page==='workspace-page',hash);
  }
- function settings(tab='town'){window.location.hash='/settings/'+tab;route();}
- function map(){const from=current;window.location.hash='/town';route();$(from==='settings-page'?'settings-toggle':'worklists-toggle').focus();}
- function worklists(){window.location.hash='/worklists';route();}
- $('settings-toggle').onclick=()=>settings();$('settings-back').onclick=map;$('worklists-toggle').onclick=worklists;$('worklists-back').onclick=map;$('scenario-settings').onclick=()=>settings('scenarios');
+ function settings(tab='town'){window.location.hash='/config/'+tab;route();}
+ function map(){const from=current;window.location.hash='/town';route();$(from==='settings-page'?'settings-toggle':'nav-map').focus();}
+ function worklists(){window.location.hash='/workspace';route();}
+ $('settings-toggle').onclick=()=>current==='settings-page'?map():settings();$('nav-map').onclick=e=>{e.preventDefault();map();};$('settings-back').onclick=map;$('worklists-toggle').onclick=worklists;$('worklists-back').onclick=map;$('scenario-settings').onclick=()=>settings('scenarios');
  document.querySelectorAll('[data-settings-tab]').forEach(el=>el.onclick=()=>settings(el.dataset.settingsTab));
  document.querySelectorAll('[data-scenario-preset]').forEach(el=>el.onclick=()=>{onScenario(el.dataset.scenarioPreset);map();});
  $('settings-load-snapshot').onclick=()=>$('snapshot-file').click();
