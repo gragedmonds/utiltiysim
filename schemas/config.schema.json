@@ -565,6 +565,19 @@
             "every electric size"
           ]
         },
+        "conductor_planning_margin": {
+          "default": 1.25,
+          "description": "Primary conductors are sized for design load × this margin (winter peaks, load growth).",
+          "maximum": 2.0,
+          "minimum": 1.0,
+          "title": "Conductor Planning Margin",
+          "type": "number",
+          "x-advanced": true,
+          "x-effects": [
+            "primary conductor sizes",
+            "loading in power flow"
+          ]
+        },
         "feeder_design_mva": {
           "default": 6.0,
           "description": "Design peak per feeder.",
@@ -2843,5 +2856,5 @@
   },
   "title": "SimConfig",
   "type": "object",
-  "x-generator-version": "0.6.0"
+  "x-generator-version": "0.7.0"
 }

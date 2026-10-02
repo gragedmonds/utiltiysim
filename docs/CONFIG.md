@@ -124,6 +124,7 @@ Bulk supply, substations, feeders, transformers, services.
 | `coincidence_floor` | `0.33` | 0.1–1.0 |  | (advanced) Coincidence factor CF(n) = a + (1-a)/√n; a is the floor as n → ∞. *Affects: every electric size.* |
 | `transformer_kva_steps` | `[25, 50, 75, 100, 167]` |  | kVA | (advanced) Single-phase transformer sizes. |
 | `transformer_max_loading` | `1.3` | 0.8–2.0 |  | (advanced) Allowed peak loading relative to nameplate. |
+| `conductor_planning_margin` | `1.25` | 1.0–2.0 |  | (advanced) Primary conductors are sized for design load × this margin (winter peaks, load growth). *Affects: primary conductor sizes, loading in power flow.* |
 | `max_houses_per_transformer_overhead` | `6` | 1–20 |  | Max houses on a pole-mount transformer. |
 | `max_houses_per_transformer_underground` | `10` | 1–25 |  | Max houses on a pad-mount transformer. |
 | `feeder_design_mva` | `6.0` | 1–20 | MVA | Design peak per feeder. *Affects: feeder count, tie switches.* |

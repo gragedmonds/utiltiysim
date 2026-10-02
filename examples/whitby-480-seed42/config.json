@@ -116,6 +116,7 @@
       167.0
     ],
     "transformer_max_loading": 1.3,
+    "conductor_planning_margin": 1.25,
     "max_houses_per_transformer_overhead": 6,
     "max_houses_per_transformer_underground": 10,
     "feeder_design_mva": 6.0,
