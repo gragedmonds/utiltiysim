@@ -1,0 +1,86 @@
+{
+  "01-industrial-plant": {
+    "category": "Facilities",
+    "description": "Brick industrial building with a loading bay, rooftop equipment, CT cabinet and a small transformer pad.",
+    "bindings": ["buildings[].buildingType: industrial", "premises[].services", "meters[] electric service", "electric transformer node: mount pad"],
+    "futureStates": ["selected", "hover", "unsupplied by utility", "night lighting"],
+    "sizeGuidance": "A larger building footprint than a house. Scale CT cabinet and pad separately; a transformer must stay much smaller than the building."
+  },
+  "02-utility-depot": {
+    "category": "Facilities",
+    "description": "Two-bay utility depot with a rear crew yard and an AMI communications mast.",
+    "bindings": ["facilities kind: depot", "amiNetwork.headend"],
+    "futureStates": ["selected", "hover", "night lighting", "yard occupied by crew vehicles"],
+    "sizeGuidance": "Use the facility footprint. Yard vehicles are separate job-linked assets; do not enlarge or shrink them with the lot polygon."
+  },
+  "03-electric-substation": {
+    "category": "Facilities",
+    "description": "Fenced substation yard with a power transformer, switchgear and a control cabinet.",
+    "bindings": ["electric node kind: substation", "facilities substation", "electric supply and trunk edges"],
+    "futureStates": ["selected", "hover", "feeder out", "de-energized"],
+    "sizeGuidance": "Calibrate against the fenced facility footprint and explicit supply/feeder connection anchors."
+  },
+  "04-water-pump-station": {
+    "category": "Facilities",
+    "description": "Compact water pump station with rooftop vents and exposed utility pipework.",
+    "bindings": ["water node kind: pump_station", "facilities pump station: pumps"],
+    "futureStates": ["selected", "hover", "running", "out"],
+    "sizeGuidance": "Scale from the facility footprint, with pipe inlet/outlet anchors kept independent of decorative crop bounds."
+  },
+  "05-elevated-water-tower": {
+    "category": "Facilities",
+    "description": "Elevated water tank on four legs, with a service ladder and central riser.",
+    "bindings": ["water node kind: elevated_tank", "capacityM3", "overflowElevationM", "water edge kind: tank_riser"],
+    "futureStates": ["selected", "hover", "feeding", "standby", "level when supplied by engine"],
+    "sizeGuidance": "Calibrate the leg footprint and tank elevation separately. The overhead footprint must not inherit the tall isometric sprite height."
+  },
+  "06-gas-city-gate": {
+    "category": "Facilities",
+    "description": "Fenced gas receiving and regulating station with control cabinets and parallel pipe trains.",
+    "bindings": ["gas node kind: city_gate_regulator", "facilities city gate: inletKPa, outletKPa"],
+    "futureStates": ["selected", "hover", "pressure lens overlay"],
+    "sizeGuidance": "Use the fenced station footprint with transmission inlet and distribution outlet anchors. Do not automatically reuse as a smaller district regulator station."
+  },
+  "07-bucket-line-truck": {
+    "category": "Crews",
+    "description": "Electric line truck with a stowed bucket boom, side ladder and cable reel.",
+    "bindings": ["operations jobs[].crewKind: electric", "jobs[].route", "jobs[].returnRoute", "jobs[].visitPoint"],
+    "futureStates": ["driving", "parked", "working with raised bucket", "returning", "selected", "hover"],
+    "sizeGuidance": "Share road scale with other crew vehicles. Calibrate tire contact and wheelbase, keeping a truck clearly smaller than a house footprint."
+  },
+  "08-water-crew-truck-excavator": {
+    "category": "Crews",
+    "description": "Water crew service truck and a compact excavator in a parked working-site arrangement.",
+    "bindings": ["operations jobs[].crewKind: water", "jobs[].visitPoint", "water_main_break repair in progress"],
+    "futureStates": ["parked", "working", "dig site", "selected", "hover"],
+    "sizeGuidance": "This is a composite parked study. Separate the truck and excavator before routing or animating either one; do not drive the whole paired sheet down a road."
+  },
+  "09-gas-service-truck": {
+    "category": "Crews",
+    "description": "Gas service truck with fixed tool lockers, pipe storage and safety equipment.",
+    "bindings": ["operations jobs[].crewKind: gas", "jobs[].route", "jobs[].returnRoute", "jobs[].visitPoint"],
+    "futureStates": ["driving", "parked", "working", "returning", "selected", "hover"],
+    "sizeGuidance": "Use the same vehicle scale and tire-contact convention as the electric line truck and meter van."
+  },
+  "10-meter-technician-van": {
+    "category": "Crews",
+    "description": "Compact meter service van with a roof ladder and a consistent sliding-door side.",
+    "bindings": ["operations jobs[].crewKind: meter", "jobs[].route", "jobs[].returnRoute", "jobs[].visitPoint"],
+    "futureStates": ["driving", "parked", "working at meter", "returning", "selected", "hover"],
+    "sizeGuidance": "Smaller than the heavy utility trucks. Field, relight and drive-by AMR roles require explicit job bindings and distinct role markings if this design is reused."
+  },
+  "11-residential-electric-ami-meter": {
+    "category": "Meters",
+    "description": "Residential electric AMI meter and weatherproof wall cabinet, drawn as a mountable assembly.",
+    "bindings": ["meters[] electric", "premises[].meterTechnology: AMI", "premises[].services", "service points and registers linked to meter ID"],
+    "futureStates": ["selected", "hover", "read", "VEE flagged", "missed", "estimated", "last gasp"],
+    "sizeGuidance": "A small wall attachment. Scale from its mounting face and make it legible through close zoom or a detail panel; never use house-sized sheet scaling."
+  },
+  "12-residential-diaphragm-gas-meter": {
+    "category": "Meters",
+    "description": "Residential diaphragm gas meter with a service regulator and connected pipe assembly.",
+    "bindings": ["gas meter node meterClass: 250 CFH diaphragm", "gas service regulator", "gas service pressureTier", "premises[].services"],
+    "futureStates": ["selected", "hover", "in service", "shut off awaiting relight", "meter status badge"],
+    "sizeGuidance": "A small house-side assembly with explicit inlet/outlet ports and a wall-side orientation. Commercial rotary sets require a separate asset family."
+  }
+}
