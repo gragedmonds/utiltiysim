@@ -13,7 +13,7 @@ Status: **Done** (M1, tested), **Next** (designed, M2/M3), **Later** (M4).
 | G4 | Towns larger than the extract grow era-appropriate synthetic districts around it | Done (`expansion: grow`) |
 | G5 | Coherent eras: pre-war grid core, post-war loops, modern cul-de-sac courts, with matching lot sizes | Done |
 | G6 | Houses sit on parcels; buildings carry footprint, height, storeys, roof, rotation for 3D | Done |
-| G7 | Land use: commercial strip, schools, industry, parks, utility sites (substation, pump station, tank, city gate, depot) | Done |
+| G7 | Land use: downtown main street, frontage-driven commercial (a share of arterial, collector and local frontage, clustered at main-road intersections and towards downtown), schools, industry, parks, utility sites (substation, pump station, tank, city gate, depot) | Done |
 | G8 | Addresses unique per street, numbered away from the centre, odd/even by side | Done |
 | G9 | Every assumption configurable with bounds, units and declared knock-on effects | Done (`docs/CONFIG.md`) |
 

@@ -19,6 +19,7 @@ pressure-zone boundary closed (`enabled: false`, `boundaryValve: "closed"`).
 | Overhead vs underground | districts built before 1978 overhead (poles every 42 m); arterials overhead before 2000 |
 | Three-phase mains | subtree > 150 customers, any 3φ customer, any collector/arterial, or load beyond 1φ capacity |
 | Conductors | OH ACSR #2 / 1/0 / 4/0 / 336 / 477 / 795; UG AL 1/0 / 4/0 / 500 / 750 / 1000 (ampacity, R, X tabled) |
+| Shared corridors | where a piece carries more than the largest cable can (the substation getaway and the street feeders share before they part), the largest cable runs in parallel: `parallelCables`, a duct bank underground or a multi-circuit pole line overhead |
 | Feeders | carved from each substation's tree when CF·ΣP exceeds 6 MVA; reclosers at heads, fuses at lateral taps |
 | Substations | one per 25 MVA of town design load; 115 kV backbone in-and-out between substations |
 | Ties | one normally-open tie per pair of adjacent feeders, on the shortest unused street piece |

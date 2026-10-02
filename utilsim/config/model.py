@@ -100,8 +100,28 @@ class TownConfig(BaseModel):
                             le=150)
     era_noise_years: float = F(8.0, "Std-dev of era noise per district.", unit="yr", ge=0, le=30, advanced=True)
     park_share: float = F(0.04, "Share of blocks kept as parks.", ge=0, le=0.2, advanced=True)
-    commercial_strip_m: float = F(700.0, "Length of the commercial strip along the main arterial.", unit="m", ge=0,
-                                  le=3000)
+    commercial_strip_m: float = F(700.0, "Length of the downtown main street: arterial frontage within half this "
+                                  "distance of the centre is all commercial (up to 80 lots). The frontage shares "
+                                  "below apply beyond it.", unit="m", ge=0, le=3000,
+                                  effects=["downtown storefronts", "homes pushed outward"])
+    commercial_share_arterial: float = F(0.45, "Share of developed lots fronting an arterial (beyond the downtown "
+                                         "main street) that become commercial or mixed-use premises. The rest are "
+                                         "homes, or rear yards where modern subdivisions back onto the arterial.",
+                                         ge=0, le=1,
+                                         effects=["commercial premises", "plazas at major intersections",
+                                                  "commercial hydrant spacing", "transformer pads",
+                                                  "commercial accounts"])
+    commercial_share_collector: float = F(0.15, "Share of developed lots fronting a collector that become "
+                                          "commercial or mixed-use premises.", ge=0, le=1,
+                                          effects=["commercial premises", "corner shops on collectors",
+                                                   "commercial accounts"])
+    commercial_share_local: float = F(0.02, "Share of developed lots on local streets that become commercial "
+                                      "(corner stores near downtown and where local streets meet main roads).",
+                                      ge=0, le=1, effects=["commercial premises", "homes pushed outward"])
+    commercial_cluster_m: float = F(120.0, "Distance over which commercial frontage clusters around main-road "
+                                    "intersections and downtown. Smaller gives tight corner clusters, larger gives "
+                                    "long strips.", unit="m", ge=20, le=1000, advanced=True,
+                                    effects=["where storefronts sit along main roads"])
     industrial_lots: int = F(2, "Number of large industrial customers.", ge=0, le=10)
     houses_per_school: int = F(2500, "One school per this many houses.", ge=500, le=20_000, advanced=True)
     margin_m: float = F(120.0, "Empty margin around the developed area.", unit="m", ge=0, le=1000, advanced=True)

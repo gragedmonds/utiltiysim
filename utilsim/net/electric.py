@@ -154,6 +154,14 @@ def build_electric(ctx: NetContext) -> Network:
     placement: dict[int, str] = {}
     phases: dict[int, int] = {}
     cond: dict[int, object] = {}
+    circuits: dict[int, int] = {}
+
+    def sized(v: int, need: float) -> tuple[object, int]:
+        """Conductor and parallel circuits for a piece that must carry ``need`` kVA: one cable when one is enough,
+        else the largest cable in parallel (feeders sharing a duct bank or pole line out of the substation)."""
+        c = pick_conductor(need, ec.primary_kv, phases[v], placement[v])
+        return c, max(1, math.ceil(need / conductor_kva(c, ec.primary_kv, phases[v]) - 1e-9))
+
     for v in forest.order:
         if forest.parent[v] < 0:
             continue
@@ -167,15 +175,15 @@ def build_electric(ctx: NetContext) -> Network:
         three = sub_n[v] > 150 or sub_nr[v] > 0 or cls != LOCAL or \
             design[v] > 0.8 * conductor_kva(pick_conductor(1e9, ec.primary_kv, 1, placement[v]), ec.primary_kv, 1)
         phases[v] = 3 if three else 1
-        cond[v] = pick_conductor(design[v], ec.primary_kv, phases[v], placement[v])
+        cond[v], circuits[v] = sized(v, float(design[v]))
     for v in forest.order[::-1]:
         p = forest.parent[v]
         if p >= 0 and forest.parent[p] >= 0:
             if phases[v] == 3 and phases[p] == 1:
                 phases[p] = 3
-            cap_c = conductor_kva(cond[v], ec.primary_kv, phases[v])
-            if conductor_kva(cond[p], ec.primary_kv, phases[p]) < cap_c:
-                cond[p] = pick_conductor(cap_c, ec.primary_kv, phases[p], placement[p])
+            cap_c = conductor_kva(cond[v], ec.primary_kv, phases[v]) * circuits[v]
+            if conductor_kva(cond[p], ec.primary_kv, phases[p]) * circuits[p] < cap_c:
+                cond[p], circuits[p] = sized(p, cap_c)
     # Phase letters for laterals, balanced per feeder.
     phase_letter: dict[int, str] = {}
     feeder_phase_load: dict[int, np.ndarray] = {}
@@ -246,14 +254,18 @@ def build_electric(ctx: NetContext) -> Network:
         nid = f"electric-J-{v}" if v < sg.n_road else f"electric-T-{v}"
         fname = feeder_name[int(feeder_head[v])]
         node_of[v] = net.add_node(nid, "junction", pts[-1], feeder=fname)
-        c = cond[v]
+        c, n_c = cond[v], circuits[v]
         tier = "primary_main" if phases[v] == 3 else "primary_lateral"
+        cable = {"conductor": c.label} if n_c == 1 else \
+            {"conductor": f"{n_c} × {c.label} ({'multi-circuit pole line' if oh else 'shared feeder duct bank'})",
+             "parallelCables": n_c}
         net.add_edge("distribution", node_of[p], node_of[v], pts, placement=placement[v], tier=tier,
                      voltageKV=ec.primary_kv, phases=phases[v], phase=phase_letter[v], feeder=fname,
-                     conductor=c.label, capacityKVA=round(conductor_kva(c, ec.primary_kv, phases[v]), 1),
+                     **cable, capacityKVA=round(conductor_kva(c, ec.primary_kv, phases[v]) * n_c, 1),
                      designKVA=round(float(design[v]), 1), customers=int(sub_n[v]),
                      roadEdge=int(sg.piece_edge[piece]),
-                     rOhmKm=c.r_ohm_km, xOhmKm=c.x_ohm_km)
+                     rOhmKm=c.r_ohm_km if n_c == 1 else round(c.r_ohm_km / n_c, 4),
+                     xOhmKm=c.x_ohm_km if n_c == 1 else round(c.x_ohm_km / n_c, 4))
         if v in heads and v not in sub_tap:
             net.equipment.append({"id": f"RCL-{fname}", "kind": "recloser", "xy": net.nodes[node_of[v]].xy,
                                   "nodeId": net.nodes[node_of[v]].id, "feeder": fname})

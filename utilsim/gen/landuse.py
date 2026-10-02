@@ -1,9 +1,13 @@
-"""Land use: which lots become houses, plus parks, the commercial strip, schools, industry and utility sites.
+"""Land use: which lots become houses and shops, plus parks, schools, industry and utility sites.
 
 Houses are chosen compactly around the centre (distance plus a per-block jitter so whole blocks fill together).
-Utility facilities sit just outside the developed radius beside arterials, so supply arrives from the map edge;
-the elevated tank takes the highest ground inside town. Roads are then cropped to what the town uses, with
-arterials clipped at the map edge (these exits are where off-map transmission, gas and water arrive)."""
+Shops follow the street a lot fronts: the downtown main street is all storefronts, and beyond it a share of the
+developed frontage on each road class (most on arterials, some on collectors, a few corner stores on local streets)
+turns commercial, clustered where main roads cross and towards downtown. Shops push homes outward, so the town
+still holds exactly ``town.houses`` homes. Utility facilities sit just outside the developed radius beside
+arterials, so supply arrives from the map edge; the elevated tank takes the highest ground inside town. Roads are
+then cropped to what the town uses, with arterials clipped at the map edge (these exits are where off-map
+transmission, gas and water arrive)."""
 
 from __future__ import annotations
 
@@ -12,14 +16,19 @@ from dataclasses import dataclass, field
 
 import numpy as np
 import shapely
+from scipy.spatial import cKDTree
 from shapely.geometry import LineString, Point, Polygon, box
 
 from utilsim.config.model import SimConfig
 from utilsim.core.rng import Purpose, hash_u01
 from utilsim.gen.parcels import Lots, candidate_lots
 from utilsim.gen.roads.build import Geography
-from utilsim.gen.roads.model import ARTERIAL, COLLECTOR, ROW_WIDTH, RoadNetwork
+from utilsim.gen.roads.model import ARTERIAL, COLLECTOR, LOCAL, ROW_WIDTH, RoadNetwork
 from utilsim.gen.roads.subgraph import crop_network, remap_s
+
+# How strongly a road class draws shops to an intersection on it (see ``commercial_pull``).
+CLASS_PULL = {ARTERIAL: 1.0, COLLECTOR: 0.6, LOCAL: 0.25}
+DOWNTOWN_MAX_LOTS = 80
 
 PAD_SIZE = {  # width along road, depth into land (m)
     "substation": (70.0, 60.0), "pump_station": (42.0, 34.0), "city_gate": (32.0, 26.0),
@@ -112,6 +121,78 @@ def _pad_at(site: dict, kind: str, roads_union, side_pref: int, net: RoadNetwork
     return best[1], best[2], best[3]
 
 
+def commercial_pull(geo: Geography, lots: Lots, strip_m: float, cluster_m: float, seed: str) -> np.ndarray:
+    """How strongly each lot draws a shop (higher first).
+
+    An intersection pulls by the product of its second and third strongest roads (``CLASS_PULL``): two arterials
+    crossing pull hardest, an arterial meeting a collector next, a local street entering a main road least, and two
+    local streets not at all. A lot takes the strongest pull among nearby intersections, decaying over
+    ``cluster_m``, or the pull of downtown, decaying over half the main street. A per-block-face factor (one side
+    of a street between two junctions) varies which corners develop, so shops come in runs, not single lots."""
+    g = geo.roads.graph
+    road_pull = np.array([CLASS_PULL.get(int(c), CLASS_PULL[LOCAL]) for c in g.edge_class])
+    node_pull = np.zeros(g.n_nodes)
+    for v, inc in enumerate(g.incident_edges()):
+        if len(inc) >= 3:
+            s = np.sort(road_pull[inc])[::-1]
+            node_pull[v] = s[1] * s[2]
+    hubs = np.flatnonzero(node_pull > CLASS_PULL[LOCAL] ** 2)
+    near = np.zeros(len(lots))
+    if len(hubs):
+        k = min(8, len(hubs))
+        d, j = cKDTree(g.xy[hubs]).query(lots.front_xy, k=k, distance_upper_bound=6 * cluster_m)
+        d, j = np.asarray(d).reshape(len(lots), k), np.asarray(j).reshape(len(lots), k)
+        found = j < len(hubs)  # misses come back as index len(hubs) at distance inf
+        hub_pull = np.where(found, node_pull[hubs[np.minimum(j, len(hubs) - 1)]], 0.0)
+        near = (hub_pull * np.exp(-np.where(found, d, 0.0) / cluster_m)).max(axis=1)
+    center = np.asarray(geo.center)
+    fdist = np.hypot(lots.front_xy[:, 0] - center[0], lots.front_xy[:, 1] - center[1])
+    downtown = np.exp(-fdist / max(strip_m / 2, cluster_m))
+    face = 0.6 + 0.8 * hash_u01(seed, Purpose.LAND_USE, lots.edge, lots.side.astype(np.int64) + 2)
+    return np.maximum(near, downtown) * face
+
+
+def _pick_shops(dev: np.ndarray, shop_ok: np.ndarray, cls: np.ndarray, pull: np.ndarray,
+                shares: dict[int, float]) -> np.ndarray:
+    """Among developed lots, the share of each road class's frontage with the strongest pull."""
+    out = [np.empty(0, dtype=np.int64)]
+    for c in sorted(shares):
+        pool = dev[cls[dev] == c]
+        quota = int(np.floor(shares[c] * len(pool) + 0.5))
+        cand = pool[shop_ok[pool]]
+        out.append(cand[np.argsort(-pull[cand], kind="stable")[:quota]])
+    return np.sort(np.concatenate(out))
+
+
+def develop(score: np.ndarray, res_ok: np.ndarray, shop_ok: np.ndarray, cls: np.ndarray, pull: np.ndarray,
+            shares: dict[int, float], n_houses: int) -> tuple[np.ndarray, np.ndarray]:
+    """(homes, shops) lot indices: the developed area is the lots nearest the centre (by ``score``) that hold
+    ``n_houses`` homes beside the shops its frontage shares call for.
+
+    Shops push homes outward, so the area grows until the homes fit. If the lots run out first, the shops with the
+    weakest pull on lots that could hold a home give way to homes. ``res_ok`` must hold at least ``n_houses``."""
+    cand = np.flatnonzero(res_ok | shop_ok)
+    order = cand[np.argsort(score[cand], kind="stable")]
+    res_order = order[res_ok[order]]
+    taken = 0
+    while True:  # each pass takes strictly more lots, so this ends
+        k = min(n_houses + taken, len(res_order))
+        dev = order[score[order] <= score[res_order[k - 1]]]
+        shops = _pick_shops(dev, shop_ok, cls, pull, shares)
+        on_res = int(np.count_nonzero(res_ok[shops]))
+        if np.count_nonzero(res_ok[dev]) - on_res >= n_houses or k == len(res_order):
+            break
+        taken = on_res
+    homes = dev[res_ok[dev] & ~np.isin(dev, shops)]
+    if len(homes) < n_houses:
+        give = shops[res_ok[shops]]
+        give = give[np.argsort(pull[give], kind="stable")[: n_houses - len(homes)]]
+        shops = np.setdiff1d(shops, give)
+        homes = np.concatenate([homes, give])
+    homes = homes[np.argsort(score[homes], kind="stable")[:n_houses]]
+    return np.sort(homes), shops
+
+
 def plan_land_use(geo: Geography, cfg: SimConfig) -> LandUse:
     seed = cfg.seeds.for_("town")
     t = cfg.town
@@ -138,28 +219,31 @@ def plan_land_use(geo: Geography, cfg: SimConfig) -> LandUse:
                 parks.append(blk)
                 avail[lots.block == b] = False
 
-    # Commercial strip: arterial frontage near the centre.
+    # Downtown main street: arterial frontage near the centre, all storefronts.
     g = geo.roads.graph
-    on_art = g.edge_class[lots.edge] == ARTERIAL
+    lot_cls = g.edge_class[lots.edge]
+    on_art = lot_cls == ARTERIAL
     fdist = np.hypot(lots.front_xy[:, 0] - center[0], lots.front_xy[:, 1] - center[1])
     commercial = on_art & (fdist < t.commercial_strip_m / 2) & avail
-    if commercial.sum() > 80:
+    if commercial.sum() > DOWNTOWN_MAX_LOTS:
         idx = np.flatnonzero(commercial)
         commercial[:] = False
-        commercial[idx[np.argsort(fdist[idx], kind="stable")[:80]]] = True
+        commercial[idx[np.argsort(fdist[idx], kind="stable")[:DOWNTOWN_MAX_LOTS]]] = True
     avail &= ~commercial
-    # Modern districts back onto arterials (reverse frontage): no houses facing them.
+    # Beyond downtown any developed lot may hold a shop. Modern districts back onto arterials (reverse frontage):
+    # no houses face them, though a plaza may.
+    shop_ok = avail.copy()
     avail &= ~(on_art & (lots.year >= 1960))
+    pull = commercial_pull(geo, lots, t.commercial_strip_m, t.commercial_cluster_m, seed)
+    shares = {ARTERIAL: t.commercial_share_arterial, COLLECTOR: t.commercial_share_collector,
+              LOCAL: t.commercial_share_local}
 
-    def developed_radius(mask) -> float:
-        idx = np.flatnonzero(mask)
-        if len(idx) < n_houses:
-            raise CapacityError(f"Only {len(idx)} residential lots fit this road skeleton; {n_houses} requested. "
-                                "Use town.expansion='grow' or a larger extract.", available=len(idx))
-        order = idx[np.argsort(score[idx], kind="stable")]
-        return float(np.max(dist[order[:n_houses]]))
-
-    r_dev = developed_radius(avail)
+    n_res = int(avail.sum())
+    if n_res < n_houses:
+        raise CapacityError(f"Only {n_res} residential lots fit this road skeleton; {n_houses} requested. "
+                            "Use town.expansion='grow' or a larger extract.", available=n_res)
+    homes, _ = develop(score, avail, shop_ok, lot_cls, pull, shares, n_houses)
+    r_dev = float(np.max(dist[homes]))
     facilities: list[Facility] = []
     # Elevated tank(s): highest ground inside the developed area, one per pressure-zone band.
     inner = np.flatnonzero(avail & (dist < r_dev * 0.85) & (dist > r_dev * 0.15))
@@ -202,6 +286,7 @@ def plan_land_use(geo: Geography, cfg: SimConfig) -> LandUse:
             facilities.append(Facility(f"SCHOOL-{k + 1:02d}", "school", f"School {k + 1}", c, blk, 0.0,
                                        int(lots.edge[j]), float(lots.s_center[j]), int(lots.side[j])))
             avail[lots.block == b] = False
+            shop_ok[lots.block == b] = False
     # Perimeter facilities at arterial crossings just outside the developed radius.
     wanted = ["substation"]
     total_kva_est = n_houses * 11.0 * 0.36 / 1000.0
@@ -257,14 +342,16 @@ def plan_land_use(geo: Geography, cfg: SimConfig) -> LandUse:
     if pads:
         tree = shapely.STRtree(lots.poly)
         for pad in pads:
-            avail[tree.query(pad, predicate="intersects")] = False
-            commercial[tree.query(pad, predicate="intersects")] = False
-    idx = np.flatnonzero(avail)
-    if len(idx) < n_houses:
-        raise CapacityError(f"Only {len(idx)} residential lots remain after reserving facilities; {n_houses} "
-                            "requested.", available=len(idx))
-    chosen_idx = np.sort(idx[np.argsort(score[idx], kind="stable")[:n_houses]])
-    com_idx = np.flatnonzero(commercial)
+            hit = tree.query(pad, predicate="intersects")
+            avail[hit] = False
+            shop_ok[hit] = False
+            commercial[hit] = False
+    n_res = int(avail.sum())
+    if n_res < n_houses:
+        raise CapacityError(f"Only {n_res} residential lots remain after reserving facilities; {n_houses} "
+                            "requested.", available=n_res)
+    chosen_idx, shop_idx = develop(score, avail, shop_ok, lot_cls, pull, shares, n_houses)
+    com_idx = np.union1d(np.flatnonzero(commercial), shop_idx)
     r_dev = float(np.max(dist[chosen_idx]))
 
     # Bounds and road cropping.
