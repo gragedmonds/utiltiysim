@@ -85,6 +85,19 @@ def validate(preset: str = "whitby_small", seed: str = typer.Option(None), house
     raise typer.Exit(0 if res["valid"] else 1)
 
 
+@app.command()
+def pack(presets: str = typer.Option(",".join(("whitby_small", "ayr", "elora", "cobourg")),
+                                     help="Comma-separated presets to pack."),
+         out: Path = typer.Option(Path("packs"), help="Output folder (served at /packs/).")):
+    """Prebuild town packs (snapshot + day replay, gzipped, named by town id) and packs/index.json."""
+    from utilsim.io.pack import write_packs
+
+    index = write_packs([p.strip() for p in presets.split(",") if p.strip()], out)
+    for t in index["towns"]:
+        typer.echo(f"{t['preset']:<14} {t['townId']}  {t['homes']:>6} homes  "
+                   f"snapshot {t['files']['snapshot']['bytes'] / 1e6:.1f} MB  replay {t['files']['replay']['bytes'] / 1e6:.1f} MB")
+
+
 osm_app = typer.Typer(add_completion=False, help="Freeze real places' streets from OpenStreetMap and make presets.")
 app.add_typer(osm_app, name="osm")
 

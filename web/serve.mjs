@@ -1,8 +1,10 @@
-// Serves the viewer package (packages/town-viewer/dist) at / and engine exports (examples/) at /examples/.
+// Serves the viewer package (packages/town-viewer/dist) at /, town packs (packs/) at /packs/ and engine exports
+// (examples/) at /examples/: the same layout the Vercel build produces in public/.
 // Run `npm install` in packages/town-viewer first (it vendors Three.js into dist/vendor).
 import http from 'node:http'; import fs from 'node:fs'; import path from 'node:path'; import {fileURLToPath} from 'node:url';
 const repo = fileURLToPath(new URL('../', import.meta.url));
-const roots = [['/examples/', path.join(repo, 'examples')], ['/', path.join(repo, 'packages/town-viewer/dist')]];
+const roots = [['/examples/', path.join(repo, 'examples')], ['/packs/', path.join(repo, 'packs')],
+  ['/', path.join(repo, 'packages/town-viewer/dist')]];
 const mime = {'.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json',
   '.gz': 'application/gzip', '.md': 'text/markdown', '.png': 'image/png', '.txt': 'text/plain'};
 http.createServer((req, res) => {

@@ -1,0 +1,131 @@
+{
+  "schemaVersion": "town-pack/1.0",
+  "generatorVersion": "0.2.0",
+  "towns": [
+    {
+      "preset": "whitby_small",
+      "description": "Whitby street extract (OSM), 480 homes. Matches the prototype's default town size.",
+      "townId": "town-629f54bde38fe9d7",
+      "topologyRevision": "topo-c4a684f3ccd333981689",
+      "indexRevision": "idx-0b15be28acbef3fdd460",
+      "homes": 480,
+      "premises": 552,
+      "place": null,
+      "source": {
+        "type": "osm",
+        "label": "Whitby street snapshot",
+        "snapshotDate": "2026-10-02",
+        "attribution": "© OpenStreetMap contributors",
+        "license": "https://opendatacommons.org/licenses/odbl/1-0/"
+      },
+      "scenarioDate": "2026-07-15",
+      "timezone": "America/Toronto",
+      "files": {
+        "snapshot": {
+          "path": "whitby_small/town-629f54bde38fe9d7.snapshot.json.gz",
+          "bytes": 632672
+        },
+        "replay": {
+          "path": "whitby_small/town-629f54bde38fe9d7.replay-day.json.gz",
+          "bytes": 503860
+        }
+      }
+    },
+    {
+      "preset": "ayr",
+      "description": "Ayr, Ontario: real OSM streets (snapshot 2026-10-01, 1,500 m radius), 1,861 homes at natural size.",
+      "townId": "town-575a4a6a94146f73",
+      "topologyRevision": "topo-6dcb82e76a72e8b672ea",
+      "indexRevision": "idx-80ece9dfb8e90638ed71",
+      "homes": 1861,
+      "premises": 1933,
+      "place": {
+        "name": "Ayr",
+        "query": "Ayr, Ontario"
+      },
+      "source": {
+        "type": "osm",
+        "label": "Ayr street snapshot",
+        "snapshotDate": "2026-10-01",
+        "attribution": "© OpenStreetMap contributors",
+        "license": "https://opendatacommons.org/licenses/odbl/1-0/"
+      },
+      "scenarioDate": "2026-07-15",
+      "timezone": "America/Toronto",
+      "files": {
+        "snapshot": {
+          "path": "ayr/town-575a4a6a94146f73.snapshot.json.gz",
+          "bytes": 2028627
+        },
+        "replay": {
+          "path": "ayr/town-575a4a6a94146f73.replay-day.json.gz",
+          "bytes": 1618942
+        }
+      }
+    },
+    {
+      "preset": "elora",
+      "description": "Elora, Ontario: real OSM streets (snapshot 2026-10-01, 1,800 m radius), 3,271 homes at natural size.",
+      "townId": "town-a68fbab9722a72f5",
+      "topologyRevision": "topo-db272fd76e0f0d7bd756",
+      "indexRevision": "idx-1bbf65fdade5e447fd33",
+      "homes": 3271,
+      "premises": 3331,
+      "place": {
+        "name": "Elora",
+        "query": "Elora, Ontario"
+      },
+      "source": {
+        "type": "osm",
+        "label": "Elora street snapshot",
+        "snapshotDate": "2026-10-01",
+        "attribution": "© OpenStreetMap contributors",
+        "license": "https://opendatacommons.org/licenses/odbl/1-0/"
+      },
+      "scenarioDate": "2026-07-15",
+      "timezone": "America/Toronto",
+      "files": {
+        "snapshot": {
+          "path": "elora/town-a68fbab9722a72f5.snapshot.json.gz",
+          "bytes": 3342198
+        },
+        "replay": {
+          "path": "elora/town-a68fbab9722a72f5.replay-day.json.gz",
+          "bytes": 2637104
+        }
+      }
+    },
+    {
+      "preset": "cobourg",
+      "description": "Cobourg, Ontario: real OSM streets (snapshot 2026-10-01, 2,500 m radius), 5,500 homes at natural size.",
+      "townId": "town-d886fea19364fc01",
+      "topologyRevision": "topo-1f645f6d70bcba98a59d",
+      "indexRevision": "idx-331b010aec5ef997a097",
+      "homes": 5500,
+      "premises": 5572,
+      "place": {
+        "name": "Cobourg",
+        "query": "Cobourg, Ontario"
+      },
+      "source": {
+        "type": "osm",
+        "label": "Cobourg street snapshot",
+        "snapshotDate": "2026-10-01",
+        "attribution": "© OpenStreetMap contributors",
+        "license": "https://opendatacommons.org/licenses/odbl/1-0/"
+      },
+      "scenarioDate": "2026-07-15",
+      "timezone": "America/Toronto",
+      "files": {
+        "snapshot": {
+          "path": "cobourg/town-d886fea19364fc01.snapshot.json.gz",
+          "bytes": 5515219
+        },
+        "replay": {
+          "path": "cobourg/town-d886fea19364fc01.replay-day.json.gz",
+          "bytes": 4161121
+        }
+      }
+    }
+  ]
+}
