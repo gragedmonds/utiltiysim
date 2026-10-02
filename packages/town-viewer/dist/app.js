@@ -13,6 +13,7 @@ import {installWorklists,parseRoute,routeHash} from './worklists.js';
 import {installWorkspace,workspaceHash} from './workspace.js';
 import {renderSchemaForm} from './schema-form.js';
 import {installProcess,parseRoute as parseProcessRoute} from './process.js';
+import {installMapLens} from './map-lens.js';
 const $=id=>document.getElementById(id);
 const fmt=(x,d=0)=>x===null||x===undefined?'—':Number(x).toLocaleString('en-CA',{maximumFractionDigits:d,minimumFractionDigits:d});
 const escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -221,6 +222,8 @@ function wire(){
  $('return-demo').onclick=()=>generate().catch(e=>toast(e.message));
  $('load-state-btn').onclick=()=>$('state-file').click();$('state-file').onchange=async e=>{try{loadFrames(await readJSON(e.target.files[0]));toast(`${frames.length} engine frame${frames.length===1?'':'s'} loaded.`);}catch(e){toast('State rejected: '+e.message);}finally{$('state-file').value='';}};
  document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeInspector();$('search-results').hidden=true;$('asset-menu').hidden=true;}});
+ // Map lenses (map-lens.js): redrawn from the scene's frame and layer changes; reads the live state through this context.
+ installMapLens({scene,getContext:()=>({town,flow,utility,m2c,ops,engine:!!ops?.engine,frame:receiver?.frame||null})});
 }
 function registerTools(){const ctx=document.modelContext;if(!ctx?.registerTool)return;for(const t of [{name:'read_town_state',description:'Read viewer mode, town identity, active frame and selected premise.',inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:{readOnlyHint:true},execute:getState},{name:'select_town_premise',description:'Select and focus an existing premise.',inputSchema:{type:'object',properties:{premiseId:{type:'string'}},required:['premiseId'],additionalProperties:false},annotations:{readOnlyHint:false},execute:input=>{const h=town.premises.find(h=>h.id===input?.premiseId);if(!h)throw Error('Premise not found.');selectHome(h,true);return getState();}}])try{Promise.resolve(ctx.registerTool(t)).catch(()=>{});}catch{}}
 try{const response=await fetch('./whitby-roads.json');if(!response.ok)throw Error('Street fixture could not be loaded.');source=parseOSM(await response.json());scene=new TownScene($('map'),({home,asset:u,nodeId,landmark})=>{if(landmark){showLandmark(landmark);return;}if(home)selectHome(home);else if(u){asset=u;assetNode=nodeId;selected=null;scene.clearSelection();$('inspector').hidden=false;renderAsset();}},QUALITY);scene.play=!matchMedia('(prefers-reduced-motion: reduce)').matches;syncQuality();scene.onContextLost=()=>{syncQuality();showGlLost(true);};scene.onContextRestored=()=>{showGlLost(false);toast('3D view restored in light mode.');};wire();await generate();registerTools();await installPacks();}
