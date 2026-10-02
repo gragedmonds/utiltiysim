@@ -371,3 +371,5 @@
 .ws-dialog .read-review-actions{display:flex;gap:8px}
 .ws-dialog .read-review-actions button{border:1px solid #9bb3c6;background:#e9f1f7;color:#23506f;padding:6px 12px;font:13px Arial,sans-serif}
 .ws-dialog .small{font-size:11px;color:#7991a2;margin:10px 0 0}
+/* Phones: the order header wraps instead of scrolling the description out of view */
+@media(max-width:700px){.fo-order-line{min-width:0;flex-wrap:wrap}.fo-order-line .fo-field:last-child{flex:1 1 100%}.fo-order-line .fo-field:last-child input{min-width:0}}
