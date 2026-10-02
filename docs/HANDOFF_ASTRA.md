@@ -111,3 +111,30 @@ page on the first load. Design passes welcome, especially:
 - the confidence gauge;
 - how a held read is shown;
 - the history chart's colours (estimated, adjusted, flagged).
+
+## 8. The simulator day and meter-to-cash, linked (rev 5, night work)
+
+**Run day**
+- `EngineOperations` now sends `date` (the run day) and `m2c` (the meter-to-cash run's settings and actions).
+- `setDate(day)` starts a new day with an empty command list.
+- The worklists date and the map's run day stay in step. The operations panel has a run-day picker.
+
+**Scheduled jobs on the map**
+- New job kinds:
+  - `meter_reading` (`mode: 'walk' | 'drive'`, with `walkRoute`/`walkTimes`): a walker parks the van and walks the round; a drive-by van drives it;
+  - `field_order`: meter-to-cash truck rolls on that day;
+  - `relight`: gas crews after a main is restored.
+- `jobState` handles walk rounds. `OperationsView` now holds up to 64 vans and workers.
+
+**Linking actions**
+- "Watch the truck roll" on a field-order case moves the map to that day and follows the van.
+- A field visit sent on the map is reported to meter-to-cash as a `field_read` action, which settles that premise's open read cases.
+
+**Visual cues**
+- `outage-marks.js`: daytime rings in the utility colour for premises in `premises.unsupplied`, for the visible layers.
+- `clock.tempC` shows by the clock status.
+
+Design passes welcome:
+- walker and van models for readers;
+- a lighter ring style;
+- how a gas relight sweep reads at town scale.
