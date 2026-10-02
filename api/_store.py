@@ -1,4 +1,4 @@
-"""In-process town store: builds are deterministic, so a town is fully identified by its config; generated towns
+"""In-process town store (the leading underscore keeps Vercel from deploying this module as a function): builds are deterministic, so a town is fully identified by its config; generated towns
 are kept in an LRU and their snapshots cached on disk under ``.utilsim_cache/{townId}/``."""
 
 from __future__ import annotations

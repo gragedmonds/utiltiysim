@@ -11,8 +11,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 import api.index as hosted
+from api._store import store
 from api._towns import REF_SEP, config_from_ref, town_ref
-from api.store import store
 from utilsim.config import load_preset
 
 ROOT = Path(__file__).resolve().parents[1]

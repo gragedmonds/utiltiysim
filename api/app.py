@@ -15,10 +15,10 @@ from fastapi.responses import Response
 
 from api._m2c import router as m2c_router
 from api._ops import router as ops_router
+from api._store import store
 from api._towns import health as health_body
 from api._towns import ready_town as _town
 from api._towns import router as towns_router
-from api.store import store
 from utilsim.config import SCENARIOS
 from utilsim.config.presets import deep_merge
 from utilsim.io.geojson import LAYERS, layer
@@ -243,7 +243,7 @@ def get_render(tid: str, services: bool = False):
 
 
 def store_dir(tid: str) -> str:
-    from api.store import CACHE_DIR
+    from api._store import CACHE_DIR
 
     d = CACHE_DIR / tid
     d.mkdir(parents=True, exist_ok=True)
