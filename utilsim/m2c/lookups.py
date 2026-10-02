@@ -63,7 +63,8 @@ def installation(run: M2CRun, installation_id: str, *, as_of: str | None = None,
     meters: dict[int, dict] = {}
     for r in rows:
         mi = int(tw.meter_of[r])
-        meters.setdefault(mi, {"meterId": tw.meter_ids[mi], "technology": str(tw.tech[r]), "registers": []})[
+        meters.setdefault(mi, {"meterId": tw.meter_ids[mi], "technology": str(tw.tech[r]), "registers": [],
+                               "deviceId": run.device_at(mi, T, T), "devices": device_history(run, mi, T)})[
             "registers"].append({"registerId": tw.reg_ids[r], "direction": str(tw.direction[r]),
                                  "unit": str(tw.unit[r]), "digits": int(tw.digits[r]),
                                  "multiplier": int(tw.multiplier[r])})
@@ -89,6 +90,26 @@ def installation(run: M2CRun, installation_id: str, *, as_of: str | None = None,
             "reads": [read_record(run, r, m, T, truth) for r in rows for m in range(1, 13) if run.read_t[r, m] <= T],
             "cases": [_row(run, c, T) for c in run.cases if c.created <= T and int(tw.inst_of[c.r]) == k
                       and c.work != "hold"]}
+
+
+def device_history(run: M2CRun, mi: int, T: float) -> list[dict]:
+    """The devices on meter slot ``mi`` as of ``T``, oldest first: the snapshot's own (in place before 2026), then
+    each replacement registered by ``T`` with its install date, initial and removal reads, and who made it (you, or a
+    field crew FIELD-n, from a case or an order)."""
+    tw = run.town
+    regs = {int(r): tw.reg_ids[r] for r in np.flatnonzero(tw.meter_of == mi)}
+    xs = [x for x in run.installs if x.meter == mi and x.t_reg <= T]
+    out = [{"deviceId": tw.meter_ids[mi], "installedAt": None, "registeredAt": None, "initialReads": None,
+            "by": None, "orderId": None, "caseId": None, "note": None}]
+    for x in xs:
+        out[-1].update(removedAt=run.iso(x.t), removalReads={regs[r]: v for r, v in x.removal.items()} or None)
+        out.append({"deviceId": x.device, "installedAt": run.iso(x.t), "registeredAt": run.iso(x.t_reg),
+                    "initialReads": {regs[r]: round(v, 3) for r, v in x.initial.items()}, "by": x.by,
+                    "orderId": x.order, "caseId": x.case, "note": x.note, "physical": x.physical})
+    out[-1].update(removedAt=None, removalReads=None)
+    for d in out:
+        d["current"] = d is out[-1]
+    return out
 
 
 def read_document(run: M2CRun, read_id: str, *, as_of: str | None = None, truth: bool = False) -> dict:

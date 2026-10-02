@@ -1806,6 +1806,32 @@
           "x-advanced": true,
           "x-unit": "min"
         },
+        "supervisor_queue_days_max": {
+          "default": 3,
+          "description": "Maximum wait before a supervisor picks up an escalation from an analyst or you. An escalation you take yourself (assign) waits for you.",
+          "maximum": 30,
+          "minimum": 1,
+          "title": "Supervisor Queue Days Max",
+          "type": "integer",
+          "x-effects": [
+            "escalation backlog",
+            "days to bill"
+          ],
+          "x-unit": "d"
+        },
+        "supervisor_queue_days_min": {
+          "default": 1,
+          "description": "Minimum wait before a supervisor picks up an escalation (VEE's own escalations wait this long).",
+          "maximum": 20,
+          "minimum": 1,
+          "title": "Supervisor Queue Days Min",
+          "type": "integer",
+          "x-effects": [
+            "escalation backlog",
+            "days to bill"
+          ],
+          "x-unit": "d"
+        },
         "supervisors": {
           "default": 1,
           "description": "Supervisors approving escalations.",

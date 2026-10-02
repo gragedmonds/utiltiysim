@@ -36,7 +36,10 @@ EVENTS: dict[str, tuple[str, str, str, float, float, float]] = {
     # Field.
     "FIELD_ORDER": ("Field order raised", "🧰", "field", 0, 0.5, 0),
     "TRUCK_ROLL": ("Truck roll", "🚚", "field", 85, 0, 0),
+    "ON_SITE": ("Crew on site", "📍", "field", 0, 0, 0),
+    "VISIT_SHARED": ("Covered by the same visit", "🏘️", "field", 0, 0, 0),
     "METER_EXCHANGE": ("Meter exchanged", "🔧", "field", 40, 0, 0),
+    "DEVICE_REPLACED": ("Device replaced (new register)", "🔁", "field", 4, 0.1, 0),
     "SPECIAL_READ": ("Special read", "🔍", "field", 0, 0, 0),
     # Read outcomes.
     "ESTIMATE_CREATED": ("Estimate created", "🧮", "vee", 0, 0.25, 0),
@@ -66,7 +69,7 @@ EVENTS: dict[str, tuple[str, str, str, float, float, float]] = {
     "ORDER_LINKED": ("Field service order linked", "🔗", "field", 0, 0, 0),
     "ORDER_RELEASED": ("Order released", "📋", "field", 2, 0.1, 0),
     "ORDER_DISPATCHED": ("Order dispatched", "📟", "field", 1, 0.1, 0),
-    "ORDER_COMPLETED": ("Order completed", "🏁", "field", 0, 0.1, 0),
+    "ORDER_COMPLETED": ("Field order completed", "🏁", "field", 0, 0.1, 0),
     "INVOICE_HOLD": ("Invoice hold", "🧊", "invoice", 4, 0, 0),
     "INVOICE_DEFERRED": ("Invoice held back", "⏸️", "invoice", 0, 0.1, 0),
     "INVOICE_UNHOLD": ("Invoice hold removed", "▶️", "invoice", 2, 0, 0),
@@ -101,13 +104,15 @@ QUEUES = {
 # Clarification categories (Utility Studio). Each case gets one from its type and queue (``category()``); the rest of
 # the Studio's list has no engine meaning yet, so filtering by it returns an empty list.
 CATEGORIES = {
-    "MR Implausibles": "Value exceptions from VEE (VEE_REVIEW, SUPERVISOR)",
-    "Meter Read Follow-Up": "Missing reads: comm fail, no access, no read document, consecutive estimates",
+    "MR Implausibles": "Value exceptions from VEE (VEE_REVIEW)",
+    "Meter Read Follow-Up": "Missing reads: comm fail, no access, no read document, consecutive estimates "
+                            "(ESTIMATION)",
     "Billing Outsorts": "Billing blocks for a high bill, a large credit or an implausible true-up (HIGH_BILL, "
                         "BILL_CREDIT, TRUE_UP)",
     "Billing Errors": "Billing blocks for a wrong rate class in master data (RATE_CLASS)",
     "Invoice Outsorts": "Invoice holds you placed on an account (INVOICE_HOLD)",
     "Field Work": "Cases in the FIELD queue and your field service orders (FIELD_SERVICE)",
+    "Escalations": "Cases in the SUPERVISOR queue (escalated by VEE, an analyst or you), whatever their type",
 }
 NO_ENGINE_CATEGORIES = ("AMP", "Bill Correction", "Bill Print Errors", "Billing- see IT Supp", "Budget Bill Cases",
                         "Invoice Errors", "Low Income Process")
@@ -118,6 +123,8 @@ def category(kind: str, queue: str | None, work: str | None = None) -> str:
     """The clarification category of a case of type ``kind`` in ``queue`` (its last queue once resolved)."""
     if work == "order" or queue == "FIELD":
         return "Field Work"
+    if queue == "SUPERVISOR":
+        return "Escalations"
     if work == "hold":
         return "Invoice Outsorts"
     if kind == "RATE_CLASS":

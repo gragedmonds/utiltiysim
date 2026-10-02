@@ -309,6 +309,8 @@ Work queues, automation, workforce, costs and carrying cost.
 | `supervisors` | `1` | 0–50 |  | Supervisors approving escalations. *Affects: escalation backlog.* |
 | `supervisor_hours_per_day` | `2.0` | 0.25–10 | h | (advanced) Supervisor hours on escalations per business day. |
 | `supervisor_minutes` | `40.0` | 5–240 | min | (advanced) Supervisor review time per escalation. |
+| `supervisor_queue_days_min` | `1` | 1–20 | d | Minimum wait before a supervisor picks up an escalation (VEE's own escalations wait this long). *Affects: escalation backlog, days to bill.* |
+| `supervisor_queue_days_max` | `3` | 1–30 | d | Maximum wait before a supervisor picks up an escalation from an analyst or you. An escalation you take yourself (assign) waits for you. *Affects: escalation backlog, days to bill.* |
 | `field_orders_per_day` | `6` | 0–500 |  | Meter investigations, re-reads and exchanges completed per business day. *Affects: field order backlog, estimates.* |
 | `field_days_min` | `1` | 0–20 | d | (advanced) Earliest a field order is worked after it is raised. |
 | `analyst_accuracy` | `0.95` | 0.5–1 |  | (advanced) Share of reviews where the analyst finds the true cause. *Affects: billing errors, wasted truck rolls.* |

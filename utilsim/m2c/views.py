@@ -23,8 +23,10 @@ from utilsim.m2c.run import (
     OUTAGE_REASON,
     STATUS,
     SUMMARY_VERSION,
+    TRAVEL_MIN,
     YEAR_DAYS,
     Case,
+    Install,
     M2CRun,
     bdays_between,
     parse_day,
@@ -233,10 +235,32 @@ def read_type(run: M2CRun, r: int, m: int, T: float) -> str:
 
 
 def billed_use(run: M2CRun, r: int, m: int) -> float:
-    """Consumption between the released registers of months ``m - 1`` and ``m``, as billing computes it."""
+    """Consumption between the released registers of months ``m - 1`` and ``m``, as billing computes it (a device
+    change in the period bills the new register from its initial read, plus the old register's last stretch)."""
     mod = 10.0 ** int(run.town.digits[r])
-    d = float(run.released[r, m] - run.released[r, m - 1])
+    x = run.dev_change[r, m]
+    prev = float(run.released[r, m - 1]) if x is None else x.carry(r, float(run.released[r, m - 1]),
+                                                                  float(run.normal_at[r, m - 1]))
+    d = float(run.released[r, m]) - prev
     return d + mod if d < -0.5 * mod else d
+
+
+def read_base(run: M2CRun, r: int, m: int, T: float) -> tuple[float, Install | None]:
+    """The register value read ``m`` is measured from as of ``T``, and the device change inside its period (if one
+    is registered by then). A change registered after the read was taken re-bases it on the new register."""
+    x = run.change_between(r, float(run.prev_t_at_read[r, m]), float(run.read_t[r, m]), T)
+    if x is None or x.t_reg <= run.read_t[r, m]:
+        return float(run.prev_at_read[r, m]), x
+    return run.prev_for(r, m, T)[0], x
+
+
+def device_change_json(run: M2CRun, x: Install, r: int, base: float) -> dict:
+    """A read period with a device change: the new device, its install date and initial read, and the old
+    register's last stretch that the period's consumption includes."""
+    return {"deviceId": x.device, "previousDeviceId": x.previous, "installedAt": run.iso(x.t),
+            "registeredAt": run.iso(x.t_reg), "initialRead": _r3(x.initial[r]),
+            "removalRead": _r3(x.removal[r]) if r in x.removal else None, "oldRegisterUse": _r3(x.initial[r] - base),
+            "by": x.by}
 
 
 # Why a read is missing: reasonCode → (cause code, label).
@@ -299,7 +323,8 @@ def register_check(run: M2CRun, r: int, m: int, T: float) -> dict:
         return {"registerDelta": None, "registerWentBackwards": False, "previousEstimated": False}
     vee_t = float(run.town.read_day[r, m]) + 18.0 / 24
     prev = next((j for j in range(m - 1, -1, -1) if run.release_t[r, j] <= vee_t), 0)
-    return {"registerDelta": _r3(obs - run.prev_at_read[r, m]),
+    base, x = read_base(run, r, m, T)
+    return {"registerDelta": _r3(obs - (x.initial[r] if x is not None else base)),
             "registerWentBackwards": run.backwards(r, m, obs, T) >= 0,
             "previousEstimated": bool(run.method[r, prev] == 2)}
 
@@ -400,7 +425,15 @@ def _row(run: M2CRun, case: Case, T: float) -> dict:
     linked = [oid for oid in case.orders if run.orders[oid].created <= T]
     if linked:
         row["linkedOrderIds"] = linked
+    if case.work is None:  # one visit per premise: the other open cases there
+        row["relatedCaseIds"] = [c.id for c in related_open(run, case, T)]
     return row
+
+
+def related_open(run: M2CRun, case: Case, T: float) -> list[Case]:
+    """The other open cases (as of ``T``) at ``case``'s premise: read cases and billing blocks, not Studio work."""
+    return [c for c in run.by_prem.get(int(run.town.prem[case.r]), []) if c is not case and c.work is None
+            and c.created <= T and (c.resolved is None or c.resolved > T)]
 
 
 
@@ -480,6 +513,12 @@ def read_record(run: M2CRun, r: int, m: int, T: float, truth: bool = False) -> d
     rid = run.read_id(r, m)
     released = run.release_t[r, m] <= T
     case = run.case_of[r, m]
+    base, change = read_base(run, r, m, T)
+    prev = change.initial[r] if change is not None else base
+    mod = 10.0 ** int(tw.digits[r])
+    delta = float(run.obs[r, m]) - base
+    rollover = bool(not missing and delta < 0 and base > 0.8 * mod and run.obs[r, m] < 0.2 * mod)
+    cons = delta + mod if rollover else delta
     rec = {
         "id": rid, "schemaVersion": READ_SCHEMA_VERSION, "simulationId": run.simulation_id,
         "premiseId": tw.premise_ids[p], "servicePointId": tw.service_point[r], "installationId": tw.installation[r],
@@ -487,15 +526,17 @@ def read_record(run: M2CRun, r: int, m: int, T: float, truth: bool = False) -> d
         "commodity": str(tw.commodity[r]), "direction": str(tw.direction[r]), "unit": str(tw.unit[r]),
         "periodStart": run.iso(run.prev_t_at_read[r, m]), "periodEnd": run.iso(run.read_t[r, m]),
         "scheduledReadAt": run.iso(run.read_t[r, m]), "readAt": None if missing else run.iso(run.read_t[r, m]),
-        "previousReadAt": run.iso(run.prev_t_at_read[r, m]), "previousRegisterValue": _r3(run.prev_at_read[r, m]),
+        "previousReadAt": run.iso(run.prev_t_at_read[r, m]), "previousRegisterValue": _r3(prev),
         "registerValue": None if missing else _r3(run.obs[r, m]),
         # A lower register near the top of the dial is a rollover (consumption wraps); any other lower register went
-        # backwards: no consumption (null) and registerRegression, with the negative registerDelta.
-        "consumption": None if missing or run.cons[r, m] < 0 else _r3(run.cons[r, m]),
-        "registerDelta": None if missing else _r3(run.obs[r, m] - run.prev_at_read[r, m]),
+        # backwards: no consumption (null) and registerRegression, with the negative registerDelta. After a device
+        # change in the period, the new register counts from its initial read (``deviceChange``).
+        "consumption": None if missing or cons < 0 else _r3(cons),
+        "registerDelta": None if missing else _r3(run.obs[r, m] - prev),
         "multiplier": int(tw.multiplier[r]), "registerDigits": int(tw.digits[r]),
-        "rolloverFlag": bool(not missing and run.obs[r, m] < run.prev_at_read[r, m] and run.cons[r, m] >= 0),
-        "registerRegression": bool(not missing and run.cons[r, m] < 0),
+        "rolloverFlag": rollover, "registerRegression": bool(not missing and cons < 0),
+        "deviceId": run.device_at(int(tw.meter_of[r]), float(run.read_t[r, m]), T),
+        "deviceChange": device_change_json(run, change, r, base) if change is not None else None,
         "readType": "missing" if missing else "actual", "readStatus": "missing" if missing else "received",
         "readReason": "periodic", "source": cat.SOURCE[str(tw.tech[r])], "mruId": tw.mru[r],
         "reasonCode": run.reason[r, m] or None if missing else None, "cause": missing_cause(run, r, m),
@@ -520,7 +561,7 @@ def read_record(run: M2CRun, r: int, m: int, T: float, truth: bool = False) -> d
     if released and run.status[r, m] in (2, 3):
         val = float(run.released[r, m])
         rec["revisions"] = [{"revision": 1, "readType": "estimated" if run.status[r, m] == 2 else "adjusted",
-                             "registerValue": _r3(val), "consumption": _r3(val - run.prev_at_read[r, m]),
+                             "registerValue": _r3(val), "consumption": _r3(val - base),
                              "at": run.iso(run.release_t[r, m]), "caseId": rec["caseId"],
                              "decisionId": rec["veeDecisionId"]}]
     if truth:
@@ -654,12 +695,19 @@ def case_view(run: M2CRun, case_id: str, *, as_of: str | None = None, truth: boo
     no_value = case.doc < 0 and bool(np.isnan(run.obs[r, m]))  # a missing read: nothing to accept or override
     decisions = () if case.work is not None or not open_now else \
         tuple(a for a in (("accept", "estimate", "escalate") if case.doc >= 0 else
-                          ("estimate", "field_order", "escalate") if no_value else DECISIONS)
+                          ("estimate", "field_order", "escalate", "check_read") if no_value else DECISIONS)
               if not (a == "escalate" and row["queue"] == "SUPERVISOR")
               and not (a == "field_order" and row["queue"] == "FIELD")
               and run.decision_refusal(case, a, t9, hold if case.doc >= 0 else None) is None)
-    expected = {"registerValue": _r3(run.prev_at_read[r, m] + run.expected[r, m]),
+    base = read_base(run, r, m, T)[0] if read else float("nan")
+    expected = {"registerValue": _r3(base + run.expected[r, m]),
                 "consumption": round(float(run.expected[r, m]), 3)} if read else None
+    check = run.check_value(case, t9) if "check_read" in decisions else None
+    related = [{"caseId": c.id, "type": c.type, "label": cat.EVENTS[c.type][0], "commodity": str(run.town.commodity[c.r]),
+                "queue": _queue_at(c, T)[0], "registerId": run.town.reg_ids[c.r],
+                # A field visit for this case can also settle it (one visit per premise): the Studio offers to cover it.
+                "coverable": c.doc < 0 and run.not_open(c, c.id, t9) is None and run.cover_refusal(c, r, case, t9)
+                is None} for c in related_open(run, case, T)] if case.work is None else []
     return {"schemaVersion": CASE_VERSION, **row, "simulationId": run.simulation_id, "asOf": date_of(day).isoformat(),
             "expected": expected, "released": released_json(run, case, T),
             "readHistory": read_history(run, r, T) if case.work != "hold" else [],
@@ -672,6 +720,10 @@ def case_view(run: M2CRun, case_id: str, *, as_of: str | None = None, truth: boo
             "actions": list(decisions),
             # Utility Studio: notes, linked orders, the account's invoice hold, and the Studio actions open now.
             "notes": case_notes(run, case, T), "orders": [order_brief(run, o, T) for o in linked],
+            # The latest field outcome written back to this case, and the check read it gives (check_read).
+            "fieldOutcome": field_outcome(run, case, linked, T),
+            "checkRead": {"value": check[0], "orderId": check[1].id} if check is not None else None,
+            "relatedCases": related,
             "invoiceHold": hold_json(run, hold, T) if hold is not None else None,
             "studioActions": studio_actions(run, case, T, open_now, hold, linked),
             **({"order": order_json(run, run.orders[case.ref], T)} if case.work == "order" else {}),
@@ -679,20 +731,40 @@ def case_view(run: M2CRun, case_id: str, *, as_of: str | None = None, truth: boo
             **({"truth": {"class": case.truth}} if truth else {})}
 
 
-NOTE_EVENTS = ("CASE_NOTE", "USER_ACTION", "INVOICE_HOLD", "INVOICE_UNHOLD", "ORDER_COMPLETED")
+NOTE_EVENTS = ("CASE_NOTE", "USER_ACTION", "INVOICE_HOLD", "INVOICE_UNHOLD", "ORDER_COMPLETED", "DEVICE_REPLACED")
 
 
 def case_notes(run: M2CRun, case: Case, T: float) -> list[dict]:
-    """Notes on the case as of ``T``: your case notes, and the reasons recorded with decisions, holds and orders."""
+    """Notes on the case as of ``T``: your case notes, and the reasons recorded with decisions, holds and orders (a
+    field order's outcome, by you or its crew)."""
     out = []
     for t, kind, payload, _ in case.events:
         if t > T:
             break
         text = payload.get("text") if kind == "CASE_NOTE" else payload.get("note") if kind in NOTE_EVENTS else None
         if text:
-            out.append({"at": run.iso(t), "text": text, "by": "you", "kind": kind,
+            out.append({"at": run.iso(t), "text": text, "by": payload.get("by") or "you", "kind": kind,
                         "label": cat.EVENTS[kind][0], "actionId": payload.get("actionId")})
     return out
+
+
+def outcome_json(run: M2CRun, outcome: dict, T: float) -> dict:
+    """A recorded field outcome: its kind and fields, label, one line of text, who recorded it (you or the crew)
+    and when."""
+    return {**{k: v for k, v in outcome.items() if k != "at"}, "label": ords.OUTCOMES.get(outcome["kind"],
+                                                                                         ("Remark",))[0],
+            "text": ords.outcome_text(outcome), "at": run.iso(outcome["at"])}
+
+
+def field_outcome(run: M2CRun, case: Case, linked: list, T: float) -> dict | None:
+    """The newest outcome a completed field order wrote back to ``case`` as of ``T`` (``case_outcomes``: the crew
+    reads each meter it covers), with the order id."""
+    for o in reversed(linked):
+        got = o.case_outcomes.get(case.id) if o.outcome is not None and o.outcome["at"] <= T else None
+        if got is not None:
+            return {"orderId": o.id, **outcome_json(run, {**got[0], "by": o.outcome["by"], "at": o.outcome["at"]}, T),
+                    "registerId": run.town.reg_ids[got[1]]}
+    return None
 
 
 def hold_json(run: M2CRun, hold: list, T: float) -> dict:
@@ -707,9 +779,14 @@ def hold_json(run: M2CRun, hold: list, T: float) -> dict:
 # ---- field service orders -----------------------------------------------------------------------------------------
 def order_brief(run: M2CRun, o: ords.Order, T: float) -> dict:
     stage = o.stage_at(T)
+    done = o.outcome is not None and o.outcome["at"] <= T
     return {"orderId": o.id, "stage": stage, "systemStatus": ords.SYSTEM_STATUS.get(stage or "", None),
             "caseId": o.case.id if o.case is not None else None,
-            "shortText": (o.version_at(T) or (0, "", {}, []))[2].get("shortText") or None}
+            "shortText": (o.version_at(T) or (0, "", {}, []))[2].get("shortText") or None,
+            "startDate": (o.version_at(T) or (0, "", {}, []))[2].get("startDate") or None,
+            "coveredCaseIds": [c.id for c in o.covered],
+            "outcome": outcome_json(run, o.outcome, T) if done else None,
+            "completedAt": run.iso(o.outcome["at"]) if done else None}
 
 
 def order_json(run: M2CRun, o: ords.Order, T: float) -> dict:
@@ -729,9 +806,15 @@ def order_json(run: M2CRun, o: ords.Order, T: float) -> dict:
            "createdAt": run.iso(o.created), "releasedAt": run.iso(at["Ready for dispatch"]) if "Ready for dispatch" in at
            else None, "dispatchedAt": run.iso(at["Dispatched"]) if "Dispatched" in at else None,
            "completedAt": run.iso(at["Completed"]) if "Completed" in at else None,
-           "outcome": next((n for t, s, _, n in o.stages if s == "Completed" and t <= T), None),
-           "history": [{"at": run.iso(t), "stage": s, "actionId": aid, **({"note": n} if n else {})}
-                       for t, s, aid, n in o.stages if t <= T],
+           # Structured: {kind, label, text, by (you or the crew FIELD-n), at, ...the kind's fields}.
+           "outcome": outcome_json(run, o.outcome, T) if o.outcome is not None and o.outcome["at"] <= T else None,
+           "history": [{"at": run.iso(t), "stage": s, "actionId": aid,
+                        "by": aid if isinstance(aid, str) and aid.startswith("FIELD-") else "you", **({"note": n} if n
+                                                                                                    else {})}
+                       for t, s, aid, n in sorted(o.stages, key=lambda x: x[0]) if t <= T],
+           "coveredCaseIds": [c.id for c in o.covered],
+           # order_complete applies today (on the crew's day, your outcome replaces the crew's).
+           "completable": order_completable(run, o, T),
            "saves": sum(1 for v in o.versions if v[0] <= T)}
     if r >= 0:
         p = int(tw.prem[r])
@@ -740,10 +823,12 @@ def order_json(run: M2CRun, o: ords.Order, T: float) -> dict:
                             "installationId": tw.installation[r], "meterId": tw.meter_ids[tw.meter_of[r]],
                             "registerId": tw.reg_ids[r], "commodity": str(tw.commodity[r]), "contractId": ctr,
                             "accountId": acct}
-    if stage in ("Dispatched", "Completed") and o.roll_t is not None:
+    if stage in (*ords.OPEN_STAGES, "Completed") and o.roll_t is not None:
         out["visit"] = {"day": date_of(int(o.roll_t)).isoformat(), "seconds": round((o.roll_t - int(o.roll_t)) * 86400, 1),
                         "activity": ords.ACTIVITY.get(fields.get("activityType"), "special_read"),
-                        "minutes": o.minutes, "crew": "FIELD", "rolled": o.roll_t <= T}
+                        "minutes": o.minutes, "crew": o.crew or "FIELD", "rolled": o.roll_t <= T,
+                        "onSiteAt": run.iso(o.roll_t + TRAVEL_MIN / 1440.0),
+                        "doneAt": run.iso(o.done_t) if o.done_t is not None else None}
     return out
 
 
@@ -798,20 +883,31 @@ def order_view(run: M2CRun, *, order_id: str | None = None, case_id: str | None 
     return {**head, "order": None, "proposal": order_proposal(run, r, m, case, day)}
 
 
+def order_completable(run: M2CRun, o: ords.Order, T: float) -> bool:
+    """Whether ``order_complete`` dated ``T``'s day applies: dispatched by 09:00, on or after the basic start, and not
+    completed on an earlier day. On the day the crew works the order, your outcome (09:00) replaces the crew's."""
+    d = int(T)
+    if o.case is None or o.stage_at(d + 9.0 / 24) in ("Draft", "Ready for dispatch", None) or d < o.start_day:
+        return False
+    done = o.outcome
+    if done is None:
+        return o.case.resolved is None or o.case.resolved > d + 9.0 / 24
+    return int(done["at"]) > d or (done["by"] != "you" and int(done["at"]) == d)
+
+
 def studio_actions(run: M2CRun, case: Case, T: float, open_now: bool, hold: list | None, linked: list) -> list[str]:
     """The Studio action types this case accepts on its as-of day (decisions are in ``actions``)."""
+    if case.work == "order" and order_completable(run, run.orders[case.ref], T):
+        return [*(("note", "assign") if open_now else ()), "order_complete"]
     if not open_now:
         return []
     out = ["note", "assign"]
     if case.work == "order":
-        o = run.orders[case.ref]
-        stage = o.stage_at(T)
+        stage = run.orders[case.ref].stage_at(T)
         if stage == "Draft":
             out += ["order_save", "order_release"]
         elif stage == "Ready for dispatch":
             out.append("order_dispatch")
-        elif stage == "Dispatched" and int(T) >= o.start_day:
-            out.append("order_complete")
     elif case.work == "hold":
         out.append("invoice_unhold")
     else:
