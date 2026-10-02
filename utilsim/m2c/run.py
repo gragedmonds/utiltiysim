@@ -400,6 +400,9 @@ class M2CRun:
         mt = tw.meter_tech[mm]
         p = np.select([mt == "AMI", mt == "AMR"], [c.reading.ami_missed_read, c.reading.amr_missed_read],
                       np.where(self.missed_last[mm], c.reading.no_access_repeat, c.reading.manual_no_access))
+        # Deep cold: AMI endpoints drop out more, walkers find more meters snowed in, vans miss more.
+        cold = float(np.clip((-10.0 - self.temp(day)) / 10.0, 0.0, 1.5))
+        p = np.minimum(1.0, p * (1.0 + cold))
         episode = (m >= self.cest_from[mm]) & (m < self.cest_from[mm] + self.cest_len[mm])
         miss_m = (u < p) | episode | self.no_doc[mm, m]
         self.missed_last[mm] = miss_m & (mt == "MANUAL")
@@ -765,6 +768,10 @@ class M2CRun:
         self.books.mark(r, m)
 
     # ---- identities -----------------------------------------------------------------------------------------
+    def temp(self, day: int) -> float:
+        k = day + 31  # the weather series starts 2025-12-01
+        return float(self.town.temps[min(max(k, 0), len(self.town.temps) - 1)])
+
     def next_bday(self, day: int, k: int = 1) -> int:
         return add_bdays(day, k)
 

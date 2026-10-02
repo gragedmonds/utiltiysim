@@ -311,5 +311,22 @@
     "escalate_impact": 150.0,
     "estimation": "prior_year",
     "history_noise": 0.1
+  },
+  "billing": {
+    "rate_change_date": "2026-11-01",
+    "rate_change_pct": 3.5,
+    "high_bill_ratio": 2.5,
+    "high_bill_min": 150.0,
+    "first_bill_limit": 600.0,
+    "credit_review": 75.0,
+    "data_error_rate": 3.0,
+    "print_lag_days": 1,
+    "pad_reject_rate": 0.015,
+    "nsf_fee": 20.0,
+    "late_fee_pct": 1.5,
+    "reminder_days": 7,
+    "notice_days": 21,
+    "disconnect_days": 45,
+    "winter_moratorium": true
   }
 }

@@ -125,6 +125,8 @@ def summary(run: M2CRun, as_of: str | None = None) -> dict:
                     "recall": round(tp / (tp + fn), 3) if tp + fn else None},
         },
         "billing": billing,
+        "weather": {"tempC": run.temp(day), "series": [round(run.temp(d), 1) for d in range(day + 1)],
+                    "coldDays": sum(1 for d in range(day + 1) if run.temp(d) <= -15.0)},
         "queues": queues,
         "exceptions": {k: {**v, "label": cat.EVENTS[k][0], "icon": cat.EVENTS[k][1], "rpa": k in run.rpa_types}
                        for k, v in sorted(by_type.items(), key=lambda kv: -kv[1]["count"])},

@@ -2,7 +2,7 @@
 
 The same inputs come from a generated town (``UsageInputs.from_premises``) or from its snapshot
 (``UsageInputs.from_snapshot``), so the hosted engine reproduces the generator's register values exactly.
-Climate normals for Southern Ontario; the weather milestone replaces them behind the same functions.
+Heating and cooling follow the town's seeded weather year (``sim.weather``): each month's mean degree-days.
 """
 
 from __future__ import annotations
@@ -14,8 +14,9 @@ import numpy as np
 from utilsim.core.ids import str_key
 from utilsim.core.rng import Purpose, hash_normal
 from utilsim.sim.shapes import _shapes
+from utilsim.sim.weather import MONTH_TEMP_C, monthly_degree_days  # noqa: F401  (re-export)
 
-MONTH_TEMP_C = np.array([-5.5, -4.6, -0.2, 6.9, 13.2, 18.6, 21.6, 20.6, 16.4, 9.8, 3.9, -1.9])
+PV_DERATE = 0.66  # noon AC output as a share of DC nameplate (viewer arc peak)
 PV_YIELD = np.array([1.6, 2.5, 3.4, 4.0, 4.6, 4.9, 5.0, 4.5, 3.7, 2.6, 1.6, 1.3])  # kWh/kWp/day
 IRRIGATION_SEASON = np.array([0, 0, 0, 0, 0.3, 0.8, 1.0, 0.9, 0.4, 0, 0, 0])
 POOL_SEASON = np.array([0, 0, 0, 0, 0.3, 1.0, 1.0, 1.0, 0.5, 0, 0, 0])
@@ -76,9 +77,8 @@ def monthly_typical_day(u: UsageInputs, cfg) -> dict[str, np.ndarray]:
     n = len(u)
     floor = u.floor_m2
     occ = u.occupants.astype(float)
-    t = MONTH_TEMP_C[:, None]
-    hdd = np.maximum(0.0, cfg.weather.heating_base_c + 3.0 - t)  # degree-days below 18 °C
-    cdd = np.maximum(0.0, t - (cfg.weather.cooling_base_c - 6.0))
+    h, c = monthly_degree_days(cfg)
+    hdd, cdd = h[:, None], c[:, None]  # mean degrees per day below the heating / above the cooling base
     ua = 0.045 * floor * UA_ERA[u.era]
     fuel = u.heating_fuel
     heat_th = ua * hdd
@@ -130,3 +130,12 @@ def monthly_energy(u: UsageInputs, cfg) -> dict[str, np.ndarray]:
     return {"electric_import": np.round(imp, 3), "electric_export": np.round(exp_, 3),
             "water": np.round(m["water"] * DAYS_2026[:, None] * noise, 4),
             "gas": np.round(m["gas"] * DAYS_2026[:, None] * noise, 4)}
+
+
+def monthly_daily(u: UsageInputs, cfg) -> dict[str, np.ndarray]:
+    """Typical-day demand per month (12, n), rounded as the snapshot's July fields: dailyKWh, dailyWaterM3,
+    dailyGasM3 and solarPeakKW (the PV arc peak scales with the month's yield)."""
+    m = monthly_typical_day(u, cfg)
+    peak = (u.pv_kw * PV_DERATE)[None, :] * (PV_YIELD / PV_YIELD[6])[:, None]
+    return {"dailyKWh": np.round(m["electric"], 2), "dailyWaterM3": np.round(m["water"], 3),
+            "dailyGasM3": np.round(m["gas"], 3), "solarPeakKW": np.round(peak, 2)}

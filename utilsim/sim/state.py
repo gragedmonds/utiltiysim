@@ -18,6 +18,8 @@ import numpy as np
 from utilsim.io.revisions import index_revision, topology_revision
 from utilsim.sim.astro import moon_phase, sun_position
 from utilsim.sim.flows import FlowModel
+from utilsim.sim.weather import START as WEATHER_START
+from utilsim.sim.weather import daily_temps
 from utilsim.version import REPLAY_SCHEMA_VERSION, STATE_SCHEMA_VERSION
 
 MAX_REPLAY_FRAMES = 2000
@@ -69,6 +71,7 @@ class FrameContext:
     enabled: dict[str, np.ndarray]
     supply: np.ndarray  # electric supply edges (substation_outage disables them)
     served: dict[str, np.ndarray]  # premise has the service
+    temps: np.ndarray | None = None  # daily mean temperature, index 0 = 2025-12-01 (sim.weather)
 
     @classmethod
     def from_town(cls, town) -> FrameContext:
@@ -82,7 +85,7 @@ class FrameContext:
                    enabled={u: np.array([e.enabled for e in nt.edges]) for u, nt in town.networks.items()},
                    supply=np.array([e.kind == "supply" for e in town.networks["electric"].edges]),
                    served={"electric": np.ones(n, dtype=bool), "water": np.ones(n, dtype=bool),
-                           "gas": np.asarray(a["has_gas"], dtype=bool)})
+                           "gas": np.asarray(a["has_gas"], dtype=bool)}, temps=daily_temps(town.cfg))
 
 
 class FrameBuilder:
@@ -114,7 +117,8 @@ class FrameBuilder:
             target = ctx.premise_ids[0]
         if sequence is None:
             sequence = run_sequence(when, local.date(), tz)
-        res = self.fm.flows(hour, scenario, target, disabled=disabled, injections=injections, premises_off=premises_off)
+        res = self.fm.flows(hour, scenario, target, disabled=disabled, injections=injections, premises_off=premises_off,
+                            month=local.month)
         sim_time = iso_utc(when)
         networks = {}
         for u in ("electric", "water", "gas"):
@@ -149,6 +153,9 @@ class FrameBuilder:
         frame["clock"] = {"simTime": sim_time, "timezone": ctx.timezone, "localTime": local.isoformat(),
                           "sunElevationDeg": elev, "sunAzimuthDeg": az, "moonPhase": moon_phase(when),
                           "isDay": bool(elev > -0.833)}
+        k = (local.date() - WEATHER_START).days
+        if ctx.temps is not None and 0 <= k < len(ctx.temps):
+            frame["clock"]["tempC"] = float(ctx.temps[k])
         return frame
 
     def replay(self, day: str, *, scenario: str = "normal", target: str | None = None, start_hour: float = 0.0,

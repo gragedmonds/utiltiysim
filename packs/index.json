@@ -1,11 +1,11 @@
 {
   "schemaVersion": "town-pack/1.0",
-  "generatorVersion": "0.3.0",
+  "generatorVersion": "0.4.0",
   "towns": [
     {
       "preset": "whitby_small",
       "description": "Whitby street extract (OSM), 480 homes. Matches the prototype's default town size.",
-      "townId": "town-8457c81b21029171",
+      "townId": "town-c83a39cdf7a2b45b",
       "topologyRevision": "topo-c4a684f3ccd333981689",
       "indexRevision": "idx-0b15be28acbef3fdd460",
       "homes": 480,
@@ -22,19 +22,19 @@
       "timezone": "America/Toronto",
       "files": {
         "snapshot": {
-          "path": "whitby_small/town-8457c81b21029171.fd72e55e6e.snapshot.json.gz",
-          "bytes": 637871
+          "path": "whitby_small/town-c83a39cdf7a2b45b.26de1e3232.snapshot.json.gz",
+          "bytes": 640706
         },
         "replay": {
-          "path": "whitby_small/town-8457c81b21029171.e9e0b8ab0c.replay-day.json.gz",
-          "bytes": 503715
+          "path": "whitby_small/town-c83a39cdf7a2b45b.18aa737331.replay-day.json.gz",
+          "bytes": 536490
         }
       }
     },
     {
       "preset": "ayr",
       "description": "Ayr, Ontario: real OSM streets (snapshot 2026-10-01, 1,500 m radius), 1,861 homes at natural size.",
-      "townId": "town-df3fc61cc5ea917d",
+      "townId": "town-4b98d703e5466ecd",
       "topologyRevision": "topo-6dcb82e76a72e8b672ea",
       "indexRevision": "idx-80ece9dfb8e90638ed71",
       "homes": 1861,
@@ -54,19 +54,19 @@
       "timezone": "America/Toronto",
       "files": {
         "snapshot": {
-          "path": "ayr/town-df3fc61cc5ea917d.fd8e920433.snapshot.json.gz",
-          "bytes": 2031691
+          "path": "ayr/town-4b98d703e5466ecd.602044d6b9.snapshot.json.gz",
+          "bytes": 2041592
         },
         "replay": {
-          "path": "ayr/town-df3fc61cc5ea917d.e47c7afc62.replay-day.json.gz",
-          "bytes": 1619124
+          "path": "ayr/town-4b98d703e5466ecd.d90e27f04a.replay-day.json.gz",
+          "bytes": 1740868
         }
       }
     },
     {
       "preset": "elora",
       "description": "Elora, Ontario: real OSM streets (snapshot 2026-10-01, 1,800 m radius), 3,271 homes at natural size.",
-      "townId": "town-8cc7325fb98af1b2",
+      "townId": "town-ba323b25c768fd6f",
       "topologyRevision": "topo-db272fd76e0f0d7bd756",
       "indexRevision": "idx-1bbf65fdade5e447fd33",
       "homes": 3271,
@@ -86,19 +86,19 @@
       "timezone": "America/Toronto",
       "files": {
         "snapshot": {
-          "path": "elora/town-8cc7325fb98af1b2.0bd76743f0.snapshot.json.gz",
-          "bytes": 3380434
+          "path": "elora/town-ba323b25c768fd6f.1e108fd102.snapshot.json.gz",
+          "bytes": 3397715
         },
         "replay": {
-          "path": "elora/town-8cc7325fb98af1b2.2161f33512.replay-day.json.gz",
-          "bytes": 2637136
+          "path": "elora/town-ba323b25c768fd6f.0baabbfb42.replay-day.json.gz",
+          "bytes": 2837466
         }
       }
     },
     {
       "preset": "cobourg",
       "description": "Cobourg, Ontario: real OSM streets (snapshot 2026-10-01, 2,500 m radius), 5,500 homes at natural size.",
-      "townId": "town-219255e2027e2b97",
+      "townId": "town-dbe381557bddba64",
       "topologyRevision": "topo-1f645f6d70bcba98a59d",
       "indexRevision": "idx-331b010aec5ef997a097",
       "homes": 5500,
@@ -118,12 +118,12 @@
       "timezone": "America/Toronto",
       "files": {
         "snapshot": {
-          "path": "cobourg/town-219255e2027e2b97.60ec40cc69.snapshot.json.gz",
-          "bytes": 5576679
+          "path": "cobourg/town-dbe381557bddba64.c359c1f816.snapshot.json.gz",
+          "bytes": 5603855
         },
         "replay": {
-          "path": "cobourg/town-219255e2027e2b97.15c238500e.replay-day.json.gz",
-          "bytes": 4160880
+          "path": "cobourg/town-dbe381557bddba64.b32d8716dd.replay-day.json.gz",
+          "bytes": 4497123
         }
       }
     }

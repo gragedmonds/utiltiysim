@@ -14,9 +14,7 @@ import numpy as np
 from utilsim.config.model import SimConfig
 from utilsim.model.premises import Premises
 from utilsim.sim import usage
-from utilsim.sim.usage import DAYS_2026, GAS_KWH_PER_M3, MONTH_TEMP_C, PV_YIELD  # noqa: F401  (re-export)
-
-PV_DERATE = 0.66  # noon AC output as a share of DC nameplate (viewer arc peak)
+from utilsim.sim.usage import DAYS_2026, GAS_KWH_PER_M3, MONTH_TEMP_C, PV_DERATE, PV_YIELD  # noqa: F401
 
 
 def design_kva(p: Premises, cfg: SimConfig) -> np.ndarray:
@@ -63,9 +61,8 @@ def monthly_typical_day(p: Premises, cfg: SimConfig) -> dict[str, np.ndarray]:
 
 
 def july_daily(p: Premises, cfg: SimConfig) -> dict[str, np.ndarray]:
-    m = monthly_typical_day(p, cfg)
-    return {"dailyKWh": np.round(m["electric"][6], 2), "dailyWaterM3": np.round(m["water"][6], 3),
-            "dailyGasM3": np.round(m["gas"][6], 3), "solarPeakKW": np.round(p.attrs["pv_kw"] * PV_DERATE, 2)}
+    """The July typical day (snapshot fields dailyKWh, dailyWaterM3, dailyGasM3, solarPeakKW)."""
+    return {k: v[6] for k, v in usage.monthly_daily(usage.UsageInputs.from_premises(p), cfg).items()}
 
 
 from utilsim.sim.shapes import (  # noqa: E402,F401  (re-export)

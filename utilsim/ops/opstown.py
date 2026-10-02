@@ -12,8 +12,11 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
+from utilsim.config.model import SimConfig
 from utilsim.sim.flows import FlowInputs, FlowModel, NetInputs
 from utilsim.sim.state import FrameBuilder, FrameContext
+from utilsim.sim.usage import UsageInputs, monthly_daily
+from utilsim.sim.weather import daily_temps
 
 UTILITIES = ("electric", "water", "gas")
 ROAD_CLASS = {"arterial": 0, "collector": 1, "local": 2}
@@ -57,6 +60,7 @@ class OpsTown:
         cfg = snap["config"]
         self.id = snap["id"]
         self.config = cfg
+        self.sim_config = SimConfig.model_validate(cfg)
         self.timezone = cfg["town"]["timezone"]
         self.scenario_date = cfg["scenario"]["date"]
         self.ops = cfg["operations"]
@@ -90,14 +94,16 @@ class OpsTown:
             daily={k: np.array([float(p[k]) for p in prem]) for k in ("dailyKWh", "dailyWaterM3", "dailyGasM3",
                                                                          "solarPeakKW")},
             occupied=np.array([bool(p["occupied"]) for p in prem]), has_gas=has_gas, premise_ids=self.premise_ids,
-            leak_m3h=float(cfg["scenario"]["leak_m3h"]))
+            leak_m3h=float(cfg["scenario"]["leak_m3h"]),
+            monthly=monthly_daily(UsageInputs.from_snapshot(snap), self.sim_config))
         self.context = FrameContext(
             id=self.id, topology=snap["topologyRevision"], index=snap["indexRevision"], timezone=self.timezone,
             origin_lat=float(origin["lat"]), origin_lon=float(origin["lon"]), premise_ids=self.premise_ids,
             edge_ids={u: [e["id"] for e in snap["networks"][u]["edges"]] for u in UTILITIES},
             enabled={u: self.flow_inputs.nets[u].enabled.copy() for u in UTILITIES},
             supply=np.array([e["kind"] == "supply" for e in snap["networks"]["electric"]["edges"]]),
-            served={"electric": np.ones(n, dtype=bool), "water": np.ones(n, dtype=bool), "gas": has_gas})
+            served={"electric": np.ones(n, dtype=bool), "water": np.ones(n, dtype=bool), "gas": has_gas},
+            temps=daily_temps(self.sim_config))
         self.flow_model = FlowModel(self.flow_inputs)
         self.frames = FrameBuilder(self.context, self.flow_model)
 

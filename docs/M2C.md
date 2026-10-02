@@ -44,6 +44,17 @@ Each business day goes in this order:
 7. **RPA** resolves exception types covered by `rpa_coverage`, taken in the order of `catalog.EXCEPTIONS`. Half are
    resolved the same evening; the rest at 07:00 the next business day.
 
+## Weather
+
+`sim/weather.py` gives the town a seeded daily temperature for 2025-12-01 to 2026-12-31: climate normals, each
+season's configured mean and spread, an AR(1) anomaly (`weather.persistence`), and clipping to the season's range.
+It drives:
+- monthly consumption, through each month's mean heating and cooling degree-days;
+- live demand: each frame uses its month's typical day and carries `clock.tempC`;
+- reading conditions: below −10 °C, missed reads grow by up to 2.5×.
+
+The summary carries the series to date (`weather.series`) and the count of days at or below −15 °C.
+
 ## Reads
 
 Every register is read once a month on its portion's business day. Missed reads by technology:

@@ -18,6 +18,7 @@ from utilsim.core.rng import Purpose, hash_u01
 from utilsim.customers.calendar import scheduled_read_date
 from utilsim.m2c import registers as regs
 from utilsim.sim.usage import KEYS, UsageInputs, monthly_energy
+from utilsim.sim.weather import daily_temps
 
 YEAR = 2026
 READ_HOUR = {"AMI": (2.0, 0.0), "AMR": (9.5, 5.0), "MANUAL": (9.0, 6.0)}  # base hour, spread × u
@@ -76,6 +77,7 @@ class M2CTown:
     tariffs: dict[str, dict]
     account_method: dict[str, str]
     account_profile: dict[str, str]
+    temps: np.ndarray  # daily mean temperature, index 0 = 2025-12-01 (sim.weather)
 
     @property
     def n_registers(self) -> int:
@@ -176,7 +178,8 @@ class M2CTown:
             inst_ids=inst_ids, inst_of=inst_of, inst_rows=[np.flatnonzero(inst_of == k) for k in range(len(inst_ids))],
             inst_rate=[rate_of.get(x, "") for x in inst_ids], tariffs=tariffs,
             account_method={a["id"]: a.get("paymentMethod") or "online" for a in snap.get("accounts", [])},
-            account_profile={a["id"]: profile.get(a.get("businessPartnerId"), "on_time") for a in snap.get("accounts", [])})
+            account_profile={a["id"]: profile.get(a.get("businessPartnerId"), "on_time") for a in snap.get("accounts", [])},
+            temps=daily_temps(cfg))
 
 
 def date_of(day: int) -> date:

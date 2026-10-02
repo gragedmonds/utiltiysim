@@ -79,3 +79,15 @@ def test_sequence_is_minutes_since_local_midnight(town120):
     # A replay past midnight keeps counting from the run day, so sequences stay increasing.
     late = fb.replay("2026-07-15", start_hour=23, hours=2, step_minutes=60, include_premises=False)
     assert [f["sequence"] for f in late["frames"]] == [1380, 1440]
+
+
+def test_weather_year_drives_seasonal_demand(town120):
+    from utilsim.sim.weather import daily_temps
+
+    temps = daily_temps(town120.cfg)
+    assert len(temps) == 396 and np.array_equal(temps, daily_temps(town120.cfg))
+    fb = FrameBuilder(town120)
+    jan = fb.frame(local_time(town120, "2026-01-15", 7.0))
+    jul = fb.frame(local_time(town120, "2026-07-15", 7.0))
+    assert jan["networks"]["gas"]["sourceFlow"] > 3 * jul["networks"]["gas"]["sourceFlow"]
+    assert jan["clock"]["tempC"] < jul["clock"]["tempC"]

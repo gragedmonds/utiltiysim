@@ -2564,5 +2564,5 @@
   },
   "title": "SimConfig",
   "type": "object",
-  "x-generator-version": "0.3.0"
+  "x-generator-version": "0.4.0"
 }

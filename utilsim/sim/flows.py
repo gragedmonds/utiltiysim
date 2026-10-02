@@ -39,15 +39,16 @@ class NetInputs:
 @dataclass
 class FlowInputs:
     nets: dict[str, NetInputs]
-    daily: dict[str, np.ndarray]  # dailyKWh, dailyWaterM3, dailyGasM3, solarPeakKW per premise
+    daily: dict[str, np.ndarray]  # dailyKWh, dailyWaterM3, dailyGasM3, solarPeakKW per premise (July)
     occupied: np.ndarray
     has_gas: np.ndarray
     premise_ids: list[str]
     leak_m3h: float
+    monthly: dict[str, np.ndarray] | None = None  # the same per month (12, n), from the weather year
 
     @classmethod
     def from_town(cls, town) -> FlowInputs:
-        from utilsim.sim.demand import july_daily
+        from utilsim.sim.usage import UsageInputs, monthly_daily
 
         index = {pid: i for i, pid in enumerate(town.prem.ids)}
         nets = {}
@@ -63,8 +64,10 @@ class FlowInputs:
                 sources=np.array([i for i, nd in enumerate(net.nodes) if nd.kind == "external_supply"],
                                  dtype=np.int64),
                 unit=net.unit)
-        return cls(nets, july_daily(town.prem, town.cfg), np.asarray(town.prem.attrs["occupied"], dtype=bool),
-                   np.asarray(town.prem.attrs["has_gas"], dtype=bool), list(town.prem.ids), town.cfg.scenario.leak_m3h)
+        monthly = monthly_daily(UsageInputs.from_premises(town.prem), town.cfg)
+        return cls(nets, {k: v[6] for k, v in monthly.items()}, np.asarray(town.prem.attrs["occupied"], dtype=bool),
+                   np.asarray(town.prem.attrs["has_gas"], dtype=bool), list(town.prem.ids), town.cfg.scenario.leak_m3h,
+                   monthly)
 
 
 @dataclass
@@ -163,12 +166,13 @@ class FlowModel:
     def flows(self, hour: float, scenario: str = "normal", target: str | None = None, *,
               disabled: dict[str, np.ndarray] | None = None,
               injections: dict[str, dict[int, float]] | None = None,
-              premises_off: dict[str, np.ndarray] | None = None) -> FlowResult:
+              premises_off: dict[str, np.ndarray] | None = None, month: int | None = None) -> FlowResult:
         """``premises_off`` (bool per premise) takes premises off a commodity although the network reaches them
         (e.g. gas meters shut until relit)."""
         inp = self.inputs
         ti = self.index.get(target) if target else None
-        d = hourly(self.daily, inp.occupied, inp.has_gas, hour, scenario, ti, inp.leak_m3h)
+        daily = self.daily if month is None or inp.monthly is None else {k: v[month - 1] for k, v in inp.monthly.items()}
+        d = hourly(daily, inp.occupied, inp.has_gas, hour, scenario, ti, inp.leak_m3h)
         source, edge_flows, unit, unsupplied = {}, {}, {}, {}
         homes = dict(d)
         for u, net in inp.nets.items():
