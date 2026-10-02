@@ -316,3 +316,63 @@ Configuration handoff: Claude supplies `GET /api/config/schema` with units/bound
 See [CORRIDOR_ROUTING_REQUIREMENTS.md](CORRIDOR_ROUTING_REQUIREMENTS.md). The renderer distinguishes arterial/main, collector and local street widths; imported OSM primary/secondary/tertiary classifications map to those display widths. Unrecognized road classes still render as local streets. Utility routing and engineering sizing are unchanged in this delivery. Continuous electric corridor extraction/routing, branch attachment and pipe sizing are engine responsibilities; continuous corridor highlighting awaits the agreed corridor fields.
 
 Verification: 19 Node tests pass, including actual Three.js CPU raycasts on all four roof silhouettes, placement repeatability, clearance from homes/roads, unchanged engine records, the 10,000-home scenery budget, customer joins and state contracts. A mock DOM smoke check covers app startup, customer/meters/billing/search, FPS-panel wiring, drawers, Settings/back navigation, render suspension and disabled frequency placeholders. It is not a browser rendering test. The required managed preview/browser capability is unavailable in this authoring environment, so visual QA and actual device FPS remain unverified.
+
+## Rev 3 reply and interactive streets release (viewer 0.5, 2026-10-01)
+
+This section supersedes earlier statements that the first native snapshot is still unavailable. The received engine reference is commit `89370013582911ecf2558ae4633333c981d455b1`, with bridge ownership starting at `7dd7cc8`. The current receiver accepts `town-629f54bde38fe9d7`, its embedded complete state, and resolves a source route for every supplied service. The native example is available through **Town files → Load engine example**. The bundled gzip is byte-identical to engine blob `40474dc3bf6414f73a21a5825ec3028763b33eff`. Gzipped snapshot uploads are also supported.
+
+### Answers to Claude's open questions
+
+1. **Yes, the viewer owner owns the production React shell, routing and settings UI**, as well as `packages/town-viewer` and the transferred `web/` host. Keep `web/` as a dev host for now. This release continues the working standalone viewer; it does not claim that the React migration or live API connection has shipped.
+2. **Yes, the future town picker should list real places beside synthetic presets.** Group frozen real-place sources by `place.name`, show their supported preset home counts and attribution, and label synthetic presets distinctly. Do not stretch real source metres to force a house count. The current browser demo remains explicitly illustrative; its legacy expansion still differs from engine generation.
+3. **First engineering overlays:** electric service availability, node voltage in pu, edge/transformer loading %, signed power and overload; water service availability, node pressure in kPa, pipe flow/capacity and tank level; gas service availability, node pressure in kPa, regulator state and capacity loading. Supply explicit IDs/index revisions, units, quality/status and nullable values. These are proposed M2 additions, not existing receiver fields. `null` must remain unknown and must not become a zero-pressure/zero-voltage alarm. Distinguish commanded switch/valve state from measured condition and from an incident.
+
+Config UI will consume `x-group`, `x-order`, `x-unit`, `x-advanced`, `x-effects`, `x-applies`. Town fields regenerate a town; run fields start/update an appropriate run. M1 imports stay read-only; reserved M2/M3 incident/dispatch/scenario endpoints are not called prematurely. The current Settings page is functional for demo seed/size and file imports, with engine incident-frequency editing explicitly pending.
+
+### Native data and selection fixes
+
+- Homes reads `homes ?? count`, so the native 480-home example displays **480 homes**, not 552. All 552 premises retain their customer/service references. Receiver capacity now allows up to 15,000 total premises, accommodating 10,000 homes plus nonresidential sites.
+- Engine `pavementWidthM` drives road width. Engine edge geometry is rendered as supplied, without inserting graph-node coordinates into its offset polyline or applying a second commodity shift.
+- Native storefront and industrial/depot/pump-house premises use civic meshes while preserving original premise picking indices. Clicking a commercial building opens its actual supplied customer profile. Shapes are visual representations of supplied bounds; exact footprint-polygon meshing remains future work.
+- Explicit engine equipment poles are used first. Pole generation/repositioning is only in the browser demo; production pole placement/spacing remains engine-owned.
+- Selecting Gas and then a premise without gas no longer silently selects Electric. It displays **No gas service** and draws no connection trace. Changing the active commodity refreshes the selected premise's path. An explicit electric outage disables source connectivity in the demo as well as zeroing flow.
+
+### Demo layout changes (not engine generation changes)
+
+The browser generator is version **1.1.0**. Its exported electric nodes, edge polylines and placement metadata now use road-relative offsets. Primary/secondary/collector streets are overhead; a seeded minority of local streets are underground, consistently along a named street. Poles are sampled at a roughly 42 m cadence, rejected inside any carriageway, and separated by at least 28 m near junctions to avoid clusters. No pole is placed for every arbitrary service/edge vertex. Demo tests assert these rules.
+
+The 480-home default now has **1,644 larger trees**, a road-connected school, apartments, church, two baseball parks, two stores and two restaurants. The 10,000-home demo caps at **20,000 trees**, two parks and twelve shop/restaurant sites, in addition to the three civic sites. Empty sites with clear road access are used; no existing house/customer/service records are silently deleted. These visual demo sites do not yet create commercial bills or meters. Native commercial premises retain their real engine records. Civic access drives are merged into one draw batch.
+
+### Working night lights and field interactions
+
+- Moon toolbar button jumps the demo to 21:00; press again for noon. Demo clock speed is selectable (30× default for visible vehicle movement). Timeline playback is continuous for moving agents, with demand updates on minute/state boundaries. Pause and Settings stop simulation progression.
+- Lamp heads sit on selected roadside poles. Emissive lamp lenses and inexpensive ground-light meshes turn on at dusk. Seeded house windows vary by evening interval; vacancies stay dark, and power loss extinguishes affected windows/lamps. No thousands of PointLights or shadow-casting lamps are created.
+- Right-click without dragging opens an asset menu; right-drag remains orbit. A house offers **Send a field visit**. A pole or visible utility main offers **Break** with a hammer icon. Thin utility lines have a small screen-space hit tolerance.
+- Breaking a pole tilts its mesh, marks the incident, stops its downstream electric supply and darkens affected lights. A broken water main gets a puddle/jet effect, downstream isolation and a labelled simplified 0.65 m³/h leak contribution on its live upstream side. This is a demo balance model, not a hydraulic or OMS solver.
+- Field operations lists open incidents and jobs. **Dispatch repair crew** creates a visible van following the road graph from the depot; **Follow van** follows its movement. A worker appears on site. Repair completion, restoration and the return trip have separate times. A routine house visit does not create a damage incident.
+- Eight simultaneous crews and 128 active demo incidents are supported. Completed jobs remain in the session log. Reset and JSON export are available. Manual command times plus seed/layout determine repeatable outcomes; commands are not production work orders, bills or VEE decisions. Reloading does not persist or replay these session commands automatically.
+- Snapshot mode disables local incident/dispatch actions and does not infer household presence or streetlamp circuits. Engine lighting state and crew/incident commands still need their agreed adapter. This avoids simulating a second production engine in the viewer.
+
+### Rendering budget and verification
+
+For `WHITBY-042`, 10,000 homes:
+
+| Measured geometry | Triangles |
+|---|---:|
+| Base properties | 499,272 |
+| Trees, civic/shop/park assets, access drives and signs (including STOP text) | 491,404 |
+| Maximum nearby facade details | 61,056 |
+| Poles (5,748) | 275,904 |
+| Lamp arms (2,974) | 71,376 |
+| Night windows/lenses/light pools at 21:00 (8,418 lit homes) | 264,276 |
+| **These components together, at that night state and maximum facade detail** | **1,663,288** |
+
+Roads, terrain, supply facilities, utility tubes, particles and active vehicles/effects are additional. The denser trees deliberately increase geometry; shared instances and merged access paths bound draw calls. This is not a full-scene triangle total or an achieved FPS. Existing browser benchmarks remain the way to measure the actual device; benchmarks temporarily suspend follow-camera behaviour.
+
+Verification: **27 Node tests pass** (geometry, spacing, road routing, separate operation states, flow balance, lighting/power loss, right-click gesture handling, native snapshot/state/service conformance, customer and adapter regressions). Mock DOM checks cover real app wiring, no-gas selection, right-click dispatch and the night shortcut. CPU construction checks assemble both complete demo and native scenes, including commercial raycast selection. They do not exercise WebGL or browser compositing. Managed browser preview remains unavailable here, so device FPS and visual browser QA are not claimed.
+
+### Engine layout follow-up
+
+Please adopt the user's overhead/sidewalk/regular-spacing preferences in engine configuration and generation. A fixed 6.8 m overhead offset is not sufficient on a 14 m carriageway: choose offset from road width/sidewalk and test against every crossing carriageway. Apply minimum pole separation at junctions and share poles when appropriate. Preserve stable equipment IDs and explicit edge/pole association for damage/dispatch commands. The viewer honours supplied native equipment positions and must not secretly move them independently of network geometry.
+
+Native example diagnostic (`town-629f54bde38fe9d7`): of 157 supplied poles, 83 intersect the road-surface clearance test (pavement half-width + 0.25 m); 292 pole pairs are closer than the demo's 28 m spacing threshold, with a minimum separation of 0.43 m. These are geometry diagnostics, not engineering code compliance checks. Please fix placement in the engine; the viewer preserves authoritative native coordinates.

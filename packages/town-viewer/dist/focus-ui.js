@@ -1,5 +1,7 @@
 // Map chrome and settings navigation. Simulation commands remain with the app/engine.
 const paths={
+ moon:'<path d="M20 15A9 9 0 0 1 9 4a8 8 0 1 0 11 11Z"/>',
+ van:'<path d="M3 6h12v12H3Zm12 5h4l3 4v3h-7"/><circle cx="7" cy="19" r="2"/><circle cx="18" cy="19" r="2"/>',
  search:'<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4.5 4.5"/>',
  folder:'<path d="M3 7V5a1 1 0 0 1 1-1h5l3 3h8a1 1 0 0 1 1 1v11H3Z"/>',
  settings:'<path d="M5 3v18M12 3v18M19 3v18M2 8h6m1 8h6m1-9h6"/><circle cx="5" cy="8" r="2" fill="currentColor"/><circle cx="12" cy="16" r="2" fill="currentColor"/><circle cx="19" cy="7" r="2" fill="currentColor"/>',
@@ -44,7 +46,7 @@ export function installFocusUI({getContext,onSettings,onScenario}){
  document.querySelectorAll('[data-settings-tab]').forEach(el=>el.onclick=()=>settings(el.dataset.settingsTab));
  document.querySelectorAll('[data-scenario-preset]').forEach(el=>el.onclick=()=>{onScenario(el.dataset.scenarioPreset);map();});
  $('settings-load-snapshot').onclick=()=>$('snapshot-file').click();
- for(const id of ['load-snapshot-btn','export-btn','requirements-btn'])$(id).addEventListener('click',closeTools);
+ for(const id of ['load-engine-example','load-snapshot-btn','export-btn','requirements-btn'])$(id).addEventListener('click',closeTools);
  document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeTools();if(!$('settings-page').hidden)map();}});
  window.addEventListener('hashchange',route);route();
  return {refresh,map,closeTools};
