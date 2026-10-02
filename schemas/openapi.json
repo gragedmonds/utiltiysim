@@ -3,9 +3,31 @@
     "schemas": {
       "Action": {
         "properties": {
+          "at": {
+            "anyOf": [
+              {
+                "exclusiveMaximum": 86400.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "field_read: seconds since local midnight.",
+            "title": "At"
+          },
           "caseId": {
-            "title": "Caseid",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The case acted on (all types except field_read).",
+            "title": "Caseid"
           },
           "day": {
             "description": "Local date of the decision (YYYY-MM-DD), in 2026, never before the previous action.",
@@ -23,13 +45,26 @@
             ],
             "title": "Id"
           },
+          "premiseId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "field_read: the premise a field visit read on the map.",
+            "title": "Premiseid"
+          },
           "type": {
             "enum": [
               "accept",
               "override",
               "estimate",
               "field_order",
-              "escalate"
+              "escalate",
+              "field_read"
             ],
             "title": "Type",
             "type": "string"
@@ -50,8 +85,7 @@
         },
         "required": [
           "day",
-          "type",
-          "caseId"
+          "type"
         ],
         "title": "Action",
         "type": "object"
@@ -235,6 +269,19 @@
             ],
             "description": "Run day (local); default: the town's scenario date.",
             "title": "Date"
+          },
+          "m2c": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The meter-to-cash run ({settings, actions}) whose field orders for this day become crew jobs (see /api/m2c/*).",
+            "title": "M2C"
           },
           "premises": {
             "default": true,
@@ -623,6 +670,19 @@
             ],
             "description": "Run day (local); default: the town's scenario date.",
             "title": "Date"
+          },
+          "m2c": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The meter-to-cash run ({settings, actions}) whose field orders for this day become crew jobs (see /api/m2c/*).",
+            "title": "M2C"
           },
           "settings": {
             "anyOf": [

@@ -81,6 +81,8 @@ class TimelineRequest(BaseModel):
     date: str | None = Field(None, description="Run day (local); default: the town's scenario date.")
     commands: list[Command] = Field(default_factory=list, max_length=500)
     settings: dict | None = Field(None, description="Overrides for response timings (see GET /api/sim/settings).")
+    m2c: dict | None = Field(None, description="The meter-to-cash run ({settings, actions}) whose field orders for this "
+                             "day become crew jobs (see /api/m2c/*).")
 
 
 class FrameRequest(TimelineRequest):
@@ -88,10 +90,16 @@ class FrameRequest(TimelineRequest):
     premises: bool = True
 
 
-def _run(req: TimelineRequest) -> Run:
+def _run(req: TimelineRequest, *, with_m2c: bool = False) -> Run:
     ops = resolve(req.town)
+    orders = None
+    if with_m2c and req.m2c is not None:
+        from api._m2c import field_orders_for  # the meter-to-cash run behind the day's field work
+
+        orders = field_orders_for(req.town, req.date or ops.scenario_date, req.m2c)
     try:
-        return Run(ops, [c.model_dump() for c in req.commands], day=req.date, settings=req.settings)
+        return Run(ops, [c.model_dump() for c in req.commands], day=req.date, settings=req.settings,
+                   field_orders=orders)
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
 
@@ -112,7 +120,7 @@ def get_settings():
 def post_timeline(req: TimelineRequest):
     """``utility-timeline/1.0``: incidents, crew jobs with road routes, events, state changes and field-visit reads
     for a run's command list. Appending a command never changes what earlier commands produced."""
-    return J(_run(req).timeline())
+    return J(_run(req, with_m2c=True).timeline())
 
 
 @router.post("/api/sim/frame")

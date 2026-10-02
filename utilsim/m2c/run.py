@@ -42,7 +42,7 @@ DECISION_VERSION = "vee-decision/1.0"
 P_READ, P_ANOM, P_WORK = 33, 34, 35  # rng purposes (appended after core Purpose.CUSTOMER = 32)
 INF = float("inf")
 YEAR_DAYS = 365
-ACTION_TYPES = ("accept", "override", "estimate", "field_order", "escalate")
+ACTION_TYPES = ("accept", "override", "estimate", "field_order", "escalate", "field_read")
 STATUS = ("pending", "released", "estimated", "adjusted", "held", "missing")
 FAULTS = ("stuck_meter", "slow_meter", "tamper", "exchange_registration_failure")
 
@@ -173,9 +173,17 @@ class M2CRun:
                 v = a.get("value")
                 if not isinstance(v, (int, float)) or v < 0:
                     raise ValueError(f"action {k}: override needs a non-negative register value")
+            extra = {}
+            if a["type"] == "field_read":
+                if not isinstance(a.get("premiseId"), str):
+                    raise ValueError(f"action {k}: field_read needs the premiseId the field visit read")
+                at = a.get("at", 13 * 3600)
+                if not isinstance(at, (int, float)) or not 0 <= at < 86400:
+                    raise ValueError(f"action {k}: field_read 'at' is seconds since local midnight")
+                extra = {"premiseId": a["premiseId"], "at": float(at)}
             last = day
             out.append({"id": a.get("id") or f"ACT-{k + 1}", "day": date_of(day).isoformat(), "type": a["type"],
-                        "caseId": a.get("caseId"), **({"value": float(a["value"])} if "value" in a else {})})
+                        "caseId": a.get("caseId"), **extra, **({"value": float(a["value"])} if "value" in a else {})})
         return out
 
     def _u(self, purpose: int, *keys) -> np.ndarray:
@@ -342,14 +350,23 @@ class M2CRun:
         self.case_index: dict[str, Case] = {}
         self.open: list[Case] = []
         for day in range(YEAR_DAYS):
+            acts = by_day.get(day, [])
+            if day not in _BSET:  # your decisions and field visits count on any day
+                for a in acts:
+                    (self._field_read if a["type"] == "field_read" else self._apply_action)(day, a)
+                self.open = [c for c in self.open if c.resolved is None]
             if day in _BSET:
-                for a in by_day.get(day, []):
-                    self._apply_action(day, a)
+                for a in acts:
+                    if a["type"] != "field_read":
+                        self._apply_action(day, a)
                 for case in self.rpa_due.pop(day, []):
                     self._rpa(case, day + 7.0 / 24)
                 self._analysts(day)
                 self._supervisors(day)
                 self._field(day)
+                for a in acts:
+                    if a["type"] == "field_read":
+                        self._field_read(day, a)
                 if day in self.batches:
                     self._evening(day, *self.batches[day])
                 self._same_day_rpa()
@@ -621,18 +638,37 @@ class M2CRun:
         todo = [c for c in self.open if c.resolved is None and c.queue == "FIELD" and c.eligible <= day]
         for k, case in enumerate(todo[: max(0, p.field_orders_per_day)]):
             t0 = day + (8.0 + 7.0 * k / max(1, p.field_orders_per_day)) / 24
-            case.ev(t0, "TRUCK_ROLL", {"crew": f"TECH-{(k % 2) + 1}"})
-            meter = int(self.town.meter_of[case.r])
-            t1 = t0 + 1.0 / 24
-            if case.truth == "meter_fault" and self.fault_t[meter] <= t1 < self.fix_t[meter]:
-                self.fix_t[meter] = t1
-                case.ev(t1, "METER_EXCHANGE", {"meterId": self.town.meter_ids[meter],
-                                               "fault": FAULTS[int(self.fault_type[meter])]})
-                self._resolve(case, t1, "estimate", actor="field")
-            else:
-                case.ev(t1, "SPECIAL_READ", {})
-                action = {"read_error": "correct", "physics": "accept_callback"}.get(case.truth, "verified")
-                self._resolve(case, t1, action, actor="field")
+            case.ev(t0, "TRUCK_ROLL", {"crew": f"FIELD-{(k % 2) + 1}"})
+            self._visit_case(case, t0 + 1.0 / 24, actor="field")
+
+    def _visit_case(self, case: Case, t: float, *, actor: str) -> None:
+        """A meter tech at the meter: a faulty meter is exchanged (and the read estimated); otherwise a special read
+        settles the case (a missing read gets the real register value)."""
+        meter = int(self.town.meter_of[case.r])
+        if case.truth == "meter_fault" and self.fault_t[meter] <= t < self.fix_t[meter]:
+            self.fix_t[meter] = t
+            case.ev(t, "METER_EXCHANGE", {"meterId": self.town.meter_ids[meter],
+                                          "fault": FAULTS[int(self.fault_type[meter])]})
+            self._resolve(case, t, "estimate", actor=actor)
+        else:
+            case.ev(t, "SPECIAL_READ", {"by": actor})
+            action = {"read_error": "correct", "physics": "accept_callback"}.get(case.truth, "special_read")
+            self._resolve(case, t, action, actor=actor)
+
+    def _field_read(self, day: int, a: dict) -> None:
+        """A field visit on the map read this premise's meters: its open read cases are settled on the spot."""
+        p = self.town.premise_index.get(a["premiseId"])
+        if p is None:
+            self.warnings.append(f"{a['id']}: unknown premise {a['premiseId']}")
+            return
+        t = day + a["at"] / 86400.0
+        for case in [c for c in self.open if c.resolved is None and c.doc < 0 and c.created <= t
+                     and int(self.town.prem[c.r]) == p]:
+            case.assignee = "you"
+            case.ev(t, "USER_ACTION", {"actionId": a["id"], "action": "field_read"})
+            if case.rpa_at is not None:
+                case.rpa_at = INF
+            self._visit_case(case, t + 0.0005, actor="you")
 
     def _apply_action(self, day: int, a: dict) -> None:
         case = self.case_index.get(a.get("caseId") or "")
@@ -680,7 +716,7 @@ class M2CRun:
             if act == "estimate":
                 val, kind = self._estimate(r, m), 2
                 case.ev(t, "ESTIMATE_CREATED", {"readId": self.read_id(r, m), "value": val}, cause)
-            elif act == "correct":
+            elif act == "special_read" or (act == "correct"):
                 val, kind = float(self.meter_true[r, m]), 3
                 case.ev(t, "READ_ADJUSTED", {"readId": self.read_id(r, m), "value": val}, cause)
             elif act == "override":

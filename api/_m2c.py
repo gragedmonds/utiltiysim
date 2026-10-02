@@ -19,7 +19,7 @@ from utilsim.config.model import SimConfig
 from utilsim.m2c import catalog as cat
 from utilsim.m2c import views
 from utilsim.m2c.base import M2CTown, cached_m2c_town, m2c_town
-from utilsim.m2c.run import M2C_GROUPS, M2CRun, settings_schema
+from utilsim.m2c.run import M2C_GROUPS, M2CRun, parse_day, settings_schema
 
 router = APIRouter()
 _RUNS: OrderedDict[bytes, M2CRun] = OrderedDict()
@@ -29,8 +29,10 @@ RUN_CACHE = 4
 class Action(BaseModel):
     id: str | None = None
     day: str = Field(..., description="Local date of the decision (YYYY-MM-DD), in 2026, never before the previous action.")
-    type: Literal["accept", "override", "estimate", "field_order", "escalate"]
-    caseId: str
+    type: Literal["accept", "override", "estimate", "field_order", "escalate", "field_read"]
+    caseId: str | None = Field(None, description="The case acted on (all types except field_read).")
+    premiseId: str | None = Field(None, description="field_read: the premise a field visit read on the map.")
+    at: float | None = Field(None, ge=0, lt=86400, description="field_read: seconds since local midnight.")
     value: float | None = Field(None, ge=0, description="Register value for an override.")
 
 
@@ -173,3 +175,25 @@ def post_vee_export(req: MonthRequest):
     """``vee-input-fixture/1.1`` for one month (and portion): the reads an external VEE engine would receive,
     with truth stripped."""
     return _view(views.vee_export, run_for(req), req.month, req.portion, as_of=req.asOf)
+
+
+def field_orders_for(town: str, day: str, m2c: dict) -> list[dict]:
+    """The meter-to-cash run's truck rolls on ``day`` as operations work: premise, start time, activity, duration."""
+    req = RunRequest(town=town, settings=m2c.get("settings"), actions=m2c.get("actions") or [])
+    run = run_for(req)
+    try:
+        d = parse_day(day, -1)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    tw, out = run.town, []
+    for case in run.cases:
+        for k, (t, kind, _, _) in enumerate(case.events):
+            if kind != "TRUCK_ROLL" or int(t) != d:
+                continue
+            nxt = next((e[1] for e in case.events[k + 1:] if e[1] in ("METER_EXCHANGE", "SPECIAL_READ")), "SPECIAL_READ")
+            p = int(tw.prem[case.r])
+            out.append({"caseId": case.id, "premiseId": tw.premise_ids[p], "at": round((t - d) * 86400.0, 1),
+                        "activity": "meter_exchange" if nxt == "METER_EXCHANGE" else "special_read",
+                        "minutes": 45 if nxt == "METER_EXCHANGE" else 20,
+                        "label": f"{cat.EVENTS[case.type][0]} · {tw.address[p]}"})
+    return out

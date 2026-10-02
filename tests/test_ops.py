@@ -85,8 +85,8 @@ def test_broken_pole_trips_a_fuse_then_crew_isolates_and_restores(ayr, ayr_snaps
     inc = tl["incidents"][0]
     assert inc["device"]["kind"] == "fuse" and 0 < inc["unsupplied"]["atFault"] < len(ayr.premises) / 2
     assert inc["unsupplied"]["afterIsolation"] <= inc["unsupplied"]["atFault"]
-    job = tl["jobs"][0]
-    assert job["kind"] == "repair" and job["incidentId"] == inc["id"] and job["crewId"].startswith("ELEC")
+    job = next(j for j in tl["jobs"] if j["kind"] == "repair")
+    assert job["incidentId"] == inc["id"] and job["crewId"].startswith("ELEC")
     assert inc["detectedAt"] < job["startAt"] < job["arrivalAt"] < inc["isolatedAt"] < inc["restoredAt"] <= job["endAt"]
     kinds = [e["eventType"] for e in tl["events"]]
     for k in ("asset.damaged", "protection.operated", "outage.started", "incident.detected", "workorder.created",
@@ -128,8 +128,8 @@ def test_water_main_break_leaks_until_valves_isolate_it(ayr, ayr_snapshot):
 
 def test_field_visit_drives_out_and_takes_interim_reads(ayr):
     tl = Run(ayr, [{"id": "V", "at": 10 * 3600, "type": "dispatch", "payload": {"targetId": "P-00042"}}]).timeline()
-    job = tl["jobs"][0]
-    assert job["kind"] == "field_visit" and job["premiseId"] == "P-00042" and job["crewId"].startswith("TECH")
+    job = next(j for j in tl["jobs"] if j["kind"] == "field_visit")
+    assert job["premiseId"] == "P-00042" and job["crewId"].startswith("TECH")
     assert len(job["route"]) == len(job["routeTimes"]) and job["routeTimes"][0] == 0
     assert job["arrivalAt"] == pytest.approx(job["startAt"] + job["routeTimes"][-1])
     assert tl["reads"] and all(r["readReason"] == "interim" and r["source"] == "field-visit" for r in tl["reads"])
@@ -184,3 +184,54 @@ def test_hosted_engine_imports_without_the_generation_stack():
             "import api.index\nprint('ok')")
     out = subprocess.run([sys.executable, "-c", code], cwd=ROOT, capture_output=True, text=True, timeout=120)
     assert out.returncode == 0 and out.stdout.strip() == "ok", out.stderr[-2000:]
+
+
+def test_reading_rounds_walk_the_route_in_order(ayr):
+    from utilsim.customers.calendar import scheduled_read_date
+
+    mru = next(m for m in ayr.mrus if m["technology"] == "MANUAL")
+    day = scheduled_read_date(2026, 7, mru["portion"]).isoformat()
+    tl = Run(ayr, [], day=day).timeline()
+    job = next(j for j in tl["jobs"] if j["kind"] == "meter_reading" and j["mruId"] == mru["id"])
+    assert job["mode"] == "walk" and job["crewId"] == mru["readerId"]
+    assert job["meters"] == sum(1 for p in ayr.premises if p.get("mruId") == mru["id"])
+    assert len(job["walkRoute"]) == len(job["walkTimes"]) and np.all(np.diff(job["walkTimes"]) > 0)
+    assert job["workSeconds"] == pytest.approx(job["walkTimes"][-1], abs=1e-3)
+    assert job["startAt"] < job["arrivalAt"] < job["returnStartAt"] < job["endAt"]
+    start, end = job["walkRoute"][0], job["walkRoute"][-1]
+    assert np.hypot(start["x"] - end["x"], start["z"] - end["z"]) < 5  # the reader walks back to the van
+    kinds = [e["eventType"] for e in tl["events"]]
+    assert "reading.started" in kinds and "reading.completed" in kinds
+    assert Run(ayr, [], day=day, settings={"meterReading": False}).timeline()["jobs"] == []
+
+
+def test_m2c_field_orders_become_crew_jobs_and_field_visits_settle_cases(ayr):
+    from fastapi.testclient import TestClient
+
+    from api._m2c import RunRequest, run_for
+    from api.index import app
+    from utilsim.m2c.base import date_of
+
+    client = TestClient(app)
+    run = run_for(RunRequest(town="ayr"))
+    case, t = next((c, e[0]) for c in run.cases for e in c.events if e[1] == "TRUCK_ROLL")
+    day = date_of(int(t)).isoformat()
+    tl = client.post("/api/sim/timeline", json={"town": "ayr", "date": day, "m2c": {}}).json()
+    job = next(j for j in tl["jobs"] if j["kind"] == "field_order" and j["caseId"] == case.id)
+    assert job["crewId"].startswith("FIELD") and job["requestedAt"] == pytest.approx((t - int(t)) * 86400, abs=0.1)
+    assert not any(j["kind"] == "field_order" for j in client.post(
+        "/api/sim/timeline", json={"town": "ayr", "date": day}).json()["jobs"])  # without the run, no field orders
+    # A field visit on the map reads the meters and settles the premise's open read cases.
+    slow = {"process": {"analysts": 0, "rpa_coverage": 0}}
+    base = run_for(RunRequest(town="ayr", settings=slow))
+    open_case = next(c for c in base.cases if c.doc < 0 and c.created < 200 and (c.resolved or 999) > c.created + 5)
+    visit_day = date_of(int(open_case.created) + 2).isoformat()
+    premise = base.town.premise_ids[base.town.prem[open_case.r]]
+    action = {"day": visit_day, "type": "field_read", "premiseId": premise, "at": 11 * 3600}
+    after = run_for(RunRequest(town="ayr", settings=slow, actions=[action]))
+    settled = after.case_index[open_case.id]
+    assert settled.assignee == "you" and settled.resolved == pytest.approx(int(open_case.created) + 2 + 11 / 24, abs=0.01)
+    assert any(e[1] in ("SPECIAL_READ", "METER_EXCHANGE") for e in settled.events)
+    summary = client.post("/api/m2c/summary", json={"town": "ayr", "settings": slow, "actions": [action],
+                                                     "asOf": visit_day}).json()
+    assert not summary["warnings"]

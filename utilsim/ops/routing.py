@@ -92,8 +92,10 @@ class Router:
         self.edge_mps = self.mps[np.clip(roads.cls, 0, 2)]
         self.edge_sec = roads.length / self.edge_mps
 
-    def _dijkstra(self, start: tuple[int, float]) -> tuple[np.ndarray, np.ndarray]:
+    def _dijkstra(self, start: tuple[int, float], stop: tuple[int, ...] = ()) -> tuple[np.ndarray, np.ndarray]:
+        """Travel times from an access point; stops once every node in ``stop`` is settled (when given)."""
         g = self.g
+        waiting = set(stop)
         e0, s0 = start
         n = len(g.node_xy)
         dist = np.full(n, np.inf)
@@ -108,6 +110,10 @@ class Router:
             t, v = heapq.heappop(heap)
             if t > dist[v]:
                 continue
+            if waiting:
+                waiting.discard(v)
+                if not waiting:
+                    break
             for k, w in g.adj[v]:
                 nt = t + self.edge_sec[k]
                 if nt < dist[w] - 1e-9:
@@ -120,7 +126,7 @@ class Router:
         g = self.g
         e0, s0 = origin[0], float(np.clip(origin[1], 0, g.length[origin[0]]))
         e1, s1 = target[0], float(np.clip(target[1], 0, g.length[target[0]]))
-        dist, prev = self._dijkstra((e0, s0))
+        dist, prev = self._dijkstra((e0, s0), (int(g.a[e1]), int(g.b[e1])))
         options = []
         if e0 == e1:
             options.append((abs(s1 - s0) / self.edge_mps[e0], "direct", None))

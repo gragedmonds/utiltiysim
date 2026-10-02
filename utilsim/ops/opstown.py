@@ -65,6 +65,11 @@ class OpsTown:
         self.premise_ids = [p["id"] for p in prem]
         self.premise_index = {pid: i for i, pid in enumerate(self.premise_ids)}
         self.premises = prem
+        portions = {x["id"]: int(x["portion"]) for x in snap.get("portions", [])}
+        self.mrus = [{"id": m["id"], "technology": m.get("technology"), "readerId": m.get("readerId"),
+                      "name": m.get("name") or m["id"], "portion": portions.get(m.get("portionId"), 1)}
+                     for m in snap.get("mrus", [])]
+        self.reading_paths: dict[tuple, object] = {}  # (mru id, mode) -> Route, built on first use
         self.roads = self._roads(snap["roads"])
         self.premise_access = [(self.roads.index[p["roadId"]], float(p["t"])) for p in prem]
         depot = next((f for f in snap["facilities"] if f["kind"] == "depot"), None) \

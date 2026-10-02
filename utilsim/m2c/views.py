@@ -394,6 +394,9 @@ def case_view(run: M2CRun, case_id: str, *, as_of: str | None = None, truth: boo
     return {"schemaVersion": CASE_VERSION, **row, "simulationId": run.simulation_id, "asOf": date_of(day).isoformat(),
             "decision": decision(run, r, m), "read": read_record(run, r, m, T, truth),
             "heldReadIds": [run.read_id(r, j) for j in case.reads[1:] if run.read_t[r, j] <= T],
+            # Truck rolls as local day and seconds, so the map can show the visit.
+            "fieldVisits": [{"day": date_of(int(t)).isoformat(), "seconds": round((t - int(t)) * 86400.0, 1)}
+                            for t, kind, _, _ in case.events if kind == "TRUCK_ROLL"],
             "history": history, "events": events, "edges": edges,
             "actions": [a for a in (("accept", "estimate", "escalate") if case.doc >= 0 else
                                     ("accept", "override", "estimate", "field_order", "escalate"))

@@ -12,6 +12,9 @@ A run is stateless and deterministic: `(town, settings, actions)` gives the same
   - `type` is one of `accept`, `override` (with a register value), `estimate`, `field_order` or `escalate`.
   - Actions are append-only by `day`. An action never changes anything before its day, so a reply for an earlier
     date stays valid.
+- `field_read` (`{day, premiseId, at}`, no `caseId`) is a field visit made on the map. The tech reads the
+  premise's meters, and each of its open read cases settles on the spot: a faulty meter is exchanged, otherwise a
+  special read gives the real register value.
 - Views read the finished year *as of* a date (`asOf`, default: the town's scenario date).
 
 The engine (`utilsim/m2c/`, numpy only) runs locally (`utilsim serve`) and on the hosted Vercel function. A
@@ -158,3 +161,18 @@ balance and recent ledger). Reads show `billStatus` (`billed`, `billing_blocked`
 | `POST /api/process/costs` | Cost, carry and days to release by exception type |
 
 Every response stays under the hosted 4.5 MB limit; `tests/test_m2c.py` checks this.
+
+## In the simulator (operations day)
+
+The operations run for a day (`POST /api/sim/timeline`) schedules meter-to-cash work as crew jobs, before your
+commands and on their own crews:
+- **Reading rounds:** the day's walked (MANUAL) and drive-by (AMR) routes, those whose portion's business day it
+  is, become `meter_reading` jobs.
+  - A walker parks at the first premise, walks every meter in sequence order and walks back to the van.
+  - A drive-by van drives the round.
+  - Each job carries `walkRoute` and `walkTimes`.
+- **Field orders:** when the request carries the meter-to-cash run (`m2c: {settings, actions}`), that run's truck
+  rolls on the day become `field_order` jobs (`FIELD-n` crews, 45 min for an exchange, 20 for a special read).
+
+The viewer keeps one run day for the map and the worklists. "Watch the truck roll" on a field-order case moves the
+map to that day and follows the van, and a field visit on the map is reported back as `field_read`.

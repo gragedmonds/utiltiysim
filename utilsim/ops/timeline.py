@@ -29,6 +29,8 @@ from zoneinfo import ZoneInfo
 
 import numpy as np
 
+from utilsim.customers.calendar import scheduled_read_date
+from utilsim.ops.reading import reading_path, stops
 from utilsim.ops.routing import Route, Router, access_point
 from utilsim.sim.state import run_sequence
 from utilsim.version import EVENT_SCHEMA_VERSION, READ_SCHEMA_VERSION
@@ -44,10 +46,24 @@ DEFAULTS = {
     "flushMinutes": 20,
     "visitMinutes": 15,
     "leakM3h": {"water": 40.0, "gas": 25.0},
+    "meterReading": True,  # the day's walked and drive-by reading rounds
+    "readerStartHour": {"MANUAL": 8.0, "AMR": 9.0},
+    "walkKmh": 4.5,
+    "driveByKmh": 20.0,
+    "meterDwellSeconds": 40,
+    "fieldCrews": 2,  # meter shop crews working meter-to-cash field orders
 }
 CREWS = {"electric": ("ELEC", "electric_crews"), "water": ("WATER", "water_crews"), "gas": ("GAS", "gas_crews"),
-         "meter": ("TECH", "meter_techs")}
+         "meter": ("TECH", "meter_techs"), "field": ("FIELD", None)}
 MAX_SEGMENT_EDGES = 4000
+
+
+def _pts(points) -> list[dict]:
+    return [{"x": round(float(x), 2), "z": round(float(z), 2)} for x, z in points]
+
+
+def _ts(times) -> list[float]:
+    return [round(float(t), 3) for t in times]
 
 
 def _merge(base: dict, over: dict | None) -> dict:
@@ -72,7 +88,7 @@ class _Interval:
 
 class Run:
     def __init__(self, ops, commands: list[dict], *, day: str | None = None, settings: dict | None = None,
-                 scenario: str = "normal"):
+                 scenario: str = "normal", field_orders: list[dict] | None = None):
         self.ops = ops
         self.day = day or ops.scenario_date
         self.scenario = scenario
@@ -86,8 +102,9 @@ class Run:
         self.router = Router(ops.roads, (o["speed_kmh_arterial"], o["speed_kmh_collector"], o["speed_kmh_local"]))
         self.depot_access = access_point(ops.roads, *ops.depot["access"]) if ops.depot["access"] else \
             ops.nearest_access(ops.depot["x"], ops.depot["z"])
-        self.crews = {kind: [{"id": f"{prefix}-{k + 1}", "free": -math.inf}
-                             for k in range(max(1, int(o.get(key, 1))))] for kind, (prefix, key) in CREWS.items()}
+        size = {kind: int(o.get(key, 1)) if key else int(self.settings["fieldCrews"]) for kind, (_, key) in CREWS.items()}
+        self.crews = {kind: [{"id": f"{prefix}-{k + 1}", "free": -math.inf} for k in range(max(1, size[kind]))]
+                      for kind, (prefix, _) in CREWS.items()}
         self.commands = self._normalise(commands)
         self.incidents: list[dict] = []
         self.jobs: list[dict] = []
@@ -96,12 +113,77 @@ class Run:
         self.intervals: list[_Interval] = []
         self.warnings: list[str] = []
         self._routes: dict[tuple, Route] = {}
+        # Scheduled work first (fixed for the day, own crews), so appending a command never changes it.
+        self._schedule(field_orders or [])
         for cmd in self.commands:
             self._apply(cmd)
         self.events.sort(key=lambda e: (e["at"], e["_order"]))
         for k, e in enumerate(self.events):
             e["sequence"] = k
             e.pop("_order")
+
+    # ---- scheduled work: reading rounds and meter-to-cash field orders ----------------------------------------
+    def _schedule(self, field_orders: list[dict]) -> None:
+        d = date.fromisoformat(self.day)
+        if self.settings["meterReading"]:
+            for k, mru in enumerate(self.ops.mrus):
+                tech = mru["technology"]
+                if tech in ("MANUAL", "AMR") and scheduled_read_date(d.year, d.month, mru["portion"]) == d:
+                    self._reading(mru, tech, k)
+        for fo in sorted(field_orders, key=lambda f: (f["at"], f["caseId"])):
+            self._field_order(fo)
+
+    def _reading(self, mru: dict, tech: str, k: int) -> None:
+        ops, s = self.ops, self.settings
+        walk = tech == "MANUAL"
+        path = reading_path(ops, mru["id"], "walk" if walk else "drive", kmh=s["walkKmh"] if walk else s["driveByKmh"],
+                            dwell=s["meterDwellSeconds"])
+        if path is None:
+            return
+        rows = stops(ops, mru["id"])
+        first, last = rows[0], (rows[0] if walk else rows[-1])
+        start = float(s["readerStartHour"][tech]) * 3600 + (k % 6) * 300
+        route = self._route(self.depot_access, access_point(ops.roads, *ops.premise_access[first]))
+        back = route.reversed() if walk else self._route(access_point(ops.roads, *ops.premise_access[last]),
+                                                         self.depot_access)
+        p = ops.premises[first]
+        crew = mru["readerId"] or f"READER-{mru['id']}"
+        job = {"id": f"READ-{mru['id']}", "kind": "meter_reading", "mode": "walk" if walk else "drive",
+               "crewId": crew, "crewKind": "reader", "utility": "electric", "targetId": mru["id"], "premiseId": None,
+               "incidentId": None, "mruId": mru["id"], "meters": len(rows),
+               "label": f"{mru['name']} · {'walked' if walk else 'drive-by'} · {len(rows)} premises",
+               "requestedAt": start, "startAt": start, "arrivalAt": start + route.seconds,
+               "route": _pts(route.points), "routeTimes": _ts(route.times), "routeLength": round(route.length_m, 1),
+               "visitPoint": {"x": p["x"], "z": p["z"]}, "roadPoint": _pts(route.points[-1:])[0],
+               "walkRoute": _pts(path.points), "walkTimes": _ts(path.times),
+               "walkLength": round(path.length_m, 1), "workSeconds": round(path.seconds, 3)}
+        job["returnStartAt"] = job["arrivalAt"] + path.seconds
+        job["endAt"] = job["returnStartAt"] + back.seconds
+        job["returnRoute"], job["returnTimes"] = _pts(back.points), _ts(back.times)
+        self.jobs.append(job)
+        self._event(start, "workorder.created", "workorder", job["id"], job, mru["id"],
+                    {"kind": "meter_reading", "mruId": mru["id"], "technology": tech, "meters": len(rows)})
+        self._event(start, "crew.dispatched", "crew", crew, job, job["id"], {"jobId": job["id"]})
+        self._event(job["arrivalAt"], "reading.started", "mru", mru["id"], job, job["id"], {"mode": job["mode"]})
+        self._event(job["returnStartAt"], "reading.completed", "mru", mru["id"], job, job["id"],
+                    {"meters": len(rows), "walkLength": job["walkLength"]})
+        self._event(job["endAt"], "crew.returned", "crew", crew, job, job["id"], {"jobId": job["id"]})
+
+    def _field_order(self, fo: dict) -> None:
+        ops = self.ops
+        pid = fo["premiseId"]
+        if pid not in ops.premise_index:
+            self.warnings.append(f"field order {fo['caseId']}: unknown premise {pid}")
+            return
+        i = ops.premise_index[pid]
+        p = ops.premises[i]
+        job = self._job("field", "field_order", float(fo["at"]), access_point(ops.roads, *ops.premise_access[i]),
+                        {"x": p["x"], "z": p["z"]}, fo["caseId"], label=fo.get("label") or pid, premise=pid)
+        job["caseId"], job["activity"] = fo["caseId"], fo.get("activity", "special_read")
+        work = 60.0 * float(fo.get("minutes", 20))
+        self._event(job["arrivalAt"] + work, "fieldorder.completed", "workcase", fo["caseId"], job, job["id"],
+                    {"activity": job["activity"], "caseId": fo["caseId"]})
+        self._finish_job(job, work)
 
     # ---- commands --------------------------------------------------------------------------------------------
     @staticmethod
