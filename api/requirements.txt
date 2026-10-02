@@ -1,0 +1,7 @@
+# Hosted engine (Vercel Python function api/index.py): the light operations runtime only.
+# Town generation (scipy, shapely, pyarrow, matplotlib) stays local: see pyproject.toml.
+numpy>=2.0,<3
+fastapi>=0.111
+pydantic>=2.7,<3
+orjson>=3.10
+tzdata

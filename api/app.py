@@ -14,6 +14,8 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
+from api._ops import SNAPSHOT_SOURCES
+from api._ops import router as ops_router
 from api.store import store
 from utilsim.config import SCENARIOS, SimConfig, config_schema, list_presets, load_preset
 from utilsim.config.presets import deep_merge
@@ -28,6 +30,8 @@ app = FastAPI(title="utilsim", version=GENERATOR_VERSION,
 app.add_middleware(GZipMiddleware, minimum_size=2048)
 app.add_middleware(CORSMiddleware, allow_origins=os.environ.get("CORS_ORIGINS", "*").split(","),
                    allow_methods=["*"], allow_headers=["*"])
+app.include_router(ops_router)  # operations (also the hosted engine's API, api/index.py)
+SNAPSHOT_SOURCES.append(lambda tid: store.snapshot(tid) if store.status(tid) == "ready" else None)
 
 
 def J(data: Any, status: int = 200) -> Response:

@@ -1,6 +1,102 @@
 {
   "components": {
     "schemas": {
+      "Command": {
+        "properties": {
+          "at": {
+            "description": "Seconds since local midnight of the run day.",
+            "minimum": 0.0,
+            "title": "At",
+            "type": "number"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "title": "Payload",
+            "type": "object"
+          },
+          "type": {
+            "description": "break_asset | dispatch",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "at",
+          "type"
+        ],
+        "title": "Command",
+        "type": "object"
+      },
+      "FrameRequest": {
+        "properties": {
+          "at": {
+            "description": "Seconds since local midnight of the run day.",
+            "minimum": 0.0,
+            "title": "At",
+            "type": "number"
+          },
+          "commands": {
+            "items": {
+              "$ref": "#/components/schemas/Command"
+            },
+            "maxItems": 500,
+            "title": "Commands",
+            "type": "array"
+          },
+          "date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Run day (local); default: the town's scenario date.",
+            "title": "Date"
+          },
+          "premises": {
+            "default": true,
+            "title": "Premises",
+            "type": "boolean"
+          },
+          "settings": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Overrides for response timings (see GET /api/sim/settings).",
+            "title": "Settings"
+          },
+          "town": {
+            "description": "Pack preset (e.g. 'ayr') or town id.",
+            "title": "Town",
+            "type": "string"
+          }
+        },
+        "required": [
+          "town",
+          "at"
+        ],
+        "title": "FrameRequest",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -12,6 +108,53 @@
           }
         },
         "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "TimelineRequest": {
+        "properties": {
+          "commands": {
+            "items": {
+              "$ref": "#/components/schemas/Command"
+            },
+            "maxItems": 500,
+            "title": "Commands",
+            "type": "array"
+          },
+          "date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Run day (local); default: the town's scenario date.",
+            "title": "Date"
+          },
+          "settings": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Overrides for response timings (see GET /api/sim/settings).",
+            "title": "Settings"
+          },
+          "town": {
+            "description": "Pack preset (e.g. 'ayr') or town id.",
+            "title": "Town",
+            "type": "string"
+          }
+        },
+        "required": [
+          "town"
+        ],
+        "title": "TimelineRequest",
         "type": "object"
       },
       "TownRequest": {
@@ -222,6 +365,23 @@
         "summary": "Health"
       }
     },
+    "/api/packs": {
+      "get": {
+        "description": "Prebuilt engine towns available to the operations endpoints (and as static files under /packs/).",
+        "operationId": "get_packs_api_packs_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Packs"
+      }
+    },
     "/api/schemas/{name}.json": {
       "get": {
         "description": "Published JSON Schemas: utility-town-2.0, utility-state-1.0, utility-replay-1.0, meter-read-1.1,\nvee-input-fixture-1.1, config, openapi.",
@@ -258,6 +418,97 @@
           }
         },
         "summary": "Get Published Schema"
+      }
+    },
+    "/api/sim/frame": {
+      "post": {
+        "description": "One complete ``utility-state/1.0`` frame at ``at`` with the run's incidents applied (open switches, closed\nvalves, leaks); ``premises.unsupplied`` lists customers without supply.",
+        "operationId": "post_frame_api_sim_frame_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FrameRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Frame"
+      }
+    },
+    "/api/sim/settings": {
+      "get": {
+        "description": "Default response timings for operations runs (override per request with ``settings``).",
+        "operationId": "get_settings_api_sim_settings_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Settings"
+      }
+    },
+    "/api/sim/timeline": {
+      "post": {
+        "description": "``utility-timeline/1.0``: incidents, crew jobs with road routes, events, state changes and field-visit reads\nfor a run's command list. Appending a command never changes what earlier commands produced.",
+        "operationId": "post_timeline_api_sim_timeline_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TimelineRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Timeline"
       }
     },
     "/api/sources": {
