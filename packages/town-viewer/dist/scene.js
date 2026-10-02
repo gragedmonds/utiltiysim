@@ -8,6 +8,7 @@ import {roofGeometry,houseStyle,roadClass} from './lowpoly.js';
 import {TownDressing,civicKind} from './town-dressing.js';
 import {GeometryBuilder} from './lowpoly.js';
 import {NightLights} from './night-lights.js';
+import {OutageMarks} from './outage-marks.js';
 import {OperationsView} from './operations-view.js';
 import {streetWidth} from './roads.js';
 import {PROFILES} from './quality.js';
@@ -32,7 +33,7 @@ export class TownScene{
  }
  useLite(){if(this.quality.name==='lite')return false;this.quality=PROFILES.lite;this.renderer.setPixelRatio(Math.min(globalThis.devicePixelRatio||1,this.quality.maxPixelRatio));this.renderer.shadowMap.enabled=false;this.setDressing(false);this.setHouseDetail('simple');this.resize();return true;}
  resize(){if(this.benchmark)this.cancelBenchmark('Viewport changed during the test.');const w=this.el.clientWidth,h=this.el.clientHeight;if(!w||!h)return;this.renderer.setSize(w,h);this.camera.aspect=w/h;this.camera.updateProjectionMatrix();}
- clear(){this.cancelBenchmark?.('Town changed during the test.');this.townDressing?.texture?.dispose();this.townDressing=null;this.houseDetails=null;this.nightLights=null;this.operationsView=null;this.operations=null;this.followJobId=null;this.performanceMonitor?.reset();this.root.traverse(o=>{if(o.geometry)o.geometry.dispose();if(o.material)(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>m.dispose());});this.root.clear();this.markers.forEach(m=>m.el.remove());this.markers=[];this.selected=null;this.selection=null;this.pickMeshes=[];}
+ clear(){this.cancelBenchmark?.('Town changed during the test.');this.townDressing?.texture?.dispose();this.townDressing=null;this.houseDetails=null;this.nightLights=null;this.outageMarks=null;this.operationsView=null;this.operations=null;this.followJobId=null;this.performanceMonitor?.reset();this.root.traverse(o=>{if(o.geometry)o.geometry.dispose();if(o.material)(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>m.dispose());});this.root.clear();this.markers.forEach(m=>m.el.remove());this.markers=[];this.selected=null;this.selection=null;this.pickMeshes=[];}
  box(w,h,d,color,x,y,z,group=this.root){const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),material(color));m.position.set(x,y,z);m.castShadow=true;m.receiveShadow=true;group.add(m);return m;}
  instances(geometry,mat,count){const m=new THREE.InstancedMesh(geometry,mat,count);m.castShadow=true;m.receiveShadow=true;this.root.add(m);return m;}
  setInst(mesh,i,x,y,z,sx,sy,sz,rotation=0,color){dummy.position.set(x,y,z);dummy.rotation.set(0,rotation,0);dummy.scale.set(sx,sy,sz);dummy.updateMatrix();mesh.setMatrixAt(i,dummy.matrix);if(color)mesh.setColorAt(i,new THREE.Color(color));}
@@ -44,7 +45,7 @@ export class TownScene{
   this.drawHouses(town);
   this.networkGroups={};this.serviceGroups={};this.lineGroups={};this.particleGroups={};this.pathData={};
   for(const u of UTILS)this.drawNetwork(u);
-  this.drawStations();this.drawEquipment();this.drawPoles();this.nightLights=new NightLights(this.root,town,this.poleAssets,this.heightAt,{demo});this.townDressing=new TownDressing(this.root,town,this.heightAt,{demo});this.pickMeshes.push(...(this.townDressing.pickMeshes||[]));this.townDressing.setVisible(this.dressingVisible);this.drawLandmarkLabels();this.setLayers(this.layers);this.home();this.resize();
+  this.drawStations();this.drawEquipment();this.drawPoles();this.nightLights=new NightLights(this.root,town,this.poleAssets,this.heightAt,{demo});this.outageMarks=new OutageMarks(this.root,town,this.heightAt,COLORS);this.townDressing=new TownDressing(this.root,town,this.heightAt,{demo});this.pickMeshes.push(...(this.townDressing.pickMeshes||[]));this.townDressing.setVisible(this.dressingVisible);this.drawLandmarkLabels();this.setLayers(this.layers);this.home();this.resize();
  }
  drawPoles(){
   const equipment=this.town.networks.electric.equipment?.filter(n=>n.kind==='pole')||[];
@@ -105,9 +106,9 @@ export class TownScene{
  setClock(clock){if(!this.center||!clock)return;this.currentClock=clock;let hour=clock.hour;if(!Number.isFinite(hour)&&clock.simTime){const parts=new Intl.DateTimeFormat('en-GB',{hour:'2-digit',minute:'2-digit',hourCycle:'h23',timeZone:clock.timezone||'America/Toronto'}).format(clock.simTime?new Date(clock.simTime):new Date()).split(':');hour=Number(parts[0])+Number(parts[1])/60;}this.nightLights?.update(hour??12,clock.sunElevationDeg??40,this.flow,clock.lighting);const elevation=clock.sunElevationDeg;if(!Number.isFinite(elevation))return;const daylight=Math.max(0,Math.min(1,(elevation+7)/28)),angle=(clock.sunAzimuthDeg??135)*Math.PI/180,el=elevation*Math.PI/180,s=this.span;
   this.sun.position.set(this.center.x+Math.sin(angle)*Math.cos(el)*s,this.center.y+s*Math.max(.12,Math.sin(el)),this.center.z-Math.cos(angle)*Math.cos(el)*s);this.sun.intensity=.15+daylight*3.35;this.sun.color.set(elevation<12?'#ffd6a3':'#fff9e8');this.ambient.intensity=.22+daylight*2.38;this.scene.background.set('#1b2935').lerp(new THREE.Color('#dfe1dc'),daylight);}
  setMarkers(items=[]){if(this.eventMarkers){this.root.remove(this.eventMarkers);this.eventMarkers.geometry.dispose();this.eventMarkers.material.dispose();}const entries=items.filter(p=>Number.isFinite(p.x)&&Number.isFinite(p.z));if(!entries.length){this.eventMarkers=null;return;}const m=this.instances(new THREE.OctahedronGeometry(1,0),new THREE.MeshBasicMaterial({color:0xd77545}),entries.length);entries.forEach((n,i)=>this.setInst(m,i,n.x,this.heightAt(n.x,n.z)+9,n.z,3,5,3));m.instanceMatrix.needsUpdate=true;m.computeBoundingSphere();this.eventMarkers=m;}
- setLayers(layers){this.cancelBenchmark('Utility layers changed during the test.');this.layers={...layers};if(!this.networkGroups)return;for(const u of UTILS){this.networkGroups[u].visible=!!layers[u];this.serviceGroups[u].visible=!!layers[u]&&this.xray;this.lineGroups[u].visible=!!layers[u];}this.equipment?.forEach(({m,u})=>m.visible=!!layers[u]);this.markers.forEach(m=>{m.el.style.opacity='1';});}
+ setLayers(layers){this.cancelBenchmark('Utility layers changed during the test.');this.layers={...layers};this.outageMarks?.update(this.flow,this.layers);if(!this.networkGroups)return;for(const u of UTILS){this.networkGroups[u].visible=!!layers[u];this.serviceGroups[u].visible=!!layers[u]&&this.xray;this.lineGroups[u].visible=!!layers[u];}this.equipment?.forEach(({m,u})=>m.visible=!!layers[u]);this.markers.forEach(m=>{m.el.style.opacity='1';});}
  setXray(v){this.cancelBenchmark('Service visibility changed during the test.');this.xray=v;for(const u of UTILS)this.serviceGroups[u].visible=!!this.layers[u]&&v;}
- setFlows(flow){this.cancelBenchmark('Simulation state changed during the test.');this.flow=flow;}
+ setFlows(flow){this.cancelBenchmark('Simulation state changed during the test.');this.flow=flow;this.outageMarks?.update(flow,this.layers);}
  home(){this.cancelBenchmark('Camera changed during the test.');const c=this.center,s=this.span;this.camera.position.set(c.x+s*.68,c.y+s*.76,c.z+s*.95);this.controls.target.copy(c);this.controls.minDistance=30;this.controls.maxDistance=s*4;this.camera.near=.5;this.camera.far=s*15;this.camera.updateProjectionMatrix();this.controls.update();}
  top(){this.cancelBenchmark('Camera changed during the test.');const c=this.controls.target,s=this.span;this.camera.position.set(c.x,c.y+s*.88,c.z+.01);this.controls.update();}
  zoom(f){this.cancelBenchmark('Camera changed during the test.');this.camera.position.sub(this.controls.target).multiplyScalar(f).add(this.controls.target);this.controls.update();}
