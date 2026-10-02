@@ -1,0 +1,2091 @@
+{
+  "$defs": {
+    "AmiConfig": {
+      "additionalProperties": false,
+      "description": "Meter technology mix, AMI collectors and nightly collection.",
+      "properties": {
+        "ami_route_share": {
+          "default": 0.6,
+          "description": "Share of meter reading routes converted to AMI.",
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Ami Route Share",
+          "type": "number",
+          "x-effects": [
+            "meter vans",
+            "manual reads",
+            "estimates",
+            "VEE comm-fail flags"
+          ]
+        },
+        "amr_route_share": {
+          "default": 0.25,
+          "description": "Share of routes read by drive-by AMR vans (rest are walked manually).",
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Amr Route Share",
+          "type": "number",
+          "x-effects": [
+            "van routes",
+            "walker routes"
+          ]
+        },
+        "battery_life_years": {
+          "default": 15.0,
+          "description": "AMR/AMI endpoint battery life.",
+          "maximum": 30,
+          "minimum": 3,
+          "title": "Battery Life Years",
+          "type": "number",
+          "x-advanced": true,
+          "x-unit": "yr"
+        },
+        "collector_radius_m": {
+          "default": 900.0,
+          "description": "AMI collector coverage radius.",
+          "maximum": 3000,
+          "minimum": 200,
+          "title": "Collector Radius M",
+          "type": "number",
+          "x-effects": [
+            "collector count",
+            "comm-fail clusters"
+          ],
+          "x-unit": "m"
+        },
+        "comm_fail_rate": {
+          "default": 0.004,
+          "description": "Nightly probability an AMI meter fails to report.",
+          "maximum": 0.2,
+          "minimum": 0,
+          "title": "Comm Fail Rate",
+          "type": "number",
+          "x-effects": [
+            "estimated reads",
+            "consecutive estimates"
+          ]
+        },
+        "meter_digits_electric": {
+          "default": 6,
+          "description": "Register digits on electric meters (rollover at 10^digits).",
+          "maximum": 9,
+          "minimum": 4,
+          "title": "Meter Digits Electric",
+          "type": "integer",
+          "x-advanced": true
+        },
+        "meter_digits_gas": {
+          "default": 5,
+          "description": "Register digits on gas meters.",
+          "maximum": 9,
+          "minimum": 4,
+          "title": "Meter Digits Gas",
+          "type": "integer",
+          "x-advanced": true
+        },
+        "meter_digits_water": {
+          "default": 6,
+          "description": "Register digits on water meters.",
+          "maximum": 9,
+          "minimum": 4,
+          "title": "Meter Digits Water",
+          "type": "integer",
+          "x-advanced": true
+        },
+        "poll_end_hour": {
+          "default": 4.0,
+          "description": "Nightly head-end poll window end.",
+          "maximum": 24,
+          "minimum": 0,
+          "title": "Poll End Hour",
+          "type": "number",
+          "x-unit": "h"
+        },
+        "poll_start_hour": {
+          "default": 1.0,
+          "description": "Nightly head-end poll window start (local time).",
+          "maximum": 24,
+          "minimum": 0,
+          "title": "Poll Start Hour",
+          "type": "number",
+          "x-unit": "h"
+        }
+      },
+      "title": "Metering & AMI",
+      "type": "object",
+      "x-applies": "town",
+      "x-group": true,
+      "x-order": 6
+    },
+    "AnomaliesConfig": {
+      "additionalProperties": false,
+      "description": "Injected faults with ground truth. Rates per 1,000 meters per year.",
+      "properties": {
+        "consecutive_estimates": {
+          "default": 15.0,
+          "description": "Runs of 2–4 estimated periods (higher on manual routes).",
+          "maximum": 200,
+          "minimum": 0,
+          "title": "Consecutive Estimates",
+          "type": "number"
+        },
+        "enabled": {
+          "default": true,
+          "description": "Inject anomalies into observed reads (truth is always kept separately).",
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "exchange_registration_failure": {
+          "default": 2.0,
+          "description": "Meter exchanges whose new serial fails registration.",
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Exchange Registration Failure",
+          "type": "number"
+        },
+        "leak": {
+          "default": 8.0,
+          "description": "Continuous post-meter water leaks.",
+          "maximum": 200,
+          "minimum": 0,
+          "title": "Leak",
+          "type": "number"
+        },
+        "misread": {
+          "default": 6.0,
+          "description": "Reads off by one in a high digit.",
+          "maximum": 200,
+          "minimum": 0,
+          "title": "Misread",
+          "type": "number"
+        },
+        "missing_read": {
+          "default": 5.0,
+          "description": "Periods with no read document.",
+          "maximum": 200,
+          "minimum": 0,
+          "title": "Missing Read",
+          "type": "number"
+        },
+        "slow_meter": {
+          "default": 4.0,
+          "description": "Meters under-registering 10–40%.",
+          "maximum": 200,
+          "minimum": 0,
+          "title": "Slow Meter",
+          "type": "number"
+        },
+        "stuck_meter": {
+          "default": 5.0,
+          "description": "Registers that stop advancing.",
+          "maximum": 200,
+          "minimum": 0,
+          "title": "Stuck Meter",
+          "type": "number"
+        },
+        "tamper": {
+          "default": 1.0,
+          "description": "Bypass/tamper (50–90% under-registration).",
+          "maximum": 50,
+          "minimum": 0,
+          "title": "Tamper",
+          "type": "number"
+        },
+        "transposed_digits": {
+          "default": 6.0,
+          "description": "Reads with two digits swapped.",
+          "maximum": 200,
+          "minimum": 0,
+          "title": "Transposed Digits",
+          "type": "number"
+        },
+        "vacant_consuming": {
+          "default": 3.0,
+          "description": "Vacant premises that still consume.",
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Vacant Consuming",
+          "type": "number"
+        }
+      },
+      "title": "Meter & read anomalies",
+      "type": "object",
+      "x-applies": "town",
+      "x-group": true,
+      "x-order": 12
+    },
+    "CustomersBillingConfig": {
+      "additionalProperties": false,
+      "description": "Accounts, reading routes, calendars and tariffs.",
+      "properties": {
+        "bill_cycles": {
+          "default": 21,
+          "description": "Billing portions per month (one per working day).",
+          "maximum": 31,
+          "minimum": 1,
+          "title": "Bill Cycles",
+          "type": "integer"
+        },
+        "currency": {
+          "default": "CAD",
+          "description": "Billing currency.",
+          "title": "Currency",
+          "type": "string"
+        },
+        "due_days": {
+          "default": 20,
+          "description": "Days from invoice to due date.",
+          "maximum": 60,
+          "minimum": 5,
+          "title": "Due Days",
+          "type": "integer"
+        },
+        "electric_blocks": {
+          "default": [
+            {
+              "price": 0.098,
+              "up_to": 600.0
+            },
+            {
+              "price": 0.116,
+              "up_to": null
+            }
+          ],
+          "description": "Electric energy price blocks per kWh (summer threshold).",
+          "items": {
+            "$ref": "#/$defs/RateBlock"
+          },
+          "title": "Electric Blocks",
+          "type": "array",
+          "x-unit": "$/kWh"
+        },
+        "electric_fixed_monthly": {
+          "default": 36.5,
+          "description": "Electric fixed delivery charge per month.",
+          "maximum": 500,
+          "minimum": 0,
+          "title": "Electric Fixed Monthly",
+          "type": "number",
+          "x-unit": "$"
+        },
+        "electric_variable_delivery": {
+          "default": 0.042,
+          "description": "Electric variable delivery per kWh.",
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Electric Variable Delivery",
+          "type": "number",
+          "x-unit": "$/kWh"
+        },
+        "gas_fixed_monthly": {
+          "default": 26.5,
+          "description": "Gas customer charge per month.",
+          "maximum": 500,
+          "minimum": 0,
+          "title": "Gas Fixed Monthly",
+          "type": "number",
+          "x-unit": "$"
+        },
+        "gas_price_m3": {
+          "default": 0.36,
+          "description": "Gas delivery + supply per m³.",
+          "maximum": 5,
+          "minimum": 0,
+          "title": "Gas Price M3",
+          "type": "number",
+          "x-unit": "$/m3"
+        },
+        "late_payer_share": {
+          "default": 0.14,
+          "description": "Share that pay late.",
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Late Payer Share",
+          "type": "number"
+        },
+        "mru_target_meters": {
+          "default": 450,
+          "description": "Target premises per meter reading unit (route).",
+          "maximum": 3000,
+          "minimum": 50,
+          "title": "Mru Target Meters",
+          "type": "integer",
+          "x-effects": [
+            "route count",
+            "read workload per day"
+          ]
+        },
+        "net_metering_credit": {
+          "default": 0.098,
+          "description": "Credit per exported kWh.",
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Net Metering Credit",
+          "type": "number",
+          "x-effects": [
+            "solar customer bills"
+          ],
+          "x-unit": "$/kWh"
+        },
+        "on_time_payer_share": {
+          "default": 0.82,
+          "description": "Share of accounts that pay on time.",
+          "maximum": 1,
+          "minimum": 0,
+          "title": "On Time Payer Share",
+          "type": "number",
+          "x-effects": [
+            "dunning",
+            "collections",
+            "carrying cost"
+          ]
+        },
+        "pre_authorized_share": {
+          "default": 0.45,
+          "description": "Share on pre-authorized debit.",
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Pre Authorized Share",
+          "type": "number",
+          "x-advanced": true
+        },
+        "tax_rate": {
+          "default": 0.13,
+          "description": "Sales tax on utility bills (Ontario HST).",
+          "maximum": 0.3,
+          "minimum": 0,
+          "title": "Tax Rate",
+          "type": "number"
+        },
+        "wastewater_ratio": {
+          "default": 1.05,
+          "description": "Wastewater charge as a multiple of the water volumetric charge.",
+          "maximum": 3,
+          "minimum": 0,
+          "title": "Wastewater Ratio",
+          "type": "number"
+        },
+        "water_fixed_monthly": {
+          "default": 18.0,
+          "description": "Water fixed charge per month.",
+          "maximum": 500,
+          "minimum": 0,
+          "title": "Water Fixed Monthly",
+          "type": "number",
+          "x-unit": "$"
+        },
+        "water_price_m3": {
+          "default": 2.15,
+          "description": "Water volumetric charge.",
+          "maximum": 20,
+          "minimum": 0,
+          "title": "Water Price M3",
+          "type": "number",
+          "x-unit": "$/m3"
+        }
+      },
+      "title": "Customers & billing",
+      "type": "object",
+      "x-applies": "town",
+      "x-group": true,
+      "x-order": 10
+    },
+    "ElectricConfig": {
+      "additionalProperties": false,
+      "description": "Bulk supply, substations, feeders, transformers, services.",
+      "properties": {
+        "coincidence_floor": {
+          "default": 0.33,
+          "description": "Coincidence factor CF(n) = a + (1-a)/√n; a is the floor as n → ∞.",
+          "maximum": 1.0,
+          "minimum": 0.1,
+          "title": "Coincidence Floor",
+          "type": "number",
+          "x-advanced": true,
+          "x-effects": [
+            "every electric size"
+          ]
+        },
+        "feeder_design_mva": {
+          "default": 6.0,
+          "description": "Design peak per feeder.",
+          "maximum": 20,
+          "minimum": 1,
+          "title": "Feeder Design Mva",
+          "type": "number",
+          "x-effects": [
+            "feeder count",
+            "tie switches"
+          ],
+          "x-unit": "MVA"
+        },
+        "kva_ac": {
+          "default": 3.5,
+          "description": "Added peak for central air conditioning.",
+          "maximum": 10,
+          "minimum": 0,
+          "title": "Kva Ac",
+          "type": "number",
+          "x-unit": "kVA"
+        },
+        "kva_electric_heat": {
+          "default": 6.0,
+          "description": "Added peak for electric resistance heat.",
+          "maximum": 20,
+          "minimum": 0,
+          "title": "Kva Electric Heat",
+          "type": "number",
+          "x-unit": "kVA"
+        },
+        "kva_ev": {
+          "default": 7.2,
+          "description": "Added peak for a Level-2 EV charger.",
+          "maximum": 20,
+          "minimum": 0,
+          "title": "Kva Ev",
+          "type": "number",
+          "x-unit": "kVA"
+        },
+        "kva_heat_pump": {
+          "default": 4.0,
+          "description": "Added peak for a heat pump.",
+          "maximum": 15,
+          "minimum": 0,
+          "title": "Kva Heat Pump",
+          "type": "number",
+          "x-unit": "kVA"
+        },
+        "kva_per_100m2": {
+          "default": 1.0,
+          "description": "Individual peak demand per 100 m² of floor area (lighting, plug, appliances).",
+          "maximum": 5,
+          "minimum": 0.2,
+          "title": "Kva Per 100M2",
+          "type": "number",
+          "x-effects": [
+            "transformer sizing"
+          ],
+          "x-unit": "kVA"
+        },
+        "kva_pool": {
+          "default": 1.5,
+          "description": "Added peak for a pool pump/heater.",
+          "maximum": 10,
+          "minimum": 0,
+          "title": "Kva Pool",
+          "type": "number",
+          "x-advanced": true,
+          "x-unit": "kVA"
+        },
+        "max_houses_per_transformer_overhead": {
+          "default": 6,
+          "description": "Max houses on a pole-mount transformer.",
+          "maximum": 20,
+          "minimum": 1,
+          "title": "Max Houses Per Transformer Overhead",
+          "type": "integer"
+        },
+        "max_houses_per_transformer_underground": {
+          "default": 10,
+          "description": "Max houses on a pad-mount transformer.",
+          "maximum": 25,
+          "minimum": 1,
+          "title": "Max Houses Per Transformer Underground",
+          "type": "integer"
+        },
+        "overhead_before_year": {
+          "default": 1978,
+          "description": "Districts built before this year are overhead (poles); later underground.",
+          "maximum": 2030,
+          "minimum": 1850,
+          "title": "Overhead Before Year",
+          "type": "integer",
+          "x-effects": [
+            "poles",
+            "lightning exposure",
+            "storm outages"
+          ]
+        },
+        "pole_spacing_m": {
+          "default": 42.0,
+          "description": "Pole span on overhead lines.",
+          "maximum": 90,
+          "minimum": 20,
+          "title": "Pole Spacing M",
+          "type": "number",
+          "x-advanced": true,
+          "x-unit": "m"
+        },
+        "primary_kv": {
+          "default": 13.8,
+          "description": "Primary distribution line-to-line voltage (Ontario urban 13.8 kV; US 12.47 kV).",
+          "maximum": 34.5,
+          "minimum": 4.16,
+          "title": "Primary Kv",
+          "type": "number",
+          "x-effects": [
+            "feeder capacity",
+            "conductor sizing"
+          ],
+          "x-unit": "kV"
+        },
+        "secondary_v": {
+          "default": 240.0,
+          "description": "Split-phase secondary voltage (120/240 V).",
+          "maximum": 480,
+          "minimum": 120,
+          "title": "Secondary V",
+          "type": "number",
+          "x-advanced": true,
+          "x-unit": "V"
+        },
+        "substation_mva": {
+          "default": 25.0,
+          "description": "Firm capacity per substation.",
+          "maximum": 100,
+          "minimum": 5,
+          "title": "Substation Mva",
+          "type": "number",
+          "x-effects": [
+            "substation count"
+          ],
+          "x-unit": "MVA"
+        },
+        "transformer_kva_steps": {
+          "default": [
+            25,
+            50,
+            75,
+            100,
+            167
+          ],
+          "description": "Single-phase transformer sizes.",
+          "items": {
+            "type": "number"
+          },
+          "title": "Transformer Kva Steps",
+          "type": "array",
+          "x-advanced": true,
+          "x-unit": "kVA"
+        },
+        "transformer_max_loading": {
+          "default": 1.3,
+          "description": "Allowed peak loading relative to nameplate.",
+          "maximum": 2.0,
+          "minimum": 0.8,
+          "title": "Transformer Max Loading",
+          "type": "number",
+          "x-advanced": true
+        },
+        "transmission_kv": {
+          "default": 115.0,
+          "description": "Off-map transmission voltage into the substation.",
+          "maximum": 500,
+          "minimum": 34.5,
+          "title": "Transmission Kv",
+          "type": "number",
+          "x-unit": "kV"
+        },
+        "voltage_max_pu": {
+          "default": 1.05,
+          "description": "Upper service voltage limit.",
+          "maximum": 1.15,
+          "minimum": 1.0,
+          "title": "Voltage Max Pu",
+          "type": "number",
+          "x-advanced": true
+        },
+        "voltage_min_pu": {
+          "default": 0.95,
+          "description": "Lower service voltage limit (CSA CAN3-C235 / ANSI Range A).",
+          "maximum": 1.0,
+          "minimum": 0.85,
+          "title": "Voltage Min Pu",
+          "type": "number",
+          "x-advanced": true
+        }
+      },
+      "title": "Electric distribution",
+      "type": "object",
+      "x-applies": "town",
+      "x-group": true,
+      "x-order": 3
+    },
+    "EraValues": {
+      "additionalProperties": false,
+      "description": "A value per construction era: pre-1945 core, 1945–1978 post-war, post-1978 modern subdivisions.",
+      "properties": {
+        "modern": {
+          "title": "Modern",
+          "type": "number"
+        },
+        "postwar": {
+          "title": "Postwar",
+          "type": "number"
+        },
+        "pre_1945": {
+          "title": "Pre 1945",
+          "type": "number"
+        }
+      },
+      "required": [
+        "pre_1945",
+        "postwar",
+        "modern"
+      ],
+      "title": "EraValues",
+      "type": "object"
+    },
+    "GasConfig": {
+      "additionalProperties": false,
+      "description": "City gate, mains, regulators and services.",
+      "properties": {
+        "all_electric_district_share": {
+          "default": 0.15,
+          "description": "Share of districts with no gas mains (all-electric).",
+          "maximum": 1,
+          "minimum": 0,
+          "title": "All Electric District Share",
+          "type": "number",
+          "x-effects": [
+            "gas services",
+            "electric heat share",
+            "winter electric peak"
+          ]
+        },
+        "base_pressure_kpa": {
+          "default": 101.325,
+          "description": "Base pressure for standard volume.",
+          "maximum": 110,
+          "minimum": 90,
+          "title": "Base Pressure Kpa",
+          "type": "number",
+          "x-advanced": true,
+          "x-unit": "kPa"
+        },
+        "base_temperature_c": {
+          "default": 15.0,
+          "description": "Base temperature for standard volume.",
+          "maximum": 25,
+          "minimum": 0,
+          "title": "Base Temperature C",
+          "type": "number",
+          "x-advanced": true,
+          "x-unit": "C"
+        },
+        "calorific_mj_per_m3": {
+          "default": 37.5,
+          "description": "Higher heating value used for energy conversion (therm/kWh display and billing).",
+          "maximum": 45,
+          "minimum": 30,
+          "title": "Calorific Mj Per M3",
+          "type": "number",
+          "x-effects": [
+            "gas bill energy",
+            "therm/kWh conversion"
+          ],
+          "x-unit": "MJ/m3"
+        },
+        "coincidence_floor": {
+          "default": 0.5,
+          "description": "Gas coincidence factor floor a in CF(n) = a + (1-a)/√n.",
+          "maximum": 1,
+          "minimum": 0.1,
+          "title": "Coincidence Floor",
+          "type": "number",
+          "x-advanced": true
+        },
+        "design_m3h_base": {
+          "default": 1.15,
+          "description": "Design-hour demand per house, base component (≈ 40 CFH).",
+          "maximum": 10,
+          "minimum": 0,
+          "title": "Design M3H Base",
+          "type": "number",
+          "x-unit": "m3/h"
+        },
+        "design_m3h_per_m2": {
+          "default": 0.017,
+          "description": "Design-hour demand per m² of floor area (≈ 0.6 CFH/m²).",
+          "maximum": 0.2,
+          "minimum": 0,
+          "title": "Design M3H Per M2",
+          "type": "number",
+          "x-unit": "m3/h"
+        },
+        "lp_core_before_year": {
+          "default": 1945,
+          "description": "Districts built before this year are on the low-pressure system.",
+          "maximum": 2000,
+          "minimum": 1850,
+          "title": "Lp Core Before Year",
+          "type": "integer",
+          "x-advanced": true
+        },
+        "lp_kpa": {
+          "default": 1.74,
+          "description": "Low-pressure legacy main set point (7 in w.c.).",
+          "maximum": 7,
+          "minimum": 0.5,
+          "title": "Lp Kpa",
+          "type": "number",
+          "x-advanced": true,
+          "x-unit": "kPa"
+        },
+        "min_main_mm": {
+          "default": 50,
+          "description": "Smallest distribution main (2-inch PE).",
+          "maximum": 150,
+          "minimum": 25,
+          "title": "Min Main Mm",
+          "type": "integer",
+          "x-unit": "mm"
+        },
+        "mp_kpa": {
+          "default": 414.0,
+          "description": "Medium-pressure distribution set point (60 psig).",
+          "maximum": 700,
+          "minimum": 35,
+          "title": "Mp Kpa",
+          "type": "number",
+          "x-unit": "kPa"
+        },
+        "scheme": {
+          "default": "mp_with_lp_core",
+          "description": "Medium-pressure PE everywhere with a regulator at every meter, optionally with a legacy low-pressure core fed by district regulators.",
+          "enum": [
+            "mp",
+            "mp_with_lp_core"
+          ],
+          "title": "Scheme",
+          "type": "string"
+        },
+        "transmission_kpa": {
+          "default": 3800.0,
+          "description": "Off-map transmission pressure at the city gate inlet.",
+          "maximum": 10000,
+          "minimum": 700,
+          "title": "Transmission Kpa",
+          "type": "number",
+          "x-advanced": true,
+          "x-unit": "kPa"
+        },
+        "valve_spacing_m": {
+          "default": 800.0,
+          "description": "Maximum spacing of main valves on feeders.",
+          "maximum": 3000,
+          "minimum": 100,
+          "title": "Valve Spacing M",
+          "type": "number",
+          "x-advanced": true,
+          "x-unit": "m"
+        }
+      },
+      "title": "Natural gas",
+      "type": "object",
+      "x-applies": "town",
+      "x-group": true,
+      "x-order": 4
+    },
+    "HousingConfig": {
+      "additionalProperties": false,
+      "description": "Lots, buildings and the people and appliances inside them.",
+      "properties": {
+        "ac_rate": {
+          "default": 0.85,
+          "description": "Share of houses with central air conditioning.",
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Ac Rate",
+          "type": "number",
+          "x-effects": [
+            "summer peak",
+            "transformer sizing"
+          ]
+        },
+        "electric_heat_rate": {
+          "$ref": "#/$defs/EraValues",
+          "default": {
+            "modern": 0.18,
+            "postwar": 0.14,
+            "pre_1945": 0.1
+          },
+          "description": "Share of houses heated electrically (baseboard or heat pump) where gas is available. All houses in all-electric districts are electric.",
+          "x-effects": [
+            "gas service count",
+            "winter electric peak"
+          ]
+        },
+        "ev_rate": {
+          "$ref": "#/$defs/EraValues",
+          "default": {
+            "modern": 0.12,
+            "postwar": 0.07,
+            "pre_1945": 0.05
+          },
+          "description": "Share of houses with an EV charger.",
+          "x-effects": [
+            "transformer loading",
+            "evening peak"
+          ]
+        },
+        "heat_pump_share_of_electric": {
+          "default": 0.55,
+          "description": "Share of electric heating that is a heat pump (vs baseboard).",
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Heat Pump Share Of Electric",
+          "type": "number",
+          "x-advanced": true
+        },
+        "household_size_weights": {
+          "default": [
+            0.28,
+            0.34,
+            0.15,
+            0.15,
+            0.06,
+            0.02
+          ],
+          "description": "Relative frequency of households with 1..6 occupants.",
+          "items": {
+            "type": "number"
+          },
+          "title": "Household Size Weights",
+          "type": "array",
+          "x-advanced": true
+        },
+        "irrigation_rate": {
+          "default": 0.3,
+          "description": "Share of houses that irrigate lawns in summer.",
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Irrigation Rate",
+          "type": "number",
+          "x-effects": [
+            "summer water peak"
+          ]
+        },
+        "lot_depth_m": {
+          "$ref": "#/$defs/EraValues",
+          "default": {
+            "modern": 33.0,
+            "postwar": 35.0,
+            "pre_1945": 36.0
+          },
+          "description": "Mean lot depth by era.",
+          "x-unit": "m"
+        },
+        "lot_frontage_m": {
+          "$ref": "#/$defs/EraValues",
+          "default": {
+            "modern": 16.5,
+            "postwar": 18.5,
+            "pre_1945": 15.0
+          },
+          "description": "Mean lot frontage by era.",
+          "x-effects": [
+            "houses per km of street"
+          ],
+          "x-unit": "m"
+        },
+        "occupancy_rate": {
+          "default": 0.955,
+          "description": "Share of premises occupied at simulation start.",
+          "maximum": 1.0,
+          "minimum": 0.5,
+          "title": "Occupancy Rate",
+          "type": "number",
+          "x-effects": [
+            "vacant consumption",
+            "VEE vacancy signals",
+            "move-ins"
+          ]
+        },
+        "pool_rate": {
+          "default": 0.06,
+          "description": "Share of houses (on lots > 600 m²) with a pool.",
+          "maximum": 0.5,
+          "minimum": 0,
+          "title": "Pool Rate",
+          "type": "number",
+          "x-advanced": true
+        },
+        "pv_kw_max": {
+          "default": 9.5,
+          "description": "Largest rooftop PV system.",
+          "maximum": 30,
+          "minimum": 1,
+          "title": "Pv Kw Max",
+          "type": "number",
+          "x-unit": "kW"
+        },
+        "pv_kw_min": {
+          "default": 4.0,
+          "description": "Smallest rooftop PV system.",
+          "maximum": 20,
+          "minimum": 0.5,
+          "title": "Pv Kw Min",
+          "type": "number",
+          "x-unit": "kW"
+        },
+        "rental_share": {
+          "default": 0.28,
+          "description": "Share of premises that are rentals (more contract turnover).",
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Rental Share",
+          "type": "number",
+          "x-effects": [
+            "move-in/out frequency",
+            "contract history"
+          ]
+        },
+        "semi_share": {
+          "$ref": "#/$defs/EraValues",
+          "default": {
+            "modern": 0.18,
+            "postwar": 0.08,
+            "pre_1945": 0.25
+          },
+          "description": "Share of lots built as semi-detached/townhouse pairs.",
+          "x-advanced": true
+        },
+        "setback_m": {
+          "$ref": "#/$defs/EraValues",
+          "default": {
+            "modern": 6.5,
+            "postwar": 7.5,
+            "pre_1945": 6.0
+          },
+          "description": "Front setback by era.",
+          "x-advanced": true,
+          "x-unit": "m"
+        },
+        "solar_rate": {
+          "$ref": "#/$defs/EraValues",
+          "default": {
+            "modern": 0.18,
+            "postwar": 0.1,
+            "pre_1945": 0.06
+          },
+          "description": "Share of houses with rooftop PV by era.",
+          "x-effects": [
+            "export registers",
+            "midday reverse flow",
+            "net-metering credits"
+          ]
+        },
+        "two_storey_share": {
+          "$ref": "#/$defs/EraValues",
+          "default": {
+            "modern": 0.75,
+            "postwar": 0.25,
+            "pre_1945": 0.7
+          },
+          "description": "Share of two-storey houses by era."
+        }
+      },
+      "title": "Housing & households",
+      "type": "object",
+      "x-applies": "town",
+      "x-group": true,
+      "x-order": 2
+    },
+    "IncidentConfig": {
+      "additionalProperties": false,
+      "description": "What goes wrong, how often. Rates are per year.",
+      "properties": {
+        "collector_outages_per_year": {
+          "default": 2.0,
+          "description": "AMI collector outages per year (town-wide).",
+          "maximum": 50,
+          "minimum": 0,
+          "title": "Collector Outages Per Year",
+          "type": "number"
+        },
+        "gas_main_leaks_per_100km": {
+          "default": 8.0,
+          "description": "Leaks per 100 km of gas main per year.",
+          "maximum": 200,
+          "minimum": 0,
+          "title": "Gas Main Leaks Per 100Km",
+          "type": "number"
+        },
+        "gas_service_leaks_per_1000": {
+          "default": 1.2,
+          "description": "Leaks per 1,000 gas services per year.",
+          "maximum": 50,
+          "minimum": 0,
+          "title": "Gas Service Leaks Per 1000",
+          "type": "number"
+        },
+        "manual_only": {
+          "default": false,
+          "description": "Disable random hazards; only manually injected incidents occur.",
+          "title": "Manual Only",
+          "type": "boolean"
+        },
+        "overhead_faults_per_km_storm_day": {
+          "default": 0.015,
+          "description": "Overhead primary faults per km per storm day.",
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Overhead Faults Per Km Storm Day",
+          "type": "number",
+          "x-effects": [
+            "outages",
+            "SAIDI/SAIFI",
+            "zero-usage reads"
+          ]
+        },
+        "transformer_failures_per_1000": {
+          "default": 3.0,
+          "description": "Transformer failures per 1,000 units per year (×3 when overloaded).",
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Transformer Failures Per 1000",
+          "type": "number"
+        },
+        "water_main_breaks_per_100km": {
+          "default": 14.0,
+          "description": "Main breaks per 100 km per year (×2 for cast iron).",
+          "maximum": 200,
+          "minimum": 0,
+          "title": "Water Main Breaks Per 100Km",
+          "type": "number",
+          "x-effects": [
+            "water outages",
+            "crew workload"
+          ]
+        }
+      },
+      "title": "Incidents & hazards",
+      "type": "object",
+      "x-applies": "town",
+      "x-group": true,
+      "x-order": 8
+    },
+    "OperationsConfig": {
+      "additionalProperties": false,
+      "description": "Fleet, shifts, response targets and vehicle movement.",
+      "properties": {
+        "drive_by_radius_m": {
+          "default": 120.0,
+          "description": "AMR van reads meters within this distance.",
+          "maximum": 500,
+          "minimum": 20,
+          "title": "Drive By Radius M",
+          "type": "number",
+          "x-advanced": true,
+          "x-unit": "m"
+        },
+        "electric_crews": {
+          "default": 3,
+          "description": "Electric trouble crews.",
+          "maximum": 30,
+          "minimum": 0,
+          "title": "Electric Crews",
+          "type": "integer",
+          "x-effects": [
+            "outage duration",
+            "SAIDI"
+          ]
+        },
+        "gas_crews": {
+          "default": 2,
+          "description": "Gas emergency crews.",
+          "maximum": 20,
+          "minimum": 0,
+          "title": "Gas Crews",
+          "type": "integer",
+          "x-effects": [
+            "leak response time"
+          ]
+        },
+        "gas_response_target_min": {
+          "default": 60.0,
+          "description": "Target response to a gas odour call.",
+          "maximum": 240,
+          "minimum": 10,
+          "title": "Gas Response Target Min",
+          "type": "number",
+          "x-unit": "min"
+        },
+        "meter_techs": {
+          "default": 2,
+          "description": "Meter technicians (exchanges, investigations).",
+          "maximum": 20,
+          "minimum": 0,
+          "title": "Meter Techs",
+          "type": "integer"
+        },
+        "meter_vans": {
+          "default": 2,
+          "description": "Drive-by AMR reading vans.",
+          "maximum": 20,
+          "minimum": 0,
+          "title": "Meter Vans",
+          "type": "integer",
+          "x-effects": [
+            "AMR read completion"
+          ]
+        },
+        "meter_walkers": {
+          "default": 3,
+          "description": "Manual meter readers.",
+          "maximum": 40,
+          "minimum": 0,
+          "title": "Meter Walkers",
+          "type": "integer",
+          "x-effects": [
+            "manual read completion",
+            "no-access"
+          ]
+        },
+        "shift_end_hour": {
+          "default": 15.5,
+          "description": "Day shift end.",
+          "maximum": 24,
+          "minimum": 1,
+          "title": "Shift End Hour",
+          "type": "number",
+          "x-unit": "h"
+        },
+        "shift_start_hour": {
+          "default": 7.0,
+          "description": "Day shift start.",
+          "maximum": 23,
+          "minimum": 0,
+          "title": "Shift Start Hour",
+          "type": "number",
+          "x-unit": "h"
+        },
+        "speed_kmh_arterial": {
+          "default": 50.0,
+          "description": "Driving speed on arterials.",
+          "maximum": 100,
+          "minimum": 10,
+          "title": "Speed Kmh Arterial",
+          "type": "number",
+          "x-advanced": true,
+          "x-unit": "km/h"
+        },
+        "speed_kmh_collector": {
+          "default": 40.0,
+          "description": "Driving speed on collectors.",
+          "maximum": 80,
+          "minimum": 10,
+          "title": "Speed Kmh Collector",
+          "type": "number",
+          "x-advanced": true,
+          "x-unit": "km/h"
+        },
+        "speed_kmh_local": {
+          "default": 30.0,
+          "description": "Driving speed on local streets.",
+          "maximum": 60,
+          "minimum": 5,
+          "title": "Speed Kmh Local",
+          "type": "number",
+          "x-advanced": true,
+          "x-unit": "km/h"
+        },
+        "walker_meters_per_hour": {
+          "default": 45.0,
+          "description": "Manual reads per walker-hour.",
+          "maximum": 150,
+          "minimum": 5,
+          "title": "Walker Meters Per Hour",
+          "type": "number",
+          "x-advanced": true
+        },
+        "water_crews": {
+          "default": 2,
+          "description": "Water distribution crews.",
+          "maximum": 20,
+          "minimum": 0,
+          "title": "Water Crews",
+          "type": "integer"
+        }
+      },
+      "title": "Field operations",
+      "type": "object",
+      "x-applies": "town",
+      "x-group": true,
+      "x-order": 9
+    },
+    "ProcessConfig": {
+      "additionalProperties": false,
+      "description": "Work queues, automation, costs and carrying cost.",
+      "properties": {
+        "analyst_queue_days_max": {
+          "default": 3,
+          "description": "Maximum queue wait.",
+          "maximum": 20,
+          "minimum": 1,
+          "title": "Analyst Queue Days Max",
+          "type": "integer"
+        },
+        "analyst_queue_days_min": {
+          "default": 1,
+          "description": "Minimum queue wait before an analyst picks up an exception.",
+          "maximum": 10,
+          "minimum": 1,
+          "title": "Analyst Queue Days Min",
+          "type": "integer"
+        },
+        "carry_rate_per_day": {
+          "default": 1.25,
+          "description": "Carrying cost per account per day before invoicing.",
+          "maximum": 20,
+          "minimum": 0,
+          "title": "Carry Rate Per Day",
+          "type": "number",
+          "x-unit": "$"
+        },
+        "receivable_carry_ratio": {
+          "default": 0.4,
+          "description": "Receivable carry as a share of the billing carry rate.",
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Receivable Carry Ratio",
+          "type": "number",
+          "x-advanced": true
+        },
+        "rpa_coverage": {
+          "default": 0.35,
+          "description": "Share of exception types with an RPA/auto-resolve rule.",
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Rpa Coverage",
+          "type": "number",
+          "x-effects": [
+            "analyst workload",
+            "days to invoice",
+            "carrying cost"
+          ]
+        },
+        "sequences": {
+          "default": "builtin",
+          "description": "Activity sequence library: 'builtin' or a path to a YAML file.",
+          "title": "Sequences",
+          "type": "string"
+        }
+      },
+      "title": "Meter-to-cash process",
+      "type": "object",
+      "x-applies": "town",
+      "x-group": true,
+      "x-order": 11
+    },
+    "RateBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "price": {
+          "title": "Price",
+          "type": "number"
+        },
+        "up_to": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Up To"
+        }
+      },
+      "required": [
+        "up_to",
+        "price"
+      ],
+      "title": "RateBlock",
+      "type": "object"
+    },
+    "ScenarioConfig": {
+      "additionalProperties": false,
+      "description": "Demonstration scenario on the live clock.",
+      "properties": {
+        "date": {
+          "default": "2026-07-15",
+          "description": "Demonstration date (local).",
+          "title": "Date",
+          "type": "string"
+        },
+        "hour": {
+          "default": 8.0,
+          "description": "Demonstration hour (local, decimal).",
+          "exclusiveMaximum": 24,
+          "minimum": 0,
+          "title": "Hour",
+          "type": "number",
+          "x-unit": "h"
+        },
+        "leak_m3h": {
+          "default": 0.65,
+          "description": "Leak rate added to the target premise's water demand.",
+          "maximum": 50,
+          "minimum": 0,
+          "title": "Leak M3H",
+          "type": "number",
+          "x-unit": "m3/h"
+        },
+        "name": {
+          "default": "normal",
+          "description": "Live demonstration scenario.",
+          "enum": [
+            "normal",
+            "solar_noon",
+            "leak",
+            "substation_outage"
+          ],
+          "title": "Name",
+          "type": "string"
+        },
+        "target_premise": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Premise targeted by the leak scenario (default: first premise).",
+          "title": "Target Premise"
+        },
+        "tick_minutes": {
+          "default": 5,
+          "description": "Live clock step.",
+          "maximum": 60,
+          "minimum": 1,
+          "title": "Tick Minutes",
+          "type": "integer",
+          "x-unit": "min"
+        }
+      },
+      "title": "Scenario",
+      "type": "object",
+      "x-applies": "run",
+      "x-group": true,
+      "x-order": 13
+    },
+    "SeasonTemp": {
+      "additionalProperties": false,
+      "properties": {
+        "max_c": {
+          "title": "Max C",
+          "type": "number"
+        },
+        "mean_c": {
+          "title": "Mean C",
+          "type": "number"
+        },
+        "min_c": {
+          "title": "Min C",
+          "type": "number"
+        },
+        "sd_c": {
+          "title": "Sd C",
+          "type": "number"
+        }
+      },
+      "required": [
+        "mean_c",
+        "sd_c",
+        "min_c",
+        "max_c"
+      ],
+      "title": "SeasonTemp",
+      "type": "object"
+    },
+    "SeedsConfig": {
+      "additionalProperties": false,
+      "description": "Master seed and optional per-subsystem re-rolls.",
+      "properties": {
+        "anomalies": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Override seed for meter/read anomalies.",
+          "title": "Anomalies",
+          "x-advanced": true
+        },
+        "households": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Override seed for household attributes (occupants, solar, EV, heating).",
+          "title": "Households",
+          "x-advanced": true
+        },
+        "incidents": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Override seed for incident hazards.",
+          "title": "Incidents",
+          "x-advanced": true
+        },
+        "master": {
+          "default": "WHITBY-042",
+          "description": "Master seed. Any text or integer; same seed + config + generator version reproduces the same town byte for byte.",
+          "title": "Master",
+          "type": "string",
+          "x-effects": [
+            "everything"
+          ]
+        },
+        "town": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Override seed for geography only (roads growth, parcels, buildings).",
+          "title": "Town",
+          "x-advanced": true
+        },
+        "weather": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Override seed for weather series (re-roll storms, keep the town).",
+          "title": "Weather",
+          "x-advanced": true
+        }
+      },
+      "title": "Seeds",
+      "type": "object",
+      "x-applies": "town",
+      "x-group": true,
+      "x-order": 0
+    },
+    "TownConfig": {
+      "additionalProperties": false,
+      "description": "Size, road skeleton source, terrain and land use.",
+      "properties": {
+        "anchor_lat": {
+          "default": 43.3,
+          "description": "Latitude of the local origin for synthetic towns.",
+          "maximum": 80,
+          "minimum": -80,
+          "title": "Anchor Lat",
+          "type": "number",
+          "x-advanced": true,
+          "x-unit": "deg"
+        },
+        "anchor_lon": {
+          "default": -80.6,
+          "description": "Longitude of the local origin for synthetic towns.",
+          "maximum": 180,
+          "minimum": -180,
+          "title": "Anchor Lon",
+          "type": "number",
+          "x-advanced": true,
+          "x-unit": "deg"
+        },
+        "arterial_spacing_m": {
+          "default": 1400.0,
+          "description": "Mean spacing of arterial roads (concession-grid style).",
+          "maximum": 2400,
+          "minimum": 600,
+          "title": "Arterial Spacing M",
+          "type": "number",
+          "x-advanced": true,
+          "x-unit": "m"
+        },
+        "arterial_warp_m": {
+          "default": 130.0,
+          "description": "Amplitude of the smooth warp applied to arterials.",
+          "maximum": 400,
+          "minimum": 0,
+          "title": "Arterial Warp M",
+          "type": "number",
+          "x-advanced": true,
+          "x-unit": "m"
+        },
+        "collector_block_m": {
+          "default": 650.0,
+          "description": "Superblocks larger than this get a collector road.",
+          "maximum": 1500,
+          "minimum": 250,
+          "title": "Collector Block M",
+          "type": "number",
+          "x-advanced": true,
+          "x-unit": "m"
+        },
+        "commercial_strip_m": {
+          "default": 700.0,
+          "description": "Length of the commercial strip along the main arterial.",
+          "maximum": 3000,
+          "minimum": 0,
+          "title": "Commercial Strip M",
+          "type": "number",
+          "x-unit": "m"
+        },
+        "era_core_year": {
+          "default": 1925,
+          "description": "Construction year at the town centre.",
+          "maximum": 2020,
+          "minimum": 1850,
+          "title": "Era Core Year",
+          "type": "integer",
+          "x-effects": [
+            "street pattern",
+            "lot sizes",
+            "overhead vs underground electric",
+            "legacy gas district",
+            "cast-iron water mains",
+            "solar/EV uptake"
+          ]
+        },
+        "era_noise_years": {
+          "default": 8.0,
+          "description": "Std-dev of era noise per district.",
+          "maximum": 30,
+          "minimum": 0,
+          "title": "Era Noise Years",
+          "type": "number",
+          "x-advanced": true,
+          "x-unit": "yr"
+        },
+        "era_span_years": {
+          "default": 85,
+          "description": "Years added from centre to edge (era = core + span·(d/R)^1.2 + noise).",
+          "maximum": 150,
+          "minimum": 0,
+          "title": "Era Span Years",
+          "type": "integer"
+        },
+        "expansion": {
+          "default": "grow",
+          "description": "When the OSM extract cannot hold the requested houses: grow synthetic districts outward, repeat the extract as tiles (prototype behaviour), or fail.",
+          "enum": [
+            "grow",
+            "repeat",
+            "none"
+          ],
+          "title": "Expansion",
+          "type": "string"
+        },
+        "houses": {
+          "default": 480,
+          "description": "Number of residential premises to place.",
+          "maximum": 10000,
+          "minimum": 20,
+          "title": "Houses",
+          "type": "integer",
+          "x-effects": [
+            "town extent",
+            "growth districts",
+            "substations",
+            "feeders",
+            "pipe sizes",
+            "MRUs"
+          ]
+        },
+        "houses_per_school": {
+          "default": 2500,
+          "description": "One school per this many houses.",
+          "maximum": 20000,
+          "minimum": 500,
+          "title": "Houses Per School",
+          "type": "integer",
+          "x-advanced": true
+        },
+        "industrial_lots": {
+          "default": 2,
+          "description": "Number of large industrial customers.",
+          "maximum": 10,
+          "minimum": 0,
+          "title": "Industrial Lots",
+          "type": "integer"
+        },
+        "margin_m": {
+          "default": 120.0,
+          "description": "Empty margin around the developed area.",
+          "maximum": 1000,
+          "minimum": 0,
+          "title": "Margin M",
+          "type": "number",
+          "x-advanced": true,
+          "x-unit": "m"
+        },
+        "osm_sha256": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": "4c4bb0d8c88e4b53e89f5cfae2dc1778f1c446ba93b9b587ee423a91005706d8",
+          "description": "Expected SHA-256 of the OSM extract; generation fails if it differs.",
+          "title": "Osm Sha256",
+          "x-advanced": true
+        },
+        "osm_source": {
+          "default": "data/osm/whitby-roads.json",
+          "description": "Path to an OSM API 0.6 / Overpass JSON extract.",
+          "title": "Osm Source",
+          "type": "string"
+        },
+        "park_share": {
+          "default": 0.04,
+          "description": "Share of blocks kept as parks.",
+          "maximum": 0.2,
+          "minimum": 0,
+          "title": "Park Share",
+          "type": "number",
+          "x-advanced": true
+        },
+        "skeleton": {
+          "default": "osm",
+          "description": "Road skeleton source: a frozen OpenStreetMap extract, or a fully synthetic warped section grid.",
+          "enum": [
+            "osm",
+            "synthetic"
+          ],
+          "title": "Skeleton",
+          "type": "string"
+        },
+        "terrain_relief_m": {
+          "default": 15.0,
+          "description": "Peak-to-trough terrain relief.",
+          "maximum": 120,
+          "minimum": 0,
+          "title": "Terrain Relief M",
+          "type": "number",
+          "x-effects": [
+            "water pressure zones",
+            "PRVs",
+            "tank siting"
+          ],
+          "x-unit": "m"
+        },
+        "terrain_wavelength_m": {
+          "default": 900.0,
+          "description": "Dominant wavelength of terrain undulation.",
+          "maximum": 5000,
+          "minimum": 100,
+          "title": "Terrain Wavelength M",
+          "type": "number",
+          "x-advanced": true,
+          "x-unit": "m"
+        },
+        "timezone": {
+          "default": "America/Toronto",
+          "description": "IANA timezone of the town (read schedules, billing calendar, day/night).",
+          "title": "Timezone",
+          "type": "string"
+        },
+        "units": {
+          "default": "ontario",
+          "description": "Display unit profile (stored values are always SI).",
+          "enum": [
+            "ontario",
+            "us",
+            "uk"
+          ],
+          "title": "Units",
+          "type": "string"
+        }
+      },
+      "title": "Town & geography",
+      "type": "object",
+      "x-applies": "town",
+      "x-group": true,
+      "x-order": 1
+    },
+    "WaterConfig": {
+      "additionalProperties": false,
+      "description": "Supply, pumping, storage, mains, hydrants and services.",
+      "properties": {
+        "arterial_main_mm": {
+          "default": 400,
+          "description": "Minimum transmission main on arterials leaving the pump station.",
+          "maximum": 900,
+          "minimum": 200,
+          "title": "Arterial Main Mm",
+          "type": "integer",
+          "x-advanced": true,
+          "x-unit": "mm"
+        },
+        "cast_iron_before_year": {
+          "default": 1960,
+          "description": "Districts built before this year have cast-iron mains.",
+          "maximum": 2000,
+          "minimum": 1850,
+          "title": "Cast Iron Before Year",
+          "type": "integer",
+          "x-effects": [
+            "main break rate",
+            "head loss"
+          ]
+        },
+        "collector_main_mm": {
+          "default": 300,
+          "description": "Minimum main on collector roads.",
+          "maximum": 600,
+          "minimum": 150,
+          "title": "Collector Main Mm",
+          "type": "integer",
+          "x-advanced": true,
+          "x-unit": "mm"
+        },
+        "fire_flow_commercial_lps": {
+          "default": 95.0,
+          "description": "Required commercial/institutional fire flow.",
+          "maximum": 300,
+          "minimum": 0,
+          "title": "Fire Flow Commercial Lps",
+          "type": "number",
+          "x-advanced": true,
+          "x-unit": "L/s"
+        },
+        "fire_flow_industrial_lps": {
+          "default": 190.0,
+          "description": "Required industrial fire flow.",
+          "maximum": 500,
+          "minimum": 0,
+          "title": "Fire Flow Industrial Lps",
+          "type": "number",
+          "x-advanced": true,
+          "x-unit": "L/s"
+        },
+        "fire_flow_residential_lps": {
+          "default": 63.0,
+          "description": "Required residential fire flow (1,000 USgpm).",
+          "maximum": 200,
+          "minimum": 0,
+          "title": "Fire Flow Residential Lps",
+          "type": "number",
+          "x-effects": [
+            "minimum main size",
+            "hydrants"
+          ],
+          "x-unit": "L/s"
+        },
+        "hw_c_new": {
+          "default": 130.0,
+          "description": "Hazen-Williams C for PVC/ductile iron.",
+          "maximum": 150,
+          "minimum": 60,
+          "title": "Hw C New",
+          "type": "number",
+          "x-advanced": true
+        },
+        "hw_c_old": {
+          "default": 100.0,
+          "description": "Hazen-Williams C for unlined cast iron.",
+          "maximum": 140,
+          "minimum": 40,
+          "title": "Hw C Old",
+          "type": "number",
+          "x-advanced": true
+        },
+        "hydrant_spacing_commercial_m": {
+          "default": 90.0,
+          "description": "Hydrant spacing in commercial areas.",
+          "maximum": 200,
+          "minimum": 40,
+          "title": "Hydrant Spacing Commercial M",
+          "type": "number",
+          "x-advanced": true,
+          "x-unit": "m"
+        },
+        "hydrant_spacing_m": {
+          "default": 150.0,
+          "description": "Hydrant spacing on residential mains.",
+          "maximum": 300,
+          "minimum": 50,
+          "title": "Hydrant Spacing M",
+          "type": "number",
+          "x-unit": "m"
+        },
+        "irrigation_m3_per_day": {
+          "default": 0.6,
+          "description": "Summer irrigation per irrigating house.",
+          "maximum": 5,
+          "minimum": 0,
+          "title": "Irrigation M3 Per Day",
+          "type": "number",
+          "x-unit": "m3"
+        },
+        "lpcd": {
+          "default": 220.0,
+          "description": "Indoor residential use per person per day.",
+          "maximum": 600,
+          "minimum": 50,
+          "title": "Lpcd",
+          "type": "number",
+          "x-effects": [
+            "water bills",
+            "peak flow"
+          ],
+          "x-unit": "L"
+        },
+        "max_day_factor": {
+          "default": 2.0,
+          "description": "Max-day / average-day ratio.",
+          "maximum": 4,
+          "minimum": 1,
+          "title": "Max Day Factor",
+          "type": "number",
+          "x-advanced": true
+        },
+        "min_main_mm": {
+          "default": 150,
+          "description": "Smallest main where hydrants are attached.",
+          "maximum": 300,
+          "minimum": 100,
+          "title": "Min Main Mm",
+          "type": "integer",
+          "x-unit": "mm"
+        },
+        "peak_hour_factor": {
+          "default": 3.0,
+          "description": "Peak-hour / average-day ratio.",
+          "maximum": 6,
+          "minimum": 1,
+          "title": "Peak Hour Factor",
+          "type": "number",
+          "x-advanced": true
+        },
+        "pump_units": {
+          "default": 3,
+          "description": "Pumps at the booster station (one is standby).",
+          "maximum": 8,
+          "minimum": 1,
+          "title": "Pump Units",
+          "type": "integer",
+          "x-advanced": true
+        },
+        "tank_overflow_above_ground_m": {
+          "default": 42.0,
+          "description": "Elevated tank overflow height above the highest service in its zone.",
+          "maximum": 80,
+          "minimum": 20,
+          "title": "Tank Overflow Above Ground M",
+          "type": "number",
+          "x-effects": [
+            "service pressure"
+          ],
+          "x-unit": "m"
+        },
+        "valve_spacing_m": {
+          "default": 240.0,
+          "description": "Maximum spacing between line valves.",
+          "maximum": 600,
+          "minimum": 60,
+          "title": "Valve Spacing M",
+          "type": "number",
+          "x-advanced": true,
+          "x-unit": "m"
+        },
+        "zone_band_m": {
+          "default": 28.0,
+          "description": "Elevation band per pressure zone.",
+          "maximum": 60,
+          "minimum": 10,
+          "title": "Zone Band M",
+          "type": "number",
+          "x-advanced": true,
+          "x-unit": "m"
+        }
+      },
+      "title": "Water distribution",
+      "type": "object",
+      "x-applies": "town",
+      "x-group": true,
+      "x-order": 5
+    },
+    "WeatherConfig": {
+      "additionalProperties": false,
+      "description": "Seeded daily weather. Drives magnitudes and volumes, never process structure.",
+      "properties": {
+        "cooling_base_c": {
+          "default": 22.0,
+          "description": "Cooling starts above this temperature.",
+          "maximum": 30,
+          "minimum": 15,
+          "title": "Cooling Base C",
+          "type": "number",
+          "x-advanced": true,
+          "x-unit": "C"
+        },
+        "fall": {
+          "$ref": "#/$defs/SeasonTemp",
+          "default": {
+            "max_c": 28.0,
+            "mean_c": 9.5,
+            "min_c": -10.0,
+            "sd_c": 6.5
+          },
+          "description": "Fall (Sep 21–Dec 20)."
+        },
+        "heating_base_c": {
+          "default": 15.0,
+          "description": "Heating starts below this temperature.",
+          "maximum": 22,
+          "minimum": 5,
+          "title": "Heating Base C",
+          "type": "number",
+          "x-advanced": true,
+          "x-unit": "C"
+        },
+        "persistence": {
+          "default": 0.7,
+          "description": "Day-to-day AR(1) persistence of temperature anomalies.",
+          "maximum": 0.98,
+          "minimum": 0,
+          "title": "Persistence",
+          "type": "number",
+          "x-advanced": true
+        },
+        "spring": {
+          "$ref": "#/$defs/SeasonTemp",
+          "default": {
+            "max_c": 30.0,
+            "mean_c": 9.0,
+            "min_c": -8.0,
+            "sd_c": 6.0
+          },
+          "description": "Spring (Mar 21–Jun 20)."
+        },
+        "storm_days_per_year": {
+          "default": 28.0,
+          "description": "Thunderstorm days per year (mostly May–Sep).",
+          "maximum": 120,
+          "minimum": 0,
+          "title": "Storm Days Per Year",
+          "type": "number",
+          "x-effects": [
+            "lightning outages",
+            "estimated reads"
+          ]
+        },
+        "summer": {
+          "$ref": "#/$defs/SeasonTemp",
+          "default": {
+            "max_c": 37.0,
+            "mean_c": 21.5,
+            "min_c": 10.0,
+            "sd_c": 4.0
+          },
+          "description": "Summer (Jun 21–Sep 20)."
+        },
+        "winter": {
+          "$ref": "#/$defs/SeasonTemp",
+          "default": {
+            "max_c": 12.0,
+            "mean_c": -4.5,
+            "min_c": -28.0,
+            "sd_c": 6.5
+          },
+          "description": "Winter (Dec 21–Mar 20)."
+        }
+      },
+      "title": "Weather",
+      "type": "object",
+      "x-applies": "town",
+      "x-group": true,
+      "x-order": 7
+    }
+  },
+  "additionalProperties": false,
+  "description": "Complete simulator configuration. ``town_id`` is a pure function of this object and the generator version.",
+  "properties": {
+    "ami": {
+      "$ref": "#/$defs/AmiConfig"
+    },
+    "anomalies": {
+      "$ref": "#/$defs/AnomaliesConfig"
+    },
+    "customers_billing": {
+      "$ref": "#/$defs/CustomersBillingConfig"
+    },
+    "description": {
+      "default": "",
+      "description": "Free-text description (informational).",
+      "title": "Description",
+      "type": "string"
+    },
+    "electric": {
+      "$ref": "#/$defs/ElectricConfig"
+    },
+    "gas": {
+      "$ref": "#/$defs/GasConfig"
+    },
+    "housing": {
+      "$ref": "#/$defs/HousingConfig"
+    },
+    "incidents": {
+      "$ref": "#/$defs/IncidentConfig"
+    },
+    "name": {
+      "default": "custom",
+      "description": "Preset or scenario name (informational; not part of the town id).",
+      "title": "Name",
+      "type": "string"
+    },
+    "operations": {
+      "$ref": "#/$defs/OperationsConfig"
+    },
+    "process": {
+      "$ref": "#/$defs/ProcessConfig"
+    },
+    "scenario": {
+      "$ref": "#/$defs/ScenarioConfig"
+    },
+    "seeds": {
+      "$ref": "#/$defs/SeedsConfig"
+    },
+    "town": {
+      "$ref": "#/$defs/TownConfig"
+    },
+    "water": {
+      "$ref": "#/$defs/WaterConfig"
+    },
+    "weather": {
+      "$ref": "#/$defs/WeatherConfig"
+    }
+  },
+  "title": "SimConfig",
+  "type": "object",
+  "x-generator-version": "0.2.0"
+}

@@ -1,0 +1,16 @@
+name: us_midwest
+description: Synthetic US Midwest town, 3,500 homes, US units and 12.47 kV distribution.
+seeds:
+  master: "7"
+town:
+  houses: 3500
+  skeleton: synthetic
+  units: us
+  anchor_lat: 39.5
+  anchor_lon: -94.0
+  timezone: America/Chicago
+electric:
+  primary_kv: 12.47
+  transmission_kv: 69
+gas:
+  scheme: mp

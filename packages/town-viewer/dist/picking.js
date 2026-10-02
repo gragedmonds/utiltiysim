@@ -6,3 +6,6 @@ export function bindPropertyPicking(canvas,pick,signal){
  canvas.addEventListener('pointerup',e=>{const click=down?.id===e.pointerId&&!down.moved&&e.button===0&&Math.hypot(e.clientX-down.x,e.clientY-down.y)<=6;pointers.delete(e.pointerId);if(down?.id===e.pointerId)down=null;if(click)pick(e);},{capture:true,signal});
  canvas.addEventListener('pointercancel',e=>{pointers.delete(e.pointerId);down=null;},{capture:true,signal});
 }
+
+// Right-click without movement opens actions; right-drag remains orbit.
+export function bindContextPicking(canvas,pick,signal){let down=null;canvas.addEventListener('contextmenu',e=>e.preventDefault(),{signal});canvas.addEventListener('pointerdown',e=>{if(e.button===2)down={id:e.pointerId,x:e.clientX,y:e.clientY,moved:false};},{capture:true,signal});canvas.addEventListener('pointermove',e=>{if(down&&Math.hypot(e.clientX-down.x,e.clientY-down.y)>6)down.moved=true;},{capture:true,signal});canvas.addEventListener('pointerup',e=>{if(down?.id===e.pointerId){const click=!down.moved&&e.button===2;down=null;if(click)pick(e);}},{capture:true,signal});canvas.addEventListener('pointercancel',()=>{down=null;},{signal});}

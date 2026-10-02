@@ -3,15 +3,15 @@ __pycache__/
 *.pyc
 .venv/
 *.egg-info/
-dist/
-build/
+/dist/
+/build/
 .pytest_cache/
 .ruff_cache/
 # engine caches and scratch output
 .utilsim_cache/
 out/
-# node (web bridge)
-web/node_modules/
-web/vendor/
+# node
+node_modules/
 # os
 .DS_Store
+viewer*.png

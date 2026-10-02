@@ -25,7 +25,7 @@ export function heightSampler(terrain, legacyFallback) {
 export function inspectSnapshot(snapshot, {legacyTerrain}={}) {
  if(!snapshot||!['utility-town/1.0','utility-town/2.0'].includes(snapshot.schemaVersion))throw new Error('Expected utility-town/1.0 or utility-town/2.0 snapshot.');
  text(snapshot.id,'town id');const legacy=snapshot.schemaVersion==='utility-town/1.0';
- const homes=list(snapshot.premises,'premises');if(homes.length<1||homes.length>10000||snapshot.count!==homes.length)throw new Error('Premise count must match count and be 1–10,000.');
+ const homes=list(snapshot.premises,'premises');if(homes.length<1||homes.length>15000||snapshot.count!==homes.length)throw new Error('Premise count must match count and be 1–15,000 (including nonresidential premises).');
  unique(homes.map(h=>h.id),'premise id');
  for(const h of homes){point(h,'premise');for(const k of ['width','depth','height']){finite(h[k],`premise.${k}`);if(h[k]<=0)throw new Error(`Premise ${k} must be positive.`);}for(const k of ['angle','side','roofTone','solarKW'])finite(h[k],`premise.${k}`);if(![-1,1].includes(h.side))throw new Error('Premise side must be -1 or 1.');if(!h.services||typeof h.services!=='object')throw new Error('Premise services are required.');}
  const bounds=snapshot.bounds;for(const k of ['minX','maxX','minZ','maxZ'])finite(bounds?.[k],`bounds.${k}`);if(bounds.maxX<=bounds.minX||bounds.maxZ<=bounds.minZ)throw new Error('Invalid map bounds.');

@@ -1,6 +1,7 @@
 // Utility Town v1.0.0: deterministic geography, utility graphs and simulation fixtures.
 // All units are explicit. OSM streets are geography only; utility assets are synthetic.
-export const VERSION = '1.0.0';
+import {prepareDemoNetwork} from './roads.js';
+export const VERSION = '1.1.0';
 export const UTILS = ['electric','water','gas'];
 export const LABELS = {electric:'Electricity',water:'Water',gas:'Gas'};
 export const COLORS = {electric:0xe5a735,water:0x149faf,gas:0xa783d8};
@@ -95,7 +96,7 @@ export function createTown(source,{seed='WHITBY-042',count=480}={}){
   }
   town.networks[u]={commodity:u,sourceId:supply.id,stationId:station.id,nodes,edges,topology:'radial demonstration network',unit:u==='electric'?'kW':'m3/h',assumptions:{losses:'excluded',pressureVoltageSolution:'not solved',nominalSizing:'illustrative; not capacity validated'}};
  }
- town.validation=validateTown(town);return town;
+ prepareDemoNetwork(town,terrain);town.validation=validateTown(town);return town;
 }
 export function validateTown(town){let errors=[],seen=new Set();let totalEdges=0;for(const u of UTILS){const net=town.networks[u],ids=new Set(net.nodes.map(n=>n.id)),reached=new Set([net.sourceId]),adj=new Map();for(const e of net.edges){totalEdges++;if(!ids.has(e.from)||!ids.has(e.to))errors.push(`Dangling edge ${e.id}`);if(!adj.has(e.from))adj.set(e.from,[]);adj.get(e.from).push(e.to);if(!Number.isFinite(e.lengthM)||e.lengthM<0)errors.push(`Invalid length ${e.id}`);}let q=[net.sourceId];for(let i=0;i<q.length;i++)for(const id of adj.get(q[i])||[])if(!reached.has(id)){reached.add(id);q.push(id);}for(const n of net.nodes)if(!reached.has(n.id))errors.push(`Disconnected node ${n.id}`);for(const h of town.premises)if(h.services[u]&&!reached.has(`${u}-N-${h.id}`))errors.push(`Disconnected service ${h.id}`);if(net.edges.length!==net.nodes.length-1)errors.push(`Not a tree: ${u}`);}
  for(const collection of [town.premises,town.buildings,town.accounts,town.servicePoints,town.meters,town.registers,town.installations,town.contracts])for(const row of collection){if(seen.has(row.id))errors.push(`Duplicate id ${row.id}`);seen.add(row.id);}return {valid:errors.length===0,errors,connectedServices:town.servicePoints.length,networkEdges:totalEdges,checks:['Unique identifiers','Source reachability','All active services connected','Valid edge endpoints','Radial topology']};}

@@ -1,0 +1,185 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:utilsim:utility-town-2.0",
+  "title": "Utility town snapshot (utility-town/2.0)",
+  "description": "Native engine snapshot in the viewer frame: local metres, x east, z south, y up; source.origin gives the lat/lon of (0, 0). Record ids are unique within the town (id). count = premises.length; homes = residential premises. topologyRevision identifies structural nodes/edges and connections (toggling enabled does not change it); indexRevision identifies the public id mapping and is identical for the full and viewer details. Networks are a construction forest (parentEdgeId) plus loop edges; connectivity is the graph of enabled edges. Additional properties are allowed so later minor versions stay additive.",
+  "type": "object",
+  "required": ["schemaVersion", "generatorVersion", "id", "topologyRevision", "indexRevision", "seed", "count", "homes",
+               "premiseCount", "config", "source", "bounds", "terrain", "roads", "premises", "buildings", "networks",
+               "servicePoints", "meters", "sampleReads", "billingDocuments", "invoices", "simulation", "validation",
+               "detail"],
+  "properties": {
+    "schemaVersion": {"const": "utility-town/2.0"},
+    "generatorVersion": {"type": "string", "minLength": 1},
+    "engine": {"const": "utilsim"},
+    "id": {"type": "string", "pattern": "^town-[0-9a-f]{16}$"},
+    "topologyRevision": {"type": "string", "pattern": "^topo-[0-9a-f]+$"},
+    "indexRevision": {"type": "string", "pattern": "^idx-[0-9a-f]+$"},
+    "seed": {"type": "string", "minLength": 1},
+    "count": {"type": "integer", "minimum": 1, "maximum": 10500, "description": "premises.length (all premises)."},
+    "homes": {"type": "integer", "minimum": 1, "maximum": 10000, "description": "Residential premises."},
+    "premiseCount": {"type": "integer", "minimum": 1},
+    "units": {"enum": ["ontario", "us", "uk"]},
+    "config": {"type": "object", "description": "Complete SimConfig (see config.schema.json)."},
+    "configHash": {"type": "string"},
+    "detail": {"enum": ["full", "viewer"], "description": "viewer omits reads and customer tables (fetch per premise)."},
+    "source": {
+      "type": "object",
+      "required": ["type", "utilityOffsets", "coordinateSystem", "origin"],
+      "properties": {
+        "type": {"enum": ["osm", "synthetic"]},
+        "utilityOffsets": {"const": "geometry"},
+        "coordinateSystem": {"const": "local metres; x east, z south"},
+        "origin": {"type": "object", "required": ["lat", "lon"],
+                   "properties": {"lat": {"type": "number"}, "lon": {"type": "number"}}},
+        "attribution": {"type": "string"},
+        "license": {"type": "string"},
+        "sha256": {"type": "string"}
+      }
+    },
+    "bounds": {
+      "type": "object", "required": ["minX", "maxX", "minZ", "maxZ"],
+      "properties": {"minX": {"type": "number"}, "maxX": {"type": "number"}, "minZ": {"type": "number"},
+                     "maxZ": {"type": "number"}}
+    },
+    "terrain": {
+      "type": "object",
+      "description": "values[row*cols+col] is ground elevation (m) at x = originX + col*cellSizeM, z = originZ + row*cellSizeM; bilinear between samples.",
+      "required": ["cols", "rows", "cellSizeM", "originX", "originZ", "order", "values"],
+      "properties": {
+        "cols": {"type": "integer", "minimum": 2}, "rows": {"type": "integer", "minimum": 2},
+        "cellSizeM": {"type": "number", "exclusiveMinimum": 0},
+        "originX": {"type": "number"}, "originZ": {"type": "number"},
+        "order": {"const": "row-major-z-positive"},
+        "values": {"type": "array", "items": {"type": "number"}}
+      }
+    },
+    "roads": {"type": "array", "items": {"$ref": "#/$defs/road"}},
+    "premises": {"type": "array", "minItems": 1, "maxItems": 10500, "items": {"$ref": "#/$defs/premise"}},
+    "buildings": {"type": "array", "items": {"$ref": "#/$defs/building"}},
+    "parcels": {"type": "array"},
+    "facilities": {"type": "array", "items": {"type": "object", "required": ["id", "kind", "x", "z", "polygon"]}},
+    "districts": {"type": "array"},
+    "parks": {"type": "array"},
+    "networks": {
+      "type": "object", "required": ["electric", "water", "gas"],
+      "properties": {
+        "electric": {"$ref": "#/$defs/network", "properties": {"unit": {"const": "kW"}}},
+        "water": {"$ref": "#/$defs/network", "properties": {"unit": {"const": "m3/h"}}},
+        "gas": {"$ref": "#/$defs/network", "properties": {"unit": {"const": "m3/h"}}}
+      },
+      "additionalProperties": false
+    },
+    "accounts": {"type": "array", "items": {"type": "object", "required": ["id", "businessPartnerId", "currency"]}},
+    "businessPartners": {"type": "array", "items": {"type": "object", "required": ["id", "kind", "name"]}},
+    "servicePoints": {"type": "array", "items": {"type": "object",
+      "required": ["id", "premiseId", "commodity", "meterId", "installationId", "status", "validFrom", "validTo"]}},
+    "meters": {"type": "array", "items": {"type": "object", "required": ["id", "servicePointId", "registerIds",
+                                                                         "multiplier"]}},
+    "registers": {"type": "array", "items": {"type": "object", "required": ["id", "meterId", "direction", "unit"]}},
+    "installations": {"type": "array"},
+    "contracts": {"type": "array", "items": {"type": "object",
+      "required": ["id", "installationId", "accountId", "validFrom", "validTo", "status"]}},
+    "tariffAssignments": {"type": "array"},
+    "tariffs": {"type": "array"},
+    "mrus": {"type": "array"},
+    "portions": {"type": "array"},
+    "readSchedules": {"type": "array"},
+    "amiNetwork": {"type": "object"},
+    "sampleReads": {"type": "array", "items": {"$ref": "urn:utilsim:meter-read-1.1"}},
+    "billingDocuments": {"type": "array"},
+    "invoices": {"type": "array"},
+    "stateFrame": {"$ref": "urn:utilsim:utility-state-1.0"},
+    "simulation": {"type": "object", "required": ["timezone", "epoch", "tickSeconds", "scenarios"]},
+    "validation": {"type": "object", "required": ["valid", "errors"]},
+    "stats": {"type": "object"}
+  },
+  "$defs": {
+    "point": {
+      "type": "object", "required": ["x", "z"],
+      "properties": {"x": {"type": "number"}, "z": {"type": "number"},
+                     "elevationM": {"type": "number", "description": "Ground elevation, not asset centreline."}}
+    },
+    "points": {"type": "array", "minItems": 2, "items": {"$ref": "#/$defs/point"}},
+    "road": {
+      "type": "object", "required": ["id", "points", "name", "class", "roadClass", "lengthM"],
+      "properties": {"id": {"type": "string"}, "points": {"$ref": "#/$defs/points"},
+                     "roadClass": {"enum": ["arterial", "collector", "local"]},
+                     "pavementWidthM": {"type": "number"}, "rowWidthM": {"type": "number"}}
+    },
+    "premise": {
+      "type": "object",
+      "required": ["id", "uid", "address", "x", "z", "width", "depth", "height", "angle", "side", "roofTone",
+                   "solarKW", "solar", "occupied", "occupants", "services", "accountId", "premiseType"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1}, "uid": {"type": "string", "minLength": 1},
+        "x": {"type": "number"}, "z": {"type": "number"},
+        "width": {"type": "number", "exclusiveMinimum": 0, "description": "Metres along the street."},
+        "depth": {"type": "number", "exclusiveMinimum": 0}, "height": {"type": "number", "exclusiveMinimum": 0},
+        "angle": {"type": "number", "description": "Road direction atan2(dz, dx) in radians, x/z plane."},
+        "side": {"enum": [-1, 1]},
+        "roofTone": {"type": "number", "minimum": 0, "maximum": 1},
+        "solarKW": {"type": "number", "minimum": 0}, "solarPeakKW": {"type": "number", "minimum": 0},
+        "services": {"type": "object", "required": ["electric", "water"],
+                     "properties": {"electric": {"type": "string"}, "water": {"type": "string"},
+                                    "gas": {"type": "string"}},
+                     "additionalProperties": false},
+        "premiseType": {"enum": ["residential", "commercial", "institutional", "industrial", "utility"]},
+        "roof": {"enum": ["gable", "hip", "flat"]},
+        "elevationM": {"type": "number"}
+      }
+    },
+    "building": {
+      "type": "object", "required": ["id", "premiseIds", "footprint", "heightM"],
+      "properties": {"footprint": {"type": "object", "required": ["widthM", "depthM", "polygon"]}}
+    },
+    "node": {
+      "type": "object", "required": ["id", "kind", "x", "z", "elevationM"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "kind": {"enum": ["external_supply", "substation", "pump_station", "city_gate_regulator", "elevated_tank",
+                          "district_regulator", "junction", "transformer", "meter"]},
+        "subkind": {"type": "string"},
+        "x": {"type": "number"}, "z": {"type": "number"}, "elevationM": {"type": "number"},
+        "parentEdgeId": {"type": "string"}, "premiseId": {"type": "string"}, "servicePointId": {"type": "string"},
+        "label": {"type": "string"}
+      }
+    },
+    "edge": {
+      "type": "object", "required": ["id", "commodity", "from", "to", "kind", "points", "lengthM", "placement", "tier",
+                                     "enabled"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "commodity": {"enum": ["electric", "water", "gas"]},
+        "from": {"type": "string"}, "to": {"type": "string"},
+        "kind": {"enum": ["supply", "trunk", "distribution", "transformer", "tank_riser", "service"]},
+        "points": {"$ref": "#/$defs/points"},
+        "lengthM": {"type": "number", "minimum": 0},
+        "placement": {"enum": ["overhead", "underground"]},
+        "tier": {"type": "string"},
+        "enabled": {"type": "boolean"},
+        "loop": {"const": true},
+        "normallyOpen": {"const": true},
+        "sizeMm": {"type": "integer", "minimum": 0},
+        "nominalLabel": {"type": "string"},
+        "voltageKV": {"type": "number", "exclusiveMinimum": 0},
+        "secondaryVoltageKV": {"type": "number", "exclusiveMinimum": 0},
+        "ratingKVA": {"type": "number", "exclusiveMinimum": 0}
+      }
+    },
+    "network": {
+      "type": "object",
+      "required": ["commodity", "sourceId", "sourceIds", "stationId", "nodes", "edges", "unit", "equipment"],
+      "properties": {
+        "sourceId": {"type": "string"},
+        "sourceIds": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+        "stationId": {"type": "string"},
+        "nodes": {"type": "array", "items": {"$ref": "#/$defs/node"}},
+        "edges": {"type": "array", "items": {"$ref": "#/$defs/edge"}},
+        "unit": {"enum": ["kW", "m3/h"]},
+        "equipment": {"type": "array", "items": {"type": "object", "required": ["id", "kind", "x", "z"]}}
+      }
+    }
+  },
+  "additionalProperties": true
+}

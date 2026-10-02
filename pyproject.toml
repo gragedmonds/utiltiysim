@@ -49,6 +49,7 @@ ignore = ["E501", "B008", "B905"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["tests"]
 addopts = "-q -ra"
 timeout = 600
 markers = ["slow: long-running benchmarks (deselect with -m 'not slow')"]
