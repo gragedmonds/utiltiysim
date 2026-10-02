@@ -1,7 +1,8 @@
 """A meter-to-cash run: a year of periodic reads → VEE → exception work queues, replayed deterministically.
 
 The run is stateless. A request carries ``settings`` (overrides for the run-scoped groups ``process``,
-``anomalies``, ``reading`` and ``vee``) and ``actions``, the analyst decisions made in the viewer. Actions are
+``anomalies``, ``reading``, ``vee`` and ``billing``), an optional run ``seed`` (re-rolls every draw on the same town;
+none = the town's seed) and ``actions``, the analyst decisions made in the viewer. Actions are
 append-only and dated; an action never changes anything before its day. It may also carry ``outages``: service
 interruptions from the operations simulator (who lost which service, and when). Consumption stops during an outage,
 an AMI meter without power misses its read, and VEE knows about the outage (``vee.oms_events``).
@@ -54,6 +55,7 @@ STATUS = ("pending", "released", "estimated", "adjusted", "held", "missing")
 UTILITIES = ("electric", "water", "gas")
 OUTAGE_REASON = "SIM_POWER_OUTAGE"
 MAX_OUTAGE_DAYS = 7
+MAX_SEED = 64
 FAULTS = ("stuck_meter", "slow_meter", "tamper", "exchange_registration_failure")
 
 
@@ -161,19 +163,35 @@ class Case:
 
 
 # ---- the run ----------------------------------------------------------------------------------------------------
+def town_seed(cfg: SimConfig) -> str:
+    """The seed a run uses when the request names none: the town's household seed."""
+    return cfg.seeds.for_("households")
+
+
+def run_seed(cfg: SimConfig, seed: str | None) -> str | None:
+    """A request's run seed, or None for the town's own (blank, or the town seed itself)."""
+    s = (seed or "").strip()
+    if len(s) > MAX_SEED:
+        raise ValueError(f"seed: at most {MAX_SEED} characters")
+    return s if s and s != town_seed(cfg) else None
+
+
 class M2CRun:
     def __init__(self, town: M2CTown, settings: dict | None = None, actions: list[dict] | None = None,
-                 outages: list[dict] | None = None, *, strict: bool = True):
+                 outages: list[dict] | None = None, *, strict: bool = True, seed: str | None = None):
         self.town = town
         self.strict = strict  # refuse (raise) when the newest action does not apply; else skip it with a warning
         self.cfg = resolve_settings(town.cfg, settings)
-        self.settings_hash = _hash({g: self.cfg.model_dump(mode="json")[g] for g in M2C_GROUPS})
+        # A run seed re-rolls every draw of the run (reads, anomalies, work, bill checks); the town stays the same.
+        self.run_seed = run_seed(town.cfg, seed)
+        groups = {g: self.cfg.model_dump(mode="json")[g] for g in M2C_GROUPS}
+        self.settings_hash = _hash(groups if self.run_seed is None else {**groups, "seed": self.run_seed})
         self.warnings: list[str] = []
         self.actions = self._check_actions(actions or [])
         self.outages = self._check_outages(outages or [])
         inputs = _hash([self.actions, self.outages]) if self.outages else (_hash(self.actions) if self.actions else "0")
         self.simulation_id = f"m2c-{town.id}-{self.settings_hash}-{inputs}"
-        self.seed = f"{town.cfg.seeds.for_('households')}:m2c"
+        self.seed = f"{self.run_seed or town_seed(town.cfg)}:m2c"
         self._setup()
         self._setup_outages()
         self._simulate()

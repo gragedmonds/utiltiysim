@@ -112,7 +112,7 @@ def summary(run: M2CRun, as_of: str | None = None) -> dict:
     return {
         "schemaVersion": SUMMARY_VERSION, "simulationId": run.simulation_id, "townId": tw.id,
         "asOf": date_of(day).isoformat(), "period": {"start": "2026-01-01", "end": "2026-12-31"},
-        "settingsHash": run.settings_hash, "warnings": run.warnings,
+        "settingsHash": run.settings_hash, "seed": run.run_seed, "warnings": run.warnings,
         "kpis": {
             "registers": tw.n_registers, "reads": int(read.sum()), "actual": int(got.sum()),
             "missing": int((read & np.isnan(run.obs[:, months])).sum()), "autoAccepted": int((got & (disp == 0)).sum()),

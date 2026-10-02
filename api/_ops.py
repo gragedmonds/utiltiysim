@@ -81,8 +81,8 @@ class TimelineRequest(BaseModel):
     date: str | None = Field(None, description="Run day (local); default: the town's scenario date.")
     commands: list[Command] = Field(default_factory=list, max_length=500)
     settings: dict | None = Field(None, description="Overrides for response timings (see GET /api/sim/settings).")
-    m2c: dict | None = Field(None, description="The meter-to-cash run ({settings, actions, outages}) whose field "
-                             "orders for this day become crew jobs (see /api/m2c/*).")
+    m2c: dict | None = Field(None, description="The meter-to-cash run ({settings, actions, outages, seed}) whose "
+                             "field orders for this day become crew jobs (see /api/m2c/*).")
 
 
 class FrameRequest(TimelineRequest):

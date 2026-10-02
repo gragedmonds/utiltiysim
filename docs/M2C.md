@@ -5,9 +5,17 @@ engine for calendar 2026.
 
 ## Run model
 
-A run is stateless and deterministic: `(town, settings, actions, outages)` gives the same year every time.
+A run is stateless and deterministic: `(town, settings, actions, outages, seed)` gives the same year every time.
 - `settings` overrides the run-scoped config groups `process`, `anomalies`, `reading`, `vee` and `billing`. They never change
-  the town id. `GET /api/m2c/settings` returns their JSON Schema, with units, bounds, effects and advanced flags.
+  the town id. `GET /api/m2c/settings` returns their JSON Schema, with units, bounds, effects and advanced flags
+  (`?town=` takes the defaults from that town).
+- `seed` (optional, top level, at most 64 characters) re-rolls the run on the same town: every random draw of the run
+  (missed reads, anomalies and their onsets, analyst pickup and review, bill checks, payments) comes from
+  `"{seed}:m2c"` instead of the town's `"{seeds.households}:m2c"`. Blank, `null` or the town's own seed is the town's
+  run, exactly as before the field existed (same `simulationId`). The routes, read days, meters and customers never
+  change. `GET /api/m2c/settings` returns `seed: {type, maxLength: 64, default: <town seed>, title, description}`,
+  so a form can show "blank = town seed"; summaries echo `seed` (`null` for the town's run). Operations requests
+  pass it inside `m2c` (`m2c: {settings, actions, outages, seed}`), and every run cache key includes it.
 - `actions` are analyst decisions from the viewer: `{id, day, type, caseId, value?, note?}`.
   - `type` is one of `accept`, `override` (with a register value), `estimate`, `field_order` or `escalate`.
   - The Utility Studio adds field service orders (`order_save`, `order_release`, `order_dispatch`,
@@ -260,7 +268,7 @@ opening each case.
 
 | Endpoint | Returns |
 |---|---|
-| `GET /api/m2c/settings` | Schema, defaults, queues, exception vocabulary, action types, clarification categories |
+| `GET /api/m2c/settings?town=` | Schema, defaults (the town's with `?town=`), the run `seed` (default: the town seed), queues, exception vocabulary, action types, clarification categories |
 | `GET /api/m2c/vocabulary?town=` | `m2c-vocabulary/1.0`: the field service order form as data (fields with label, tab, required, kind, bounds and choices; the town's planning plant; component units; stages and system status), action types, queues and categories |
 | `POST /api/m2c/summary` | `m2c-summary/1.0`: KPIs, cost (labour, system, CX, reads), carry, VEE precision/recall against truth, `billing`, `reliability`, `weather`, queues with aging and daily opened/closed/backlog, exception mix, RPA rules, one status per premise |
 | `POST /api/process/queue` | Paged worklist: `queue` (incl. `BILLING`), `category`, `assignee`, `status`, `sort` (`age`, `impact`, `confidence`, `created`), `page`, `pageSize` ≤ 200, `type`, `commodity`, `search` (case, address, premise, account, meter or order id) |
