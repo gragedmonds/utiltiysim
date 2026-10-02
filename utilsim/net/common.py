@@ -41,9 +41,13 @@ class SplitGraph:
     piece_s0: np.ndarray
     piece_s1: np.ndarray
     lines: list[LineString]
+    side: np.ndarray | None = None  # per road edge: +1 if u→v runs with its street (see net/corridors.py)
 
     @staticmethod
-    def build(roads: RoadNetwork, tap_edge: np.ndarray, tap_s: np.ndarray) -> SplitGraph:
+    def build(roads: RoadNetwork, tap_edge: np.ndarray, tap_s: np.ndarray, side: np.ndarray | None = None
+              ) -> SplitGraph:
+        """``side`` keeps a utility's offset on one side of each street; without it offsets follow each road edge's
+        own u→v direction."""
         g = roads.graph
         lines = [LineString(p) for p in g.geometry]
         tap_edge = np.asarray(tap_edge, dtype=np.int64)
@@ -69,8 +73,9 @@ class SplitGraph:
                 pe.append(e)
                 s0.append(sa)
                 s1.append(sb)
+        side = np.ones(g.n_edges, dtype=np.int64) if side is None else np.asarray(side, dtype=np.int64)
         return SplitGraph(roads, n_road, tap_edge, tap_s, xy, np.array(pa), np.array(pb), np.array(pe),
-                          np.array(s0), np.array(s1), lines)
+                          np.array(s0), np.array(s1), lines, side)
 
     @property
     def n_nodes(self) -> int:
@@ -95,6 +100,10 @@ class SplitGraph:
         h = math.atan2(b.y - a.y, b.x - a.x)
         p = ln.interpolate(s)
         return np.array([p.x - math.sin(h) * offset, p.y + math.cos(h) * offset])
+
+    def street_point(self, e: int, s: float, offset: float) -> np.ndarray:
+        """Like ``point_at`` with a utility offset taken on the street's side (as ``piece_points`` does)."""
+        return self.point_at(e, s, offset * int(self.side[e]))
 
     def heading_at(self, e: int, s: float) -> float:
         ln = self.lines[e]
@@ -181,7 +190,7 @@ def piece_points(sg: SplitGraph, piece: int, offset: float, from_node: int, dens
                  ) -> np.ndarray:
     pts = sg.centreline(piece)
     if offset:
-        pts = offset_polyline(pts, offset)
+        pts = offset_polyline(pts, offset * int(sg.side[int(sg.piece_edge[piece])]))
     if densify and len(pts) >= 2:  # in the piece's own direction, so lines on one piece share pole positions
         pts = densify_polyline(pts, densify)
     if int(sg.piece_a[piece]) != from_node:

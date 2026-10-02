@@ -45,7 +45,7 @@ def build_gas(ctx: NetContext) -> Network:
     mp_psig = gcfg.mp_kpa / KPA_PER_PSI
     tap_edge = np.concatenate([prem.edge[served], [gate.edge]]).astype(np.int64)
     tap_s = np.concatenate([prem.s[served], [gate.s]])
-    sg = SplitGraph.build(roads, tap_edge, tap_s)
+    sg = SplitGraph.build(roads, tap_edge, tap_s, ctx.corridors.side)
     prem_tap = sg.n_road + np.arange(len(served))
     gate_tap = sg.n_road + len(served)
     entry = ctx.exit_for(gate.xy)
@@ -91,7 +91,7 @@ def build_gas(ctx: NetContext) -> Network:
                 pipe_of[p] = pipe_of[v]
     off = OFFSETS["gas"]
     node_of: dict[int, int] = {}
-    root_xy = sg.point_at(int(gate.edge), float(gate.s), off)
+    root_xy = sg.street_point(int(gate.edge), float(gate.s), off)
     node_of[gate_tap] = net.add_node(f"gas-J-T{gate_tap}", "junction", root_xy, pressureTier="mp")
     head = max((pipe_of[v] for v in pipe_of if forest.parent[v] == gate_tap), key=lambda p: p.nominal_mm,
                default=GAS_MP[1])

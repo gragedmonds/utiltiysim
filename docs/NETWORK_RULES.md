@@ -7,7 +7,9 @@ collectors 0.75, locals 1.0 per metre, so mains follow main roads). Electric bui
 corridors with a turn-aware router (below). Loops are added after sizing as loop edges between existing nodes
 (`loop: true`, never a parent edge), each with `enabled`: water and gas loops enabled, electric feeder ties normally
 open (`enabled: false`), water ties across a pressure-zone boundary closed (`enabled: false`,
-`boundaryValve: "closed"`).
+`boundaryValve: "closed"`). Each utility keeps its lateral offset in the road allowance (water −4.5 m, gas +4.5 m,
+electric underground +6.2 m, overhead −6.8 m) on the same side along a whole street: road edges are chained by heading
+continuity (corridors, then local streets) and offsets are taken relative to the street's direction, not each edge's.
 
 ## Electric (defaults: 115 kV in, 13.8 kV primary, 120/240 V)
 

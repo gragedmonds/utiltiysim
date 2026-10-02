@@ -40,7 +40,7 @@ from utilsim.net.common import (
     piece_points,
 )
 from utilsim.net.context import NetContext
-from utilsim.net.corridors import Corridors, RouteCosts, TurnRouter, extract_corridors
+from utilsim.net.corridors import Corridors, RouteCosts, TurnRouter
 from utilsim.net.tables import SECONDARY, THREE_PHASE_KVA, coincidence, conductor_kva, pick_conductor
 from utilsim.sim.demand import design_kva
 
@@ -441,10 +441,10 @@ def build_electric(ctx: NetContext) -> Network:
     groups = _groups(ctx, kva, overhead)
     tap_edge = np.array([gr["edge"] for gr in groups] + [f.edge for f in subs], dtype=np.int64)
     tap_s = np.array([gr["s"] for gr in groups] + [f.s for f in subs])
-    sg = SplitGraph.build(roads, tap_edge, tap_s)
+    corridors = ctx.corridors
+    sg = SplitGraph.build(roads, tap_edge, tap_s, corridors.side)
     grp_tap = sg.n_road + np.arange(len(groups))
     sub_tap = [sg.n_road + len(groups) + k for k in range(len(subs))]
-    corridors = extract_corridors(roads, cfg.town.corridor_max_deflection_deg, cfg.town.corridor_name_bonus_deg)
     router = TurnRouter(sg, corridors, RouteCosts.from_config(ec))
 
     own_n = np.zeros(sg.n_nodes)
@@ -547,7 +547,6 @@ def build_electric(ctx: NetContext) -> Network:
         prev = st
 
     off_oh, off_ug = OFFSETS["electric_oh"], OFFSETS["electric_ug"]
-    street_side = corridors.side
     first_child: dict[int, int] = {}
     for v in order:
         if parent[v] >= 0 and parent[v] not in first_child:
@@ -569,7 +568,7 @@ def build_electric(ctx: NetContext) -> Network:
         f, t, fname = subs[k], sub_tap[k], fname_of[fi]
         ttop = placement.get(first_child.get(hv, -1), "underground")
         nid = f"electric-J-T{t}" if hv == t else f"electric-J-T{t}-{fname}"
-        xy = sg.point_at(int(f.edge), float(f.s), offset(hv, ttop) * street_side[int(f.edge)])
+        xy = sg.street_point(int(f.edge), float(f.s), offset(hv, ttop))
         node_of[hv] = net.add_node(nid, "junction", xy,
                                    feeder=fname)
         # The exit is the feeder's getaway cable: parallel cables when one cannot carry its load.
@@ -593,7 +592,7 @@ def build_electric(ctx: NetContext) -> Network:
         piece = L.piece[v]
         e = int(sg.piece_edge[piece])
         oh = placement[v] == "overhead"
-        pts = piece_points(sg, piece, offset(v, placement[v]) * street_side[e], L.real[p], densify=spacing if oh else None)
+        pts = piece_points(sg, piece, offset(v, placement[v]), L.real[p], densify=spacing if oh else None)
         fname = fname_of[L.feeder[v]]
         u = L.real[v]
         if L.role[v] == "express":
@@ -615,7 +614,7 @@ def build_electric(ctx: NetContext) -> Network:
                      xOhmKm=c.x_ohm_km if n_c == 1 else round(c.x_ohm_km / n_c, 4))
         edge_of[v] = len(net.edges) - 1
         if oh and L.lane[v]:
-            pole_pts[edge_of[v]] = piece_points(sg, piece, off_oh * street_side[e], L.real[p], densify=spacing)
+            pole_pts[edge_of[v]] = piece_points(sg, piece, off_oh, L.real[p], densify=spacing)
         if phases[v] == 1 and (phases.get(p, 3) == 3):
             net.equipment.append({"id": f"FUSE-{len(net.equipment):05d}", "kind": "fuse",
                                   "xy": pts[min(1, len(pts) - 1)], "edgeId": net.edges[-1].id, "feeder": fname})
@@ -636,7 +635,7 @@ def build_electric(ctx: NetContext) -> Network:
         side = int(np.sign(prem.side[m].sum()) or 1)
         cls = int(g.edge_class[e])
         if gr["overhead"]:
-            txy = sg.point_at(e, gr["s"], off_oh * street_side[e])
+            txy = sg.street_point(e, gr["s"], off_oh)
             kind_lbl, place = "Pole-mount transformer", "overhead"
         else:
             txy = sg.point_at(e, gr["s"], side * (ROW_WIDTH[cls] / 2 - 1.0))
@@ -671,8 +670,7 @@ def build_electric(ctx: NetContext) -> Network:
         a, b = nodes[0], nodes[-1]
         oh = "overhead" in (placement.get(a), placement.get(b))
         off = off_oh if oh else off_ug
-        pts = [piece_points(sg, k, off * street_side[int(sg.piece_edge[k])], x, densify=spacing if oh else None)
-               for k, x in zip(pcs, nodes[:-1])]
+        pts = [piece_points(sg, k, off, x, densify=spacing if oh else None) for k, x in zip(pcs, nodes[:-1])]
         pts = np.vstack([pts[0]] + [q[1:] for q in pts[1:]])
         key = (fname_of[fa], fname_of[fb])
         n_same = sum(1 for x in tie_ids.get(fa, []) if x.startswith(f"TIE-{key[0]}-{key[1]}"))
