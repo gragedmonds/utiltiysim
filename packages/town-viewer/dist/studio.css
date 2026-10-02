@@ -3,7 +3,8 @@
 .studio-header{--studio-accent:#7357d8}
 .focus-layout .topbar.studio-header{position:absolute;left:0;right:0;top:0;height:62px;min-height:62px;padding:0 20px 0 24px;gap:28px;display:flex;align-items:stretch;justify-content:flex-start;background:#fff;border:0;border-top:3px solid var(--studio-accent);border-bottom:1px solid #dfdfe9;pointer-events:auto;z-index:40;box-sizing:border-box}
 .studio-brand{display:flex;align-items:center;gap:10px;font-size:17px;font-weight:750;letter-spacing:-.5px;color:#211d2e;white-space:nowrap;flex:none}
-.studio-logo{width:26px;height:26px;display:grid;place-items:center;border:2px solid var(--studio-accent);color:var(--studio-accent);border-radius:4px;font-size:20px;line-height:1}
+.studio-wordmark{display:block;width:190px;height:auto}
+.studio-icon{display:none;width:34px;height:auto}
 .studio-town{font-size:12px;font-weight:500;letter-spacing:0;color:#8a8497;margin-left:4px;max-width:28ch;overflow:hidden;text-overflow:ellipsis}
 .studio-tabs{display:flex;align-items:stretch;gap:4px;flex:1;margin:0}
 .studio-tabs a{display:flex;align-items:center;padding:0 18px;font-size:14px;color:#777187;text-decoration:none;border-bottom:3px solid transparent;margin-bottom:-1px;white-space:nowrap}
@@ -19,7 +20,8 @@
 @media (max-width:600px){
  .focus-layout .topbar.studio-header{padding:0 8px 0 12px;gap:8px}
  .studio-town{display:none}
- .studio-brand>span:nth-child(2){display:none}
+ .studio-wordmark{display:none}
+ .studio-icon{display:block}
  .studio-tabs a{padding:0 12px;font-size:13px}
  .studio-header .tool-button{width:34px;height:34px}
 }
@@ -329,7 +331,7 @@
 .studio-pill{background:#f0ecfc;color:#684bc5;font-size:12px;font-weight:650;border-radius:6px;padding:5px 9px;white-space:nowrap}
 @media (max-width:600px){.studio-config-tabs{gap:14px;overflow-x:auto}.studio-config-tabs button{font-size:13px;white-space:nowrap}}
 /* Map lenses: one analytic view at a time, with its legend. */
-.lens-panel{position:absolute;right:16px;top:64px;z-index:12;background:#ffffffee;border:1px solid #dde2da;border-radius:9px;box-shadow:0 3px 15px #18231c12;padding:5px;min-width:0;max-width:300px}
+.lens-panel{position:absolute;right:16px;top:126px;z-index:8;background:#ffffffee;border:1px solid #dde2da;border-radius:9px;box-shadow:0 3px 15px #18231c12;padding:5px;min-width:0;max-width:300px}
 .lens-tabs{display:flex;gap:2px}
 .lens-tabs button{border:0;background:none;padding:7px 10px;border-radius:6px;font-size:12.5px;color:#56645a;cursor:pointer}
 .lens-tabs button[aria-pressed="true"]{background:#efeafd;color:#5d43b8;font-weight:650}
@@ -337,7 +339,41 @@
 .lens-legend:empty{display:none}
 .lens-legend .lens-row{display:flex;align-items:center;gap:7px;padding:2px 0}
 .lens-legend .lens-swatch{width:11px;height:11px;border-radius:50%;flex:none}
-.lens-legend .lens-swatch.ring{background:none!important;border:3px solid currentColor;width:7px;height:7px}
+.lens-legend .lens-swatch.ring{background:none!important;border:3px solid currentColor;width:12px;height:12px}
 .lens-legend .lens-count{margin-left:auto;color:#7a877d;font-variant-numeric:tabular-nums}
 .lens-legend .lens-note{color:#7a877d;margin-top:3px;line-height:1.35}
-@media (max-width:600px){.lens-panel{top:58px;right:8px;left:auto;max-width:calc(100% - 70px)}.lens-tabs button{padding:6px 7px;font-size:12px}}
+.lens-tabs button:disabled{color:#a9b3ab;cursor:not-allowed}
+.lens-legend .lens-swatch.line{width:14px;height:4px;border-radius:2px}
+/* Under the clock badge; beside the inspector or the operations panel when one is open (they share the right edge). */
+.map-shell:has(#operations-panel:not([hidden])) .lens-panel{right:368px}
+.map-shell:has(#inspector:not([hidden])) .lens-panel{right:418px}
+@media (max-width:820px){.map-shell:has(#operations-panel:not([hidden])) .lens-panel,.map-shell:has(#inspector:not([hidden])) .lens-panel{display:none}}
+.lens-panel.lens-collapsed .lens-legend{display:none}
+@media (max-width:600px){.lens-panel{top:112px;right:10px;left:auto;max-width:calc(100% - 74px)}.lens-tabs button{padding:6px 7px;font-size:12px}.lens-legend{font-size:11px;padding:1px 4px 3px}.lens-legend .lens-row{padding:1px 0}}
+.studio-workspace .ws-count{float:right;background:#dfe9f3;color:#2d4a63;border-radius:8px;padding:0 6px;font-size:11px;line-height:17px;margin-left:6px}
+.studio-workspace .ws-stats{margin-bottom:6px}
+.studio-workspace .ws-scorecard{background:#fff;border:1px solid #c9d6e2;padding:12px;margin-top:10px}
+/* Workspace record screens (Display Billing / Display Meter Reading Results) fill the page under the transaction header */
+.studio-workspace .ws-sap{flex:1;min-height:0;display:flex;flex-direction:column;border:0;box-shadow:none}
+.studio-workspace .ws-sap .sap-toolbar,.studio-workspace .ws-sap .sap-tabs{flex-shrink:0}
+.studio-workspace .ws-sap .sap-body{flex:1;min-height:0;overflow:auto;padding-bottom:18px}
+.studio-workspace .ws-sap .sap-section-title{font-size:14px;font-weight:400;margin:18px 0 8px;color:#193b53}
+.studio-workspace .ws-sap .sap-explain{margin-top:10px;padding:8px 10px;font-size:12px;color:#486a82;background:#f3f8fc;border:1px solid #d6e4ef}
+.studio-workspace .ws-sap .sap-link{font:inherit;color:#1d63a8;background:none;border:0;padding:0;text-decoration:underline;cursor:pointer;min-height:0}
+.studio-workspace .ws-sap .sap-field .sap-input{max-width:340px;overflow:hidden;text-overflow:ellipsis}
+.studio-workspace .fo-tabs .fo-tab-error{color:#b3261e;font-weight:700;margin:0 6px 0 -4px;align-self:center}
+/* Case notes, holds, releases and field outcomes */
+.ws-dialog{border:1px solid #849aaa;padding:0 12px 12px;width:min(520px,calc(100vw - 32px));background:#f5f9fc;box-shadow:0 12px 40px #0b1d2c40}
+.ws-dialog::backdrop{background:#0b1d2c55}
+.ws-dialog .dialog-head{display:flex;align-items:center;justify-content:space-between;gap:10px;background:linear-gradient(#dbe8f1,#aec5d8);margin:0 -12px 6px;padding:5px 10px;border-bottom:1px solid #9bafbf;min-height:34px}
+.ws-dialog .dialog-head h2{font:bold italic 16px Arial,sans-serif;margin:0;color:#111820}
+.ws-dialog .dialog-head button{border:1px solid #849aaa;background:#d9e8f2;color:#37556f;width:22px;height:22px;font-size:18px;line-height:16px;padding:0}
+.ws-dialog .read-review-actions{display:flex;gap:8px}
+.ws-dialog .read-review-actions button{border:1px solid #9bb3c6;background:#e9f1f7;color:#23506f;padding:6px 12px;font:13px Arial,sans-serif}
+.ws-dialog .small{font-size:11px;color:#7991a2;margin:10px 0 0}
+/* Phones: the order header wraps instead of scrolling the description out of view */
+@media(max-width:700px){.fo-order-line{min-width:0;flex-wrap:wrap}.fo-order-line .fo-field:last-child{flex:1 1 100%}.fo-order-line .fo-field:last-child input{min-width:0}}
+/* Fast-forward a day (map time bar and the Workspace status bar) */
+#next-day{min-height:34px;padding:6px 10px;font:600 12px Inter,ui-sans-serif,sans-serif;flex-shrink:0;border:1px solid #d1dcc9;background:#fff;border-radius:7px;color:#2f4a3d;white-space:nowrap;cursor:pointer}
+#next-day:hover{background:#eef3e7}
+.studio-workspace .fiori-status .ws-next-day{min-height:24px;padding:2px 8px;font-size:12px;margin-left:4px}

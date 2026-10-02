@@ -22,7 +22,7 @@ export class EngineM2C{
   const body=JSON.stringify(this.body(extra)),key=path+body;if(this.cache.has(key))return this.cache.get(key);
   const ticket=(this.tickets[channel]||0)+1;this.tickets[channel]=ticket;
   const r=await this.fetch(this.api+path,{method:'POST',headers:{'Content-Type':'application/json'},body});
-  if(!r.ok){let d='';try{d=(await r.json()).detail;}catch{}const e=Error('Engine '+r.status+(d?': '+(typeof d==='string'?d:JSON.stringify(d)):''));e.status=r.status;throw e;}
+  if(!r.ok){let d='';try{d=(await r.json()).detail;}catch{}const e=Error('Engine '+r.status+(d?': '+(typeof d==='string'?d:d.message||JSON.stringify(d)):''));e.status=r.status;e.detail=d||null;throw e;}
   const data=await r.json();if(this.tickets[channel]!==ticket){const e=Error('superseded');e.superseded=true;throw e;}
   this.cache.set(key,data);if(this.cache.size>48)this.cache.delete(this.cache.keys().next().value);return data;
  }
@@ -33,6 +33,12 @@ export class EngineM2C{
  costs(){return this.post('/process/costs',{},'costs');}
  scorecard(){return this.post('/vee/scorecard',{},'scorecard');}
  graph(month){return this.post('/process/graph',{month},'graph');}
+ // Studio lookups and the field service order form (the order's vocabulary is engine data, not hard-coded here).
+ order(ref){return this.post('/m2c/order',ref,'order');}
+ installation(installationId){return this.post('/m2c/installation',{installationId},'record');}
+ readDocument(readId){return this.post('/m2c/read-document',{readId},'record');}
+ possibleEntries(kind,query='',page=1){return this.post('/m2c/possible-entries',{kind,query,page,pageSize:50},'f4');}
+ async vocabulary(){if(!this._vocab){const r=await this.fetch(this.api+'/m2c/vocabulary?town='+encodeURIComponent(this.townRef));if(!r.ok)throw Error('Engine '+r.status);this._vocab=await r.json();}return this._vocab;}
  async schema(){if(!this._schema){const r=await this.fetch(this.api+'/m2c/settings');if(!r.ok)throw Error('Engine '+r.status);this._schema=await r.json();}return this._schema;}
  lastActionDay(){return this.actions.at(-1)?.day||null;}
  canAct(){const last=this.lastActionDay();return !last||!this.asOf||this.asOf>=last;}

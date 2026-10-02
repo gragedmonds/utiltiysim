@@ -7,7 +7,7 @@ snapshot's premise attributes, so registers match the generator's sample reads e
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime
 
 import numpy as np
@@ -78,6 +78,14 @@ class M2CTown:
     account_method: dict[str, str]
     account_profile: dict[str, str]
     temps: np.ndarray  # daily mean temperature, index 0 = 2025-12-01 (sim.weather)
+    # Master data for the lookup screens (installation, contract, account, business partner).
+    name: str = ""  # place name (e.g. "Ayr"), for the planning plant of field service orders
+    inst_index: dict[str, int] = field(default_factory=dict)
+    inst_meta: list[dict] = field(default_factory=list)  # per installation row: premise, division, MRU, status...
+    inst_contracts: list[list[dict]] = field(default_factory=list)  # per installation row: its contracts
+    accounts: dict[str, dict] = field(default_factory=dict)
+    partners: dict[str, dict] = field(default_factory=dict)
+    account_insts: dict[str, list[int]] = field(default_factory=dict)  # account -> installation rows
 
     @property
     def n_registers(self) -> int:
@@ -91,6 +99,20 @@ class M2CTown:
             if m.any():
                 out[m] = regs.advance(self.normal[name], self.december[name], self.prem[rows[m]], day[m], hour[m])
         return out
+
+    def read_id(self, r: int, m: int) -> str:
+        return f"READ-{self.id}-{self.reg_ids[r]}-{date_of(int(self.read_day[r, m])).isoformat()}"
+
+    def find_read(self, read_id: str) -> tuple[int, int]:
+        """(register row, month) of a 2026 read id ``READ-{townId}-{registerId}-{YYYY-MM-DD}``; KeyError if unknown."""
+        prefix = f"READ-{self.id}-"
+        r = self.reg_index.get(read_id[len(prefix):-11]) if read_id.startswith(prefix) and len(read_id) > \
+            len(prefix) + 11 else None
+        if r is not None:
+            for m in range(1, 13):
+                if self.read_id(r, m) == read_id:
+                    return r, m
+        raise KeyError(read_id)
 
     def contract_at(self, r: int, day: int) -> tuple[str, str]:
         """(contract id, account id) active for register row ``r`` on ``day`` (the current one if none)."""
@@ -142,6 +164,7 @@ class M2CTown:
         read_day = np.array([table[p] for p in portion], dtype=np.int64).reshape(len(portion), 13)
         inst_prem = {x["id"]: (pidx[x["premiseId"]], x["division"]) for x in snap["installations"]}
         rate_of = {x["id"]: x.get("rateCategory") or "" for x in snap["installations"]}
+        inst_raw = {x["id"]: x for x in snap["installations"]}
         inst_ids = list(dict.fromkeys(cols[4])) if rows else []
         inst_index = {x: k for k, x in enumerate(inst_ids)}
         inst_of = np.array([inst_index[x] for x in cols[4]], dtype=np.int64)
@@ -151,7 +174,14 @@ class M2CTown:
             tariffs[t["id"]] = {**base, **{k: v for k, v in t.items() if k != "basedOn"}}
         profile = {b["id"]: b.get("paymentProfile") or "on_time" for b in snap.get("businessPartners", [])}
         contracts: dict[tuple[int, str], list[tuple[int, int, str, str]]] = {}
+        inst_contracts: list[list[dict]] = [[] for _ in inst_ids]
+        account_insts: dict[str, list[int]] = {}
         for ctr in snap["contracts"]:
+            k_inst = inst_index.get(ctr["installationId"])
+            if k_inst is not None:
+                inst_contracts[k_inst].append({x: ctr.get(x) for x in ("id", "accountId", "validFrom", "validTo",
+                                                                       "status")})
+                account_insts.setdefault(ctr["accountId"], []).append(k_inst)
             k = inst_prem.get(ctr["installationId"])
             if k is None:
                 continue
@@ -179,7 +209,28 @@ class M2CTown:
             inst_rate=[rate_of.get(x, "") for x in inst_ids], tariffs=tariffs,
             account_method={a["id"]: a.get("paymentMethod") or "online" for a in snap.get("accounts", [])},
             account_profile={a["id"]: profile.get(a.get("businessPartnerId"), "on_time") for a in snap.get("accounts", [])},
-            temps=daily_temps(cfg))
+            temps=daily_temps(cfg), name=town_name(snap), inst_index=inst_index,
+            inst_meta=[{x: meta.get(x) for x in INST_FIELDS} for meta in (inst_raw.get(i, {}) for i in inst_ids)],
+            inst_contracts=inst_contracts,
+            accounts={a["id"]: {x: a.get(x) for x in ACCOUNT_FIELDS} for a in snap.get("accounts", [])},
+            partners={b["id"]: {x: b.get(x) for x in PARTNER_FIELDS} for b in snap.get("businessPartners", [])},
+            account_insts={a: sorted(set(v)) for a, v in account_insts.items()})
+
+
+INST_FIELDS = ("premiseId", "servicePointId", "division", "mruId", "readCycle", "rateCategory", "billingClass",
+               "status")
+ACCOUNT_FIELDS = ("businessPartnerId", "premiseId", "sapContractAccount", "paymentMethod", "budgetBilling", "currency",
+                  "validFrom", "validTo")
+PARTNER_FIELDS = ("name", "kind", "sapPartner", "since")
+
+
+def town_name(snap: dict) -> str:
+    """The place a town was built from ("Ayr" for a street snapshot of Ayr), else its preset name."""
+    label = str((snap.get("source") or {}).get("label") or "")
+    if label.endswith(" street snapshot"):
+        return label[: -len(" street snapshot")]
+    name = str((snap.get("config") or {}).get("name") or "")
+    return name.replace("_", " ").title() if name and name != "custom" else "Utility"
 
 
 def date_of(day: int) -> date:

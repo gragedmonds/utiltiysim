@@ -28,7 +28,9 @@ def test_frames_and_replay_pass_receiver_rules(town480):
     assert any(v is not None and v < 0 for v in noon["networks"]["electric"]["flows"])  # solar export somewhere
     water = noon["networks"]["water"]
     loops = {e["id"] for e in snap["networks"]["water"]["edges"] if e.get("loop") and e["enabled"]}
-    assert all(v is None for i, v in zip(water["edgeIds"], water["flows"]) if i in loops)
+    loop_flows = [v for i, v in zip(water["edgeIds"], water["flows"]) if i in loops]
+    assert loop_flows and all(v is not None for v in loop_flows)  # water loops are solved (sim.loops)
+    assert any(v != 0 for v in loop_flows)
 
 
 def test_outage_disables_supply_and_zeroes_electric(town480):

@@ -32,6 +32,7 @@ from utilsim.core.ids import str_key
 from utilsim.core.rng import Purpose, hash_normal, hash_u01
 from utilsim.customers.calendar import business_days, to_utc_iso
 from utilsim.m2c import catalog as cat
+from utilsim.m2c import orders as ords
 from utilsim.m2c import registers as regs
 from utilsim.m2c import vee as vee_mod
 from utilsim.m2c.base import M2CTown, date_of
@@ -44,7 +45,11 @@ DECISION_VERSION = "vee-decision/1.0"
 P_READ, P_ANOM, P_WORK = Purpose.M2C_READ, Purpose.M2C_ANOMALY, Purpose.M2C_WORK
 INF = float("inf")
 YEAR_DAYS = 365
-ACTION_TYPES = ("accept", "override", "estimate", "field_order", "escalate", "field_read")
+DECISIONS = ("accept", "override", "estimate", "field_order", "escalate")  # an analyst's decision on a case
+ORDER_ACTIONS = ("order_save", "order_release", "order_dispatch", "order_complete")
+CASE_WORK = ("note", "assign", "invoice_hold", "invoice_unhold")
+ACTION_TYPES = (*DECISIONS, "field_read", *ORDER_ACTIONS, *CASE_WORK)
+ActionError = ords.ActionError
 STATUS = ("pending", "released", "estimated", "adjusted", "held", "missing")
 UTILITIES = ("electric", "water", "gas")
 OUTAGE_REASON = "SIM_POWER_OUTAGE"
@@ -132,6 +137,11 @@ class Case:
     assignee: str | None = None
     resolved: float | None = None
     outcome: str | None = None
+    owner: str | None = None  # set by your Studio actions: an owned case waits for its owner (no RPA, analysts, crews)
+    work: str | None = None  # "order" (a Field Work case) or "hold" (an invoice hold): work you opened in the Studio
+    ref: str | None = None  # the order id (work "order") or the account id (work "hold")
+    source: str | None = None  # the case an order or a hold was raised from
+    orders: list[str] = field(default_factory=list)  # field service orders raised from this case
 
     def ev(self, t: float, kind: str, payload: dict | None = None, cause: int | None = -1) -> int:
         self.events.append((t, kind, payload or {}, (len(self.events) - 1 if cause == -1 else cause)))
@@ -153,8 +163,9 @@ class Case:
 # ---- the run ----------------------------------------------------------------------------------------------------
 class M2CRun:
     def __init__(self, town: M2CTown, settings: dict | None = None, actions: list[dict] | None = None,
-                 outages: list[dict] | None = None):
+                 outages: list[dict] | None = None, *, strict: bool = True):
         self.town = town
+        self.strict = strict  # refuse (raise) when the newest action does not apply; else skip it with a warning
         self.cfg = resolve_settings(town.cfg, settings)
         self.settings_hash = _hash({g: self.cfg.model_dump(mode="json")[g] for g in M2C_GROUPS})
         self.warnings: list[str] = []
@@ -170,6 +181,7 @@ class M2CRun:
     # ---- inputs --------------------------------------------------------------------------------------------------
     def _check_actions(self, actions: list[dict]) -> list[dict]:
         out, last = [], -10 ** 6
+        self.ledger = ords.Ledger(self.town)
         for k, a in enumerate(actions):
             if a.get("type") not in ACTION_TYPES:
                 raise ValueError(f"action {k}: type must be one of {', '.join(ACTION_TYPES)}")
@@ -190,10 +202,36 @@ class M2CRun:
                 if not isinstance(at, (int, float)) or not 0 <= at < 86400:
                     raise ValueError(f"action {k}: field_read 'at' is seconds since local midnight")
                 extra = {"premiseId": a["premiseId"], "at": float(at)}
+            elif a["type"] in ORDER_ACTIONS:
+                extra = self.ledger.apply(k, a, day)
+            else:
+                extra = self._check_case_work(k, a)
             last = day
             out.append({"id": a.get("id") or f"ACT-{k + 1}", "day": date_of(day).isoformat(), "type": a["type"],
                         "caseId": a.get("caseId"), **extra, **({"value": float(a["value"])} if "value" in a else {})})
         return out
+
+    def _check_case_work(self, k: int, a: dict) -> dict:
+        """Shape checks for case actions: a note's text, an assignee, an invoice hold's account and note."""
+        typ = a["type"]
+        try:
+            if typ in DECISIONS:
+                return {"note": ords.text(a["note"], "note")} if a.get("note") is not None else {}
+            if typ in ("note", "assign") and not isinstance(a.get("caseId"), str):
+                raise ValueError("caseId is required")
+            if typ == "note":
+                return {"text": ords.text(a.get("text"), "the note text")}
+            if typ == "assign":
+                return {"assignee": ords.text(a.get("assignee"), "assignee", 60)}
+            note = ords.text(a.get("note"), "a note (why the hold is placed or removed)")
+            case_id, acct = a.get("caseId"), a.get("accountId")
+            if bool(case_id) == bool(acct):
+                raise ValueError("give the caseId or the accountId to hold")
+            if acct is not None and acct not in self.town.accounts:
+                raise ValueError(f"unknown account {acct!r}")
+            return {"note": note, **({"accountId": acct} if acct else {})}
+        except ValueError as exc:
+            raise ActionError(f"action {k} ({typ}): {exc}") from None
 
     def _check_outages(self, outages: list[dict]) -> list[dict]:
         """Interruptions from the operations simulator: ``{day, utility, start, end, premiseIds}``, where start and
@@ -342,6 +380,11 @@ class M2CRun:
         self._rpa_later: list[tuple[Case, float]] = []
         self.bday_set = _BSET
         self.books = Books(self)
+        self.orders = self.ledger.orders  # field service orders by id (ords.Order)
+        self.order_rolls: dict[int, list[ords.Order]] = {}  # day -> dispatched orders whose crew rolls that day
+        self.rolls_now: dict[int, int] = {}  # day -> crews rolled the same day they were dispatched
+        self.holds: dict[str, list[list]] = {}  # account -> [[t on, t off | None, hold case], ...]
+        self.n_work = 0  # cases you opened (Field Work, invoice holds); engine case ids do not count them
 
     def _setup_outages(self) -> None:
         """Per register, the merged spans (start, end as day + fraction) during which it had no service."""
@@ -450,27 +493,28 @@ class M2CRun:
 
     # ---- simulation ---------------------------------------------------------------------------------------------
     def _simulate(self) -> None:
-        by_day: dict[int, list[dict]] = {}
-        for a in self.actions:
-            by_day.setdefault(parse_day(a["day"], 0), []).append(a)
+        by_day: dict[int, list[tuple[int, dict]]] = {}
+        for k, a in enumerate(self.actions):
+            by_day.setdefault(parse_day(a["day"], 0), []).append((k, a))
         self.case_index: dict[str, Case] = {}
         self.open: list[Case] = []
         for day in range(YEAR_DAYS):
             acts = by_day.get(day, [])
+            self._roll_orders(day)  # crews for your dispatched orders that start today (07:00-09:00)
             if day not in _BSET:  # your decisions and field visits count on any day
-                for a in acts:
-                    (self._field_read if a["type"] == "field_read" else self._apply_action)(day, a)
+                for k, a in acts:
+                    self._act(day, k, a)
                 self.open = [c for c in self.open if c.resolved is None]
             if day in _BSET:
-                for a in acts:
+                for k, a in acts:
                     if a["type"] != "field_read":
-                        self._apply_action(day, a)
+                        self._act(day, k, a)
                 for case in self.rpa_due.pop(day, []):
                     self._rpa(case, day + 7.0 / 24)
                 self._analysts(day)
                 self._supervisors(day)
                 self._field(day)
-                for a in acts:
+                for _, a in acts:
                     if a["type"] == "field_read":
                         self._field_read(day, a)
                 if day in self.batches:
@@ -630,8 +674,8 @@ class M2CRun:
         ``precursor`` (time, event) is an upstream signal that explains the exception, e.g. an AMI last gasp."""
         idx = len(self.cases)
         p = self.cfg.process
-        case = Case(idx, f"CASE-{date_of(day).strftime('%y%m%d')}-{idx + 1:05d}", r, m, kind, t, disposition,
-                    round(impact, 2), confidence, truth)
+        case = Case(idx, f"CASE-{date_of(day).strftime('%y%m%d')}-{idx - self.n_work + 1:05d}", r, m, kind, t,
+                    disposition, round(impact, 2), confidence, truth)
         self.cases.append(case)
         self.open.append(case)
         self.case_index[case.id] = case
@@ -689,7 +733,7 @@ class M2CRun:
             self._rpa(case, t)
 
     def _rpa(self, case: Case, t: float) -> None:
-        if case.resolved is not None or case.rpa_at == INF:
+        if case.resolved is not None or case.rpa_at == INF or case.owner is not None:
             return
         if case.doc >= 0:
             case.ev(t, "AUTO_RESOLVED", {"action": "release bill"})
@@ -728,7 +772,7 @@ class M2CRun:
         cap = p.analysts * p.analyst_hours_per_day * 60.0
         used = 0.0
         todo = [c for c in self.open if c.resolved is None and c.queue in ("VEE_REVIEW", "ESTIMATION", "BILLING")
-                and c.eligible <= day and c.rpa_at is None]
+                and c.eligible <= day and c.rpa_at is None and c.owner is None]
         for case in todo:
             minutes = p.review_minutes_min + float(self._u(P_WORK, self.reg_keys[case.r], case.month, 5)) * \
                 (p.review_minutes_max - p.review_minutes_min)
@@ -754,7 +798,8 @@ class M2CRun:
         if p.supervisors <= 0:
             return
         n = int(p.supervisors * p.supervisor_hours_per_day * 60.0 // p.supervisor_minutes)
-        todo = [c for c in self.open if c.resolved is None and c.queue == "SUPERVISOR" and c.eligible <= day][:n]
+        todo = [c for c in self.open if c.resolved is None and c.queue == "SUPERVISOR" and c.eligible <= day
+                and c.owner is None][:n]
         for k, case in enumerate(todo):
             t0 = day + (9.0 + k * p.supervisor_minutes / 60.0 / p.supervisors) / 24
             case.ev(t0, "SUPERVISOR_REVIEW", {"supervisor": f"SUP-{(k % p.supervisors) + 1:02d}"})
@@ -769,7 +814,8 @@ class M2CRun:
 
     def _field(self, day: int) -> None:
         p = self.cfg.process
-        todo = [c for c in self.open if c.resolved is None and c.queue == "FIELD" and c.eligible <= day]
+        todo = [c for c in self.open if c.resolved is None and c.queue == "FIELD" and c.eligible <= day
+                and c.owner is None]  # your own orders are dispatched by you (order_dispatch), not by this pool
         for k, case in enumerate(todo[: max(0, p.field_orders_per_day)]):
             t0 = day + (8.0 + 7.0 * k / max(1, p.field_orders_per_day)) / 24
             case.ev(t0, "TRUCK_ROLL", {"crew": f"FIELD-{(k % 2) + 1}"})
@@ -796,7 +842,7 @@ class M2CRun:
             self.warnings.append(f"{a['id']}: unknown premise {a['premiseId']}")
             return
         t = day + a["at"] / 86400.0
-        for case in [c for c in self.open if c.resolved is None and c.doc < 0 and c.created <= t
+        for case in [c for c in self.open if c.resolved is None and c.doc < 0 and c.work is None and c.created <= t
                      and int(self.town.prem[c.r]) == p]:
             case.assignee = "you"
             case.ev(t, "USER_ACTION", {"actionId": a["id"], "action": "field_read"})
@@ -804,15 +850,30 @@ class M2CRun:
                 case.rpa_at = INF
             self._visit_case(case, t + 0.0005, actor="you")
 
-    def _apply_action(self, day: int, a: dict) -> None:
+    def _apply_action(self, day: int, a: dict, k: int = -1) -> None:
         case = self.case_index.get(a.get("caseId") or "")
         t = day + 9.0 / 24
         if case is None or case.created > t or case.resolved is not None:
             self.warnings.append(f"{a['id']}: case {a.get('caseId')} is not open on {a['day']}")
             return
+        if case.work is not None:
+            self._reject(k, a, f"{a['type']} does not apply to {case.id}, " + (
+                f"the Field Work case of order {case.ref} (use order_complete)" if case.work == "order" else
+                f"the invoice hold on account {case.ref} (use invoice_unhold)"))
+            return
+        if case.doc >= 0 and a["type"] in ("accept", "estimate"):
+            hold = self.hold_in_force(self.account_of(case), t)
+            if hold is not None:
+                self._reject(k, a, f"account {hold[2].ref} has an invoice hold ({hold[2].id}, since "
+                                   f"{date_of(int(hold[0])).isoformat()}): remove it with invoice_unhold before "
+                                   "releasing this outsort")
+                return
         case.assignee = "you"
+        if a["type"] in ("escalate", "field_order"):
+            case.owner = None  # handed to supervisors or the field crews: they work it even if you owned it
         case.ev(t, "USER_ACTION", {"actionId": a["id"], "action": a["type"], **({"value": a["value"]}
-                                                                                if "value" in a else {})})
+                                                                                if "value" in a else {}),
+                                   **({"note": a["note"]} if "note" in a else {})})
         case.rpa_at = INF if case.rpa_at is not None else None  # your decision replaces a pending RPA run
         if case.doc >= 0 and a["type"] in ("override", "field_order"):
             self.warnings.append(f"{a['id']}: {a['type']} does not apply to a billing block (accept, estimate, escalate)")
@@ -828,6 +889,234 @@ class M2CRun:
         else:
             self._resolve(case, t, {"accept": "accept", "estimate": "estimate", "override": "override"}[a["type"]],
                           actor="you", value=a.get("value"))
+
+    # ---- Studio work: field service orders, notes, ownership, invoice holds -------------------------------------
+    def _act(self, day: int, k: int, a: dict) -> None:
+        typ = a["type"]
+        if typ == "field_read":
+            self._field_read(day, a)
+        elif typ in DECISIONS:
+            self._apply_action(day, a, k)
+        elif typ in ORDER_ACTIONS:
+            self._order_action(day, k, a)
+        elif typ in ("note", "assign"):
+            self._note_or_assign(day, k, a)
+        else:
+            self._hold(day, k, a)
+
+    def _reject(self, k: int, a: dict, message: str) -> None:
+        """Refuse an action that does not apply to this run. The newest action fails the request (HTTP 422, so the
+        viewer can roll it back); an earlier one (settings or outages changed the run under it) is skipped with a
+        warning, so a stored action list always replays. A lenient run (``strict=False``, e.g. the operations day's
+        view of the run) skips every one."""
+        if self.strict and k == len(self.actions) - 1:
+            raise ActionError(f"action {k} ({a['type']}): {message}")
+        self.warnings.append(f"{a['id']}: {message} (skipped)")
+
+    def _open_case(self, k: int, a: dict, t: float) -> Case | None:
+        case = self.case_index.get(a.get("caseId") or "")
+        if case is None or case.created > t:
+            self._reject(k, a, f"case {a.get('caseId')} does not exist on {a['day']}")
+            return None
+        if case.resolved is not None and case.resolved <= t:
+            self._reject(k, a, f"case {case.id} is already resolved")
+            return None
+        return case
+
+    @staticmethod
+    def _user_t(case: Case, day: int) -> float:
+        """When your action lands on ``case``: 09:00, or just after its latest event (events stay in time order)."""
+        return max(day + 9.0 / 24, case.events[-1][0] if case.events else 0.0)
+
+    def _own(self, case: Case, t: float, who: str = "you") -> None:
+        """Your Studio action makes you the case's owner (unless it has one): automation leaves it to you."""
+        if case.owner is None:
+            case.owner = case.assignee = who
+            case.ev(t, "CASE_ASSIGNED", {"assignee": who, "implicit": True})
+            if case.rpa_at is not None:
+                case.rpa_at = INF
+
+    def _work_case(self, t: float, r: int, m: int, kind: str, queue: str, work: str, ref: str, case_id: str,
+                   payload: dict, status: str) -> Case:
+        """A case for work you opened (a Field Work order, an invoice hold), owned by you from the start."""
+        case = Case(len(self.cases), case_id, r, m, kind, t, -1, 0.0, float("nan"), "clean", work=work, ref=ref,
+                    owner="you", assignee="you", eligible=10 ** 6)
+        self.n_work += 1
+        self.cases.append(case)
+        self.open.append(case)
+        self.case_index[case.id] = case
+        first = case.ev(t, kind, payload, None)
+        case.ev(t + 0.0005, "EXCEPTION_QUEUED", {"queue": queue}, first)
+        case.move(t + 0.0005, queue, status)
+        self.series[queue][int(t), 0] += 1
+        return case
+
+    def _close_work(self, case: Case, t: float, outcome: str) -> None:
+        self.series[case.queue][int(t), 1] += 1
+        case.resolved = t
+        case.outcome = outcome
+        case.move(t, None, "resolved")
+
+    def _order_action(self, day: int, k: int, a: dict) -> None:
+        step, o = self.ledger.steps[k]
+        t = day + 9.0 / 24
+        if step == "create":
+            self._order_create(k, a, o, t)
+            return
+        fw = o.case
+        if fw is None:  # detached (its source case is gone in this run): the order record still moves on
+            return
+        tt = self._user_t(fw, day)
+        if step == "save":
+            fw.ev(tt, "ORDER_SAVED", {"orderId": o.id, "actionId": a["id"]})
+        elif step == "release":
+            fw.ev(tt, "ORDER_RELEASED", {"orderId": o.id, "actionId": a["id"], "startDate": o.fields["startDate"]})
+            fw.move(tt, "FIELD", "released")
+        elif step == "dispatch":
+            fw.ev(tt, "ORDER_DISPATCHED", {"orderId": o.id, "actionId": a["id"], "startDate": o.fields["startDate"]})
+            fw.move(tt, "FIELD", "dispatched")
+            if o.start_day <= day:  # dispatched on (or after) its start: the crew rolls this morning
+                n = self.rolls_now.get(day, 0)
+                self.rolls_now[day] = n + 1
+                self._roll(o, tt + (30 + 10 * n) / 1440.0, n)
+            else:
+                self.order_rolls.setdefault(o.start_day, []).append(o)
+        else:  # complete: after the crew's visit when it rolled today
+            done = tt
+            if o.roll_t is not None and int(o.roll_t) == day:
+                done = min(max(tt, o.roll_t + o.minutes / 1440.0), day + 0.999)
+            note = a["note"]
+            meter = int(self.town.meter_of[o.r])
+            if ords.ACTIVITY.get(o.fields.get("activityType")) == "meter_exchange" and \
+                    self.fault_t[meter] <= done < self.fix_t[meter]:  # the crew swapped a faulty meter: reads recover
+                self.fix_t[meter] = done
+                fw.ev(done, "METER_EXCHANGE", {"meterId": self.town.meter_ids[meter], "orderId": o.id,
+                                               "fault": FAULTS[int(self.fault_type[meter])]})
+            fw.ev(done, "ORDER_COMPLETED", {"orderId": o.id, "actionId": a["id"], "note": note})
+            o.stages[-1] = (done, "Completed", a["id"], note)
+            self._close_work(fw, done, "completed")
+
+    def _order_create(self, k: int, a: dict, o: ords.Order, t: float) -> None:
+        src: Case | None = None
+        if o.source_case:
+            src = self._open_case(k, {**a, "caseId": o.source_case}, t)
+            if src is None:
+                o.detached = True
+                return
+            if src.work is not None:
+                o.detached = True
+                self._reject(k, a, f"{src.id} is " + (f"the Field Work case of order {src.ref}; save that order instead"
+                                                      if src.work == "order" else
+                                                      f"the invoice hold on account {src.ref}; it has no meter to visit"))
+                return
+            o.r, o.m = src.r, src.month
+        else:
+            c = int(self.case_of[o.r, o.m])
+            if c >= 0 and self.cases[c].created <= t and (self.cases[c].resolved is None or self.cases[c].resolved > t):
+                src = self.cases[c]
+        if src is not None and src.orders:
+            o.detached = True
+            self._reject(k, a, f"{src.id} already has field service order {src.orders[0]}; reopen that order")
+            return
+        dup = next((x for x in self.orders.values() if x is not o and x.case is not None and (x.r, x.m) == (o.r, o.m)),
+                   None)
+        if dup is not None:
+            o.detached = True
+            self._reject(k, a, f"read {self.read_id(o.r, o.m)} already has field service order {dup.id}; reopen it")
+            return
+        fw = self._work_case(t, o.r, o.m, "FIELD_SERVICE", "FIELD", "order", o.id,
+                             f"CASE-{date_of(int(t)).strftime('%y%m%d')}-F{o.n:04d}",
+                             {"orderId": o.id, "sourceCaseId": src.id if src else None,
+                              "readId": self.read_id(o.r, o.m), "actionId": a["id"]}, "draft")
+        o.case, o.source = fw, src
+        if src is not None:
+            fw.source = src.id
+            src.orders.append(o.id)
+            tt = self._user_t(src, int(t))
+            self._own(src, tt)
+            src.ev(tt, "ORDER_LINKED", {"orderId": o.id, "caseId": fw.id})
+
+    def _roll_orders(self, day: int) -> None:
+        due = sorted(self.order_rolls.pop(day, []), key=lambda o: o.n)
+        for k, o in enumerate(due):
+            self._roll(o, day + (7.0 + 2.0 * k / len(due)) / 24, k)
+
+    def _roll(self, o: ords.Order, t: float, k: int) -> None:
+        o.roll_t = t
+        o.case.ev(t, "TRUCK_ROLL", {"crew": f"FIELD-{(k % 2) + 1}", "orderId": o.id})
+        o.case.move(t, "FIELD", "on_site")
+
+    def _note_or_assign(self, day: int, k: int, a: dict) -> None:
+        case = self._open_case(k, a, day + 9.0 / 24)
+        if case is None:
+            return
+        t = self._user_t(case, day)
+        if a["type"] == "note":
+            self._own(case, t)
+            case.ev(t, "CASE_NOTE", {"text": a["text"], "by": "you", "actionId": a["id"]})
+            return
+        case.owner = case.assignee = a["assignee"]
+        case.ev(t, "CASE_ASSIGNED", {"assignee": a["assignee"], "actionId": a["id"]})
+        if case.rpa_at is not None:
+            case.rpa_at = INF
+
+    def account_of(self, case: Case) -> str:
+        """The contract account a case bills to (the one an invoice hold through this case applies to)."""
+        if case.work == "hold":
+            return str(case.ref)
+        if case.doc >= 0:
+            return self.books.account(self.books.docs[case.doc])
+        return self.town.contract_at(case.r, int(self.town.read_day[case.r, case.month]))[1]
+
+    def hold_on(self, acct: str, t: float) -> list | None:
+        """The invoice hold on ``acct`` at ``t`` ([t on, t off, hold case]), if any."""
+        return next((h for h in self.holds.get(acct, []) if h[0] <= t and (h[1] is None or h[1] > t)), None)
+
+    def hold_in_force(self, acct: str, t: float) -> list | None:
+        """While replaying your actions: the hold on ``acct`` that no earlier action has removed. An unhold earlier
+        the same day counts even though it is stamped just after the hold case's own 09:00 events."""
+        return next((h for h in self.holds.get(acct, []) if h[0] <= t and h[1] is None), None)
+
+    def _hold(self, day: int, k: int, a: dict) -> None:
+        t = day + 9.0 / 24
+        case = None
+        if a.get("caseId"):
+            case = self._open_case(k, a, t)
+            if case is None:
+                return
+            acct = self.account_of(case)
+        else:
+            acct = a["accountId"]
+        held = self.hold_in_force(acct, t)
+        if a["type"] == "invoice_hold":
+            if held is not None:
+                self._reject(k, a, f"account {acct} is already on hold ({held[2].id}, since "
+                                   f"{date_of(int(held[0])).isoformat()})")
+                return
+            if case is not None:
+                r, m = case.r, case.month
+            else:
+                insts = self.town.account_insts.get(acct, [])
+                r = int(self.books.main[insts[0]]) if insts else 0
+                m = max([j for j in range(1, 13) if self.read_t[r, j] <= t], default=0)
+            hc = self._work_case(t, r, m, "INVOICE_HOLD", "BILLING", "hold", acct,
+                                 f"CASE-{date_of(day).strftime('%y%m%d')}-H{k + 1:04d}",
+                                 {"accountId": acct, "note": a["note"], "sourceCaseId": case.id if case else None,
+                                  "actionId": a["id"]}, "held")
+            self.holds.setdefault(acct, []).append([t, None, hc])
+            if case is not None:
+                hc.source = case.id
+                self._own(case, self._user_t(case, day))
+            return
+        if held is None:
+            self._reject(k, a, f"account {acct} has no invoice hold to remove")
+            return
+        hc = held[2]
+        tt = self._user_t(hc, day)
+        held[1] = tt
+        hc.ev(tt, "INVOICE_UNHOLD", {"accountId": acct, "note": a["note"], "actionId": a["id"]})
+        self._close_work(hc, tt, "released")
+        self.books.unhold(acct, tt)
 
     def _resolve(self, case: Case, t: float, action: str, *, actor: str, value: float | None = None) -> None:
         """Close the case and release its reads (first read per ``action``; held reads as observed)."""

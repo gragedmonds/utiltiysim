@@ -9,6 +9,7 @@ from __future__ import annotations
 import numpy as np
 
 from utilsim.m2c import catalog as cat
+from utilsim.m2c import orders as ords
 from utilsim.m2c import vee as vee_mod
 from utilsim.m2c.base import date_of
 from utilsim.m2c.run import (
@@ -77,10 +78,12 @@ def summary(run: M2CRun, as_of: str | None = None) -> dict:
             rolls += kind == "TRUCK_ROLL"
         read_day = float(tw.read_day[case.r, case.month])
         end = case.resolved if case.resolved is not None and case.resolved <= T else T
-        carry += max(0.0, end - read_day) * c.process.carry_rate_per_day
+        if case.work is None:  # your orders and holds hold no read back from billing: no carry
+            carry += max(0.0, end - read_day) * c.process.carry_rate_per_day
         if case.resolved is not None and case.resolved <= T:
             resolved += 1
-            days_to_release.append(case.resolved - read_day)
+            if case.work is None:
+                days_to_release.append(case.resolved - read_day)
         else:
             open_now += 1
             bt["open"] += 1
@@ -203,14 +206,27 @@ def premise_status(run: M2CRun, T: float) -> np.ndarray:
 
 
 # ---- worklists ---------------------------------------------------------------------------------------------------
-def _row(run: M2CRun, case: Case, T: float) -> dict:
-    tw = run.town
-    r, m = case.r, case.month
+def _queue_at(case: Case, T: float) -> tuple[str | None, str, bool]:
+    """(queue, status, resolved) as of ``T``; a resolved case keeps the queue it was resolved from."""
     queue, status = case.state(T)
     done = case.resolved is not None and case.resolved <= T
     if done:
         queue = next((q for _, q, _ in reversed(case.moves[:-1]) if q), None)
-    assignee = None
+    return queue, status, done
+
+
+def read_type(run: M2CRun, r: int, m: int, T: float) -> str:
+    """actual or missing as the read record names it; estimated or adjusted once a revision is released."""
+    if run.release_t[r, m] <= T and run.status[r, m] in (2, 3):
+        return "estimated" if run.status[r, m] == 2 else "adjusted"
+    return "missing" if np.isnan(run.obs[r, m]) else "actual"
+
+
+def _row(run: M2CRun, case: Case, T: float) -> dict:
+    tw = run.town
+    r, m = case.r, case.month
+    queue, status, done = _queue_at(case, T)
+    assignee = owner = "you" if case.work is not None else None
     for t, kind, payload, _ in case.events:
         if t > T:
             break
@@ -218,30 +234,61 @@ def _row(run: M2CRun, case: Case, T: float) -> dict:
             assignee = payload.get("analyst")
         elif kind == "USER_ACTION":
             assignee = "you"
+            if payload.get("action") in ("escalate", "field_order"):
+                owner = None  # handed to supervisors or field crews
+        elif kind == "CASE_ASSIGNED":
+            assignee = owner = payload.get("assignee")
         elif kind in ("AUTO_RESOLVED", "AUTO_OVERRIDE"):
             assignee = "RPA"
         elif kind == "SUPERVISOR_REVIEW":
             assignee = payload.get("supervisor")
-    code = int(run.code[r, m])
-    return {"caseId": case.id, "queue": queue, "status": status, "type": case.type,
-            "label": cat.EVENTS[case.type][0], "icon": cat.EVENTS[case.type][1],
-            "premiseId": tw.premise_ids[tw.prem[r]], "address": tw.address[tw.prem[r]],
-            "accountId": tw.contract_at(r, int(tw.read_day[r, m]))[1], "commodity": str(tw.commodity[r]),
-            "registerId": tw.reg_ids[r], "readId": run.read_id(r, m),
-            "readDate": date_of(int(tw.read_day[r, m])).isoformat(), "createdAt": run.iso(case.created),
-            "ageDays": bdays_between(case.created, case.resolved if done else T),
-            "confidence": None if np.isnan(case.confidence) else round(case.confidence, 3),
-            "disposition": cat.DISPOSITIONS[case.disposition] if case.disposition >= 0 else "estimate",
-            "impact": case.impact, "assignee": assignee, "sapValidationCode": cat.CODE_LIST[code] if code >= 0 else None,
-            "outcome": case.outcome if done else None, "resolvedAt": run.iso(case.resolved) if done else None,
-            "technology": str(tw.tech[r])}
+    code = int(run.code[r, m]) if case.work is None else -1
+    label = cat.EVENTS[case.type][0]
+    row = {"caseId": case.id, "queue": queue, "status": status, "type": case.type, "label": label,
+           "icon": cat.EVENTS[case.type][1], "category": cat.category(case.type, queue, case.work),
+           "premiseId": tw.premise_ids[tw.prem[r]], "address": tw.address[tw.prem[r]],
+           "accountId": case.ref if case.work == "hold" else tw.contract_at(r, int(tw.read_day[r, m]))[1],
+           "commodity": str(tw.commodity[r]), "registerId": tw.reg_ids[r], "readId": run.read_id(r, m),
+           "readDate": date_of(int(tw.read_day[r, m])).isoformat(), "createdAt": run.iso(case.created),
+           "ageDays": bdays_between(case.created, case.resolved if done else T),
+           "confidence": None if np.isnan(case.confidence) else round(case.confidence, 3),
+           "disposition": None if case.work else cat.DISPOSITIONS[case.disposition] if case.disposition >= 0
+           else "estimate", "impact": case.impact, "assignee": assignee,
+           "owner": owner,
+           "sapValidationCode": cat.CODE_LIST[code] if code >= 0 else None,
+           "outcome": case.outcome if done else None, "resolvedAt": run.iso(case.resolved) if done else None,
+           "technology": str(tw.tech[r]),
+           # The read behind the case, so a reading list renders without opening each case.
+           "meterId": tw.meter_ids[tw.meter_of[r]], "mruId": tw.mru[r], "portion": int(tw.portion[r]),
+           "unit": str(tw.unit[r]), "readType": read_type(run, r, m, T), "observed": _r3(run.obs[r, m]),
+           "previous": _r3(run.prev_at_read[r, m]), "consumption": _r3(run.cons[r, m]),
+           "expected": round(float(run.expected[r, m]), 3) if m else None,
+           "scheduledReadAt": run.iso(run.read_t[r, m]),
+           "validationText": f"{label} · {cat.CODES[cat.CODE_LIST[code]][1]}" if code >= 0 else label}
+    if case.work == "order":
+        o = run.orders[case.ref]
+        row.update(orderId=o.id, orderStage=o.stage_at(T), sourceCaseId=case.source)
+    elif case.work == "hold":
+        row.update(sourceCaseId=case.source)
+    linked = [oid for oid in case.orders if run.orders[oid].created <= T]
+    if linked:
+        row["linkedOrderIds"] = linked
+    return row
+
 
 
 def worklist(run: M2CRun, queue: str | None = None, *, as_of: str | None = None, status: str = "open",
              sort: str = "age", page: int = 1, page_size: int = 50, type: str | None = None,
-             commodity: str | None = None, search: str | None = None) -> dict:
+             commodity: str | None = None, search: str | None = None, category: str | None = None,
+             assignee: str | None = None) -> dict:
     if queue is not None and queue not in cat.QUEUES:
         raise ValueError(f"unknown queue {queue!r} (use {', '.join(cat.QUEUES)})")
+    if category is not None and category not in (*cat.CATEGORIES, *cat.NO_ENGINE_CATEGORIES, cat.MY_CASES):
+        raise ValueError(f"unknown category {category!r} (use {', '.join((*cat.CATEGORIES, cat.MY_CASES))})")
+    asked = category
+    if category == cat.MY_CASES:
+        category, assignee = None, assignee or "you"
+    empty = category in cat.NO_ENGINE_CATEGORIES  # a Studio category with no engine meaning: no cases, not fakes
     if sort not in SORTS:
         raise ValueError(f"sort must be one of {', '.join(SORTS)}")
     if status not in ("open", "resolved", "all"):
@@ -251,19 +298,24 @@ def worklist(run: M2CRun, queue: str | None = None, *, as_of: str | None = None,
     rows = []
     needle = (search or "").strip().lower()
     for case in run.cases:
-        if case.created > T:
+        if case.created > T or empty:
             continue
         done = case.resolved is not None and case.resolved <= T
         if (status == "open" and done) or (status == "resolved" and not done):
             continue
-        row = _row(run, case, T)
-        if queue and row["queue"] != queue:
-            continue
         if type and case.type != type:
             continue
+        if queue or category:
+            q, _, _ = _queue_at(case, T)
+            if (queue and q != queue) or (category and cat.category(case.type, q, case.work) != category):
+                continue
+        row = _row(run, case, T)
         if commodity and row["commodity"] != commodity:
             continue
-        if needle and needle not in f"{row['caseId']} {row['address']} {row['premiseId']} {row['accountId']}".lower():
+        if assignee and row["assignee"] != assignee:
+            continue
+        if needle and needle not in (f"{row['caseId']} {row['address']} {row['premiseId']} {row['accountId']} "
+                                     f"{row['meterId']} {row.get('orderId', '')}").lower():
             continue
         rows.append(row)
     key = {"age": lambda x: (-x["ageDays"], x["caseId"]), "impact": lambda x: (-x["impact"], x["caseId"]),
@@ -272,7 +324,7 @@ def worklist(run: M2CRun, queue: str | None = None, *, as_of: str | None = None,
     rows.sort(key=key)
     start = (max(1, page) - 1) * page_size
     return {"schemaVersion": "m2c-worklist/1.0", "simulationId": run.simulation_id, "asOf": date_of(day).isoformat(),
-            "queue": queue, "status": status, "sort": sort, "total": len(rows), "page": max(1, page),
+            "queue": queue, "category": asked, "status": status, "sort": sort, "total": len(rows), "page": max(1, page),
             "pageSize": page_size, "rows": rows[start:start + page_size]}
 
 
@@ -445,19 +497,173 @@ def case_view(run: M2CRun, case_id: str, *, as_of: str | None = None, truth: boo
         history.append(h)
     row = _row(run, case, T)
     open_now = row["status"] not in ("resolved", "future")
+    acct = run.account_of(case)
+    hold = run.hold_on(acct, T)
+    linked = [run.orders[oid] for oid in case.orders if run.orders[oid].created <= T]
+    read = m > 0 and run.read_t[r, m] <= T  # an invoice hold placed before the account's first 2026 read has none
+    decisions = () if case.work is not None or not open_now else \
+        tuple(a for a in (("accept", "estimate", "escalate") if case.doc >= 0 else
+                          ("accept", "override", "estimate", "field_order", "escalate"))
+              if not (a == "escalate" and row["queue"] == "SUPERVISOR")
+              and not (a == "field_order" and row["queue"] == "FIELD")
+              and not (hold is not None and case.doc >= 0 and a in ("accept", "estimate")))
     return {"schemaVersion": CASE_VERSION, **row, "simulationId": run.simulation_id, "asOf": date_of(day).isoformat(),
-            "decision": decision(run, r, m), "read": read_record(run, r, m, T, truth),
+            "decision": decision(run, r, m) if read else None, "read": read_record(run, r, m, T, truth) if read else None,
             "heldReadIds": [run.read_id(r, j) for j in case.reads[1:] if run.read_t[r, j] <= T],
             # Truck rolls as local day and seconds, so the map can show the visit.
             "fieldVisits": [{"day": date_of(int(t)).isoformat(), "seconds": round((t - int(t)) * 86400.0, 1)}
                             for t, kind, _, _ in case.events if kind == "TRUCK_ROLL"],
             "history": history, "events": events, "edges": edges,
-            "actions": [a for a in (("accept", "estimate", "escalate") if case.doc >= 0 else
-                                    ("accept", "override", "estimate", "field_order", "escalate"))
-                        if open_now and not (a == "escalate" and row["queue"] == "SUPERVISOR")
-                        and not (a == "field_order" and row["queue"] == "FIELD")],
+            "actions": list(decisions),
+            # Utility Studio: notes, linked orders, the account's invoice hold, and the Studio actions open now.
+            "notes": case_notes(run, case, T), "orders": [order_brief(run, o, T) for o in linked],
+            "invoiceHold": hold_json(run, hold, T) if hold is not None else None,
+            "studioActions": studio_actions(run, case, T, open_now, hold, linked),
+            **({"order": order_json(run, run.orders[case.ref], T)} if case.work == "order" else {}),
             **({"billingDocument": doc_json(run, run.books.docs[case.doc], T, truth)} if case.doc >= 0 else {}),
             **({"truth": {"class": case.truth}} if truth else {})}
+
+
+NOTE_EVENTS = ("CASE_NOTE", "USER_ACTION", "INVOICE_HOLD", "INVOICE_UNHOLD", "ORDER_COMPLETED")
+
+
+def case_notes(run: M2CRun, case: Case, T: float) -> list[dict]:
+    """Notes on the case as of ``T``: your case notes, and the reasons recorded with decisions, holds and orders."""
+    out = []
+    for t, kind, payload, _ in case.events:
+        if t > T:
+            break
+        text = payload.get("text") if kind == "CASE_NOTE" else payload.get("note") if kind in NOTE_EVENTS else None
+        if text:
+            out.append({"at": run.iso(t), "text": text, "by": "you", "kind": kind,
+                        "label": cat.EVENTS[kind][0], "actionId": payload.get("actionId")})
+    return out
+
+
+def hold_json(run: M2CRun, hold: list, T: float) -> dict:
+    """An account's invoice hold as of ``T``, with the billing documents it has held back so far."""
+    hc = hold[2]
+    held = [x for t, kind, payload, _ in hc.events if kind == "INVOICE_DEFERRED" and t <= T
+            for x in payload["billingDocumentIds"]]
+    return {"accountId": hc.ref, "caseId": hc.id, "since": run.iso(hold[0]), "sourceCaseId": hc.source,
+            "note": hc.events[0][2].get("note"), "heldDocumentIds": held}
+
+
+# ---- field service orders -----------------------------------------------------------------------------------------
+def order_brief(run: M2CRun, o: ords.Order, T: float) -> dict:
+    stage = o.stage_at(T)
+    return {"orderId": o.id, "stage": stage, "systemStatus": ords.SYSTEM_STATUS.get(stage or "", None),
+            "caseId": o.case.id if o.case is not None else None,
+            "shortText": (o.version_at(T) or (0, "", {}, []))[2].get("shortText") or None}
+
+
+def order_json(run: M2CRun, o: ords.Order, T: float) -> dict:
+    """``field-order/1.0``: a field service order as of ``T`` (its form, stage, history, links and crew visit)."""
+    tw = run.town
+    _, _, fields, comps = o.version_at(T)
+    stage = o.stage_at(T)
+    r, m = o.r, o.m
+    at = {s: t for t, s, _, _ in o.stages if t <= T}
+    out = {"schemaVersion": "field-order/1.0", "orderId": o.id, "stage": stage,
+           "systemStatus": ords.SYSTEM_STATUS[stage], "editable": stage == "Draft",
+           "fields": {k: fields.get(k) for k in ords.FIELDS if k in fields}, "components": comps,
+           "source": {"caseId": o.source_case or (o.source.id if o.source is not None else None),
+                      "readId": o.source_read or (run.read_id(r, m) if r >= 0 else None),
+                      "kind": "case" if o.source_case else "read"},
+           "caseId": o.case.id if o.case is not None else None, "detached": o.detached,
+           "createdAt": run.iso(o.created), "releasedAt": run.iso(at["Ready for dispatch"]) if "Ready for dispatch" in at
+           else None, "dispatchedAt": run.iso(at["Dispatched"]) if "Dispatched" in at else None,
+           "completedAt": run.iso(at["Completed"]) if "Completed" in at else None,
+           "outcome": next((n for t, s, _, n in o.stages if s == "Completed" and t <= T), None),
+           "history": [{"at": run.iso(t), "stage": s, "actionId": aid, **({"note": n} if n else {})}
+                       for t, s, aid, n in o.stages if t <= T],
+           "saves": sum(1 for v in o.versions if v[0] <= T)}
+    if r >= 0:
+        p = int(tw.prem[r])
+        ctr, acct = tw.contract_at(r, int(tw.read_day[r, m]))
+        out["reference"] = {"premiseId": tw.premise_ids[p], "address": tw.address[p],
+                            "installationId": tw.installation[r], "meterId": tw.meter_ids[tw.meter_of[r]],
+                            "registerId": tw.reg_ids[r], "commodity": str(tw.commodity[r]), "contractId": ctr,
+                            "accountId": acct}
+    if stage in ("Dispatched", "Completed") and o.roll_t is not None:
+        out["visit"] = {"day": date_of(int(o.roll_t)).isoformat(), "seconds": round((o.roll_t - int(o.roll_t)) * 86400, 1),
+                        "activity": ords.ACTIVITY.get(fields.get("activityType"), "special_read"),
+                        "minutes": o.minutes, "crew": "FIELD", "rolled": o.roll_t <= T}
+    return out
+
+
+def order_proposal(run: M2CRun, r: int, m: int, case: Case | None, day: int) -> dict:
+    """Suggested values for a new order's form (the Studio may show or ignore them; nothing is saved)."""
+    tw = run.town
+    kind = case.type if case is not None else None
+    activity = "Access investigation" if kind in ("NO_ACCESS", "CONSECUTIVE_ESTIMATES") else \
+        "Special meter read" if kind in cat.MISSING_TYPES or kind is None else "Meter investigation"
+    start = date_of(min(run.next_bday(day), YEAR_DAYS - 1)).isoformat()
+    label = cat.EVENTS[kind][0] if kind else "Meter read"
+    return {"orderType": ords.CHOICES["orderType"][0], "plant": ords.plant(tw.name),
+            "plannerGroup": ords.CHOICES["plannerGroup"][0], "workCenter": ords.WORK_CENTER[str(tw.commodity[r])],
+            "activityType": activity, "priority": ords.CHOICES["priority"][0 if case is not None and case.impact >=
+                                                                               run.cfg.vee.escalate_impact else 1],
+            "startDate": start, "finishDate": start, "shortText": f"{label} · {tw.address[tw.prem[r]]}"[:ords.TEXT],
+            "operation": f"{activity} at meter {tw.meter_ids[tw.meter_of[r]]}"[:ords.TEXT], "duration": 30}
+
+
+def order_view(run: M2CRun, *, order_id: str | None = None, case_id: str | None = None, read_id: str | None = None,
+               as_of: str | None = None) -> dict:
+    """An order by id, or the order of a source (a case or a read). A source without an order returns
+    ``order: null`` and a ``proposal`` for the form, so reopening never creates a second order."""
+    day, T = as_of_t(run, as_of)
+    head = {"schemaVersion": "m2c-order/1.0", "simulationId": run.simulation_id, "asOf": date_of(day).isoformat()}
+    if order_id:
+        o = run.orders.get(order_id)
+        if o is None or o.created > T:
+            raise KeyError(order_id)
+        return {**head, "order": order_json(run, o, T)}
+    if case_id:
+        case = run.case_index.get(case_id)
+        if case is None or case.created > T:
+            raise KeyError(case_id)
+        if case.work == "order":
+            return {**head, "order": order_json(run, run.orders[case.ref], T)}
+        r, m = case.r, case.month
+    elif read_id:
+        r, m = run.town.find_read(read_id)
+        if run.read_t[r, m] > T:
+            raise KeyError(read_id)
+        c = int(run.case_of[r, m])
+        case = run.cases[c] if c >= 0 and run.cases[c].created <= T else None
+    else:
+        raise ValueError("give orderId, sourceCaseId or readId")
+    # One order per source: the case's own order, or any order raised on the same read (from the case or the read).
+    mine = set(case.orders) if case is not None else set()
+    o = next((x for x in run.orders.values() if x.case is not None and x.created <= T
+              and (x.id in mine or (x.r, x.m) == (r, m))), None)
+    if o is not None:
+        return {**head, "order": order_json(run, o, T)}
+    return {**head, "order": None, "proposal": order_proposal(run, r, m, case, day)}
+
+
+def studio_actions(run: M2CRun, case: Case, T: float, open_now: bool, hold: list | None, linked: list) -> list[str]:
+    """The Studio action types this case accepts on its as-of day (decisions are in ``actions``)."""
+    if not open_now:
+        return []
+    out = ["note", "assign"]
+    if case.work == "order":
+        o = run.orders[case.ref]
+        stage = o.stage_at(T)
+        if stage == "Draft":
+            out += ["order_save", "order_release"]
+        elif stage == "Ready for dispatch":
+            out.append("order_dispatch")
+        elif stage == "Dispatched" and int(T) >= o.start_day:
+            out.append("order_complete")
+    elif case.work == "hold":
+        out.append("invoice_unhold")
+    else:
+        if not linked:
+            out.append("order_save")
+        out.append("invoice_unhold" if hold is not None else "invoice_hold")
+    return out
 
 
 # ---- the run's day on the map -------------------------------------------------------------------------------------
@@ -479,7 +685,7 @@ def day_cycle(run: M2CRun, d: int) -> dict:
             missed = set(tw.prem[ami[np.isnan(run.obs[ami, m])]].tolist())
             out["ami"] = {"at": round(float(tw.hour[ami].min()) * 3600), "read": ids(set(tw.prem[ami].tolist()) - missed),
                           "missed": ids(missed)}
-    flagged = [int(tw.prem[c.r]) for c in run.cases if int(c.created) == d and c.doc < 0
+    flagged = [int(tw.prem[c.r]) for c in run.cases if int(c.created) == d and c.doc < 0 and c.work is None
                and c.type not in cat.MISSING_TYPES]
     if hit is not None or flagged:
         out["vee"] = {"at": 18 * 3600, "flagged": ids(flagged)}
@@ -538,7 +744,7 @@ def scorecard(run: M2CRun, *, as_of: str | None = None) -> dict:
         rows.append(row)
     by_type: dict[str, list[int]] = {}
     for case in run.cases:
-        if case.created > T or case.doc >= 0 or case.type in cat.MISSING_TYPES:
+        if case.created > T or case.doc >= 0 or case.type in cat.MISSING_TYPES or case.work is not None:
             continue
         c = by_type.setdefault(case.type, [0, 0])
         c[0] += 1
@@ -616,9 +822,10 @@ def costs(run: M2CRun, *, as_of: str | None = None) -> dict:
         o["field"] += "TRUCK_ROLL" in kinds
         read_day = float(tw.read_day[case.r, case.month])
         end = case.resolved if case.resolved is not None and case.resolved <= T else T
-        o["carry"] += max(0.0, end - read_day) * rate
-        if case.resolved is not None and case.resolved <= T:
-            o["daysToRelease"].append(case.resolved - read_day)
+        if case.work is None:
+            o["carry"] += max(0.0, end - read_day) * rate
+            if case.resolved is not None and case.resolved <= T:
+                o["daysToRelease"].append(case.resolved - read_day)
     rows = []
     for k, o in sorted(out.items(), key=lambda kv: -kv[1]["count"]):
         d = o.pop("daysToRelease")

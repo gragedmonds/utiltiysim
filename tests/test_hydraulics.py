@@ -1,4 +1,4 @@
-"""Radial hydraulics: water grade and service pressure, two-tier gas pressure, and frames."""
+"""Hydraulics: water grade and service pressure, two-tier gas pressure, loop flows (sim.loops), and frames."""
 
 from __future__ import annotations
 
@@ -12,9 +12,13 @@ import orjson
 import pytest
 from viewer_contract import validate_frame
 
+import utilsim.sim.flows as flows_module
+import utilsim.sim.hydraulics as hydraulics
 from utilsim.net.tables import hazen_williams_headloss_m
 from utilsim.ops.opstown import OpsTown
-from utilsim.sim.hydraulics import WATER_MIN_KPA, HydParams, solve
+from utilsim.sim.hydraulics import KPA_PER_M, WATER_MIN_KPA, HydParams, solve
+from utilsim.sim.loops import cycles, dense_solve
+from utilsim.sim.loops import solve as solve_loops
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -101,3 +105,118 @@ def test_elevated_tank_carries_the_town_when_the_pump_station_is_cut_off(ayr):
     assert normal.edge_flows["water"][riser] == 0.0  # in normal operation the supply feeds everyone
     fed = ayr.flow_model.flows(7.5, month=7, disabled={"water": cut})
     assert abs(fed.edge_flows["water"][riser]) > 0 and np.nanmin(fed.pressure["water"]) > 0
+    # Pump station and tank both feed: the path between them is a pseudo-loop, solved with the loops.
+    assert fed.loops["water"]["converged"] and not np.isnan(fed.edge_flows["water"]).any()
+
+
+# ---- loops ---------------------------------------------------------------------------------------------------------
+def test_loop_solver_on_hand_networks():
+    # Root 0 → 1 → 2 (r = 1 and 2) with 10 m³/h drawn at 2, and a chord 0 → 2 with r = 3: equal losses split it evenly.
+    parent, depth = np.array([-1, 0, 1]), np.array([0, 1, 2])
+    a, b = np.array([0, 1, 0]), np.array([1, 2, 2])
+    cyc = cycles(parent, depth, a, b, np.array([2]), np.array([True, False, False]))
+    sol = solve_loops(cyc, np.array([10.0, 10.0]), np.array([1.0, 2.0]), np.array([3.0]), 1.852, np.zeros(1),
+                      np.full(1, 1e-9))
+    assert sol.converged and sol.q[0] == pytest.approx(5.0, rel=1e-8) and np.allclose(sol.flow, 5.0)
+    # Two held nodes 1 m apart (0 at 10 m, 3 at 9 m) joined by 0 → 1 ⇢ 2 ← 3, r = 1 each: a pseudo-loop.
+    parent, depth = np.array([-1, 0, -1, -1]), np.array([0, 1, 0, 0])
+    parent[2], depth[2] = 3, 1
+    a, b = np.array([0, 3, 1]), np.array([1, 2, 2])
+    cyc = cycles(parent, depth, a, b, np.array([2]), np.array([True, False, False, True]))
+    q = (1 / 3) ** (1 / 1.852)
+    sol = solve_loops(cyc, np.zeros(2), np.ones(2), np.ones(1), 1.852, np.array([1.0]), np.full(1, 1e-9))
+    assert sol.converged and sol.q[0] == pytest.approx(q, rel=1e-8)
+    assert np.allclose(sol.flow, [q, -q])  # 0 → 1 and 2 → 3 (against node 2's parent edge)
+
+
+def test_dense_solve_matches_numpy():
+    rng = np.random.default_rng(7)
+    g = rng.random((400, 150))
+    jac = -(g.T @ g + np.diag(rng.random(150) + 0.1))  # the loop Jacobian's shape: −(Cᵀ·G·C + D)
+    jac[0, 1:] += 0.05  # and a little asymmetry
+    rhs = rng.random((150, 3))
+    assert np.allclose(dense_solve(jac, rhs), np.linalg.solve(jac, rhs), rtol=1e-9, atol=1e-12)
+    assert np.allclose(dense_solve(jac, rhs[:, 0]), np.linalg.solve(jac, rhs[:, 0]), rtol=1e-9, atol=1e-12)
+
+
+def _radial(monkeypatch, ayr, *args, **kw):
+    with monkeypatch.context() as m:
+        m.setattr(flows_module, "looped", lambda *a, **k: None)
+        return ayr.flow_model.flows(*args, **kw)
+
+
+def test_water_loops_balance_flow_and_head(ayr, monkeypatch):
+    res = ayr.flow_model.flows(7.5, month=7)  # the morning peak
+    net, hp = ayr.flow_inputs.nets["water"], ayr.flow_inputs.hyd["water"]
+    loops = net.loop & net.enabled
+    assert res.loops["water"]["converged"] and res.loops["water"]["chords"] == loops.sum() > 0
+    q = res.edge_flows["water"]
+    assert not np.isnan(q).any() and (q[loops] != 0).all()
+    # Continuity at every node but the sources.
+    bal = np.zeros(net.n_nodes)
+    np.add.at(bal, net.b, q)
+    np.add.at(bal, net.a, -q)
+    m = net.meter >= 0
+    bal[m] -= res.homes["water"][net.meter[m]]
+    bal[net.sources] = 0.0
+    assert np.abs(bal).max() < 1e-6
+    # Energy on every pipe, so around every cycle: the grade falls by r·Q·|Q|^0.852 along the flow.
+    grade = res.node_pressure["water"] / KPA_PER_M + hp.elevation
+    free = np.isnan(hp.reset)
+    free[net.sources] = False
+    pipe = (hp.tier == 0) & free[net.a] & free[net.b]
+    r = hp.loss_coefficient()
+    err = grade[net.a] - grade[net.b] - r * q * np.abs(q) ** (hp.exponent - 1)
+    assert pipe[loops].all() and np.abs(err[pipe]).max() < 1e-3
+    # Against the radial model: the worst-served premise is no worse off, and the demand-weighted pressure is higher
+    # (the loops lower the energy the network dissipates). A premise on the high side of a loop can lose a little.
+    rad = _radial(monkeypatch, ayr, 7.5, month=7)
+    assert rad.loops is None and np.isnan(rad.edge_flows["water"][loops]).all()
+    p, p0, w = res.pressure["water"], rad.pressure["water"], res.homes["water"]
+    assert p.min() >= p0.min() - 1e-9
+    assert np.average(p, weights=w) > np.average(p0, weights=w)
+
+
+def test_gas_loops_balance_flow_and_pressure(ayr):
+    res = ayr.flow_model.flows(18.5, month=1)  # a January evening
+    net, hp = ayr.flow_inputs.nets["gas"], ayr.flow_inputs.hyd["gas"]
+    loops = net.loop & net.enabled
+    q = res.edge_flows["gas"]
+    assert res.loops["gas"]["converged"] and not np.isnan(q[loops]).any()
+    bal = np.zeros(net.n_nodes)
+    np.add.at(bal, net.b, q)
+    np.add.at(bal, net.a, -q)
+    m = net.meter >= 0
+    bal[m] -= res.homes["gas"][net.meter[m]]
+    bal[net.sources] = 0.0
+    assert np.abs(bal).max() < 1e-6
+    # Weymouth on P² (psia²) for medium pressure, Spitzglass on kPa for low pressure, pipe by pipe.
+    p = res.node_pressure["gas"]
+    free = np.isnan(hp.reset)
+    free[net.sources] = False
+    drop = hp.loss_coefficient() * q * np.abs(q)
+    p2 = (p * hydraulics.PSI_PER_KPA + hydraulics.ATM_PSI) ** 2
+    for tier, pot, tol in ((1, p2, 1e-2), (2, p, 1e-4)):
+        pipe = (hp.tier == tier) & free[net.a] & free[net.b]
+        assert pipe[loops].any() and np.abs(pot[net.a] - pot[net.b] - drop)[pipe].max() < tol
+
+
+def test_unconverged_loops_fall_back_to_radial(ayr, monkeypatch):
+    def stalled(*args, **kw):
+        return solve_loops(*args, **{**kw, "max_iter": 0})
+
+    rad = _radial(monkeypatch, ayr, 7.5, month=7)
+    monkeypatch.setattr(hydraulics, "solve_loops", stalled)
+    with pytest.warns(RuntimeWarning, match="did not converge"):
+        res = ayr.flow_model.flows(7.5, month=7)
+    assert not res.loops["water"]["converged"]
+    assert np.array_equal(res.edge_flows["water"], rad.edge_flows["water"], equal_nan=True)
+    assert np.array_equal(res.pressure["water"], rad.pressure["water"], equal_nan=True)
+
+
+def test_frames_carry_loop_flows(ayr, ayr_snapshot):
+    frame = ayr.frames.frame(datetime(2026, 7, 15, 7, 30, tzinfo=ZoneInfo(ayr.timezone)))
+    validate_frame(ayr_snapshot, frame)
+    loops = {e["id"] for e in ayr_snapshot["networks"]["water"]["edges"] if e.get("loop") and e["enabled"]}
+    water = frame["networks"]["water"]
+    assert all(v is not None for i, v in zip(water["edgeIds"], water["flows"]) if i in loops)

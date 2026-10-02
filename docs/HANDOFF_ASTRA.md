@@ -15,7 +15,7 @@ requires, and CI proves it against your actual `dist/adapter.js`. Field names an
 Smoke results (your receiver, unchanged): `scripts/viewer_conformance.mjs` passes 11/11 on the example and on a
 freshly generated town, in CI (`viewer` job, after your own `npm test`):
 `inspectSnapshot` OK; a trace reaches a source for every service; customer profile finds account, partner, meters
-and reads; embedded, replay and scenario frames are accepted; enabled water loops stay `null`; the outage isolates
+and reads; embedded, replay and scenario frames are accepted; enabled water loops carry flows and a `null` flow stays `null`; the outage isolates
 electric but not water; tampered-revision, foreign-town and duplicate-sequence frames are rejected. The headless
 browser smoke loads the snapshot through `#snapshot-file`, shows ENGINE SNAPSHOT, applies the replay, finds a
 premise by search and opens its profile with no console errors.
@@ -156,6 +156,9 @@ Design passes welcome:
 
 ## 9. Utility Studio in the viewer
 
+For the reworked UI, `docs/STUDIO_BILLING.md` lists what drives each billing page: the engine call and fields, and how
+the shared run date and fast-forward move them.
+
 Your Utility Studio (`prototypes/utility-studio`) is now the viewer's shell. The production map keeps its renderer,
 phone quality profiles and WebGL recovery.
 - Header: Map and Workspace are the primary navigation, and Configuration is the cog. Routes are `#/town`,
@@ -166,8 +169,64 @@ phone quality profiles and WebGL recovery.
     meaning stay empty;
   - Display Billing and Display Meter Reading Results keep the blank query, the explicit Execute, and F4 that only
     selects.
+- KPIs and the VEE scorecard stay out of the transaction dropdown (still your four), as you asked: workload belongs
+  in the worklists.
+  - Each category in the Clarification Case List shows its open count.
+  - "Run statistics" on the list's toolbar opens `#/workspace/statistics`. It shows reads, queues with aging, costs,
+    billing and collections, and service interruptions as of the run date. "VEE scorecard" there scores VEE against
+    the simulation's truth.
+  - A case whose field order the map has scheduled offers "Watch the truck roll". It opens the map on that day and
+    follows the van from the depot.
 - Configuration has your tabs: Town & meters, Process & costs (the meter-to-cash schema), Scenario (operations
   settings from `/api/sim/settings/schema`) and Engine & data.
-- Field service orders (draft, release, dispatch, complete), notes, ownership, invoice holds and the billing and read
-  lookups are being added to the engine. Until then their buttons say so.
+- Engine-backed record screens (section 10 has the engine side):
+  - **Display Billing** shows Bil. Order, Bil.Time and Documents tabs. From the billing record you can reach the
+    contract (with the account ledger), the installation, a device, a billing document with its line items, a print
+    document with its payments and dunning, and the meter-reading results.
+  - **Display Meter Reading Results** shows the reading, its VEE tests, its clarification case and order, and the
+    register's history. Opening a reading from the billing record keeps the "‹ Back" to billing. Opening the
+    installation from a standalone reading returns to the installation query, filled in but not executed.
+- **Field service order form:** HeaderData, Operations, Components and Partner tabs, with Release & Save, Save Draft,
+  Dispatch, Complete, "Watch the truck roll" and "‹ Back to source".
+  - It opens from a clarification case, or from exactly one selected open reading.
+  - Reopening from the same source reuses the order.
+  - The form checks the release rules before sending them. The engine checks them again, and field errors from
+    either one mark the fields and their tabs.
+  - Labels, choices, required fields and units come from `GET /api/m2c/vocabulary`.
+- **Case work:** Take ownership, Add note, Do Not Invoice Account, Remove Invoice Hold, and Release billing / invoice
+  outsort (which takes a reason). Each button appears only when the engine lists the action for that case on the
+  run date. While an invoice hold is on, the release is not offered.
 
+## 10. Utility Studio seams (engine side)
+
+Your `prototypes/utility-studio/` fixtures now have engine counterparts. All calls go through `EngineM2C`: Studio
+mutations are ordinary append-only actions (`act(type, caseId, value, extra)`), so a refused one is rolled back as
+today. Details and rules: `docs/M2C.md` "Studio work".
+
+| Prototype seam | Engine |
+|---|---|
+| `fieldChoices`, `fieldRequirements`, component units | `GET /api/m2c/vocabulary?town=…` → `order.fields[]` (label, tab, required, kind, bounds, choices), `order.choices` (the town's plant, e.g. `AY01 · Ayr`), `order.components.units` |
+| `beginFieldOrder` / Reopen | `POST /api/m2c/order {sourceCaseId \| readId}` → the existing order, or `order: null` + `proposal` (prefill) |
+| Save Draft | `act('order_save', null, null, {sourceCaseId \| readId, fields, components})` (new) or `{orderId, fields, components}` (edit); then `order(...)` gives `orderId` (`WO-yymmdd-nnnn`) and the Field Work `caseId` |
+| `validateFieldOrder` + Release & Save | `act('order_release', null, null, {orderId})`; a 422 `detail.fieldErrors` is `{field: message}` with your messages; `detail.message` for the toast. Your client check can stay for instant feedback; the engine is the authority |
+| `dispatchFieldOrder` | `act('order_dispatch', null, null, {orderId})` (refused before release) |
+| `updateCase(...,'complete')` | `act('order_complete', null, null, {orderId, note})` (after dispatch, on or after the basic start) |
+| `noteDialog` note | `act('note', caseId, null, {text})`; the case view lists `notes` |
+| hold / unhold | `act('invoice_hold' \| 'invoice_unhold', caseId, null, {note})` (or `{accountId, note}`); the case view has `invoiceHold` |
+| release (outsort) | `act('accept', caseId, null, {note})` on a `BILLING` case; refused while the account is on hold |
+| assignee | `act('assign', caseId, null, {assignee})`; rows carry `assignee` and `owner` |
+| `clarificationCases`, `categories` | `queue({category, status, search, page})`; rows carry `category`, read fields and `linkedOrderIds` / `orderId`. Categories without engine meaning return empty lists |
+| `readRows` | `queue({category: 'MR Implausibles'})` rows (meter, previous, observed, expected, consumption, `validationText`) |
+| Display Billing / installation query | `POST /api/m2c/installation {installationId}` (404 → "not found" on the query) |
+| Display Meter Reading Results | `POST /api/m2c/read-document {readId}` |
+| F4 Possible Entries | `POST /api/m2c/possible-entries {kind, query, page}` → `{id, text}`; selecting must still require Execute |
+
+`EngineM2C` needs only thin wrappers for the four new POSTs (`post('/m2c/order', {...}, 'order')` and so on) and a
+GET for the vocabulary; I did not touch `packages/town-viewer/`. One small change there would help: `post()` folds
+the 422 `detail` into the Error message as JSON; keeping it as `e.detail` lets the order form put `fieldErrors` on
+its fields and switch to the first failing tab. Case view: `actions` are the decisions it accepts
+now, `studioActions` the Studio actions (`order_save`, `order_release`, `note`, `invoice_hold`, …) — drive button
+enablement from them. Identities are the engine's everywhere (premise, installation, account, meter, read, case,
+order), so the map and the Workspace share them; the fixture ids (`7100000318`, `MR-2026-0276`, `100004201`) go away.
+The Studio's "Schedule visit" maps to the order's basic start (save before release); there is no separate schedule
+action. A dispatched order shows on the map on its start date as a `field_order` job with `orderId`.

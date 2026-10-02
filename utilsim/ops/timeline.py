@@ -201,9 +201,12 @@ class Run:
         job = self._job("field", "field_order", float(fo["at"]), access_point(ops.roads, *ops.premise_access[i]),
                         {"x": p["x"], "z": p["z"]}, fo["caseId"], label=fo.get("label") or pid, premise=pid)
         job["caseId"], job["activity"] = fo["caseId"], fo.get("activity", "special_read")
+        if fo.get("orderId"):  # a field service order you dispatched in the Studio
+            job["orderId"] = fo["orderId"]
         work = 60.0 * float(fo.get("minutes", 20))
         self._event(job["arrivalAt"] + work, "fieldorder.completed", "workcase", fo["caseId"], job, job["id"],
-                    {"activity": job["activity"], "caseId": fo["caseId"]})
+                    {"activity": job["activity"], "caseId": fo["caseId"],
+                     **({"orderId": fo["orderId"]} if fo.get("orderId") else {})})
         self._finish_job(job, work)
 
     # ---- commands --------------------------------------------------------------------------------------------
