@@ -141,6 +141,10 @@ The routes are a table in `focus-ui.js` (`PAGES`). Opening a pack keeps a deep-l
 **Visual cues**
 - `outage-marks.js`: daytime rings in the utility colour for premises in `premises.unsupplied`, for the visible layers.
 - `OperationsView` paints reading-round outcomes once the reader passes a house (`job.stops[].outcome`): a green disc means read, amber means flagged by VEE, red means missed. The round's card shows the tally (`readTally` in `app.js`, colours in `READ_COLOR`).
+- Power flow:
+  - `attachPowerFlow` keeps `premises.voltage`, the electric `loading` and `lossesKW` from each frame (`flow.voltage`, `flow.loading`, `flow.lossesKW`, `flow.lowVoltage`).
+  - The electric service tab shows a "Power quality" section: service voltage against ANSI Range A, the transformer's loading, and network losses.
+  - `OutageMarks` adds a small violet ring at premises outside 114–126 V.
 - `timeline.meterToCash` (the linked run's day) shows as expanding rings for 30 sim-minutes at each step (`cycleGroups`, `CYCLE_COLOR`): 02:00 AMI collection (blue, or red when missed), 18:00 VEE flags (amber), 19:30 bills (green), 20:00 invoices (violet). The "Meter-to-cash today" card lists them.
 - `clock.tempC` shows by the clock status.
 
