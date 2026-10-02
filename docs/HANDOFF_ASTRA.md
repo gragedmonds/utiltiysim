@@ -166,6 +166,14 @@ phone quality profiles and WebGL recovery.
     meaning stay empty;
   - Display Billing and Display Meter Reading Results keep the blank query, the explicit Execute, and F4 that only
     selects.
+- KPIs and the VEE scorecard stay out of the transaction dropdown (still your four), as you asked: workload belongs
+  in the worklists.
+  - Each category in the Clarification Case List shows its open count.
+  - "Run statistics" on the list's toolbar opens `#/workspace/statistics`. It shows reads, queues with aging, costs,
+    billing and collections, and service interruptions as of the run date. "VEE scorecard" there scores VEE against
+    the simulation's truth.
+  - A case whose field order the map has scheduled offers "Watch the truck roll". It opens the map on that day and
+    follows the van from the depot.
 - Configuration has your tabs: Town & meters, Process & costs (the meter-to-cash schema), Scenario (operations
   settings from `/api/sim/settings/schema`) and Engine & data.
 - Field service orders (draft, release, dispatch, complete), notes, ownership, invoice holds and the billing and read

@@ -2,6 +2,7 @@
 // prototypes/utility-studio). Records, amounts, statuses and VEE results come from the engine through EngineM2C;
 // nothing here invents a record. Query context (what you executed) is session state, kept apart from engine data.
 import {escapeText as e} from './customer-view.js';
+import {scorecardMarkup} from './worklists.js';
 
 export const TRANSACTIONS=[
  ['Worklists','exceptions','Clarification Case List'],
@@ -38,6 +39,7 @@ export function parseWorkspaceRoute(hash){
  if(head==='billing')return {tx:'billing',record:a,screen:b||'orders'};
  if(head==='reads')return {tx:'reads',record:a,screen:b||'reads'};
  if(head==='field-order')return {tx:'field-order',record:a};
+ if(head==='statistics')return {tx:'statistics'};
  return {tx:TRANSACTIONS.some(t=>t[1]===head)?head:'exceptions'};
 }
 export function workspaceHash(r){
@@ -45,6 +47,7 @@ export function workspaceHash(r){
  if(r.tx==='billing')return `#/workspace/billing/${encodeURIComponent(r.record)}/${r.screen||'orders'}`;
  if(r.tx==='reads')return `#/workspace/reads/${encodeURIComponent(r.record)}${r.screen&&r.screen!=='reads'?'/'+r.screen:''}`;
  if(r.tx==='field-order')return '#/workspace/field-order/'+encodeURIComponent(r.record);
+ if(r.tx==='statistics')return '#/workspace/statistics';
  return '#/workspace/'+(r.tx||'exceptions');
 }
 
@@ -56,7 +59,7 @@ const btn=(label,act,extra='')=>`<button type="button" data-ws="${act}" ${extra}
 const field=(label,value,extra='')=>`<div class="gui-field"><span>${e(label)}</span><span class="gui-value ${extra}" title="${value==null?'':e(String(value))}">${value==null||value===''?'—':e(String(value))}</span></div>`;
 const group=(title,body,extra='')=>`<fieldset class="gui-group ${extra}"><legend>${e(title)}</legend>${body}</fieldset>`;
 
-export function installWorkspace({getClient,toast=()=>{},onShowPremise=()=>{},onProcess=()=>{},root=document.getElementById('workspace-root')}){
+export function installWorkspace({getClient,toast=()=>{},onShowPremise=()=>{},onProcess=()=>{},onWatch=()=>{},root=document.getElementById('workspace-root')}){
  const client=()=>getClient();
  const ui={route:{tx:'exceptions'},category:'My Assigned Cases',status:'Open',query:'',sort:'age',compact:false,veeStatus:'open',veeUtility:'all',veeQuery:'',filters:false,selected:new Set(),historyOpen:false,queries:{installation:'',read:''},queryError:'',context:{installation:null,read:null},rows:[],veeRows:[],caseView:null,record:null,busy:0,message:''};
  // Query context: a record page opens only for the record you executed in this session.
@@ -72,8 +75,23 @@ export function installWorkspace({getClient,toast=()=>{},onShowPremise=()=>{},on
  // ---- Clarification Case List ----------------------------------------------------------------------------------
  function caseRows(){const q=ui.query.trim().toLowerCase();return ui.rows.filter(r=>matchesCategory(r,ui.category)&&(ui.status==='All'||(ui.status==='Completed'?!!r.resolvedAt:!r.resolvedAt))&&(!q||`${r.caseId} ${r.label} ${r.address} ${r.accountId} ${r.premiseId}`.toLowerCase().includes(q)));}
  function caseBody(){const rows=caseRows();return rows.length?rows.map(r=>{const [code,text]=substatus(r),done=!!r.resolvedAt;return `<tr class="clarification-row" data-case="${e(r.caseId)}" tabindex="0"><td><span class="clarification-status ${done?'complete':''}"></span></td><td class="${done?'':'overdue-cell'}">${done?'—':r.ageDays+' d'}</td><td>${e(r.caseId)}</td><td>${e(r.icon||'')} ${e(r.label)} · ${e(r.address)}</td><td>${caseStatus(r)}</td><td>${code}</td><td>${e(text)}</td><td>${e(r.queue||'—')}</td><td>Monthly</td><td>UTILSIM</td><td>${e(r.assignee==='you'?'You':r.assignee||'Unassigned')}</td></tr>`;}).join(''):`<tr><td colspan="11" class="fiori-empty">${ui.busy?'Loading cases from the engine…':`No ${ui.status==='Open'?'open ':''}cases in ${e(ui.category)}${ui.query?' match this search':''}.`}</td></tr>`;}
- function casesPage(){const n=caseRows().length;return `<section class="fiori-shell clarification-shell">${header('exceptions')}<div class="clarification-main-toolbar">${btn(ui.compact?'Comfortable layout':'Compact layout','layout')}${btn('Update Clarification Case List','refresh')}${btn('Export list','export-cases')}</div><div class="clarification-layout"><aside class="clarification-sidebar"><div>Billing</div><nav aria-label="Clarification categories">${CATEGORIES.map(c=>`<button data-category="${c}" class="${ui.category===c?'active':''}" ${ui.category===c?'aria-current="page"':''}>${c}</button>`).join('')}</nav></aside><section class="clarification-main"><div class="clarification-title">${e(ui.category)}</div><div class="clarification-table-toolbar">${btn(ui.sort==='age'?'Oldest first':'Case number','sort','class="native-tool sort-tool" title="Change sort order"')}<label class="sr-only" for="ws-status">Status</label><select id="ws-status">${['Open','Completed','All'].map(v=>`<option ${ui.status===v?'selected':''}>${v}</option>`).join('')}</select><input type="search" id="ws-query" placeholder="Case, text, account…" value="${e(ui.query)}" aria-label="Find clarification case"><span class="spacer"></span><span id="ws-count">${n} cases</span></div><div class="clarification-table-scroll ${ui.compact?'compact':''}"><table class="clarification-table"><thead><tr><th></th><th>Overdue</th><th>Case</th><th>Clarification Case Text</th><th>Status</th><th>Substatus</th><th>Substatus Text</th><th>Job</th><th>Interval</th><th>Logical system</th><th>Assignee</th></tr></thead><tbody id="ws-cases">${caseBody()}</tbody></table></div></section></div>${statusbar('Clarification Case List')}</section>`;}
+ function casesPage(){const n=caseRows().length;return `<section class="fiori-shell clarification-shell">${header('exceptions')}<div class="clarification-main-toolbar">${btn(ui.compact?'Comfortable layout':'Compact layout','layout')}${btn('Update Clarification Case List','refresh')}${btn('Export list','export-cases')}${btn('Run statistics','statistics')}</div><div class="clarification-layout"><aside class="clarification-sidebar"><div>Billing</div><nav aria-label="Clarification categories">${CATEGORIES.map(c=>`<button data-category="${c}" class="${ui.category===c?'active':''}" ${ui.category===c?'aria-current="page"':''}>${c}${ui.counts&&ui.counts[c]?`<span class="ws-count">${ui.counts[c]}</span>`:''}</button>`).join('')}</nav></aside><section class="clarification-main"><div class="clarification-title">${e(ui.category)}</div><div class="clarification-table-toolbar">${btn(ui.sort==='age'?'Oldest first':'Case number','sort','class="native-tool sort-tool" title="Change sort order"')}<label class="sr-only" for="ws-status">Status</label><select id="ws-status">${['Open','Completed','All'].map(v=>`<option ${ui.status===v?'selected':''}>${v}</option>`).join('')}</select><input type="search" id="ws-query" placeholder="Case, text, account…" value="${e(ui.query)}" aria-label="Find clarification case"><span class="spacer"></span><span id="ws-count">${n} cases</span></div><div class="clarification-table-scroll ${ui.compact?'compact':''}"><table class="clarification-table"><thead><tr><th></th><th>Overdue</th><th>Case</th><th>Clarification Case Text</th><th>Status</th><th>Substatus</th><th>Substatus Text</th><th>Job</th><th>Interval</th><th>Logical system</th><th>Assignee</th></tr></thead><tbody id="ws-cases">${caseBody()}</tbody></table></div></section></div>${statusbar('Clarification Case List')}</section>`;}
+ async function loadCounts(){const m=client();if(!m)return;try{const res=await m.post('/process/queue',{status:'open',page:1,pageSize:200},'counts');const n={};for(const r of res.rows||[]){const c=categoryOf(r);n[c]=(n[c]||0)+1;if(r.assignee==='you')n['My Assigned Cases']=(n['My Assigned Cases']||0)+1;}ui.counts=n;if(ui.route.tx==='exceptions'&&!ui.route.caseId)render();}catch(err){if(!err.superseded)ui.counts=null;}}
  async function loadCases(){const m=client();if(!m)return;const ticket=++ui.busy;try{const status=ui.status==='Completed'?'resolved':ui.status==='All'?'all':'open';const res=await m.queue({status,sort:ui.sort==='age'?'age':'created',page:1,pageSize:200,...(ui.category&&ui.category!=='My Assigned Cases'?{category:ui.category}:{})});if(ticket!==ui.busy)return;ui.rows=res.rows||[];ui.total=res.total;ui.asOf=res.asOf;}catch(err){if(!err.superseded)toast('Engine: '+err.message);}finally{if(ticket===ui.busy){ui.busy=0;render();}}}
+
+ // ---- Run statistics: the year's KPIs as of the run date, and VEE against simulation truth ----------------------
+ function statisticsPage(){const sum=ui.summary;if(!sum)return empty('Loading run statistics from the engine…');const k=sum.kpis,b=sum.billing||{},rel=sum.reliability||{},pct=x=>x==null?'—':Math.round(x*100)+'%',grid=(rows)=>`<div class="gui-master-grid ws-stats">${rows.map(col=>`<div>${col.map(([l,v])=>field(l,v)).join('')}</div>`).join('')}</div>`;
+  const queues=sum.queues.map(q=>`<tr><td>${e(q.label)}</td><td>${q.open}</td><td>${q.aging['0-1']}</td><td>${q.aging['2-3']}</td><td>${q.aging['4-7']}</td><td>${q.aging['8+']}</td><td>${q.oldestDays}</td></tr>`).join('');
+  const relRows=Object.entries(rel).map(([u,r])=>`<tr><td>${e(u)}</td><td>${r.interruptions}</td><td>${num(r.customersInterrupted,0)}</td><td>${num(r.customerMinutes,0)}</td><td>${r.saidiMinutes??'—'}</td><td>${num(r.lost,1)} ${e(r.unit)}</td></tr>`).join('');
+  return `<section class="fiori-shell gui-case-shell">${header('exceptions','Run Statistics')}<nav class="gui-transaction-toolbar">${btn('‹ Back to List','back')}${btn(ui.scorecard?'Hide VEE scorecard':'VEE scorecard','scorecard')}</nav><div class="gui-case-scroll"><div class="gui-case-content">
+   ${group('Meter Reading',grid([[['Reads to date',num(k.reads,0)],['Actual',num(k.actual,0)],['Missing',num(k.missing,0)]],[['Auto-accepted',num(k.autoAccepted,0)],['Flagged by VEE',num(k.flagged,0)],['Estimated',num(k.estimated,0)]]]))}
+   ${group('Work Queues',grid([[['Cases opened',num(k.casesOpened,0)],['Resolved',num(k.casesResolved,0)],['Open now',num(k.casesOpen,0)]],[['Field orders',num(k.fieldOrders,0)],['Truck rolls',num(k.truckRolls,0)],['Days to release',k.avgDaysToRelease??'—']]])+`<table class="gui-history-table"><thead><tr><th>Queue</th><th>Open</th><th>0–1 d</th><th>2–3 d</th><th>4–7 d</th><th>8+ d</th><th>Oldest</th></tr></thead><tbody>${queues}</tbody></table>`)}
+   ${group('Costs',grid([[['Labour',money(k.costs.labor)],['System',money(k.costs.system)],['Customer experience',money(k.costs.cx)]],[['Meter reading',money(k.costs.reads)],['Total',money(k.costs.total)],['Carrying cost',money(k.carry)]]]))}
+   ${b.documents!=null?group('Billing and Collections',grid([[['Billing documents',num(b.documents,0)],['Blocked',num(b.blocked,0)],['Billed',money(b.billed)],['Billing error vs truth',money(b.billingError)]],[['Invoices',num(b.invoices,0)],['Collected',money(b.collected)],['Receivable',money(b.receivable)],['Overdue',money(b.overdue)]]])):''}
+   ${relRows?group('Service Interruptions (from the map)',`<table class="gui-history-table"><thead><tr><th>Utility</th><th>Interruptions</th><th>Customers</th><th>Customer-minutes</th><th>SAIDI min</th><th>Use lost</th></tr></thead><tbody>${relRows}</tbody></table>`):''}
+   ${group('VEE against Simulation Truth',grid([[['Precision',pct(k.vee.precision)],['Recall',pct(k.vee.recall)]],[['True positives',num(k.vee.truePositives,0)],['False positives',num(k.vee.falsePositives,0)]]])+(ui.scorecard?`<div class="ws-scorecard">${ui.scorecard===true?'<p class="small-note">Scoring VEE…</p>':scorecardMarkup(ui.scorecard)}</div>`:''))}
+  </div></div>${statusbar('Run statistics · as of '+sum.asOf)}</section>`;}
+ async function loadSummary(){const m=client();if(!m)return;const ticket=++ui.busy;try{const sum=await m.summary();if(ticket!==ui.busy)return;ui.summary=sum;ui.asOf=sum.asOf;}catch(err){if(!err.superseded)toast('Engine: '+err.message);}finally{if(ticket===ui.busy){ui.busy=0;render();}}}
 
  // ---- Clarification case detail ---------------------------------------------------------------------------------
  function casePage(c){
@@ -81,7 +99,7 @@ export function installWorkspace({getClient,toast=()=>{},onShowPremise=()=>{},on
   const tests=(decision.tests||[]).map(t=>`<tr><td>${e(t.test)}</td><td>${e(t.outcome)}</td><td>${num(t.contribution,3)}</td><td>${e(t.rationale)}</td></tr>`).join('');
   const history=(c.events||[]).map((ev,i)=>`<tr><td>${i+1}</td><td>${day(ev.occurredAt)} ${String(ev.occurredAt||'').slice(11,16)}</td><td>${e(ev.payload?.icon||'')} ${e(ev.payload?.label||ev.eventType)}</td></tr>`).join('');
   const valueActions=[acts.has('accept')?btn('<span class="gui-action-check">✓</span> Clarif. Case Completed','accept',`class="gui-yellow" ${done?'disabled':''} title="Release the read as it stands"`):'',acts.has('estimate')?btn('Estimate &amp; release','estimate','class="gui-yellow"'):'',acts.has('override')?btn('Correct value…','override','class="gui-yellow"'):'',acts.has('escalate')?btn('Escalate','escalate','class="gui-yellow"'):''].join('');
-  return `<section class="fiori-shell gui-case-shell" aria-label="Clarification Case Detail">${header('exceptions','Clarification Case Detail')}<nav class="gui-transaction-toolbar" aria-label="Case transactions">${btn('‹ Back to List','back')}${btn('Display Billing','billing-query')}${btn('Show on map','show-map')}${btn('Activity sequence','trace')}</nav><div class="gui-case-scroll"><div class="gui-case-content"><div class="gui-case-header"><div><div class="gui-field"><span>Clar.Case Cat.</span><span class="gui-code">${catCode}</span><span class="gui-inline-text">${e(category)}</span></div>${field('Clarif. Case',c.caseId)}</div><div>${field('Created on',day(c.createdAt))}${field('Time',String(c.createdAt||'').slice(11,16))}${field('Created By',c.queue==='BILLING'?'BILLING_RUN':'VEE_BATCH')}</div></div>
+  return `<section class="fiori-shell gui-case-shell" aria-label="Clarification Case Detail">${header('exceptions','Clarification Case Detail')}<nav class="gui-transaction-toolbar" aria-label="Case transactions">${btn('‹ Back to List','back')}${btn('Display Billing','billing-query')}${btn('Show on map','show-map')}${(c.fieldVisits||[]).length?btn('Watch the truck roll','watch'):''}${btn('Activity sequence','trace')}</nav><div class="gui-case-scroll"><div class="gui-case-content"><div class="gui-case-header"><div><div class="gui-field"><span>Clar.Case Cat.</span><span class="gui-code">${catCode}</span><span class="gui-inline-text">${e(category)}</span></div>${field('Clarif. Case',c.caseId)}</div><div>${field('Created on',day(c.createdAt))}${field('Time',String(c.createdAt||'').slice(11,16))}${field('Created By',c.queue==='BILLING'?'BILLING_RUN':'VEE_BATCH')}</div></div>
    ${group('Master Data',`<div class="gui-master-grid"><div>${field('Contract Acct',c.accountId)}${field('Installation',read.installationId)}${field('Premise',c.premiseId)}</div><div>${field('Address',c.address)}${field('Division',c.commodity)}${field('Device',read.meterId)}</div></div>`)}
    ${group('Clarification Reason',`<div class="gui-field gui-reason"><span>Clarific.Reason</span><span class="gui-code">${e(c.sapValidationCode||c.type)}</span><span class="gui-reason-text">${e(c.label)}</span></div><p class="gui-reason-description">${e(decision.tests?.find(t=>t.contribution>0)?.rationale||'')}</p>${tests?`<table class="gui-history-table ws-tests"><thead><tr><th>VEE test</th><th>Outcome</th><th>Risk</th><th>Rationale</th></tr></thead><tbody>${tests}</tbody></table>`:''}`)}
    ${group('Meter Reading',`<div class="gui-master-grid"><div>${field('Read document',read.id)}${field('Read date',day(read.readAt))}${field('Read status',read.readStatus)}</div><div>${field('Previous register',num(read.previousRegisterValue))}${field('Reported register',num(read.registerValue))}${field('Consumption',read.consumption==null?null:num(read.consumption)+' '+(read.unit||''))}</div></div>`)}
@@ -117,6 +135,7 @@ export function installWorkspace({getClient,toast=()=>{},onShowPremise=()=>{},on
   else if(r.tx==='billing-query')html=queryPage('installation');
   else if(r.tx==='read-query')html=queryPage('read');
   else if(r.tx==='billing'||r.tx==='reads')html=recordPage();
+  else if(r.tx==='statistics')html=statisticsPage();
   else if(r.tx==='field-order')html=empty('Field service orders open from a clarification case or a selected implausible reading once the engine order lifecycle is available.');
   else html=casesPage();
   root.innerHTML=html;
@@ -126,7 +145,7 @@ export function installWorkspace({getClient,toast=()=>{},onShowPremise=()=>{},on
   if(r.tx==='billing'&&!has('installation',r.record)){go({tx:'billing-query'});return;}
   if(r.tx==='reads'&&!has('read',r.record)){go({tx:'read-query'});return;}
   ui.route=r;render();
-  if(r.caseId)loadCase(r.caseId);else if(r.tx==='vee')loadVee();else if(r.tx==='exceptions')loadCases();
+  if(r.caseId)loadCase(r.caseId);else if(r.tx==='vee')loadVee();else if(r.tx==='statistics')loadSummary();else if(r.tx==='exceptions'){loadCases();loadCounts();}
  }
  root?.addEventListener('change',ev=>{const t=ev.target;
   if(t.id==='ws-transaction'&&t.value){ui.queryError='';go({tx:t.value});}
@@ -145,7 +164,10 @@ export function installWorkspace({getClient,toast=()=>{},onShowPremise=()=>{},on
   const f4=ev.target.closest('[data-f4]');if(f4){const input=root.querySelector('#ws-query-input');input.value=f4.dataset.f4;ui.queries[root.querySelector('#ws-query-form').dataset.kind]=f4.dataset.f4;root.querySelector('#ws-f4').innerHTML='';input.focus();return;} // F4 selects; Execute is still needed
   const b=ev.target.closest('[data-ws]');if(!b||b.disabled)return;const act=b.dataset.ws,m=client(),c=ui.caseView;
   if(act==='layout'){ui.compact=!ui.compact;render();}
-  else if(act==='refresh')loadCases();
+  else if(act==='refresh'){loadCases();loadCounts();}
+  else if(act==='statistics')go({tx:'statistics'});
+  else if(act==='scorecard'){if(ui.scorecard){ui.scorecard=null;render();return;}ui.scorecard=true;render();try{ui.scorecard=await m.scorecard();}catch(err){ui.scorecard=null;if(!err.superseded)toast('Engine: '+err.message);}render();}
+  else if(act==='watch'&&c?.fieldVisits?.length){const v=c.fieldVisits[0];onWatch({caseId:c.caseId,premiseId:c.premiseId,day:v.day,seconds:v.seconds});}
   else if(act==='sort'){ui.sort=ui.sort==='age'?'case':'age';loadCases();}
   else if(act==='export-cases')exportCsv(caseRows());
   else if(act==='filters'){ui.filters=!ui.filters;render();}

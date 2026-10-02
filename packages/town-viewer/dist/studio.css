@@ -341,3 +341,6 @@
 .lens-legend .lens-count{margin-left:auto;color:#7a877d;font-variant-numeric:tabular-nums}
 .lens-legend .lens-note{color:#7a877d;margin-top:3px;line-height:1.35}
 @media (max-width:600px){.lens-panel{top:58px;right:8px;left:auto;max-width:calc(100% - 70px)}.lens-tabs button{padding:6px 7px;font-size:12px}}
+.studio-workspace .ws-count{float:right;background:#dfe9f3;color:#2d4a63;border-radius:8px;padding:0 6px;font-size:11px;line-height:17px;margin-left:6px}
+.studio-workspace .ws-stats{margin-bottom:6px}
+.studio-workspace .ws-scorecard{background:#fff;border:1px solid #c9d6e2;padding:12px;margin-top:10px}
