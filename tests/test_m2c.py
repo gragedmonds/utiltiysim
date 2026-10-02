@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import gzip
+import re
 from collections import Counter
 from pathlib import Path
 
@@ -15,7 +16,7 @@ from utilsim.io.snapshot import build_snapshot
 from utilsim.m2c import catalog as cat
 from utilsim.m2c import views
 from utilsim.m2c.base import M2CTown, date_of
-from utilsim.m2c.run import FAULTS, M2CRun, add_bdays, resolve_settings
+from utilsim.m2c.run import FAULTS, INF, METHODS, ActionError, M2CRun, add_bdays, resolve_settings
 from utilsim.sim.demand import monthly_energy as town_energy
 from utilsim.sim.usage import UsageInputs, monthly_energy
 
@@ -139,8 +140,12 @@ def test_actions_are_append_only_and_take_effect(ayr_town):
         M2CRun(ayr_town, None, [act[0], {**act[0], "id": "A0", "day": "2026-01-05"}])
     with pytest.raises(ValueError):
         resolve_settings(ayr_town.cfg, {"vee": {"high_ratio": 0.5}})
-    stale = M2CRun(ayr_town, None, [{**act[0], "caseId": "CASE-nope"}])
-    assert stale.warnings
+    # A case id the run does not have: the newest action is refused, an older one is skipped with a warning.
+    slow = {"process": {"analysts": 0, "rpa_coverage": 0}}
+    with pytest.raises(ActionError, match="CASE-nope does not exist in this run"):
+        M2CRun(ayr_town, slow, [{**act[0], "caseId": "CASE-nope"}])
+    stale = M2CRun(ayr_town, slow, [{**act[0], "caseId": "CASE-nope"}, {**act[0], "type": "note", "text": "x"}])
+    assert any("CASE-nope does not exist" in w and "skipped" in w for w in stale.warnings)
 
 
 def test_views_are_valid_bounded_and_deterministic(ayr, ayr_town):
@@ -305,3 +310,237 @@ def test_external_vee_dispositions_become_actions():
     assert out["unmatched"][0]["readId"] == "READ-nope"
     after = client.post("/api/m2c/case", json={**body, "actions": out["actions"], "caseId": rows[1]["caseId"]}).json()
     assert after["outcome"] == "override" and after["read"]["revisions"][0]["registerValue"] == 1234.5
+
+
+# ---- the July 2026 QA run on Ayr -----------------------------------------------------------------------------------
+SLOW = {"process": {"analysts": 0, "rpa_coverage": 0}}  # nothing works the queues but you (and supervisors, crews)
+
+
+def iso(day: int) -> str:
+    return date_of(day).isoformat()
+
+
+@pytest.fixture(scope="module")
+def slow(ayr_town) -> M2CRun:
+    return M2CRun(ayr_town, SLOW)
+
+
+@pytest.fixture(scope="module")
+def outage(ayr, ayr_town):
+    """The default run plus, on an early-March read day, a power outage on five AMI electric premises and an AMI
+    collector outage on three others, both over the 02:00 read."""
+    tw = ayr_town
+    d, (_, rows) = next((d, b) for d, b in sorted(ayr.batches.items()) if 60 < d < 80)
+    ami = sorted({tw.premise_ids[tw.prem[r]] for r in rows if tw.tech[r] == "AMI" and tw.commodity[r] == "electric"})
+    outages = [{"day": iso(d), "utility": "electric", "start": 0, "end": 4 * 3600, "premiseIds": ami[:5]},
+               {"day": iso(d), "utility": "ami", "start": 0, "end": 4 * 3600, "premiseIds": ami[5:8]}]
+    return d, M2CRun(ayr_town, outages=outages)
+
+
+def qa_case(run: M2CRun):
+    """CASE-260709-01401 in QA's ids: P-00488 water read 61.701 on 2026-07-09 against 35,623.686."""
+    r = run.town.reg_index["M-P-00488-water-import"]
+    return next(c for c in run.cases if c.r == r and c.month == 7 and c.type == "REGISTER_REGRESSION")
+
+
+def test_an_action_on_a_case_that_is_not_open_is_refused_and_says_when(ayr_town, ayr, slow):
+    case = next(c for c in slow.cases if c.doc < 0 and c.type in ("HIGH_USAGE", "LOW_USAGE") and 100 < c.created < 150)
+    bill = next(c for c in slow.cases if c.doc >= 0 and 100 < c.created < 200)
+    for c, hhmm in ((case, "18:00"), (bill, "19:30")):  # the evening VEE batch and billing run raise them
+        d = int(c.created)
+        with pytest.raises(ActionError, match=rf"{c.id} was raised at {hhmm} on {iso(d)}; work it from {iso(d + 1)}"):
+            M2CRun(ayr_town, SLOW, [{"day": iso(d), "type": "estimate", "caseId": c.id}])
+        cv = views.case_view(slow, c.id, as_of=iso(d))
+        assert cv["actionableFrom"] == iso(d + 1) and cv["actions"] == [] and cv["studioActions"] == []
+        row = views.worklist(slow, None, as_of=iso(d), search=c.id)["rows"][0]
+        assert row["actionableFrom"] == iso(d + 1)
+    d = int(case.created)
+    nxt = views.case_view(slow, case.id, as_of=iso(d + 1))
+    assert nxt["actions"] and nxt["studioActions"]
+    done = M2CRun(ayr_town, SLOW, [{"day": iso(d + 1), "type": "estimate", "caseId": case.id}])
+    assert done.case_index[case.id].outcome == "estimate" and int(done.case_index[case.id].resolved) == d + 1
+    # An older action that no longer applies is skipped with the same reason, so a stored list still replays.
+    stored = M2CRun(ayr_town, SLOW, [{"id": "A1", "day": iso(d), "type": "estimate", "caseId": case.id},
+                                     {"id": "A2", "day": iso(d + 1), "type": "note", "caseId": case.id, "text": "x"}])
+    assert any(w.startswith(f"A1: {case.id} was raised at 18:00") and w.endswith("(skipped)") for w in stored.warnings)
+    assert stored.case_index[case.id].resolved is None
+    # Already resolved by automation before your action lands.
+    auto = next(c for c in ayr.cases if c.by == "RPA" and c.resolved is not None and 100 < c.created < 200)
+    day = int(auto.resolved) + 1
+    minutes = round((auto.resolved - int(auto.resolved)) * 1440)
+    with pytest.raises(ActionError, match=rf"{auto.id} was already completed by RPA at {minutes // 60:02d}:"
+                                          rf"{minutes % 60:02d} on {iso(int(auto.resolved))}"):
+        M2CRun(ayr_town, None, [{"day": iso(day), "type": "escalate", "caseId": auto.id}])
+
+
+def test_case_ids_are_content_derived_and_survive_an_earlier_outage(ayr, outage):
+    d, out = outage
+    key = lambda c: (c.type, c.r, c.month, round(c.created * 1440))  # noqa: E731
+    before, after = {key(c): c for c in ayr.cases}, {key(c): c for c in out.cases}
+    added = [c for k, c in after.items() if k not in before]
+    assert added and all(c.type == "COMM_FAIL" and int(c.created) == d for c in added)
+    later = [k for k in before if before[k].created > d + 1]
+    assert later and all(k in after and after[k].id == before[k].id for k in later)
+    assert any(after[k].idx != before[k].idx for k in later)  # a sequence number would have renumbered them
+    pattern = re.compile(r"CASE-(\d{6})-[0-9A-HJKMNP-TV-Z]{6}")
+    for c in ayr.cases:
+        hit = pattern.fullmatch(c.id)
+        assert hit and hit[1] == date_of(int(c.created)).strftime("%y%m%d"), c.id
+    assert len({c.id for c in ayr.cases}) == len(ayr.cases)
+    # A collision takes the next salt, deterministically.
+    c = ayr.cases[0]
+    again = ayr.case_id(int(c.created), c.type, c.r, c.month, c.created)
+    assert again != c.id and again == ayr.case_id(int(c.created), c.type, c.r, c.month, c.created)
+
+
+def test_a_backwards_register_is_never_released_as_read(ayr):
+    c = qa_case(ayr)
+    r, m = c.r, c.month
+    assert ayr.obs[r, m] == 61.701 and ayr.prev_at_read[r, m] == 35623.686
+    assert c.outcome != "accept" and ayr.released[r, m] >= 35623.686 and METHODS[ayr.method[r, m]] == "estimated"
+    bk = ayr.books
+    doc = bk.docs[bk.doc_of[ayr.town.inst_of[r], m]]
+    assert doc["qImp"] > 0 and doc["total"] > 0 and doc["estimated"]
+    cv = views.case_view(ayr, c.id, as_of="2026-12-31")
+    assert cv["registerWentBackwards"] and cv["registerDelta"] == -35561.985 and not cv["previousEstimated"]
+    assert cv["released"]["method"] == "estimated" and cv["released"]["registerValue"] >= 35623.686
+    # The whole year: no read value released by anyone (RPA, analysts, supervisors, crews) below its last actual read.
+    for rr in range(ayr.town.n_registers):
+        for mm in range(1, 13):
+            if ayr.method[rr, mm] in (1, 3, 4):
+                assert ayr.backwards(rr, mm, float(ayr.released[rr, mm]), INF) < 0, ayr.read_id(rr, mm)
+    # No large outsort released by RPA, and no true-up beyond the bound went out unreviewed.
+    limit = ayr.cfg.billing.outsort_auto_release_max
+    assert not [x.id for x in ayr.cases if x.by == "RPA" and x.doc >= 0 and abs(bk.docs[x.doc]["total"]) > limit]
+    assert all(x.type != "TRUE_UP" or x.by not in (None, "RPA") for x in ayr.cases)
+
+
+def test_your_accept_on_a_backwards_register_is_refused_and_large_credits_wait_for_a_person(ayr_town):
+    nobody = {"process": {"analysts": 0}}  # RPA at its default coverage (it covers BILL_CREDIT); no analysts
+    run = M2CRun(ayr_town, nobody)
+    c = qa_case(run)
+    r, m, day = c.r, c.month, iso(int(c.created) + 1)
+    cv = views.case_view(run, c.id, as_of=day)
+    assert cv["registerWentBackwards"] and cv["registerDelta"] == -35561.985
+    assert "accept" not in cv["actions"] and {"override", "estimate", "field_order"} <= set(cv["actions"])
+    with pytest.raises(ActionError, match=r"went backwards \(61\.701 against the last actual read 35,623\.686 on "
+                                          r"2026-06-08\).*estimate it, correct the value \(override\) or send a field "
+                                          r"order"):
+        M2CRun(ayr_town, nobody, [{"day": day, "type": "accept", "caseId": c.id}])
+    inst = ayr_town.inst_of[r]
+
+    def corrected(value: float, settings=nobody):
+        """Your correction to ``value``, and the first billing document and outsort for that period."""
+        run = M2CRun(ayr_town, settings, [{"day": day, "type": "override", "caseId": c.id, "value": value}])
+        doc = next(d for d in run.books.docs if d["inst"] == inst and d["month"] == m)
+        return doc, run.cases[doc["case"]] if doc["case"] >= 0 else None
+
+    # The QA value as a correction: a true-up far beyond any over-estimate is a TRUE_UP block that waits for a person.
+    doc, bc = corrected(61.701)
+    assert bc.type == "TRUE_UP" and doc["qImp"] < -35000 and bc.rpa_at is None and bc.resolved is None
+    assert doc["released"] is None and cat.category(bc.type, bc.queue) == "Billing Outsorts"
+    # A plausible true-up that is still a large credit: BILL_CREDIT, above the RPA limit, so RPA leaves it alone …
+    doc, bc = corrected(35623.686 - 150)
+    assert bc.type == "BILL_CREDIT" and doc["total"] < -500 and bc.rpa_at is None and bc.resolved is None
+    # … unless the limit allows it; a small credit is released by RPA as before.
+    doc, bc = corrected(35623.686 - 150, {**nobody, "billing": {"outsort_auto_release_max": 1000}})
+    assert bc.type == "BILL_CREDIT" and bc.by == "RPA" and doc["released"] is not None
+    doc, bc = corrected(35623.686 - 40)
+    assert bc.type == "BILL_CREDIT" and -500 < doc["total"] < -75 and bc.by == "RPA" and doc["released"] is not None
+
+
+def test_bills_built_on_estimated_reads_say_so(ayr):
+    bk, tw = ayr.books, ayr.town
+    for d in bk.docs:
+        est = any(ayr.status[r, d["month"]] == 2 for r in tw.inst_rows[d["inst"]])
+        assert d["estimated"] == (est or bool(d.get("rebilledOnEstimate"))), bk.doc_id(d)
+    assert sum(d["estimated"] for d in bk.docs) > 100
+    doc = next(d for d in bk.docs if d["estimated"] and d["version"] == 1 and d["invoice"] >= 0)
+    j = views.doc_json(ayr, doc, 400.0)
+    assert j["estimated"] and j["estimatedReadIds"]
+    inv = views.invoice_json(ayr, bk.invoices[doc["invoice"]], 400.0)
+    assert inv["estimated"] and j["id"] in inv["estimatedBillingDocumentIds"]
+    p = views.premise(ayr, j["premiseId"], as_of="2026-12-31")
+    assert any(x["id"] == j["id"] and x["estimated"] for x in p["billingDocuments"])
+    assert any(x["id"] == inv["id"] and x["estimated"] for x in p["invoices"])
+    assert any(r["id"] in j["estimatedReadIds"] and r["revisions"][0]["readType"] == "estimated" for r in p["reads"])
+
+
+def test_missing_read_cases_name_their_cause_and_who_raised_them(ayr, slow, outage):
+    first: dict[str, object] = {}
+    for run in (ayr, outage[1]):
+        for c in run.cases:
+            if c.type in cat.MISSING_TYPES:
+                first.setdefault(views.missing_cause(run, c.r, c.month)["code"], (run, c))
+    assert set(first) == {"comm_fail", "no_access", "no_read_document", "power_outage", "collector_outage"}
+    by = {"comm_fail": "ami_head_end", "no_access": "meter_reading_route", "no_read_document": "vee_batch",
+          "power_outage": "ami_head_end", "collector_outage": "ami_head_end"}
+    for code, (run, c) in first.items():
+        cv = views.case_view(run, c.id, as_of="2026-12-31")
+        assert cv["cause"]["code"] == code and cv["cause"]["reason"].startswith("No read: "), cv["cause"]
+        assert cv["createdBy"] == by[code] and cv["createdByLabel"] == cat.CREATED_BY[by[code]]
+        rationale = [t["rationale"] for t in cv["decision"]["tests"]]
+        assert {t["outcome"] for t in cv["decision"]["tests"]} == {"not_applicable"} and len(set(rationale)) == 5
+        assert cv["cause"]["reason"] in rationale[0] and cv["decision"]["cause"] == cv["cause"]
+    run, c = first["power_outage"]
+    gasp = views.missing_cause(run, c.r, c.month)
+    assert "AMI last gasp" in gasp["reason"] and gasp["lastGaspAt"] == run.iso(outage[0])  # lost power at midnight
+    run, c = first["collector_outage"]
+    assert views.missing_cause(run, c.r, c.month)["outageSince"] == run.iso(outage[0])
+    kinds = {c.created_by for c in ayr.cases}
+    assert kinds == {"ami_head_end", "meter_reading_route", "vee_batch", "billing_run"}
+    assert all(c.created_by == "billing_run" for c in ayr.cases if c.doc >= 0)
+    # A missing read has no value to accept or override: estimate, a field order or an escalation.
+    c = next(c for c in slow.cases if c.type == "COMM_FAIL" and c.resolved is None and 100 < c.created < 200)
+    assert views.case_view(slow, c.id, as_of=iso(int(c.created) + 1))["actions"] == ["estimate", "field_order",
+                                                                                     "escalate"]
+
+
+def test_case_views_carry_the_data_a_decision_needs(ayr):
+    c = next(c for c in ayr.cases if c.outcome == "correct" and c.created < 300)
+    r, m = c.r, c.month
+    cv = views.case_view(ayr, c.id, as_of="2026-12-31")
+    assert cv["expected"] == {"registerValue": round(float(ayr.prev_at_read[r, m] + ayr.expected[r, m]), 3),
+                              "consumption": round(float(ayr.expected[r, m]), 3)}
+    rel = cv["released"]
+    assert rel["method"] in ("corrected", "field_read") and rel["by"] == c.by and rel["at"] == ayr.iso(c.resolved)
+    assert rel["registerValue"] == round(float(ayr.released[r, m]), 3)
+    assert rel["consumption"] == round(float(ayr.released[r, m] - ayr.released[r, m - 1]), 3)
+    hist = cv["readHistory"]
+    assert len(hist) == 13 and [h["date"] for h in hist] == sorted(h["date"] for h in hist)
+    assert set(hist[0]) == {"readId", "date", "register", "consumption", "type", "estimated", "method", "veeStatus",
+                            "caseId"}
+    mine = next(h for h in hist if h["caseId"] == c.id)
+    assert mine["register"] == rel["registerValue"] and mine["type"] == "adjusted" and not mine["estimated"]
+    assert cv["registerDelta"] == round(float(ayr.obs[r, m] - ayr.prev_at_read[r, m]), 3)
+    field = next(c for c in ayr.cases if any(e[1] == "SPECIAL_READ" for e in c.events) and c.type in cat.MISSING_TYPES)
+    assert views.case_view(ayr, field.id, as_of="2026-12-31")["released"]["method"] == "field_read"
+    row = views.worklist(ayr, None, as_of="2026-12-31", status="all", search=c.id)["rows"][0]
+    assert {"registerDelta", "registerWentBackwards", "previousEstimated", "actionableFrom", "createdBy", "cause",
+            "releasedMethod"} <= set(row) and row["releasedMethod"] == rel["method"]
+
+
+def test_queue_sorted_by_created_is_newest_first_and_pages_add_up():
+    from fastapi.testclient import TestClient
+
+    from api.index import app
+
+    client = TestClient(app)
+    body = {"town": "ayr", "asOf": "2026-08-31", "status": "all", "sort": "created", "pageSize": 200}
+    rows, page = [], 1
+    while True:
+        res = client.post("/api/process/queue", json={**body, "page": page}).json()
+        rows += res["rows"]
+        if len(res["rows"]) < 200:
+            break
+        page += 1
+    assert len(rows) == res["total"] == len({r["caseId"] for r in rows}) > 400
+    created = [r["createdAt"] for r in rows]
+    assert created == sorted(created, reverse=True) and created[0] > created[-1]
+    # Through the API, an action on a case raised later that day is a 422 that says when it can be worked.
+    late = rows[0]
+    assert late["actionableFrom"] == "2026-09-01"
+    r = client.post("/api/m2c/summary", json={"town": "ayr", "asOf": "2026-08-31", "actions": [
+        {"day": "2026-08-31", "type": "escalate", "caseId": late["caseId"]}]})
+    assert r.status_code == 422, r.text
+    assert f"{late['caseId']} was raised at" in r.json()["detail"] and "work it from 2026-09-01" in r.json()["detail"]

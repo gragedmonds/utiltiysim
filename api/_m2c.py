@@ -206,7 +206,7 @@ def get_settings(town: str | None = None):
                        "analyst work, bill checks) on the same town; send it as the request's top-level seed. Blank "
                        "or null runs on the town's seed (the default shown); the same seed always gives the same run."},
               "queues": cat.QUEUES, "exceptions": {k: {"label": cat.EVENTS[k][0], "icon": cat.EVENTS[k][1]}
-                                                    for k in cat.EXCEPTIONS},
+                                                    for k in cat.EXCEPTION_TYPES},
               "actions": list(DECISIONS), "actionTypes": list(ACTION_TYPES), "categories": cat.CATEGORIES})
 
 
@@ -444,11 +444,18 @@ def post_dispositions(req: DispositionRequest):
             reason = "decidedAt or asOf is needed to date the action"
         elif last and day < last:
             reason = f"actions are append-only: {day} is before the last action ({last})"
+        kind = "override" if d.value is not None and d.disposition in ("accept", "reject", "estimate") \
+            else DISPOSITION_ACTION.get(d.disposition)
+        if not reason:  # what the engine would refuse at 09:00 that day (not raised yet, resolved, backwards, …)
+            try:
+                t = parse_day(day, -1) + 9.0 / 24
+            except ValueError:
+                t = None
+            reason = "decidedAt is not a date" if t is None else run.not_open(case, case.id, t) or \
+                run.decision_refusal(case, kind, t, run.hold_on(run.account_of(case), t) if case.doc >= 0 else None)
         if reason:
             unmatched.append({"readId": d.readId, "disposition": d.disposition, "reason": reason})
             continue
-        kind = "override" if d.value is not None and d.disposition in ("accept", "reject", "estimate") \
-            else DISPOSITION_ACTION[d.disposition]
         action = {"id": f"VEE-{d.decisionId or k + 1}", "day": day, "type": kind, "caseId": case.id}
         if kind == "override":
             action["value"] = d.value

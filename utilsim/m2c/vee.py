@@ -114,13 +114,16 @@ def run(b: Batch, vee) -> Result:
 
 def explain(test: int, risk: float, *, code: str | None, ratio: float, days: float, expected: float, unit: str,
             consec: int, prior_cases: int, occupied: bool, moved: bool, manual: bool, vee,
-            outage_h: float = 0.0) -> str:
-    """One-line rationale for a test outcome (built when a decision is viewed)."""
+            outage_h: float = 0.0, true_up: bool = False) -> str:
+    """One-line rationale for a test outcome (built when a decision is viewed). ``true_up``: the register is below the
+    previous (estimated) register but not below the last actual read."""
     if test == 0:
         if code is None:
             return f"No validation code: {ratio:.2f}× expected ({expected:.1f} {unit}) is within tolerance."
         tail = " (half weight: a move in the period explains some change)" if moved and code != "SIM-C01" else ""
-        return {"SIM-C01": "Register went backwards and the previous value was not near rollover.",
+        return {"SIM-C01": "Register is below the previous estimate but not below the last actual read: a true-up "
+                           "of an over-estimate." if true_up else
+                "Register went backwards from the last actual read and the previous value was not near rollover.",
                 "SIM-T01": f"{ratio:.2f}× expected use is above the high tolerance ({vee.high_ratio}×){tail}.",
                 "SIM-T02": f"{ratio:.2f}× expected use is below the low tolerance ({vee.low_ratio}×){tail}.",
                 "SIM-Z01": "No consumption at an occupied premise where use is expected.",

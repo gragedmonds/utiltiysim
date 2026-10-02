@@ -40,7 +40,11 @@ pages change only through payments, dunning and the cases you work.
 Your Studio actions (`accept`, `override`, `estimate`, notes, holds, orders…) are dated with the run date and land at
 **09:00** that day. Actions are append-only: you cannot act on a date earlier than your last action. A case the
 engine raised later in the day (VEE at 18:00, billing at 19:30) can be worked from the next day; **+1 day** is the
-quick way there.
+quick way there. Every case row and case carries that date as `actionableFrom`, and until then the case lists no
+`actions` or `studioActions`. An action on a case that is not open at 09:00 is refused (HTTP 422) with the reason,
+e.g. `CASE-260706-K3M9QX was raised at 18:00 on 2026-07-06; work it from 2026-07-07` or `… was already completed by
+RPA at 19:00 on 2026-07-06`. Case ids are stable: the same case keeps its id when outages or settings change the run
+around it.
 
 ## 2. Requests
 
@@ -77,7 +81,7 @@ A refused action returns **HTTP 422**. Its `detail` is a string, or for order re
 |---|---|
 | **Bil. Order** | One row per entry in `reads[]` (newest first): `scheduledReadAt`, `billStatus`, `contractId`, `readReason`. Under the table, the block or hold: an open `cases[]` entry with `queue: "BILLING"`, or `accounts[0].invoiceHold`. |
 | **Bil.Time** | `contracts[]`: `contractId`, `status`, `validFrom`, `validTo` (none means open-ended), `accountId`. |
-| **Documents** | `billingDocuments[]`: `id`, `periodStart`, `periodEnd`, `contractId`, `invoiceId`, `totalAmount`, `billStatus`, `estimated`, `reversedAt`, `version`, `replaces`. Below it, `invoices[]`: `id`, `issuedAt`, `dueAt`, `totalAmount`, `invoiceStatus`, `paidAt`. |
+| **Documents** | `billingDocuments[]`: `id`, `periodStart`, `periodEnd`, `contractId`, `invoiceId`, `totalAmount`, `billStatus`, `estimated` (built on an estimated read; `estimatedReadIds` names them), `reversedAt`, `version`, `replaces`. Below it, `invoices[]`: `id`, `issuedAt`, `dueAt`, `totalAmount`, `invoiceStatus`, `paidAt`, `estimated` (`estimatedBillingDocumentIds`). |
 | **Billing document** | One `billingDocuments[]` entry. `lines[]` has `type`, `description`, `quantity`, `unit`, `rate` and `amount`, plus `subtotal`, `tax` and `totalAmount`. A rebill has `replaces`; a reversed document has `reversedAt`. |
 | **Print document** | One `invoices[]` entry: `billingDocumentIds[]`, `payments[]` (`at`, `amount`, `status`), `dunning[]` (`at`, `type`, `label`). |
 | **Contract** | The current entry in `contracts[]`, plus from `accounts[0]`: `paymentMethod`, `budgetBilling`, `balance`, `ledger[]` (`at`, `type`, `amount`, `ref`) and `invoiceHold`. |
@@ -103,16 +107,35 @@ billing pages reached from a standalone reading go through the installation quer
 ### Clarification cases (the billing ones)
 
 - **Lists** come from `POST /api/process/queue`.
-  - Body: `{status: open|resolved|all, queue?, category?, assignee?, sort, page, pageSize ≤ 200}`.
-  - Billing categories: **Billing Outsorts** (HIGH_BILL, BILL_CREDIT), **Billing Errors** (RATE_CLASS) and
+  - Body: `{status: open|resolved|all, queue?, category?, assignee?, sort, page, pageSize ≤ 200}`. `sort: "created"`
+    is newest first; `total` counts every matching row, so `ceil(total / pageSize)` pages hold them all.
+  - Billing categories: **Billing Outsorts** (HIGH_BILL, BILL_CREDIT, TRUE_UP), **Billing Errors** (RATE_CLASS) and
     **Invoice Outsorts** (invoice holds).
+  - Rows also carry `actionableFrom`, `createdBy` / `createdByLabel` (AMI head-end, meter-reading route, VEE batch,
+    billing run, you), `cause` (missing reads), `registerDelta`, `registerWentBackwards`, `previousEstimated` and
+    `releasedMethod`.
 - **Case** comes from `POST /api/m2c/case {caseId}`.
-  - Billing-related fields: `queue`, `type`, `category`, `impact`, `invoiceHold`, `notes[]`, `orders[]`.
-  - `actions` lists the decisions allowed today; `studioActions` lists the case work allowed today.
+  - Billing-related fields: `queue`, `type`, `category`, `impact`, `invoiceHold`, `notes[]`, `orders[]`,
+    `billingDocument`.
+  - Decision data (docs/M2C.md "Cases"): `expected {registerValue, consumption}`; once resolved, `released
+    {registerValue, consumption, method, by, at}` (`method`: `as_read`, `corrected`, `estimated`, `field_read`; a
+    billing case adds `billingDocumentId`, `totalAmount`); `registerDelta`, `registerWentBackwards`,
+    `previousEstimated`; `readHistory[]` (`readId`, `date`, `register`, `consumption`, `type`, `estimated`, `method`,
+    `veeStatus`, `caseId`; up to 13 periods); `cause {code, label, reasonCode, reason, lastGaspAt?, outageSince?}` for
+    a missing read.
+  - `actions` lists the decisions allowed today; `studioActions` lists the case work allowed today. Both list only
+    what the engine accepts from an action dated the run date, so both are empty before `actionableFrom`.
   - Show a button only when its action is in one of these lists. For example, while an account is on hold, `accept`
-    (the outsort release) disappears.
+    (the outsort release) disappears; on a register that went backwards `accept` is not offered (estimate, override
+    with the right value, or a field order); a missing read offers only estimate, field order and escalate.
+  - Show a backwards register as `registerDelta` (negative), not as the read's `consumption`, which a meter data
+    system records as a rollover.
 - **Releasing a billing outsort** is `accept` with a `note`, the reason. Holds are
   `invoice_hold {caseId | accountId, note}` and `invoice_unhold {caseId | accountId, note}`.
+- **Who releases what.** RPA releases a high bill or a large credit only up to the run setting
+  `billing.outsort_auto_release_max` ($500 by default, Config → Billing & collections); larger outsorts, and every
+  `TRUE_UP` block (an estimate true-up beyond `billing.trueup_max_ratio` × the period's expected use), wait in the
+  queue for an analyst or you.
 
 ### Field service orders
 

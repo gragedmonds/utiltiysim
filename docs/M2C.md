@@ -25,6 +25,16 @@ A run is stateless and deterministic: `(town, settings, actions, outages, seed)`
   - A refused action is HTTP 422 with a clear `detail` (for an order form, an object with `fieldErrors`), so the
     viewer can roll it back. Only the newest action is refused this way; an earlier one that no longer applies
     (settings or outages changed the run under it) is skipped with a warning, so a stored list always replays.
+  - An action works a case only if the case is open when the action lands (09:00). Otherwise it is refused, and the
+    message says why and when:
+    - a case raised later that day (VEE at 18:00, billing at 19:30) or on a later day: `CASE-… was raised at 18:00
+      on 2026-07-06; work it from 2026-07-07` (rows and case views carry this date as `actionableFrom`);
+    - a case already resolved: `CASE-… was already completed by RPA at 19:00 on 2026-07-06` (or by analyst AN-01,
+      supervisor SUP-01, field crew FIELD-1, you);
+    - a case id the run does not have: `case CASE-… does not exist in this run`.
+  - Decisions a case does not take are refused too: `accept` on a register that went backwards (see "Backwards
+    registers"), `override` or `field_order` on a billing block, a release while the account is on hold, any
+    decision on a Field Work or hold case.
 - `field_read` (`{day, premiseId, at}`, no `caseId`) is a field visit made on the map. The tech reads the
   premise's meters, and each of its open read cases settles on the spot: a faulty meter is exchanged, otherwise a
   special read gives the real register value.
@@ -59,7 +69,57 @@ Each business day goes in this order:
    - 19:30: billing documents for every installation period whose reads are all released.
    - 20:00: invoices that consolidate each account's released documents.
 7. **RPA** resolves exception types covered by `rpa_coverage`, taken in the order of `catalog.EXCEPTIONS`. Half are
-   resolved the same evening; the rest at 07:00 the next business day.
+   resolved the same evening; the rest at 07:00 the next business day. RPA never resolves a `TRUE_UP` block, nor a
+   `HIGH_BILL` or `BILL_CREDIT` outsort above `billing.outsort_auto_release_max`: those wait for a person.
+
+## Cases
+
+**Ids.** An engine case is `CASE-{yymmdd}-{code}`: the date it was raised and six characters (Crockford base 32) of a
+hash of what it is about (exception type, register, read period, creation minute). A case keeps its id when
+anything else in the run changes (an outage on an earlier day, another anomaly rate), so stored actions keep naming
+the same case. A collision takes the next salt of the hash (deterministic). The cases you open keep their action-keyed
+ids: Field Work `CASE-{yymmdd}-F{nnnn}` and invoice holds `CASE-{yymmdd}-H{nnnn}`.
+
+**Who raised it.** Every row and case view carries `createdBy` and `createdByLabel`:
+
+| `createdBy` | Cases |
+|---|---|
+| `ami_head_end` | AMI reads that did not arrive (comm fail, power outage, collector outage) |
+| `meter_reading_route` | Walked (no access) and drive-by reads that were missed |
+| `vee_batch` | Value exceptions, consecutive estimates, periods with no read document |
+| `billing_run` | Billing blocks (`HIGH_BILL`, `BILL_CREDIT`, `RATE_CLASS`, `TRUE_UP`) |
+| `studio` | Your Field Work and invoice hold cases |
+
+**Missing reads explain themselves.** A missing-read case (and its read's VEE decision) carries `cause`:
+`{code, label, reasonCode, reason, lastGaspAt? | outageSince?}`. `code` is `power_outage` (with the AMI last gasp
+time), `collector_outage` (with the outage start), `comm_fail` (AMI head-end or drive-by), `no_access` or
+`no_read_document`; `reason` is one line that names it ("No read: the meter lost power at 00:00 on 2026-03-03 (AMI
+last gasp) and was still without power at the 02:00 read."). The five VEE tests stay `not_applicable`, each saying
+what it would have checked. A case with no read value offers `estimate`, `field_order` and `escalate` only.
+
+**What a decision needs.** Case views (`work-case/1.0`) carry:
+- `expected`: `{registerValue, consumption}`, the expected register (previous register + expected use) and use;
+- `registerDelta` (observed − previous register), `registerWentBackwards` (below the last actual read and not a
+  rollover) and `previousEstimated` (the previous register was an estimate, so a negative delta alone is a true-up);
+- `released` once resolved: `{registerValue, consumption, method, by, at}`, what billing used. `method` is `as_read`,
+  `corrected`, `estimated` or `field_read`; `by` is `RPA`, `AN-nn`, `SUP-nn`, `FIELD-n` or `you`. A billing case adds
+  `billingDocumentId` and `totalAmount`;
+- `readHistory`: the register's periods to date (up to 13, oldest first), each `{readId, date, register,
+  consumption, type, estimated, method, veeStatus, caseId}`;
+- `actionableFrom`, `cause`, `createdBy`;
+- `actions` and `studioActions`: only what the engine accepts from an action dated the view's day (empty while the
+  case is not open at 09:00 that day).
+
+Worklist rows carry `actionableFrom`, `createdBy`, `createdByLabel`, `cause`, `registerDelta`,
+`registerWentBackwards`, `previousEstimated` and `releasedMethod` as well.
+
+**Backwards registers.** A register below its last actual read (as read, corrected or field read; not an estimate),
+and not a plausible rollover, is never released as read:
+- simulated analysts, supervisors, RPA and field visits estimate it or send a field order;
+- your `accept` is refused ("estimate it, correct the value (override) or send a field order");
+- a read below the previous *estimate* only is a true-up of that estimate and can be accepted.
+
+Your `override` value is yours to give; billing still checks the true-up it causes.
 
 ## Weather
 
@@ -134,18 +194,26 @@ The calculator is `billing.py`, vectorised per tariff; the state lives in `books
 
 Each document also carries its total at true consumption (`truthTotal`); summed, these give the billing error.
 
-**Billing blocks** go to the `BILLING` queue:
+**Billing blocks** go to the `BILLING` queue, checked in this order:
+- `TRUE_UP`: an estimate true-up (a negative period quantity) larger than `trueup_max_ratio` (default 3) × the
+  period's expected use (at least 30 kWh or 1 m³): more credit than any over-estimate could explain;
+- `RATE_CLASS`: a wrong rate class in billing master data, seeded at `data_error_rate`;
 - `HIGH_BILL`: above `high_bill_ratio` × the expected bill (prior-year use at current prices) and at least
   `high_bill_min` above it;
-- `BILL_CREDIT`: a credit larger than `credit_review`;
-- `RATE_CLASS`: a wrong rate class in billing master data, seeded at `data_error_rate`.
+- `BILL_CREDIT`: a credit larger than `credit_review`.
 
 What analysts do with a block:
 - release it, with a customer callback when the use is real;
 - rebill it on an estimate when the read was wrong (a version 2 document replaces the reversed one);
 - fix the rate class and rebill.
 
-RPA covers `BILL_CREDIT`.
+RPA covers `BILL_CREDIT` at the default coverage, but releases a `HIGH_BILL` or `BILL_CREDIT` outsort only up to
+`outsort_auto_release_max` (default $500, either sign); a larger one waits for an analyst (or you). No RPA rule
+covers `TRUE_UP`. All three are in the "Billing Outsorts" category.
+
+**Estimated bills.** A billing document built on an estimated read says so: `estimated: true` and
+`estimatedReadIds` (a rebill on an estimate is estimated too). An invoice carries `estimated` and
+`estimatedBillingDocumentIds`, so premise and installation views show which bills and invoices rest on estimates.
 
 **Invoices:** `INV-{account}-{date}` sums the account's documents released that day. It is issued
 `print_lag_days` later and due `customers_billing.due_days` after issue.
@@ -240,7 +308,7 @@ keeps the queue it was resolved from). `POST /api/process/queue` filters by `cat
 |---|---|
 | MR Implausibles | Value exceptions (`HIGH_USAGE`, `LOW_USAGE`, `ZERO_USAGE`, `ERRATIC`, …), in `VEE_REVIEW` or `SUPERVISOR` |
 | Meter Read Follow-Up | Missing reads: `COMM_FAIL`, `NO_ACCESS`, `NO_READ`, `CONSECUTIVE_ESTIMATES` (`ESTIMATION`, or escalated) |
-| Billing Outsorts | Billing blocks `HIGH_BILL`, `BILL_CREDIT` |
+| Billing Outsorts | Billing blocks `HIGH_BILL`, `BILL_CREDIT`, `TRUE_UP` |
 | Billing Errors | Billing blocks `RATE_CLASS` (wrong rate class in master data) |
 | Invoice Outsorts | Your invoice holds (`INVOICE_HOLD` cases) |
 | Field Work | Any case in the `FIELD` queue, and your field service orders (`FIELD_SERVICE` cases) |
@@ -272,8 +340,8 @@ opening each case.
 | `GET /api/m2c/settings?town=` | Schema, defaults (the town's with `?town=`), the run `seed` (default: the town seed), queues, exception vocabulary, action types, clarification categories |
 | `GET /api/m2c/vocabulary?town=` | `m2c-vocabulary/1.0`: the field service order form as data (fields with label, tab, required, kind, bounds and choices; the town's planning plant; component units; stages and system status), action types, queues and categories |
 | `POST /api/m2c/summary` | `m2c-summary/1.0`: KPIs, cost (labour, system, CX, reads), carry, VEE precision/recall against truth, `billing`, `reliability`, `weather`, queues with aging and daily opened/closed/backlog, exception mix, RPA rules, one status per premise |
-| `POST /api/process/queue` | Paged worklist: `queue` (incl. `BILLING`), `category`, `assignee`, `status`, `sort` (`age`, `impact`, `confidence`, `created`), `page`, `pageSize` ≤ 200, `type`, `commodity`, `search` (case, address, premise, account, meter or order id) |
-| `POST /api/m2c/case` | `work-case/1.0`: the case, its VEE decision, the read, 12-month history, events (`event/1.0`) with causal edges, allowed decisions (`actions`) and Studio actions (`studioActions`), `notes`, linked `orders`, the account's `invoiceHold`, and for a Field Work case its `order` (`truth: true` adds ground truth) |
+| `POST /api/process/queue` | Paged worklist: `queue` (incl. `BILLING`), `category`, `assignee`, `status`, `sort` (`age` oldest first, `impact`, `confidence`, `created` newest first; ties by case id, so pages never overlap), `page`, `pageSize` ≤ 200, `type`, `commodity`, `search` (case, address, premise, account, meter or order id). `total` counts every matching row |
+| `POST /api/m2c/case` | `work-case/1.0`: the case, its VEE decision, the read, 12-month history and `readHistory`, `expected`, `released`, the register check, `cause`, `createdBy`, `actionableFrom`, events (`event/1.0`) with causal edges, allowed decisions (`actions`) and Studio actions (`studioActions`), `notes`, linked `orders`, the account's `invoiceHold`, and for a Field Work case its `order` (`truth: true` adds ground truth); see "Cases" |
 | `POST /api/m2c/order` | `m2c-order/1.0`: a field service order (`field-order/1.0`: form, stage, SAP system status, history, source, reference installation/meter/contract, crew visit) by `orderId`, or the order of a `sourceCaseId` / `readId` (`order: null` and a `proposal` when there is none) |
 | `POST /api/m2c/installation` | `m2c-installation/1.0` for one `installationId` (see "Lookups") |
 | `POST /api/m2c/read-document` | `m2c-read-document/1.0` for one `readId` |

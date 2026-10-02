@@ -5,9 +5,13 @@ The run calls in at fixed points of each business day:
 - **20:00:** invoices that consolidate an account's released documents.
 
 Bill checks block a document into the ``BILLING`` queue:
+- an estimate true-up (a negative period quantity) larger than ``trueup_max_ratio`` × the period's expected use;
+- a wrong rate class in billing master data (seeded data errors);
 - a high bill against the installation's recent history;
-- a large credit;
-- a wrong rate class in billing master data (seeded data errors).
+- a large credit.
+
+RPA may release a high bill or a large credit only up to ``outsort_auto_release_max``; a larger outsort and every
+true-up block wait for a person. A document says whether it was built on an estimated read (``estimated``).
 
 Analysts work the queue: they release the bill, rebill it on an estimate, or fix the rate class. Payments and dunning
 run after the year, because nothing upstream depends on them:
@@ -28,6 +32,7 @@ from utilsim.core.rng import Purpose, hash_u01
 from utilsim.m2c import billing as bl
 from utilsim.m2c import catalog as cat
 from utilsim.m2c import registers as regs
+from utilsim.m2c.vee import MIN_EXPECTED
 
 P_BILL = Purpose.M2C_BILL
 INF = float("inf")
@@ -143,17 +148,22 @@ class Books:
         true_totals = self.compute(list(zip(i.tolist(), m.tolist(), right, ti.tolist(), te.tolist(), strict=True)))
         expected = self.compute(list(zip(i.tolist(), m.tolist(), right, ei.tolist(), ee.tolist(), strict=True)))
         b = run.cfg.billing
+        tw = run.town
         for k, (a, mm) in enumerate(ready):
             sub, tax, total = totals[k]
+            est = [int(r) for r in tw.inst_rows[a] if run.status[r, mm] == 2]  # registers billed on an estimate
             doc = {"k": len(self.docs), "inst": a, "month": mm, "rate": rates[k], "qImp": float(qi[k]),
                    "qExp": float(qe[k]), "subtotal": sub, "tax": tax, "total": total, "truthTotal": true_totals[k][2],
                    "expectedTotal": expected[k][2], "created": t, "released": None, "reversed": None, "version": 1,
-                   "case": -1, "invoice": -1, "replaces": -1}
+                   "case": -1, "invoice": -1, "replaces": -1, "estimated": bool(est), "estRows": est}
             self.docs.append(doc)
             self.doc_of[a, mm] = doc["k"]
             exp = expected[k][2]
             kind = None
-            if rates[k] != right[k]:
+            floor = MIN_EXPECTED.get(str(tw.unit[self.main[a]]), 1.0)
+            if qi[k] < 0 and -qi[k] > b.trueup_max_ratio * max(float(ei[k]), floor):
+                kind = "TRUE_UP"  # more credit than the period could plausibly have been over-estimated by
+            elif rates[k] != right[k]:
                 kind = "RATE_CLASS"
             elif exp > 0 and total > max(b.high_bill_ratio * exp, exp + b.high_bill_min):
                 kind = "HIGH_BILL"
@@ -173,9 +183,13 @@ class Books:
         bad = int(np.max(run.truth_cls[run.town.inst_rows[i], m]))
         off = abs(doc["total"] - doc["truthTotal"]) > max(5.0, 0.1 * abs(doc["truthTotal"]))
         truth = cat.TRUTH[bad] if off and bad in (1, 2) else ("physics" if bad == 3 else "clean")
+        # RPA releases small outsorts only; a large one (and any true-up block) needs a person.
+        rpa = kind not in cat.OUTSORTS or abs(doc["total"]) <= run.cfg.billing.outsort_auto_release_max
         case = run.new_case(day=int(t), r=r, m=m, kind=kind, disposition=-1, impact=impact,
                             confidence=float("nan"), truth=truth, queue="BILLING", t=t, cause_payload={
-                                "billingDocumentId": self.doc_id(doc), "total": doc["total"]})
+                                "billingDocumentId": self.doc_id(doc), "total": doc["total"],
+                                **({"quantity": doc["qImp"]} if kind == "TRUE_UP" else {})},
+                            created_by="billing_run", rpa=rpa)
         case.doc = doc["k"]
         doc["case"] = case.idx
 
@@ -207,7 +221,8 @@ class Books:
         ((sub, tax, total),) = self.compute([(i, m, rate, qi, qe)])
         new = {**doc, "k": len(self.docs), "rate": rate, "qImp": qi, "qExp": qe, "subtotal": sub, "tax": tax,
                "total": total, "created": t, "released": None, "reversed": None, "version": doc["version"] + 1,
-               "invoice": -1, "replaces": doc["k"], "estimated": estimate}
+               "invoice": -1, "replaces": doc["k"], "estimated": bool(estimate or doc.get("estimated")),
+               "rebilledOnEstimate": estimate}
         self.docs.append(new)
         self.doc_of[i, m] = new["k"]
         self.release(new, t + 0.001)
