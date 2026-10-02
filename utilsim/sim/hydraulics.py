@@ -7,11 +7,12 @@ flows: a tree pipe can now carry water back up toward its parent, and then the g
 
 Water uses Hazen-Williams head loss. The hydraulic grade starts at the zone's elevated-tank overflow, held there by
 the pump station, and resets at the overflow of another zone's tank where a pipe enters that zone. Pressure is
-grade minus ground elevation, in kPa. C factors: PVC 150, copper 140, ductile iron 130, concrete 120.
+grade minus ground elevation, in kPa. C factors: PVC and ductile iron `water.hw_c_new` (130), unlined cast iron
+`water.hw_c_old` (100), copper services 140, concrete trunks 120.
 
 Gas has two tiers. Medium pressure starts at the city gate outlet and uses Weymouth (P₁² − P₂² ∝ Q²·L / d^(16/3),
-absolute pressures). Low pressure starts at a district regulator's outlet and uses Spitzglass (Δh ∝ Q²·L / d⁵, in
-inches of water column). Pressures are kPa gauge at the service inlet; a meter on a medium-pressure service has its
+absolute pressures, base conditions from ``gas.base_*``: 520 °R and 14.73 psia by default). Low pressure starts at a
+district regulator's outlet and uses Spitzglass (Δh ∝ Q²·L / d⁵, in inches of water column). Pressures are kPa gauge at the service inlet; a meter on a medium-pressure service has its
 own regulator, so the house still sees about 1.7 kPa. A gas loop is solved within one tier only: a cycle whose path
 crosses a regulator, or mixes tiers, stays unsolved (null).
 """
@@ -23,16 +24,36 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from utilsim.net.tables import CAST_IRON, WEYMOUTH_BASE, weymouth_base
 from utilsim.sim.loops import Cycles, cycles
 from utilsim.sim.loops import solve as solve_loops
 
-C_FACTOR = {"PVC C900": 150.0, "copper": 140.0, "ductile iron": 130.0, "PCCP": 120.0}
+
+def c_factors(cfg=None) -> dict[str, float]:
+    """Hazen-Williams C by material: ``water.hw_c_new`` for PVC and ductile iron, ``water.hw_c_old`` for unlined cast
+    iron, fixed values for copper services and concrete (PCCP) trunks. ``cfg``: a ``SimConfig`` (default: defaults)."""
+    if cfg is None:
+        from utilsim.config.model import WaterConfig
+
+        w = WaterConfig()
+    else:
+        w = cfg.water
+    return {"PVC C900": w.hw_c_new, "ductile iron": w.hw_c_new, CAST_IRON: w.hw_c_old, **C_FIXED}
+
+
+def gas_base(cfg=None) -> tuple[float, float]:
+    """Weymouth base conditions (°R, psia) from ``gas.base_pressure_kpa`` / ``base_temperature_c``."""
+    return weymouth_base(cfg.gas.base_pressure_kpa, cfg.gas.base_temperature_c) if cfg is not None else WEYMOUTH_BASE
+
+C_FIXED = {"copper": 140.0, "PCCP": 120.0}  # services and concrete trunks; mains follow ``water.hw_c_*``
+C_DEFAULT = 130.0  # a material the table does not know
 KPA_PER_M = 9.80665  # water: kPa per metre of head
 PSI_PER_KPA = 1 / 6.894757
 ATM_PSI = 14.7
 INWC_PER_KPA = 4.01865
 CF_PER_M3 = 35.3147
-TB, PB, T_GAS, SG = 520.0, 14.73, 520.0, 0.6  # Weymouth base conditions (°R, psia), flowing temperature, gravity
+TB, PB = WEYMOUTH_BASE  # default Weymouth base conditions (°R, psia); ``gas.base_*`` sets them per town
+T_GAS, SG = 520.0, 0.6  # flowing temperature (°R), gravity
 WATER_MIN_KPA = 275.0  # 40 psi: the usual minimum service pressure at peak hour
 GAS_LP_MIN_KPA = 1.0  # about 4" w.c. at the meter inlet
 GAS_MP_MIN_KPA = 100.0
@@ -52,8 +73,11 @@ class HydParams:
     domain: np.ndarray | None = None  # per node: tier of the pipes a held node feeds (−1 none); see ``looped``
 
     @classmethod
-    def from_network(cls, utility: str, edges: list[dict], nodes: list[dict]) -> HydParams:
+    def from_network(cls, utility: str, edges: list[dict], nodes: list[dict], cfg=None) -> HydParams:
+        """``cfg`` (a ``SimConfig``) supplies the Hazen-Williams C factors and the Weymouth base conditions."""
         n, m = len(edges), len(nodes)
+        cf = c_factors(cfg)
+        tb, pb = gas_base(cfg)
         k, tier = np.zeros(n), np.full(n, -1, dtype=np.int8)
         elev = np.array([float(nd.get("elevationM") or 0.0) for nd in nodes])
         reset = np.full(m, np.nan)
@@ -66,7 +90,7 @@ class HydParams:
             if d_in <= 0 or length <= 0:
                 continue
             if utility == "water":
-                c = C_FACTOR.get(e.get("material") or ("copper" if e.get("kind") == "service" else ""), 130.0)
+                c = cf.get(e.get("material") or ("copper" if e.get("kind") == "service" else ""), C_DEFAULT)
                 d = d_in * 0.0254
                 k[j] = 10.67 * length / (c ** 1.852 * d ** 4.8704)  # h = k · q^1.852, q in m³/s
                 tier[j] = 0
@@ -76,7 +100,7 @@ class HydParams:
                 tier[j] = 2
             else:
                 mi = length / 1609.344
-                k[j] = SG * T_GAS * mi / (433.5 * TB / PB * d_in ** (8.0 / 3.0)) ** 2  # ΔP² = k · Q_scfd²
+                k[j] = SG * T_GAS * mi / (433.5 * tb / pb * d_in ** (8.0 / 3.0)) ** 2  # ΔP² = k · Q_scfd²
                 tier[j] = 1
         if utility == "water":
             tanks = {nd.get("zone", 0): float(nd["overflowElevationM"]) for nd in nodes

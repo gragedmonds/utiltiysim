@@ -73,9 +73,20 @@ class GasPipe:
     tier: str  # mp | lp | service
 
 
-def weymouth_m3h(id_in: float, p1_psig: float, p2_psig: float, length_mi: float, sg: float = 0.6) -> float:
-    """Weymouth equation, US units (scfd), returned as standard m³/h."""
-    tb, pb, t = 520.0, 14.73, 520.0
+PSI_PER_KPA = 1 / 6.894757
+WEYMOUTH_BASE = (520.0, 14.73)  # customary Weymouth base: 520 °R (≈ 60 °F) and 14.73 psia
+
+
+def weymouth_base(base_pressure_kpa: float, base_temperature_c: float) -> tuple[float, float]:
+    """Weymouth base conditions (°R, psia) from the config's standard-volume base (``gas.base_*``), to 6 decimals
+    (the defaults, 15.738889 °C and 101.559771 kPa, give exactly 520 °R and 14.73 psia)."""
+    return round(base_temperature_c * 1.8 + 491.67, 6), round(base_pressure_kpa * PSI_PER_KPA, 6)
+
+
+def weymouth_m3h(id_in: float, p1_psig: float, p2_psig: float, length_mi: float, sg: float = 0.6,
+                 base: tuple[float, float] = WEYMOUTH_BASE) -> float:
+    """Weymouth equation, US units (scfd at the ``base`` conditions), returned as standard m³/h."""
+    (tb, pb), t = base, 520.0
     p1, p2 = p1_psig + 14.7, p2_psig + 14.7
     q_scfd = 433.5 * (tb / pb) * math.sqrt((p1 * p1 - p2 * p2) / (sg * t * length_mi)) * id_in ** (8.0 / 3.0)
     return q_scfd / 24.0 / 35.3147
@@ -109,10 +120,10 @@ GAS_SERVICE = [  # (nominal mm, label, capacity m³/h)
 GAS_TRANSMISSION = GasPipe(300, '12" steel transmission', 12.0, "steel", "hp")
 
 
-def gas_capacity_m3h(p: GasPipe, mp_psig: float = 60.0) -> float:
+def gas_capacity_m3h(p: GasPipe, mp_psig: float = 60.0, base: tuple[float, float] = WEYMOUTH_BASE) -> float:
     if p.tier == "lp":
         return spitzglass_lp_m3h(p.id_in, 1.5, 2000.0)
-    return weymouth_m3h(p.id_in, mp_psig, mp_psig * 2.0 / 3.0, 2.0)
+    return weymouth_m3h(p.id_in, mp_psig, mp_psig * 2.0 / 3.0, 2.0, base=base)
 
 
 # ---------------------------------------------------------------- water
@@ -134,6 +145,7 @@ WATER_MAINS = [
     WaterPipe(600, '24" ductile iron', 612.0, "ductile iron"),
     WaterPipe(750, '30" concrete', 762.0, "PCCP"),
 ]
+CAST_IRON = "cast iron"  # unlined, in districts built before ``water.cast_iron_before_year``
 WATER_SERVICE = [(19, '3/4" copper', 1.0), (25, '1" copper', 1.6), (38, '1-1/2" copper', 4.0), (50, '2" copper', 6.5),
                  (100, '4" ductile iron', 26.0), (150, '6" ductile iron', 55.0)]
 V_NORMAL = 1.5  # m/s at peak hour

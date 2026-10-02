@@ -76,7 +76,8 @@ class FlowInputs:
         el = town.networks["electric"]
         elec = ElecParams.from_edges([_edge_dict(e, el) for e in el.edges], [nd.kind for nd in el.nodes])
         hyd = {u: HydParams.from_network(u, [_edge_dict(e, town.networks[u]) for e in town.networks[u].edges],
-                                         [_node_dict(nd) for nd in town.networks[u].nodes]) for u in ("water", "gas")}
+                                         [_node_dict(nd) for nd in town.networks[u].nodes], town.cfg)
+               for u in ("water", "gas")}
         return cls(nets, {k: v[6] for k, v in monthly.items()}, np.asarray(town.prem.attrs["occupied"], dtype=bool),
                    np.asarray(town.prem.attrs["has_gas"], dtype=bool), list(town.prem.ids), town.cfg.scenario.leak_m3h,
                    monthly, elec, hyd)

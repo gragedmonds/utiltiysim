@@ -16,7 +16,7 @@ import numpy as np
 from utilsim.config.model import SimConfig
 from utilsim.sim.flows import SOURCE_KINDS, FlowInputs, FlowModel, NetInputs
 from utilsim.sim.hydraulics import HydParams
-from utilsim.sim.state import FrameBuilder, FrameContext
+from utilsim.sim.state import FrameBuilder, FrameContext, voltage_limits
 from utilsim.sim.usage import UsageInputs, monthly_daily
 from utilsim.sim.voltage import ElecParams
 from utilsim.sim.weather import daily_temps
@@ -119,8 +119,8 @@ class OpsTown:
             monthly=monthly_daily(UsageInputs.from_snapshot(snap), self.sim_config),
             elec=ElecParams.from_edges(snap["networks"]["electric"]["edges"],
                                        [nd["kind"] for nd in snap["networks"]["electric"]["nodes"]]),
-            hyd={u: HydParams.from_network(u, snap["networks"][u]["edges"], snap["networks"][u]["nodes"])
-                 for u in ("water", "gas")})
+            hyd={u: HydParams.from_network(u, snap["networks"][u]["edges"], snap["networks"][u]["nodes"],
+                                           self.sim_config) for u in ("water", "gas")})
         self.context = FrameContext(
             id=self.id, topology=snap["topologyRevision"], index=snap["indexRevision"], timezone=self.timezone,
             origin_lat=float(origin["lat"]), origin_lon=float(origin["lon"]), premise_ids=self.premise_ids,
@@ -128,7 +128,7 @@ class OpsTown:
             enabled={u: self.flow_inputs.nets[u].enabled.copy() for u in UTILITIES},
             supply=np.array([e["kind"] == "supply" for e in snap["networks"]["electric"]["edges"]]),
             served={"electric": np.ones(n, dtype=bool), "water": np.ones(n, dtype=bool), "gas": has_gas},
-            temps=daily_temps(self.sim_config))
+            temps=daily_temps(self.sim_config), voltage_limits=voltage_limits(self.sim_config))
         self.flow_model = FlowModel(self.flow_inputs)
         self.frames = FrameBuilder(self.context, self.flow_model)
 

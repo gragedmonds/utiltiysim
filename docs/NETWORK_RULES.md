@@ -41,7 +41,10 @@ continuity (corridors, then local streets) and offsets are taken relative to the
 - Transformers drop `(P·1.1 % + Q·1.6 %)` on their rating.
 - The substation tap changer holds 1.03 pu. Loads run at power factor 0.95, and rooftop solar nets against load, so
   reverse flow raises voltage.
-- Frames report `loading` per electric edge (S / capacity), `lossesKW`, and `premises.voltage` on a 120 V base.
+- Frames report `loading` per electric edge (S / capacity), `lossesKW`, and `premises.voltage` on a 120 V base,
+  with the town's limits in `premises.voltageLimits` (`electric.voltage_min_pu` / `voltage_max_pu` × 120 V, and the
+  premises below and above them). Back-feeding through a tie keeps every customer at or above the lower limit less
+  4 V (ANSI Range B, 110 V by default).
 - On Ayr, a typical July evening stays within ANSI Range A (114–126 V) with losses near 3 %. A January evening
   pushes transformers serving electric-heat streets past nameplate; the primary stays within rating.
 
@@ -54,13 +57,15 @@ counts arterial/collector islands beyond the first). The same numbers are report
 loops. Pressures are walked down the forest from the held grades with the looped flows.
 
 Water:
-- Hazen-Williams head loss, with C 150 for PVC, 140 for copper, 130 for ductile iron and 120 for concrete.
+- Hazen-Williams head loss, with C from the town's config: `water.hw_c_new` (130) for PVC and ductile iron,
+  `water.hw_c_old` (100) for unlined cast iron; 140 for copper services and 120 for the concrete trunk.
 - The grade starts at the zone tank's overflow, held there by the pump station. It resets to another zone's tank
   where a pipe enters that zone.
 - Service pressure is grade minus elevation. On Ayr it is about 410–570 kPa (59–83 psi) and follows the ground.
 
 Gas:
-- Medium-pressure pipes use Weymouth P², starting from the city gate outlet.
+- Medium-pressure pipes use Weymouth P², starting from the city gate outlet, at the base conditions
+  `gas.base_pressure_kpa` / `base_temperature_c` (14.73 psia and 520 °R by default; sizing uses the same).
 - Low-pressure pipes use Spitzglass, starting from a district regulator's outlet.
 - Low-pressure services stay between 1.5 and 1.74 kPa at a January peak.
 
@@ -120,7 +125,7 @@ Known limits: a tank holds its overflow grade (no level over the day), and a pum
 | Tanks and zones | one elevated tank per 28 m elevation band at the band's high ground; PRV going down a band, booster going up |
 | Hydrants | every 150 m along mains (90 m near commercial premises) |
 | Valves | N−1 at junctions with ≥ 3 mains; line valves every 240 m |
-| Materials | PVC C900 to 300 mm, ductile iron 400–600 mm; Hazen-Williams C = 130 (new) / 100 (cast iron before 1960) |
+| Materials | PVC C900 to 300 mm, ductile iron 400–600 mm, a 750 mm concrete trunk. Mains along streets built before `water.cast_iron_before_year` (1960) are unlined cast iron of the same size; a street is as old as the older side it serves (as for overhead electric). Hazen-Williams C = `hw_c_new` 130 (PVC, ductile iron) / `hw_c_old` 100 (cast iron). Cast iron also breaks twice as often (background incidents) |
 
 ## AMI
 

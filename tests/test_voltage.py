@@ -89,6 +89,11 @@ def test_frames_carry_loading_losses_and_service_voltage(ayr, ayr_snapshot):
     assert len(el["loading"]) == len(el["edgeIds"]) and el["lossesKW"] > 0
     volts = [x for x in frame["premises"]["voltage"] if x is not None]
     assert len(volts) == len(ayr.premise_ids) and 100 < min(volts) < max(volts) <= 126
+    # The town's service limits travel with the frame (electric.voltage_min_pu / max_pu on a 120 V base).
+    lim = frame["premises"]["voltageLimits"]
+    e = ayr.sim_config.electric
+    assert (lim["min"], lim["max"]) == (e.voltage_min_pu * BASE_V, e.voltage_max_pu * BASE_V) == (114.0, 126.0)
+    assert lim["low"] == sum(v < lim["min"] for v in volts) and lim["high"] == sum(v > lim["max"] for v in volts)
 
 
 def test_backfeed_is_declined_when_the_receiving_feeder_would_overload(ayr):
