@@ -146,14 +146,14 @@ net-exports at noon in July. M2 weather-driven profiles replace them.
 
 | Method & path | Returns |
 |---|---|
-| `GET /api/health` | status, generator and schema versions |
+| `GET /api/health` | `{status, engine: local\|hosted, generatorVersion, schemaVersion, towns, generated, capabilities}`: `towns` lists the pack presets, then the ids of ready generated towns (`generated` gives `{townId, name, seed, houses}`); `capabilities.generate` is true when the engine can import the generation stack (scipy, shapely), so `POST /api/towns` works (the local API: yes; the hosted engine: only once its function ships the stack, tried on request, never at import) |
 | `GET /api/schemas/{name}.json` | the published schemas above |
 | `GET /api/config/schema` | `SimConfig` JSON Schema with UI hints: `x-unit`, `x-advanced`, `x-effects`, `x-group`, `x-order`, `x-applies` (`town` regenerates, `run` applies to a run) |
 | `GET /api/config/presets` · `/presets/{name}` | town presets and scenario names · a preset's full config |
 | `GET /api/sources` | frozen street extracts (real places) with attribution, snapshot date, bbox, SHA-256 and the presets built on them |
-| `POST /api/towns` `{preset, seed?, houses?, scenario?, overrides?, config?}` | `{townId, status}`; ≤ 2,000 homes build synchronously (201), larger ones in the background (202, poll `GET /api/towns/{id}`) |
+| `POST /api/towns` `{preset, seed?, houses?, scenario?, overrides?, config?}` | `{townId, status}`; ≤ 2,000 homes build synchronously (201), larger ones in the background (202, poll `GET /api/towns/{id}`); 501 on an engine without the generation stack. A ready town's id works as `town` in every operations and meter-to-cash request (`/api/sim/*`, `/api/m2c/*`, `/api/process/*`, `/api/vee/*`). Ayr's full config builds in about 4.5 s |
 | `GET /api/towns/{id}` | status, bounds, origin, source, layer and table names, stats |
-| `GET /api/towns/{id}/snapshot.json?profile=full\|viewer` | the snapshot (gzip) |
+| `GET /api/towns/{id}/snapshot.json?profile=full\|viewer` (or `detail=`) | the snapshot (gzip) |
 | `GET /api/towns/{id}/state?hour=&date=&scenario=&target=&premises=` | one complete frame. Stateless and idempotent |
 | `GET /api/towns/{id}/replay?date=&scenario=&target=&startHour=&hours=&stepMinutes=&premises=` | a replay (≤ 2,000 frames, `hours` ≤ 168) |
 | `GET /api/towns/{id}/layers/{layer}.geojson?crs=wgs84\|local` | one GeoJSON layer (list below) |
@@ -267,7 +267,10 @@ null if still out at the end of the day; the meter-to-cash run's `outages`; coll
 
 Frames from `/api/sim/frame` add `premises.unsupplied` (`{electric: [premiseId…], …}`) when anyone is without supply.
 Every frame also carries the radial power flow: `networks.electric.loading` per edge (apparent power over capacity),
-`networks.electric.lossesKW`, and `premises.voltage` (service voltage on a 120 V base, null when unsupplied).
+`networks.electric.lossesKW`, and `premises.voltage` (service voltage on a 120 V base, null when unsupplied), with
+`premises.voltageLimits: {min, max, low, high}`: the town's service limits on the same base (`electric.voltage_min_pu`
+and `voltage_max_pu` × 120 V, 114–126 V by default; also in the snapshot's `config`) and how many premises are below
+and above them. A voltage lens should colour against these, not fixed numbers.
 They also carry `premises.pressure.water` and `premises.pressure.gas`: service pressure in kPa gauge from the
 hydraulics, loops included. It is null when the premise is unsupplied or not served.
 

@@ -227,9 +227,15 @@ def test_hosted_api(ayr):
 
 def test_hosted_engine_imports_without_the_generation_stack():
     code = ("import sys\nfor m in ('scipy','shapely','pyarrow','matplotlib','yaml'):\n    sys.modules[m]=None\n"
-            "import api.index\nprint('ok')")
+            "import api.index\nfrom fastapi.testclient import TestClient\nc = TestClient(api.index.app)\n"
+            "print(c.get('/api/health').json()['capabilities']['generate'], "
+            "c.post('/api/towns', json={'preset': 'ayr'}).status_code)")
     out = subprocess.run([sys.executable, "-c", code], cwd=ROOT, capture_output=True, text=True, timeout=120)
-    assert out.returncode == 0 and out.stdout.strip() == "ok", out.stderr[-2000:]
+    # Without the stack the hosted engine says it cannot generate, and POST /api/towns answers 501.
+    assert out.returncode == 0 and out.stdout.strip() == "False 501", out.stderr[-2000:]
+    from api.index import app
+
+    assert TestClient(app).get("/api/health").json()["capabilities"]["generate"] is True  # this env has the stack
 
 
 def test_reading_rounds_walk_the_route_in_order(ayr):

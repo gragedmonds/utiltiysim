@@ -27,8 +27,9 @@ router = APIRouter()
 SNAPSHOT_SOURCES: list[Callable[[str], dict | None]] = []
 
 
-def J(data: Any) -> Response:
-    return Response(orjson.dumps(data, option=orjson.OPT_SERIALIZE_NUMPY), media_type="application/json")
+def J(data: Any, status: int = 200) -> Response:
+    return Response(orjson.dumps(data, option=orjson.OPT_SERIALIZE_NUMPY), status_code=status,
+                    media_type="application/json")
 
 
 @lru_cache(maxsize=1)
