@@ -22,12 +22,12 @@
       "timezone": "America/Toronto",
       "files": {
         "snapshot": {
-          "path": "whitby_small/town-a5025bda20b8028f.fe4707275c.snapshot.json.gz",
-          "bytes": 706937
+          "path": "whitby_small/town-a5025bda20b8028f.c41590bba1.snapshot.json.gz",
+          "bytes": 707580
         },
         "replay": {
-          "path": "whitby_small/town-a5025bda20b8028f.13135d837c.replay-day.json.gz",
-          "bytes": 696664
+          "path": "whitby_small/town-a5025bda20b8028f.5fd0eaee4e.replay-day.json.gz",
+          "bytes": 710356
         }
       }
     },
@@ -54,12 +54,12 @@
       "timezone": "America/Toronto",
       "files": {
         "snapshot": {
-          "path": "ayr/town-b1c40ea889bd3200.0fcd3e57fa.snapshot.json.gz",
-          "bytes": 2241975
+          "path": "ayr/town-b1c40ea889bd3200.4c6407782c.snapshot.json.gz",
+          "bytes": 2243021
         },
         "replay": {
-          "path": "ayr/town-b1c40ea889bd3200.6004a55e8f.replay-day.json.gz",
-          "bytes": 2217017
+          "path": "ayr/town-b1c40ea889bd3200.0c707e71da.replay-day.json.gz",
+          "bytes": 2244453
         }
       }
     },
@@ -86,12 +86,12 @@
       "timezone": "America/Toronto",
       "files": {
         "snapshot": {
-          "path": "elora/town-3e327e045e791573.aafbe9c8fa.snapshot.json.gz",
-          "bytes": 3953690
+          "path": "elora/town-3e327e045e791573.62575d5a7d.snapshot.json.gz",
+          "bytes": 3956265
         },
         "replay": {
-          "path": "elora/town-3e327e045e791573.36dbdd110b.replay-day.json.gz",
-          "bytes": 3824587
+          "path": "elora/town-3e327e045e791573.8e2c4a8825.replay-day.json.gz",
+          "bytes": 3890697
         }
       }
     },
@@ -118,12 +118,12 @@
       "timezone": "America/Toronto",
       "files": {
         "snapshot": {
-          "path": "cobourg/town-f13156fcd17694ff.dec5f18c76.snapshot.json.gz",
-          "bytes": 6370789
+          "path": "cobourg/town-f13156fcd17694ff.0ccf71654a.snapshot.json.gz",
+          "bytes": 6377291
         },
         "replay": {
-          "path": "cobourg/town-f13156fcd17694ff.4cfe2b106a.replay-day.json.gz",
-          "bytes": 5974101
+          "path": "cobourg/town-f13156fcd17694ff.102991bc44.replay-day.json.gz",
+          "bytes": 6099174
         }
       }
     }
