@@ -203,6 +203,38 @@ def test_reading_rounds_walk_the_route_in_order(ayr):
     kinds = [e["eventType"] for e in tl["events"]]
     assert "reading.started" in kinds and "reading.completed" in kinds
     assert Run(ayr, [], day=day, settings={"meterReading": False}).timeline()["jobs"] == []
+    # Each meter is read in sequence order while the walker is out.
+    at = [s["at"] for s in job["stops"]]
+    assert len(at) == job["meters"] and all(np.diff(at) >= 0)
+    assert job["arrivalAt"] <= at[0] and at[-1] <= job["returnStartAt"]
+    assert "outcome" not in job["stops"][0]  # without the meter-to-cash run, no outcomes
+
+
+def test_reading_rounds_show_the_meter_to_cash_outcome_of_each_read(ayr):
+    from fastapi.testclient import TestClient
+
+    from api._m2c import RunRequest, run_for
+    from api.index import app
+    from utilsim.m2c.base import date_of
+
+    run = run_for(RunRequest(town="ayr"))
+    tw = run.town
+    # A day with walked or drive-by reads where VEE flagged one or a reader missed one.
+    day = next(d for d, (m, rows) in sorted(run.batches.items()) if any(
+        tw.tech[r] != "AMI" and (np.isnan(run.obs[r, m]) or run.disp[r, m] > 0) for r in rows.tolist()))
+    tl = TestClient(app).post("/api/sim/timeline", json={"town": "ayr", "date": date_of(day).isoformat(),
+                                                          "m2c": {}}).json()
+    stops = [s for j in tl["jobs"] if j["kind"] == "meter_reading" for s in j["stops"]]
+    seen = {s["outcome"] for s in stops}
+    assert stops and "read" in seen and seen & {"flagged", "missed"} and "not_due" not in seen
+    m, rows = run.batches[day]
+    for s in stops:
+        r = [x for x in rows.tolist() if tw.premise_ids[tw.prem[x]] == s["premiseId"] and tw.tech[x] != "AMI"]
+        assert r, s["premiseId"]  # the round reads exactly the premises meter-to-cash reads that day
+        if s["outcome"] == "missed":
+            assert any(np.isnan(run.obs[x, m]) for x in r) and s["reason"]
+        if s["outcome"] == "flagged":
+            assert s["exception"] and run.case_index[s["caseId"]].type == s["exception"]
 
 
 def test_m2c_field_orders_become_crew_jobs_and_field_visits_settle_cases(ayr):

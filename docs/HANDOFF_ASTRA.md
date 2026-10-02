@@ -140,6 +140,7 @@ The routes are a table in `focus-ui.js` (`PAGES`). Opening a pack keeps a deep-l
 
 **Visual cues**
 - `outage-marks.js`: daytime rings in the utility colour for premises in `premises.unsupplied`, for the visible layers.
+- `OperationsView` paints reading-round outcomes once the reader passes a house (`job.stops[].outcome`): a green disc means read, amber means flagged by VEE, red means missed. The round's card shows the tally (`readTally` in `app.js`, colours in `READ_COLOR`).
 - `clock.tempC` shows by the clock status.
 
 Design passes welcome:

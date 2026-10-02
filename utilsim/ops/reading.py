@@ -61,22 +61,30 @@ def nearest_order(ops, rows: list[int], x: float, z: float) -> list[int]:
 
 
 def reading_path(ops, mru_id: str, mode: str, *, kmh: float, dwell: float) -> Route | None:
-    """The round's path (walk or drive-by), cached on the town; None when the route has no premises."""
+    """The round's path (walk or drive-by), cached on the town; None when the route has no premises.
+
+    ``route.stop_times`` holds, per premise of ``stops(ops, mru_id)``, when its meter is read (seconds from the
+    path's start): a walker at the end of the pause at each meter, a drive-by van as it passes (premises between the
+    van's waypoints are read on the way)."""
     key = (mru_id, mode, round(kmh, 2), round(dwell, 1))
     if key in ops.reading_paths:
         return ops.reading_paths[key]
-    rows = stops(ops, mru_id)
+    every = stops(ops, mru_id)
+    rows, idx = every, list(range(len(every)))
     if mode == "drive" and len(rows) > 2:
-        rows = rows[::DRIVE_BY_STRIDE] + [rows[-1]]
+        idx = idx[::DRIVE_BY_STRIDE] + [len(every) - 1]
+        rows = [every[i] for i in idx]
     if mode == "walk" and rows:
         rows = rows + [rows[0]]  # back to the van
     router = Router(ops.roads, (kmh, kmh, kmh))
     pts, times, length, clock = [], [], 0.0, 0.0
+    arrive = [0.0]
     for a, b in zip(rows, rows[1:], strict=False):
         try:
             leg = router.route(access_point(ops.roads, *ops.premise_access[a]),
                                access_point(ops.roads, *ops.premise_access[b]))
         except ValueError:
+            arrive.append(clock + (dwell if mode == "walk" and pts else 0.0))
             continue
         if pts:
             clock += dwell if mode == "walk" else 0.0
@@ -86,6 +94,7 @@ def reading_path(ops, mru_id: str, mode: str, *, kmh: float, dwell: float) -> Ro
             pts.append(leg.points)
             times.append(leg.times)
         clock = float(times[-1][-1])
+        arrive.append(clock)
         length += leg.length_m
     if not pts:
         ops.reading_paths[key] = None
@@ -94,5 +103,10 @@ def reading_path(ops, mru_id: str, mode: str, *, kmh: float, dwell: float) -> Ro
     t = np.concatenate(times)
     t = np.maximum.accumulate(t + np.arange(len(t)) * 1e-3)  # strictly increasing
     route = Route(points, t, length)
+    if mode == "walk":
+        at = np.array(arrive[: len(every)]) + np.where(np.arange(len(every)) > 0, dwell, 0.0)
+    else:
+        at = np.interp(np.arange(len(every)), idx, arrive[: len(idx)])
+    route.stop_times = np.round(at, 1)
     ops.reading_paths[key] = route
     return route

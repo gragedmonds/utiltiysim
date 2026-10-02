@@ -228,6 +228,7 @@ class M2CRun:
         tw, c = self.town, self.cfg
         R, M = tw.n_registers, len(tw.meter_ids)
         self.reg_keys = np.array([str_key(x) for x in tw.reg_ids], dtype=np.int64)
+        self.prem_keys = np.array([str_key(x) for x in tw.premise_ids], dtype=np.int64)
         # Prior-year history around this year's normal use, per register and month.
         self.hist = np.clip(1.0 + c.vee.history_noise * hash_normal(self.seed, P_READ, self.reg_keys[:, None],
                                                                     np.arange(13)[None, :], 7), 0.6, 1.4)
@@ -499,10 +500,11 @@ class M2CRun:
         tech = tw.tech[rows]
         for k, name in enumerate(("AMI", "AMR", "MANUAL")):
             self.read_counts[day, k] += int((tech == name).sum())
-        # Did we get a read? One draw per meter and month.
+        # Did we get a read? One draw per meter and month; a walker who cannot get in misses every meter there.
         mm = np.unique(meters)
-        u = self._u(P_READ, tw.meter_keys[mm], m, 1)
         mt = tw.meter_tech[mm]
+        u = np.where(mt == "MANUAL", self._u(P_READ, self.prem_keys[tw.meter_prem[mm]], m, 1),
+                     self._u(P_READ, tw.meter_keys[mm], m, 1))
         p = np.select([mt == "AMI", mt == "AMR"], [c.reading.ami_missed_read, c.reading.amr_missed_read],
                       np.where(self.missed_last[mm], c.reading.no_access_repeat, c.reading.manual_no_access))
         # Deep cold: AMI endpoints drop out more, walkers find more meters snowed in, vans miss more.

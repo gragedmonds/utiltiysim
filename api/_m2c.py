@@ -10,6 +10,7 @@ from __future__ import annotations
 from collections import OrderedDict
 from typing import Any, Literal
 
+import numpy as np
 import orjson
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field, ValidationError
@@ -191,8 +192,8 @@ def post_vee_export(req: MonthRequest):
     return _view(views.vee_export, run_for(req), req.month, req.portion, as_of=req.asOf)
 
 
-def field_orders_for(town: str, day: str, m2c: dict) -> list[dict]:
-    """The meter-to-cash run's truck rolls on ``day`` as operations work: premise, start time, activity, duration.
+def m2c_day(town: str, day: str, m2c: dict) -> tuple[list[dict], dict[str, dict]]:
+    """What the meter-to-cash run puts on an operations day: its field orders and its walked/drive-by read outcomes.
 
     Outages from ``day`` itself or later are left out: they come from this operations run, and the morning's work
     orders cannot depend on what happens later that day."""
@@ -205,6 +206,41 @@ def field_orders_for(town: str, day: str, m2c: dict) -> list[dict]:
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
     run = run_for(req)
+    return _field_orders(run, d), read_outcomes(run, d)
+
+
+RANK = {"read": 0, "flagged": 1, "missed": 2}
+
+
+def read_outcomes(run: M2CRun, d: int) -> dict[str, dict]:
+    """Per premise read by a walker or drive-by van on day ``d``: read, flagged by VEE (with the exception) or missed
+    (with the reason). A premise with several meters shows its worst outcome."""
+    hit = run.batches.get(d)
+    if hit is None:
+        return {}
+    m, rows = hit
+    tw, out = run.town, {}
+    for r in rows[np.isin(tw.tech[rows], ("MANUAL", "AMR"))].tolist():
+        if np.isnan(run.obs[r, m]):
+            o = {"outcome": "missed", "reason": str(run.reason[r, m])}
+        elif run.disp[r, m] > 0 or run.status[r, m] == 4:
+            k = int(run.case_of[r, m])
+            o = {"outcome": "flagged", "exception": run.cases[k].type if k >= 0 else "HELD",
+                 **({"caseId": run.cases[k].id} if k >= 0 else {})}
+        else:
+            o = {"outcome": "read"}
+        pid = tw.premise_ids[tw.prem[r]]
+        if pid not in out or RANK[o["outcome"]] > RANK[out[pid]["outcome"]]:
+            out[pid] = o
+    return out
+
+
+def field_orders_for(town: str, day: str, m2c: dict) -> list[dict]:
+    """The meter-to-cash run's truck rolls on ``day`` as operations work: premise, start time, activity, duration."""
+    return m2c_day(town, day, m2c)[0]
+
+
+def _field_orders(run: M2CRun, d: int) -> list[dict]:
     tw, out = run.town, []
     for case in run.cases:
         for k, (t, kind, _, _) in enumerate(case.events):

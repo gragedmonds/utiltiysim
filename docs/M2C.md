@@ -63,7 +63,8 @@ The summary carries the series to date (`weather.series`) and the count of days 
 Every register is read once a month on its portion's business day. Missed reads by technology:
 - AMI: `ami_missed_read`;
 - AMR: `amr_missed_read`;
-- walked (MANUAL): `manual_no_access`, then `no_access_repeat` while it stays missed.
+- walked (MANUAL): `manual_no_access`, then `no_access_repeat` while it stays missed. No access is per premise:
+  a walker who cannot get in misses every meter there.
 
 Anomalies follow `anomalies.*` (per 1,000 meters per year). Each keeps its ground truth:
 
@@ -185,7 +186,12 @@ commands and on their own crews:
   is, become `meter_reading` jobs.
   - A walker parks at the first premise, walks every meter in sequence order and walks back to the van.
   - A drive-by van drives the round.
-  - Each job carries `walkRoute` and `walkTimes`.
+  - Each job carries `walkRoute` and `walkTimes`, and `stops`: when each premise's meters are read
+    (`{premiseId, at}`, in sequence order; a drive-by van reads the premises between its waypoints on the way).
+  - With the meter-to-cash run linked, each stop also carries that read's outcome: `read`, `flagged` (with the
+    VEE `exception` and `caseId`) or `missed` (with the `reason`, e.g. `SIM_NO_ACCESS`). The map paints a disc at
+    each house as the reader passes it, and the round's card counts them. The read's own `readAt` in meter-to-cash
+    keeps its scheduled hour, not the walker's arrival.
 - **Field orders:** when the request carries the meter-to-cash run (`m2c: {settings, actions}`), that run's truck
   rolls on the day become `field_order` jobs (`FIELD-n` crews, 45 min for an exchange, 20 for a special read).
 

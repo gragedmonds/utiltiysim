@@ -97,7 +97,8 @@ class _Interval:
 
 class Run:
     def __init__(self, ops, commands: list[dict], *, day: str | None = None, settings: dict | None = None,
-                 scenario: str = "normal", field_orders: list[dict] | None = None):
+                 scenario: str = "normal", field_orders: list[dict] | None = None,
+                 read_outcomes: dict[str, dict] | None = None):
         self.ops = ops
         self.day = day or ops.scenario_date
         self.scenario = scenario
@@ -122,6 +123,7 @@ class Run:
         self.intervals: list[_Interval] = []
         self.warnings: list[str] = []
         self._routes: dict[tuple, Route] = {}
+        self.read_outcomes = read_outcomes  # premise id -> the meter-to-cash read on this day (when linked)
         # Scheduled work first (fixed for the day, own crews), so appending a command never changes it.
         self._schedule(field_orders or [])
         for cmd in self.commands:
@@ -166,6 +168,11 @@ class Run:
                "visitPoint": {"x": p["x"], "z": p["z"]}, "roadPoint": _pts(route.points[-1:])[0],
                "walkRoute": _pts(path.points), "walkTimes": _ts(path.times),
                "walkLength": round(path.length_m, 1), "workSeconds": round(path.seconds, 3)}
+        arrive = start + route.seconds
+        job["stops"] = [{"premiseId": ops.premise_ids[i], "at": round(arrive + float(t), 1),
+                         **(self.read_outcomes.get(ops.premise_ids[i], {"outcome": "not_due"})
+                            if self.read_outcomes is not None else {})}
+                        for i, t in zip(rows, path.stop_times, strict=True)]
         job["returnStartAt"] = job["arrivalAt"] + path.seconds
         job["endAt"] = job["returnStartAt"] + back.seconds
         job["returnRoute"], job["returnTimes"] = _pts(back.points), _ts(back.times)
