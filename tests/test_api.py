@@ -52,6 +52,47 @@ def test_town_lifecycle_and_endpoints():
     assert client.get(f"/api/towns/{tid}/render.png").content[:4] == b"\x89PNG"
 
 
+def test_a_generated_town_runs_operations_and_meter_to_cash():
+    """The Studio's Configuration flow: send a full edited config (Ayr with another seed and an override), then use
+    the new town id everywhere a pack preset works."""
+    import time
+
+    import orjson
+
+    from utilsim.config import load_preset
+
+    cfg = load_preset("ayr").model_dump(mode="json")
+    cfg["seeds"]["master"] = "AYR-STUDIO-7"
+    cfg["operations"]["electric_crews"] = 5
+    t0 = time.perf_counter()
+    r = client.post("/api/towns", json={"config": cfg})
+    built = time.perf_counter() - t0
+    assert r.status_code == 201, r.text
+    tid = r.json()["townId"]
+    assert client.post("/api/towns", json={"config": cfg}).json() == {"townId": tid, "status": "ready"}  # same id
+    health = client.get("/api/health").json()
+    assert health["capabilities"]["generate"] is True and tid in health["towns"] and "ayr" in health["towns"]
+    assert next(t for t in health["generated"] if t["townId"] == tid)["seed"] == "AYR-STUDIO-7"
+    view = client.get(f"/api/towns/{tid}/snapshot.json", params={"detail": "viewer"}).json()
+    assert view["id"] == tid and view["detail"] == "viewer" and view["sampleReads"] == []
+    assert view["config"]["seeds"]["master"] == "AYR-STUDIO-7"
+    settings = client.get("/api/sim/settings", params={"town": tid}).json()
+    assert settings["electricCrews"] == 5  # the town's config is the run's default
+    tl = client.post("/api/sim/timeline", json={"town": tid, "m2c": {}})
+    assert tl.status_code == 200, tl.text
+    tl = tl.json()
+    assert tl["townId"] == tid and tl["topologyRevision"] == view["topologyRevision"] and "meterToCash" in tl
+    pole = next(q for q in view["networks"]["electric"]["equipment"] if q["kind"] == "pole")
+    body = {"town": tid, "commands": [{"id": "C", "at": 8 * 3600, "type": "break_asset",
+                                       "payload": {"id": pole["id"], "kind": "pole", "utility": "electric",
+                                                   "edgeId": pole["edgeId"]}}], "settings": {"randomIncidents": False}}
+    frame = client.post("/api/sim/frame", json={**body, "at": 8 * 3600 + 120}).json()
+    assert frame["townId"] == tid and frame["premises"]["unsupplied"]["electric"]
+    summary = client.post("/api/m2c/summary", json={"town": tid, "asOf": "2026-06-30"})
+    assert summary.status_code == 200 and summary.json()["townId"] == tid and summary.json()["kpis"]["reads"] > 0
+    print(f"generated {tid} in {built:.1f} s; snapshot {len(orjson.dumps(view)) / 1e6:.1f} MB")
+
+
 def test_errors():
     assert client.get("/api/towns/town-nope").status_code == 404
     assert client.post("/api/towns", json={"preset": "nope"}).status_code == 422

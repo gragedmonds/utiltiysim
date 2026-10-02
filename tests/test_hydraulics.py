@@ -36,12 +36,48 @@ def ayr(ayr_snapshot) -> OpsTown:
 
 
 def test_hazen_williams_coefficient_matches_the_sizing_table(ayr_snapshot):
+    """Mains take C from the town's config: water.hw_c_new for PVC and ductile iron, hw_c_old for unlined cast iron;
+    gas uses the config's Weymouth base conditions (520 °R and 14.73 psia by default, as before)."""
+    from utilsim.config.model import SimConfig
+    from utilsim.sim.hydraulics import gas_base
+
     net = ayr_snapshot["networks"]["water"]
-    hp = HydParams.from_network("water", net["edges"], net["nodes"])
-    k = next(i for i, e in enumerate(net["edges"]) if e["kind"] == "distribution" and e.get("material") == "PVC C900")
-    e = net["edges"][k]
-    want = hazen_williams_headloss_m(20.0, e["diameterIn"] * 25.4, e["lengthM"], 150.0)
-    assert hp.k[k] * (20.0 / 1000.0) ** 1.852 == pytest.approx(want, rel=1e-9)
+    cfg = SimConfig.model_validate(ayr_snapshot["config"])
+    hp = HydParams.from_network("water", net["edges"], net["nodes"], cfg)
+
+    def check(params, k: int, c: float) -> None:
+        e = net["edges"][k]
+        want = hazen_williams_headloss_m(20.0, e["diameterIn"] * 25.4, e["lengthM"], c)
+        assert params.k[k] * (20.0 / 1000.0) ** 1.852 == pytest.approx(want, rel=1e-9)
+
+    for material in ("PVC C900", "ductile iron"):
+        check(hp, next(i for i, e in enumerate(net["edges"]) if e["kind"] in ("distribution", "trunk")
+                       and e.get("material") == material), cfg.water.hw_c_new)
+    k = next(i for i, e in enumerate(net["edges"]) if e["kind"] == "distribution")
+    edges = [dict(e) for e in net["edges"]]
+    edges[k]["material"] = "cast iron"
+    old = cfg.model_copy(update={"water": cfg.water.model_copy(update={"hw_c_old": 80.0})})
+    check(HydParams.from_network("water", edges, net["nodes"], old), k, 80.0)
+    assert gas_base(SimConfig()) == (520.0, 14.73) and gas_base(None) == (520.0, 14.73)
+
+
+def test_old_streets_get_cast_iron_mains(town120):
+    """Mains along streets built before water.cast_iron_before_year are unlined cast iron of the same size; with
+    hw_c_old below hw_c_new they lose more head, so the town's pressures are a little lower."""
+    from utilsim.config import load_preset
+    from utilsim.gen.pipeline import generate
+    from utilsim.sim.flows import FlowModel
+
+    water = town120.networks["water"].edges
+    ci = [e for e in water if e.attrs.get("material") == "cast iron"]
+    assert ci and all(e.kind == "distribution" and e.attrs["nominalLabel"].endswith('" cast iron') for e in ci)
+    new = generate(load_preset("whitby_small", seed="T120", houses=120,
+                               overrides={"water": {"cast_iron_before_year": 1850}}))
+    assert not any(e.attrs.get("material") == "cast iron" for e in new.networks["water"].edges)
+    assert [e.size_mm for e in new.networks["water"].edges] == [e.size_mm for e in water]  # sizing is unchanged
+    old_p = FlowModel(town120).flows(7.5, month=7).pressure["water"]
+    new_p = FlowModel(new).flows(7.5, month=7).pressure["water"]
+    assert np.nanmean(old_p) < np.nanmean(new_p) and np.mean(old_p <= new_p + 1e-6) > 0.8  # loops shift a few
 
 
 def test_water_pressure_follows_elevation_and_demand(ayr, ayr_snapshot):

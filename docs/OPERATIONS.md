@@ -34,8 +34,12 @@ Each incident is the **initiating event** of a causal chain; its downstream even
 | Transformer failure | 4–10 homes out → replacement (upsized if overloaded) | zero-usage reads |
 | AMI collector outage | cluster of comm failures | estimates, consecutive-estimate flags |
 
-Hazard rates are per asset per year and modulated by weather (storm days, freeze-thaw, heat); `manual_only`
-disables random hazards for scripted demos; `POST /api/sim/{id}/incidents` injects one.
+Hazard rates are per asset per year; overhead faults happen on storm days (`weather.storm_days_per_year`) and a
+transformer loaded above its rating fails three times as often. `manual_only` disables random hazards for scripted
+demos. As built (`utilsim/ops/hazards.py`), every operations day draws its background incidents at these rates,
+seeded by (town, run seed, date), and works them exactly like a hammer blow; the rates and the on/off switch are
+operations run settings whose defaults are the town's values (see CONTRACT.md "Background incidents"). Freeze-thaw
+and heat modulation are not modelled yet.
 
 ## Meter-to-cash process
 

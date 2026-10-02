@@ -20,15 +20,24 @@ from utilsim.net.common import (
     subtree_sums,
 )
 from utilsim.net.context import NetContext
-from utilsim.net.tables import GAS_LP, GAS_MP, GAS_SERVICE, GAS_TRANSMISSION, coincidence, gas_capacity_m3h
+from utilsim.net.tables import (
+    GAS_LP,
+    GAS_MP,
+    GAS_SERVICE,
+    GAS_TRANSMISSION,
+    WEYMOUTH_BASE,
+    coincidence,
+    gas_capacity_m3h,
+    weymouth_base,
+)
 from utilsim.sim.demand import design_gas_m3h
 
 KPA_PER_PSI = 6.894757
 
 
-def _pick(table, m3h: float, mp_psig: float, min_mm: int = 0):
+def _pick(table, m3h: float, mp_psig: float, min_mm: int = 0, base: tuple[float, float] = WEYMOUTH_BASE):
     for p in table:
-        if p.nominal_mm >= min_mm and gas_capacity_m3h(p, mp_psig) >= m3h:
+        if p.nominal_mm >= min_mm and gas_capacity_m3h(p, mp_psig, base) >= m3h:
             return p
     return table[-1]
 
@@ -43,6 +52,7 @@ def build_gas(ctx: NetContext) -> Network:
         raise RuntimeError("gas network needs a city gate")
     gate = gates[0]
     mp_psig = gcfg.mp_kpa / KPA_PER_PSI
+    base = weymouth_base(gcfg.base_pressure_kpa, gcfg.base_temperature_c)  # standard-volume base conditions
     tap_edge = np.concatenate([prem.edge[served], [gate.edge]]).astype(np.int64)
     tap_s = np.concatenate([prem.s[served], [gate.s]])
     sg = SplitGraph.build(roads, tap_edge, tap_s, ctx.corridors.side)
@@ -82,7 +92,7 @@ def build_gas(ctx: NetContext) -> Network:
         if forest.parent[v] < 0:
             continue
         table = GAS_LP if tier_lp[v] else GAS_MP
-        pipe_of[v] = _pick(table, design[v], mp_psig, gcfg.min_main_mm if not tier_lp[v] else 100)
+        pipe_of[v] = _pick(table, design[v], mp_psig, gcfg.min_main_mm if not tier_lp[v] else 100, base)
     # Monotone within a tier: a parent main is at least as large as any same-tier child.
     for v in forest.order[::-1]:
         p = forest.parent[v]
@@ -116,7 +126,7 @@ def build_gas(ctx: NetContext) -> Network:
             reg = net.add_node(f"gas-DREG-{n_reg:02d}", "district_regulator", (mid.x, mid.y),
                                label=f"District regulator {n_reg}", inletKPa=gcfg.mp_kpa, outletKPa=gcfg.lp_kpa)
             first = np.vstack([pts[:1], _cut(line, 0, line.length / 2)])
-            mp_pipe = _pick(GAS_MP, design[v], mp_psig, gcfg.min_main_mm)
+            mp_pipe = _pick(GAS_MP, design[v], mp_psig, gcfg.min_main_mm, base)
             net.add_edge("distribution", a, reg, first, placement="underground", tier="distribution",
                          size_mm=mp_pipe.nominal_mm, diameterIn=round(mp_pipe.nominal_mm / 25.4, 1),
                          nominalLabel=mp_pipe.label, material=mp_pipe.material, depthM=1.0,

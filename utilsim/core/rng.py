@@ -66,6 +66,7 @@ class Purpose(IntEnum):
     M2C_ANOMALY = 35
     M2C_WORK = 36
     M2C_BILL = 37
+    OPS_INCIDENT = 38
 
 
 def normalize_seed(seed: int | str) -> int:

@@ -23,7 +23,7 @@ from utilsim.net.common import (
     subtree_sums,
 )
 from utilsim.net.context import NetContext
-from utilsim.net.tables import V_FIRE, V_NORMAL, WATER_MAINS, WATER_SERVICE, water_capacity_lps
+from utilsim.net.tables import CAST_IRON, V_FIRE, V_NORMAL, WATER_MAINS, WATER_SERVICE, water_capacity_lps
 from utilsim.sim.demand import water_avg_lps
 
 FIRE_CLASS = {0: "fire_flow_residential_lps", 1: "fire_flow_commercial_lps", 2: "fire_flow_commercial_lps",
@@ -118,7 +118,9 @@ def build_water(ctx: NetContext) -> Network:
                                                      float(sg.tap_s[root_tap - sg.n_road]), off))
     trunk_mm = int(max(size[forest.order].max() if len(forest.order) else 0, w.arterial_main_mm))
     _sized_edge(net, "trunk", st, node_of[root_tap], None, trunk_mm, "trunk", zone=0)
-    _emit_tree(net, sg, forest, node_of, size, zone, off, prem_tap, tank_tap, sub_n, ph, fire_need)
+    # Mains along streets built before ``cast_iron_before_year`` are unlined cast iron (the concrete trunk stays).
+    old = ctx.street_years < w.cast_iron_before_year
+    _emit_tree(net, sg, forest, node_of, size, zone, off, prem_tap, tank_tap, sub_n, ph, fire_need, old)
     # Zone boundary equipment.
     for v in forest.order:
         p = forest.parent[v]
@@ -164,10 +166,11 @@ def build_water(ctx: NetContext) -> Network:
         same_zone = bool(zone[a] == zone[b])
         pts = piece_points(sg, int(k), off, a)
         boundary = {} if same_zone else {"boundaryValve": "closed"}
+        label, material = _material(MAIN_BY_MM[mm], bool(old[int(sg.piece_edge[k])]))
         add_loop_edge(net, node_of[a], node_of[b], pts, enabled=same_zone, **boundary, placement="underground",
                        tier="distribution",
-                       size_mm=mm, diameterIn=round(mm / 25.4, 1), nominalLabel=MAIN_BY_MM[mm].label,
-                       material=MAIN_BY_MM[mm].material, depthM=1.8, zone=int(zone[a]))
+                       size_mm=mm, diameterIn=round(mm / 25.4, 1), nominalLabel=label,
+                       material=material, depthM=1.8, zone=int(zone[a]))
     _hydrants_and_valves(net, ctx, prem)
     net.meta.update({"zones": int(n_z), "zoneBandM": w.zone_band_m, "elevationMinM": round(zmin, 2),
                      "designPeakHourLps": round(float(ph[pump_tap].sum()), 2),
@@ -182,8 +185,16 @@ def _sized_edge(net: Network, kind: str, a: int, b: int, pts, mm: int, tier: str
                         depthM=1.8, zone=zone)
 
 
+def _material(pipe, old: bool) -> tuple[str, str]:
+    """(label, material) of a main: PVC or ductile iron, or unlined cast iron of the same size along an old street
+    (concrete trunks stay concrete)."""
+    if old and pipe.material in ("PVC C900", "ductile iron"):
+        return f"{pipe.label.split(' ')[0]} {CAST_IRON}", CAST_IRON
+    return pipe.label, pipe.material
+
+
 def _emit_tree(net, sg: SplitGraph, forest: Forest, node_of, size, zone, off, prem_tap, tank_tap, sub_n, ph,
-               fire_need):
+               fire_need, old):
     g = sg.roads.graph
     for v in forest.order:
         p = int(forest.parent[v])
@@ -194,11 +205,11 @@ def _emit_tree(net, sg: SplitGraph, forest: Forest, node_of, size, zone, off, pr
         nid = f"water-J-{v}" if v < sg.n_road else f"water-T-{v}"
         node_of[v] = net.add_node(nid, "junction", pts[-1], zone=int(zone[v]))
         mm = int(size[v])
-        pipe = MAIN_BY_MM[mm]
+        label, material = _material(MAIN_BY_MM[mm], bool(old[int(sg.piece_edge[piece])]))
         cls = int(g.edge_class[sg.piece_edge[piece]])
         tier = "trunk" if mm >= 300 or cls == ARTERIAL and mm >= 250 else "distribution"
         net.add_edge("distribution", node_of[p], node_of[v], pts, placement="underground", tier=tier, size_mm=mm,
-                     diameterIn=round(mm / 25.4, 1), nominalLabel=pipe.label, material=pipe.material, depthM=1.8,
+                     diameterIn=round(mm / 25.4, 1), nominalLabel=label, material=material, depthM=1.8,
                      zone=int(zone[v]), roadEdge=int(sg.piece_edge[piece]), customers=int(sub_n[v]),
                      designPeakHourLps=round(float(ph[v]), 3), designFireLps=round(float(fire_need[v]), 2))
 

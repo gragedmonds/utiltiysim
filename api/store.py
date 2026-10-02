@@ -13,8 +13,6 @@ from pathlib import Path
 import orjson
 
 from utilsim.config.model import SimConfig
-from utilsim.gen.pipeline import generate
-from utilsim.io.snapshot import build_snapshot
 
 CACHE_DIR = Path(os.environ.get("UTILSIM_CACHE", ".utilsim_cache"))
 SYNC_LIMIT = int(os.environ.get("UTILSIM_SYNC_HOUSES", "2000"))
@@ -48,6 +46,8 @@ class TownStore:
 
     def _build(self, tid: str, cfg: SimConfig) -> None:
         try:
+            from utilsim.gen.pipeline import generate  # the generation stack, loaded on first use
+
             town = generate(cfg)
             with self._lock:
                 self._towns[tid] = town
@@ -71,6 +71,13 @@ class TownStore:
             return "evicted"
         return "unknown"
 
+    def ready(self) -> list[dict]:
+        """Generated towns in memory, oldest first: ``{townId, name, seed, houses}``."""
+        with self._lock:
+            towns = list(self._towns.items())
+        return [{"townId": tid, "name": t.cfg.name, "seed": t.cfg.seeds.master, "houses": t.cfg.town.houses}
+                for tid, t in towns]
+
     def error(self, tid: str) -> str | None:
         return self._errors.get(tid)
 
@@ -90,6 +97,8 @@ class TownStore:
             data = path.read_bytes()
         else:
             town = self.get(tid)
+            from utilsim.io.snapshot import build_snapshot
+
             data = gzip.compress(orjson.dumps(build_snapshot(town, detail=profile)), 6, mtime=0)
             try:
                 path.parent.mkdir(parents=True, exist_ok=True)

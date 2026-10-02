@@ -89,6 +89,11 @@ def test_frames_carry_loading_losses_and_service_voltage(ayr, ayr_snapshot):
     assert len(el["loading"]) == len(el["edgeIds"]) and el["lossesKW"] > 0
     volts = [x for x in frame["premises"]["voltage"] if x is not None]
     assert len(volts) == len(ayr.premise_ids) and 100 < min(volts) < max(volts) <= 126
+    # The town's service limits travel with the frame (electric.voltage_min_pu / max_pu on a 120 V base).
+    lim = frame["premises"]["voltageLimits"]
+    e = ayr.sim_config.electric
+    assert (lim["min"], lim["max"]) == (e.voltage_min_pu * BASE_V, e.voltage_max_pu * BASE_V) == (114.0, 126.0)
+    assert lim["low"] == sum(v < lim["min"] for v in volts) and lim["high"] == sum(v > lim["max"] for v in volts)
 
 
 def test_backfeed_is_declined_when_the_receiving_feeder_would_overload(ayr):
@@ -103,12 +108,12 @@ def test_backfeed_is_declined_when_the_receiving_feeder_would_overload(ayr):
         k = net.edge_index[q["edgeId"]]
         if edges.loop[k]:
             continue
-        tl = Run(ayr, [break_pole(q, 8 * 3600)]).timeline()
+        tl = Run(ayr, [break_pole(q, 8 * 3600)], settings={"randomIncidents": False}).timeline()
         if tl["incidents"] and tl["incidents"][0].get("tie"):
             break
     inc = tl["incidents"][0]
     assert inc["tie"]["maxLoading"] <= 1.3 and inc["tie"]["minVoltage"] >= 110
-    strict = Run(ayr, [break_pole(q, 8 * 3600)], settings={"tieMaxLoading": 0.01}).timeline()
+    strict = Run(ayr, [break_pole(q, 8 * 3600)], settings={"tieMaxLoading": 0.01, "randomIncidents": False}).timeline()
     inc2 = strict["incidents"][0]
     assert "tie" not in inc2 and inc2["tiesDeclined"][0]["maxLoading"] > 0.01
     assert any(e["eventType"] == "backfeed.declined" for e in strict["events"])

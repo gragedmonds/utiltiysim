@@ -16,11 +16,14 @@ generated from `GET /api/config/schema`, which carries these UI hints on every f
 | `x-effects` | What changes downstream when this value changes (show as a tooltip / "affects" chips) |
 | `x-group`, `x-order` | Group cards and their order on the page |
 | `x-applies` (on a group) | `town`: part of the town id, so changing it generates a new town (new `townId`, revisions and ids); `run`: applies to a simulation run of the same town (no regeneration) |
+| `x-run-setting` | This town value is the default of an operations run setting with that key (`GET /api/sim/settings/schema?town=`): change it per run there without generating a new town |
+| `x-status`, `x-status-reason` | `not-modelled`: the engine does not use the field yet (show it disabled with the reason); `deprecated`: another setting replaces it, named in `x-deprecated` |
 
 Presets (`GET /api/config/presets`) are YAML overrides deep-merged on the defaults. The town id is a hash of the
-generation-relevant config plus the generator version, so every combination is reproducible. Only `scenario` is
-run-scoped today; weather, incidents, operations, process and anomalies become run-scoped when the M2/M3 clock
-uses them (their groups will then say `x-applies: run`).
+generation-relevant config plus the generator version, so every combination is reproducible. The run-scoped groups
+(`x-applies: run`: scenario, process, anomalies, reading, VEE, billing) are the meter-to-cash run's settings
+(`GET /api/m2c/settings`). Crews, the day shift, the gas response target, incident rates and storm days stay in the
+town groups but are only defaults: the operations run settings (`x-run-setting`) override them per run.
 
 ## Knock-on chains worth demonstrating
 
@@ -32,6 +35,8 @@ uses them (their groups will then say `x-applies: run`).
 | `electric.overhead_before_year` ↑ | More overhead districts → poles, pole-mount transformers, lightning exposure (M3 outages) |
 | `gas.scheme` = `mp` | No low-pressure core, no district regulators, ¾" services with regulators everywhere |
 | `water.fire_flow_residential_lps` ↑ | Larger distribution mains everywhere (fire flow governs sizing) |
+| `water.cast_iron_before_year` ↑ | More unlined cast-iron mains along the older streets: more head loss (`hw_c_old`) and twice the background main-break rate |
+| `incidents.*` / `weather.storm_days_per_year` ↑ (or the run's random-incident settings) | More background incidents on operations days: crews busier, more interruptions, more outage-explained estimates in meter-to-cash |
 | `town.terrain_relief_m` ↑ | Second pressure zone, second elevated tank, PRV/booster equipment at zone boundaries |
 | `ami.ami_route_share` ↓ | More AMR van and manual walker routes; more estimated reads (M3) |
 | `customers_billing.mru_target_meters` ↓ | More, smaller meter reading routes |
@@ -61,6 +66,12 @@ def main() -> None:
             desc = p.get("description", "").replace("|", "/")
             if p.get("x-effects"):
                 desc += f" *Affects: {', '.join(p['x-effects'])}.*"
+            if p.get("x-run-setting"):
+                desc += f" *Default of the operations run setting `{p['x-run-setting']}`.*"
+            if p.get("x-status") == "not-modelled":
+                desc += f" **Not modelled yet:** {p['x-status-reason']}"
+            elif p.get("x-status") == "deprecated":
+                desc += f" **Deprecated** (use `{p['x-deprecated']}`): {p['x-status-reason']}"
             if p.get("x-advanced"):
                 desc = "(advanced) " + desc
             lines.append(f"| `{f}` | `{default}` | {rng} | {p.get('x-unit', '')} | {desc} |")

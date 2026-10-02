@@ -26,11 +26,14 @@ from utilsim.m2c.run import (
     CASE_WORK,
     DECISIONS,
     M2C_GROUPS,
+    MAX_SEED,
     ORDER_ACTIONS,
     YEAR_DAYS,
     M2CRun,
     parse_day,
+    run_seed,
     settings_schema,
+    town_seed,
 )
 
 router = APIRouter()
@@ -69,7 +72,9 @@ class Action(BaseModel):
 class Outage(BaseModel):
     id: str | None = None
     day: str = Field(..., description="Local date the interruption began (YYYY-MM-DD), in 2026.")
-    utility: Literal["electric", "water", "gas"]
+    utility: Literal["electric", "water", "gas", "ami"] = Field(
+        ..., description="The service lost, or \"ami\" for an AMI collector outage (service goes on; the premises' AMI "
+                         "meters cannot report)")
     start: float = Field(..., ge=0, lt=86400, description="Seconds since local midnight of ``day``.")
     end: float = Field(..., gt=0, description="Seconds since local midnight of ``day`` (may pass midnight).")
     premiseIds: list[str] = Field(..., min_length=1, max_length=20000)
@@ -85,6 +90,10 @@ class RunRequest(BaseModel):
         description="Service interruptions from the operations simulator (a timeline's ``interruptions``): "
                     "consumption stops, AMI meters without power miss their reads, and VEE sees the outage.")
     asOf: str | None = Field(None, description="View date (YYYY-MM-DD); default: the town's scenario date.")
+    seed: str | None = Field(None, max_length=MAX_SEED,
+                             description="Run seed: re-rolls the run's random draws (missed reads, anomalies, analyst "
+                                         "work, bill checks) on the same town. Blank or null: the town's seed (GET "
+                                         "/api/m2c/settings?town= shows it).")
 
 
 class PremiseRequest(RunRequest):
@@ -155,13 +164,17 @@ def run_for(req: RunRequest, *, strict: bool = True) -> M2CRun:
     town = _town(req.town)
     actions = [a.model_dump(exclude_none=True) for a in req.actions]
     outages = [o.model_dump(exclude_none=True) for o in req.outages]
-    key = orjson.dumps([town.id, req.settings, actions, outages, strict], option=orjson.OPT_SORT_KEYS)
+    try:
+        seed = run_seed(town.cfg, req.seed)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    key = orjson.dumps([town.id, req.settings, actions, outages, strict, seed], option=orjson.OPT_SORT_KEYS)
     hit = _RUNS.get(key)
     if hit is not None:
         _RUNS.move_to_end(key)
         return hit
     try:
-        run = M2CRun(town, req.settings, actions, outages, strict=strict)
+        run = M2CRun(town, req.settings, actions, outages, strict=strict, seed=seed)
     except ValidationError as exc:
         raise HTTPException(422, orjson.loads(exc.json(include_url=False))) from exc
     except ValueError as exc:
@@ -182,10 +195,16 @@ def _view(fn, *args, **kw):
 
 
 @router.get("/api/m2c/settings")
-def get_settings():
-    """Run settings for meter-to-cash: JSON Schema (groups, defaults, bounds, units, effects), defaults, vocabulary."""
-    defaults = SimConfig().model_dump(mode="json")
+def get_settings(town: str | None = None):
+    """Run settings for meter-to-cash: JSON Schema (groups, defaults, bounds, units, effects), defaults, vocabulary,
+    and the run ``seed`` (blank = the town's seed). ``?town=`` takes the defaults and the seed from that town."""
+    cfg = _town(town).cfg if town else SimConfig()
+    defaults = cfg.model_dump(mode="json")
     return J({"schema": settings_schema(), "defaults": {g: defaults[g] for g in M2C_GROUPS},
+              "seed": {"type": ["string", "null"], "maxLength": MAX_SEED, "default": town_seed(cfg),
+                       "title": "Run seed", "description": "Re-rolls the run's random draws (missed reads, anomalies, "
+                       "analyst work, bill checks) on the same town; send it as the request's top-level seed. Blank "
+                       "or null runs on the town's seed (the default shown); the same seed always gives the same run."},
               "queues": cat.QUEUES, "exceptions": {k: {"label": cat.EVENTS[k][0], "icon": cat.EVENTS[k][1]}
                                                     for k in cat.EXCEPTIONS},
               "actions": list(DECISIONS), "actionTypes": list(ACTION_TYPES), "categories": cat.CATEGORIES})
@@ -311,7 +330,8 @@ def m2c_day(town: str, day: str, m2c: dict) -> tuple[list[dict], dict[str, dict]
     try:
         d = parse_day(day, -1)
         req = RunRequest(town=town, settings=m2c.get("settings"), actions=m2c.get("actions") or [],
-                         outages=[o for o in m2c.get("outages") or [] if parse_day(o.get("day"), YEAR_DAYS) < d])
+                         outages=[o for o in m2c.get("outages") or [] if parse_day(o.get("day"), YEAR_DAYS) < d],
+                         seed=m2c.get("seed"))
     except ValidationError as exc:
         raise HTTPException(422, orjson.loads(exc.json(include_url=False))) from exc
     except ValueError as exc:

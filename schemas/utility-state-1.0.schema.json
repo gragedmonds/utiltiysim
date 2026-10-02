@@ -37,6 +37,7 @@
         "water": {"$ref": "#/$defs/nullableNumbers"},
         "gas": {"$ref": "#/$defs/nullableNumbers"},
         "voltage": {"$ref": "#/$defs/nullableNumbers", "description": "Service voltage per premise on a 120 V base (ANSI C84.1 Range A is 114-126 V); null when unsupplied."},
+        "voltageLimits": {"type": "object", "description": "The town's service voltage limits on a 120 V base (electric.voltage_min_pu and voltage_max_pu x 120 V) and how many premises fall below and above them; present with voltage.", "required": ["min", "max"], "properties": {"min": {"type": "number"}, "max": {"type": "number"}, "low": {"type": "integer", "minimum": 0}, "high": {"type": "integer", "minimum": 0}}},
         "pressure": {"type": "object", "description": "Service pressure per premise (kPa gauge) from the hydraulics, loops included; null when unsupplied or not served.", "properties": {"water": {"$ref": "#/$defs/nullableNumbers"}, "gas": {"$ref": "#/$defs/nullableNumbers"}}}
       }
     },

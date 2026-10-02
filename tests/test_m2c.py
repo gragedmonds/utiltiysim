@@ -165,6 +165,25 @@ def test_views_are_valid_bounded_and_deterministic(ayr, ayr_town):
     assert views.summary(ayr, "2026-03-31")["kpis"]["reads"] < s["kpis"]["reads"]
 
 
+def test_a_run_seed_rerolls_the_run_on_the_same_town(ayr, ayr_town):
+    town_seed = ayr_town.cfg.seeds.for_("anomalies")
+    # No seed: exactly the town-derived draws as before the seed existed; naming the town seed is the same run.
+    assert ayr.run_seed is None and ayr.seed == f"{town_seed}:m2c"
+    same = M2CRun(ayr_town, seed=town_seed)
+    assert same.run_seed is None and same.simulation_id == ayr.simulation_id
+    assert views.summary(same, "2026-12-31") == views.summary(ayr, "2026-12-31")
+    a, b, c = M2CRun(ayr_town, seed="RUN-1"), M2CRun(ayr_town, seed="RUN-1"), M2CRun(ayr_town, seed="RUN-2")
+    assert views.summary(a, "2026-12-31") == views.summary(b, "2026-12-31")  # same seed, same run
+    assert a.simulation_id != ayr.simulation_id != c.simulation_id != a.simulation_id
+    assert views.summary(a, "2026-12-31")["seed"] == "RUN-1"
+    for x, y in ((a, c), (a, ayr)):  # another seed: other missed reads and other anomalies
+        assert not np.array_equal(np.isnan(x.obs), np.isnan(y.obs))
+        assert not np.array_equal(x.fault_type, y.fault_type) or not np.array_equal(x.fault_t, y.fault_t)
+    assert np.array_equal(a.read_t, ayr.read_t)  # the town (routes, read days) is unchanged
+    with pytest.raises(ValueError):
+        M2CRun(ayr_town, seed="x" * 65)
+
+
 def test_hosted_m2c_api():
     from fastapi.testclient import TestClient
 
@@ -174,6 +193,15 @@ def test_hosted_m2c_api():
     st = client.get("/api/m2c/settings").json()
     assert set(st["schema"]["properties"]) == {"process", "anomalies", "reading", "vee", "billing"}
     assert st["defaults"]["vee"]["accept_confidence"] == 0.75
+    seed = client.get("/api/m2c/settings", params={"town": "ayr"}).json()["seed"]
+    assert seed["default"] and seed["maxLength"] == 64 and "string" in seed["type"]
+    s1 = client.post("/api/m2c/summary", json={"town": "ayr", "seed": "RUN-1"}).json()
+    assert s1["seed"] == "RUN-1" and client.post("/api/m2c/summary", json={"town": "ayr", "seed": "RUN-1"}).json() == s1
+    plain = client.post("/api/m2c/summary", json={"town": "ayr"}).json()
+    assert plain["seed"] is None and plain == client.post(
+        "/api/m2c/summary", json={"town": "ayr", "seed": seed["default"]}).json()
+    assert plain["kpis"] != s1["kpis"]
+    assert client.post("/api/m2c/summary", json={"town": "ayr", "seed": "x" * 65}).status_code == 422
     body = {"town": "ayr", "asOf": "2026-08-31", "settings": {"process": {"analysts": 1}}}
     s = client.post("/api/m2c/summary", json=body)
     assert s.status_code == 200 and s.json()["schemaVersion"] == "m2c-summary/1.0"

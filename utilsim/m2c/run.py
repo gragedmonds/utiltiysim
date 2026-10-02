@@ -1,7 +1,8 @@
 """A meter-to-cash run: a year of periodic reads → VEE → exception work queues, replayed deterministically.
 
 The run is stateless. A request carries ``settings`` (overrides for the run-scoped groups ``process``,
-``anomalies``, ``reading`` and ``vee``) and ``actions``, the analyst decisions made in the viewer. Actions are
+``anomalies``, ``reading``, ``vee`` and ``billing``), an optional run ``seed`` (re-rolls every draw on the same town;
+none = the town's seed) and ``actions``, the analyst decisions made in the viewer. Actions are
 append-only and dated; an action never changes anything before its day. It may also carry ``outages``: service
 interruptions from the operations simulator (who lost which service, and when). Consumption stops during an outage,
 an AMI meter without power misses its read, and VEE knows about the outage (``vee.oms_events``).
@@ -52,8 +53,11 @@ ACTION_TYPES = (*DECISIONS, "field_read", *ORDER_ACTIONS, *CASE_WORK)
 ActionError = ords.ActionError
 STATUS = ("pending", "released", "estimated", "adjusted", "held", "missing")
 UTILITIES = ("electric", "water", "gas")
+OUTAGE_KINDS = (*UTILITIES, "ami")  # "ami": a collector outage (no service lost; AMI meters cannot report)
 OUTAGE_REASON = "SIM_POWER_OUTAGE"
+COLLECTOR_REASON = "SIM_COLLECTOR_OUTAGE"
 MAX_OUTAGE_DAYS = 7
+MAX_SEED = 64
 FAULTS = ("stuck_meter", "slow_meter", "tamper", "exchange_registration_failure")
 
 
@@ -86,6 +90,23 @@ def settings_schema() -> dict:
 
 def _hash(obj) -> str:
     return hashlib.blake2b(orjson.dumps(obj, option=orjson.OPT_SORT_KEYS), digest_size=6).hexdigest()
+
+
+def _merge_spans(spans: dict[int, list[tuple[float, float]]], n: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Per row, its overlapping spans merged: (row pointer, starts, ends) in CSR form."""
+    ptr, t0s, t1s = np.zeros(n + 1, dtype=np.int64), [], []
+    for r in range(n):
+        merged: list[list[float]] = []
+        for a, b in sorted(spans.get(r, [])):
+            if merged and a <= merged[-1][1]:
+                merged[-1][1] = max(merged[-1][1], b)
+            else:
+                merged.append([a, b])
+        for a, b in merged:
+            t0s.append(a)
+            t1s.append(b)
+        ptr[r + 1] = len(t0s)
+    return ptr, np.array(t0s), np.array(t1s)
 
 
 # ---- calendar ---------------------------------------------------------------------------------------------------
@@ -161,19 +182,35 @@ class Case:
 
 
 # ---- the run ----------------------------------------------------------------------------------------------------
+def town_seed(cfg: SimConfig) -> str:
+    """The seed a run uses when the request names none: the town's ``seeds.anomalies`` (else the master seed)."""
+    return cfg.seeds.for_("anomalies")
+
+
+def run_seed(cfg: SimConfig, seed: str | None) -> str | None:
+    """A request's run seed, or None for the town's own (blank, or the town seed itself)."""
+    s = (seed or "").strip()
+    if len(s) > MAX_SEED:
+        raise ValueError(f"seed: at most {MAX_SEED} characters")
+    return s if s and s != town_seed(cfg) else None
+
+
 class M2CRun:
     def __init__(self, town: M2CTown, settings: dict | None = None, actions: list[dict] | None = None,
-                 outages: list[dict] | None = None, *, strict: bool = True):
+                 outages: list[dict] | None = None, *, strict: bool = True, seed: str | None = None):
         self.town = town
         self.strict = strict  # refuse (raise) when the newest action does not apply; else skip it with a warning
         self.cfg = resolve_settings(town.cfg, settings)
-        self.settings_hash = _hash({g: self.cfg.model_dump(mode="json")[g] for g in M2C_GROUPS})
+        # A run seed re-rolls every draw of the run (reads, anomalies, work, bill checks); the town stays the same.
+        self.run_seed = run_seed(town.cfg, seed)
+        groups = {g: self.cfg.model_dump(mode="json")[g] for g in M2C_GROUPS}
+        self.settings_hash = _hash(groups if self.run_seed is None else {**groups, "seed": self.run_seed})
         self.warnings: list[str] = []
         self.actions = self._check_actions(actions or [])
         self.outages = self._check_outages(outages or [])
         inputs = _hash([self.actions, self.outages]) if self.outages else (_hash(self.actions) if self.actions else "0")
         self.simulation_id = f"m2c-{town.id}-{self.settings_hash}-{inputs}"
-        self.seed = f"{town.cfg.seeds.for_('households')}:m2c"
+        self.seed = f"{self.run_seed or town_seed(town.cfg)}:m2c"
         self._setup()
         self._setup_outages()
         self._simulate()
@@ -235,14 +272,15 @@ class M2CRun:
 
     def _check_outages(self, outages: list[dict]) -> list[dict]:
         """Interruptions from the operations simulator: ``{day, utility, start, end, premiseIds}``, where start and
-        end are seconds since local midnight of ``day`` (end may run past midnight, up to a week)."""
+        end are seconds since local midnight of ``day`` (end may run past midnight, up to a week). ``utility: "ami"``
+        is an AMI collector outage: the premises keep their service, but their AMI meters cannot report."""
         out, unknown = [], 0
         for k, o in enumerate(outages):
             day = parse_day(o.get("day"), -1)
             if not 0 <= day < YEAR_DAYS:
                 raise ValueError(f"outage {k}: day must be in 2026")
-            if o.get("utility") not in UTILITIES:
-                raise ValueError(f"outage {k}: utility must be one of {', '.join(UTILITIES)}")
+            if o.get("utility") not in OUTAGE_KINDS:
+                raise ValueError(f"outage {k}: utility must be one of {', '.join(OUTAGE_KINDS)}")
             start, end = o.get("start"), o.get("end")
             if not isinstance(start, (int, float)) or not 0 <= start < 86400:
                 raise ValueError(f"outage {k}: start is seconds since local midnight")
@@ -387,42 +425,36 @@ class M2CRun:
         self.n_work = 0  # cases you opened (Field Work, invoice holds); engine case ids do not count them
 
     def _setup_outages(self) -> None:
-        """Per register, the merged spans (start, end as day + fraction) during which it had no service."""
+        """Per register, the merged spans (start, end as day + fraction) during which it had no service, and those
+        during which its AMI collector was down (``utility: "ami"``: the meter cannot report; use goes on)."""
         tw = self.town
         R = tw.n_registers
         by_prem: dict[tuple[int, str], list[int]] = {}
         for r in range(R):
             by_prem.setdefault((int(tw.prem[r]), str(tw.commodity[r])), []).append(r)
-        spans: dict[int, list[tuple[float, float]]] = {}
+            if tw.tech[r] == "AMI":
+                by_prem.setdefault((int(tw.prem[r]), "ami"), []).append(r)
+        spans: dict[str, dict[int, list[tuple[float, float]]]] = {"supply": {}, "comms": {}}
         self.outage_log = []
         for o in self.outages:
             d = parse_day(o["day"], 0)
             t0, t1 = d + o["start"] / 86400.0, d + o["end"] / 86400.0
             prem = np.array([tw.premise_index[p] for p in o["premiseIds"]], dtype=np.int64)
             rows = [r for p in prem.tolist() for r in by_prem.get((p, o["utility"]), [])]
+            kind = spans["comms" if o["utility"] == "ami" else "supply"]
             for r in rows:
-                spans.setdefault(r, []).append((t0, t1))
+                kind.setdefault(r, []).append((t0, t1))
             self.outage_log.append({**o, "t0": t0, "t1": t1, "prem": prem, "rows": np.array(rows, dtype=np.int64)})
-        ptr, t0s, t1s = np.zeros(R + 1, dtype=np.int64), [], []
-        for r in range(R):
-            merged: list[list[float]] = []
-            for a, b in sorted(spans.get(r, [])):
-                if merged and a <= merged[-1][1]:
-                    merged[-1][1] = max(merged[-1][1], b)
-                else:
-                    merged.append([a, b])
-            for a, b in merged:
-                t0s.append(a)
-                t1s.append(b)
-            ptr[r + 1] = len(t0s)
-        self.o_ptr, self.o_t0, self.o_t1 = ptr, np.array(t0s), np.array(t1s)
+        self.o_ptr, self.o_t0, self.o_t1 = _merge_spans(spans["supply"], R)
+        self.c_ptr, self.c_t0, self.c_t1 = _merge_spans(spans["comms"], R)
         self.outage_h = np.zeros((R, 13), dtype=np.float32)  # outage hours inside each read's period
 
-    def _spans(self, rows: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-        """(position in ``rows``, span index) for every outage span of the given registers."""
-        if not len(self.o_t0):
+    def _spans(self, rows: np.ndarray, comms: bool = False) -> tuple[np.ndarray, np.ndarray]:
+        """(position in ``rows``, span index) for every outage span (collector outage span) of the registers."""
+        ptr, t0 = (self.c_ptr, self.c_t0) if comms else (self.o_ptr, self.o_t0)
+        if not len(t0):
             return np.zeros(0, dtype=np.int64), np.zeros(0, dtype=np.int64)
-        lo, hi = self.o_ptr[rows], self.o_ptr[rows + 1]
+        lo, hi = ptr[rows], ptr[rows + 1]
         k = np.flatnonzero(hi > lo)
         if not len(k):
             return k, k
@@ -445,14 +477,15 @@ class M2CRun:
         np.add.at(hours, pos, (tc - a) * 24.0)
         return loss, hours
 
-    def _dark(self, rows: np.ndarray, t: np.ndarray) -> np.ndarray:
-        """When the outage covering ``t`` began, per register (nan if it had service)."""
+    def _dark(self, rows: np.ndarray, t: np.ndarray, comms: bool = False) -> np.ndarray:
+        """When the outage (``comms``: collector outage) covering ``t`` began, per register (nan if none)."""
         out = np.full(len(rows), np.nan)
-        pos, span = self._spans(rows)
+        pos, span = self._spans(rows, comms)
         if len(pos):
+            t0, t1 = (self.c_t0, self.c_t1) if comms else (self.o_t0, self.o_t1)
             tt = np.broadcast_to(t, len(rows))[pos]
-            hit = (self.o_t0[span] <= tt) & (tt < self.o_t1[span])
-            out[pos[hit]] = self.o_t0[span[hit]]
+            hit = (t0[span] <= tt) & (tt < t1[span])
+            out[pos[hit]] = t0[span[hit]]
         return out
 
     # ---- physics of a register ----------------------------------------------------------------------------------
@@ -558,13 +591,17 @@ class M2CRun:
         # An AMI electric meter with no power cannot answer the head end (water and gas endpoints run on batteries).
         dark = self._dark(rows, t)
         dark = np.where((tech == "AMI") & (tw.commodity[rows] == "electric"), dark, np.nan)
+        # Nor can any AMI meter whose collector is down (an operations collector outage).
+        mute = np.where(tech == "AMI", self._dark(rows, t, comms=True), np.nan)
         first = np.unique(meters, return_index=True)[1]
         dark_m = ~np.isnan(dark[first])
-        miss_m = (u < p) | episode | self.no_doc[mm, m] | dark_m
+        mute_m = ~np.isnan(mute[first])
+        miss_m = (u < p) | episode | self.no_doc[mm, m] | dark_m | mute_m
         self.missed_last[mm] = miss_m & (mt == "MANUAL")
         miss_of = dict(zip(mm.tolist(), miss_m.tolist(), strict=True))
         nodoc_of = dict(zip(mm.tolist(), self.no_doc[mm, m].tolist(), strict=True))
         dark_of = dict(zip(mm.tolist(), dark[first].tolist(), strict=True))
+        mute_of = dict(zip(mm.tolist(), mute[first].tolist(), strict=True))
         missed = np.array([miss_of[x] for x in meters.tolist()], dtype=bool)
         # Physical and observed registers (exact read day and hour, as the generator's sample reads).
         normal = tw.true_advance(rows, tw.read_day[rows, m], tw.hour[rows])
@@ -629,6 +666,7 @@ class M2CRun:
         self.conf[rows, m] = np.where(missed, np.nan, res.confidence)
         self.disp[rows, m] = np.where(missed, -1, res.disposition)
         self.reason[rows, m] = np.where(missed, [("NO_READ" if nodoc_of[x] else OUTAGE_REASON if dark_of[x] == dark_of[x]
+                                                  else COLLECTOR_REASON if mute_of[x] == mute_of[x]
                                                   else cat.REASON[str(tw.meter_tech[x])]) for x in meters.tolist()], "")
         clean = ~missed & (res.disposition == 0) & (self.open_case[rows] < 0)
         acc = rows[clean]
@@ -656,10 +694,11 @@ class M2CRun:
                 kind = "CONSECUTIVE_ESTIMATES" if self.consec[r] + 1 > c.vee.max_consecutive_estimates else \
                     ("NO_READ" if self.reason[r, m] == "NO_READ" else
                      ("NO_ACCESS" if tw.tech[r] == "MANUAL" else "COMM_FAIL"))
-                gasp = dark_of[int(tw.meter_of[r])]
+                gasp, down = dark_of[int(tw.meter_of[r])], mute_of[int(tw.meter_of[r])]
+                pre = (gasp, "AMI_LAST_GASP", OUTAGE_REASON) if gasp == gasp else \
+                    (down, "AMI_COLLECTOR_OUTAGE", COLLECTOR_REASON) if down == down else None
                 self._raise(day, r, m, kind, disposition=-1, impact=float(expected[k] * self.price[r]),
-                            confidence=float("nan"), truth="clean", queue="ESTIMATION",
-                            precursor=None if gasp != gasp else (gasp, "AMI_LAST_GASP"))
+                            confidence=float("nan"), truth="clean", queue="ESTIMATION", precursor=pre)
             else:
                 self.status[r, m] = 4
                 d = int(res.disposition[k])
@@ -671,7 +710,8 @@ class M2CRun:
                  truth: str, queue: str, t: float, cause_payload: dict, precursor: tuple | None = None) -> Case:
         """Open a case in ``queue``: initiating event, EXCEPTION_QUEUED, pickup lag, and RPA when its type is covered.
 
-        ``precursor`` (time, event) is an upstream signal that explains the exception, e.g. an AMI last gasp."""
+        ``precursor`` (time, event, reason) is an upstream signal that explains the exception: an AMI last gasp or a
+        collector outage."""
         idx = len(self.cases)
         p = self.cfg.process
         case = Case(idx, f"CASE-{date_of(day).strftime('%y%m%d')}-{idx - self.n_work + 1:05d}", r, m, kind, t,
@@ -682,7 +722,7 @@ class M2CRun:
         pre = None
         if precursor is not None:
             pre = case.ev(precursor[0], precursor[1], {"meterId": self.town.meter_ids[self.town.meter_of[r]],
-                                                       "reason": OUTAGE_REASON}, None)
+                                                       "reason": precursor[2]}, None)
         first = case.ev(t - 0.02 if kind in cat.MISSING_TYPES else t, kind, cause_payload, pre)
         case.ev(t + 0.002, "EXCEPTION_QUEUED", {"queue": queue}, first)
         case.move(t + 0.002, queue, "queued")

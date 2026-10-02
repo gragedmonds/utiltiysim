@@ -5,9 +5,17 @@ engine for calendar 2026.
 
 ## Run model
 
-A run is stateless and deterministic: `(town, settings, actions, outages)` gives the same year every time.
+A run is stateless and deterministic: `(town, settings, actions, outages, seed)` gives the same year every time.
 - `settings` overrides the run-scoped config groups `process`, `anomalies`, `reading`, `vee` and `billing`. They never change
-  the town id. `GET /api/m2c/settings` returns their JSON Schema, with units, bounds, effects and advanced flags.
+  the town id. `GET /api/m2c/settings` returns their JSON Schema, with units, bounds, effects and advanced flags
+  (`?town=` takes the defaults from that town).
+- `seed` (optional, top level, at most 64 characters) re-rolls the run on the same town: every random draw of the run
+  (missed reads, anomalies and their onsets, analyst pickup and review, bill checks, payments) comes from
+  `"{seed}:m2c"` instead of the town's `"{seeds.anomalies or seeds.master}:m2c"`. Blank, `null` or the town's own seed is the town's
+  run, exactly as before the field existed (same `simulationId`). The routes, read days, meters and customers never
+  change. `GET /api/m2c/settings` returns `seed: {type, maxLength: 64, default: <town seed>, title, description}`,
+  so a form can show "blank = town seed"; summaries echo `seed` (`null` for the town's run). Operations requests
+  pass it inside `m2c` (`m2c: {settings, actions, outages, seed}`), and every run cache key includes it.
 - `actions` are analyst decisions from the viewer: `{id, day, type, caseId, value?, note?}`.
   - `type` is one of `accept`, `override` (with a register value), `estimate`, `field_order` or `escalate`.
   - The Utility Studio adds field service orders (`order_save`, `order_release`, `order_dispatch`,
@@ -20,7 +28,8 @@ A run is stateless and deterministic: `(town, settings, actions, outages)` gives
 - `field_read` (`{day, premiseId, at}`, no `caseId`) is a field visit made on the map. The tech reads the
   premise's meters, and each of its open read cases settles on the spot: a faulty meter is exchanged, otherwise a
   special read gives the real register value.
-- `outages` are service interruptions from the operations simulator: `{day, utility, start, end, premiseIds}`, with
+- `outages` are service interruptions from the operations simulator: `{day, utility, start, end, premiseIds}`
+  (`utility` `electric`, `water`, `gas`, or `ami` for an AMI collector outage), with
   start and end in seconds since local midnight of `day` (end may pass midnight, up to a week). An operations
   timeline reports them as `interruptions`. See "Outages from the map" below.
 - Views read the finished year *as of* a date (`asOf`, default: the town's scenario date).
@@ -260,7 +269,7 @@ opening each case.
 
 | Endpoint | Returns |
 |---|---|
-| `GET /api/m2c/settings` | Schema, defaults, queues, exception vocabulary, action types, clarification categories |
+| `GET /api/m2c/settings?town=` | Schema, defaults (the town's with `?town=`), the run `seed` (default: the town seed), queues, exception vocabulary, action types, clarification categories |
 | `GET /api/m2c/vocabulary?town=` | `m2c-vocabulary/1.0`: the field service order form as data (fields with label, tab, required, kind, bounds and choices; the town's planning plant; component units; stages and system status), action types, queues and categories |
 | `POST /api/m2c/summary` | `m2c-summary/1.0`: KPIs, cost (labour, system, CX, reads), carry, VEE precision/recall against truth, `billing`, `reliability`, `weather`, queues with aging and daily opened/closed/backlog, exception mix, RPA rules, one status per premise |
 | `POST /api/process/queue` | Paged worklist: `queue` (incl. `BILLING`), `category`, `assignee`, `status`, `sort` (`age`, `impact`, `confidence`, `created`), `page`, `pageSize` ≤ 200, `type`, `commodity`, `search` (case, address, premise, account, meter or order id) |
@@ -313,7 +322,7 @@ map to that day and follows the van, and a field visit on the map is reported ba
 
 ### Outages from the map
 
-Break a pole or a main on the map and the outage reaches meter-to-cash. The timeline's `interruptions` list who lost
+Break a pole or a main on the map, or let a background incident happen, and the outage reaches meter-to-cash. The timeline's `interruptions` list who lost
 which service and when; the viewer keeps them per operations day and sends them as the run's `outages`. In the run:
 - **Use stops:** each register loses its normal consumption for the hours without service (an electric outage also
   stops PV export), so the following reads, bills and true-ups are lower.
@@ -323,6 +332,12 @@ which service and when; the viewer keeps them per operations day and sends them 
 - **VEE knows:** with `vee.oms_events` (default on), the hours without service lower the expected use, and the
   context test's rationale names them. Turn it off to see what an outage does to low-usage flags when VEE is not
   told.
+- **Silent collectors:** an outage with `utility: "ami"` is an AMI collector outage from operations (a background
+  incident; see CONTRACT.md "Background incidents"). Service goes on and nothing stops flowing, but every AMI meter
+  (any commodity) at its premises misses a read that falls inside it (`reasonCode` `SIM_COLLECTOR_OUTAGE`); the
+  `COMM_FAIL` case is caused by an `AMI_COLLECTOR_OUTAGE` event. A collector that fails in the evening is repaired in
+  the next day shift, so the night's 02:00 reads are the ones it costs. It is not in `reliability`; a premise view
+  lists it among its `outages` with `utility: "ami"`, `collectorOutage: true` and no use lost.
 - **Reliability:** the summary's `reliability` reports interruptions, customers interrupted, customer-minutes, SAIDI
   minutes per customer served, use lost and AMI last gasps, per utility. A premise view lists its `outages`.
 

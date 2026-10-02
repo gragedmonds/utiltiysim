@@ -400,22 +400,7 @@ def _edge_placement(ctx: NetContext, g) -> list[str]:
     ``overhead_before_year`` are overhead, arterials before 2000. A street is as old as the older side it serves
     (main roads often bound districts of different eras; the line along them predates the newer side)."""
     ec = ctx.cfg.electric
-    mids, normals = [], []
-    for pts in g.geometry:
-        pts = np.asarray(pts, dtype=np.float64)
-        seg = np.hypot(*np.diff(pts, axis=0).T)
-        cum = np.concatenate([[0.0], np.cumsum(seg)])
-        s = 0.5 * cum[-1]
-        m = np.array([np.interp(s, cum, pts[:, 0]), np.interp(s, cum, pts[:, 1])])
-        a = np.array([np.interp(max(0.0, s - 2), cum, pts[:, 0]), np.interp(max(0.0, s - 2), cum, pts[:, 1])])
-        b = np.array([np.interp(min(cum[-1], s + 2), cum, pts[:, 0]), np.interp(min(cum[-1], s + 2), cum, pts[:, 1])])
-        d = b - a
-        nrm = np.array([-d[1], d[0]]) / max(float(np.hypot(*d)), 1e-9)
-        mids.append(m)
-        normals.append(nrm)
-    mids, normals = np.array(mids).reshape(-1, 2), np.array(normals).reshape(-1, 2)
-    reach = (ROW_WIDTH[np.asarray(g.edge_class)] / 2 + 15.0)[:, None]
-    yr = np.min([ctx.year_at(mids), ctx.year_at(mids + normals * reach), ctx.year_at(mids - normals * reach)], axis=0)
+    yr = ctx.street_years
     cls = np.asarray(g.edge_class)
     oh = (yr < ec.overhead_before_year) | ((cls == ARTERIAL) & (yr < 2000))
     return ["overhead" if x else "underground" for x in oh]

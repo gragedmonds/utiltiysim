@@ -112,7 +112,7 @@ def summary(run: M2CRun, as_of: str | None = None) -> dict:
     return {
         "schemaVersion": SUMMARY_VERSION, "simulationId": run.simulation_id, "townId": tw.id,
         "asOf": date_of(day).isoformat(), "period": {"start": "2026-01-01", "end": "2026-12-31"},
-        "settingsHash": run.settings_hash, "warnings": run.warnings,
+        "settingsHash": run.settings_hash, "seed": run.run_seed, "warnings": run.warnings,
         "kpis": {
             "registers": tw.n_registers, "reads": int(read.sum()), "actual": int(got.sum()),
             "missing": int((read & np.isnan(run.obs[:, months])).sum()), "autoAccepted": int((got & (disp == 0)).sum()),
@@ -173,6 +173,11 @@ def premise_outages(run: M2CRun, p: int, T: float) -> list[dict]:
     out = []
     for o in run.outage_log:
         if o["t0"] > T or not (o["prem"] == p).any():
+            continue
+        if o["utility"] == "ami":  # a collector outage: service went on, only the AMI meters fell silent
+            out.append({"id": o["id"], "utility": "ami", "start": run.iso(o["t0"]), "end": run.iso(o["t1"]),
+                        "ongoing": o["t1"] > T, "minutes": round((min(o["t1"], T) - o["t0"]) * 1440.0, 1), "lost": 0.0,
+                        "unit": "", "lastGasp": False, "collectorOutage": True})
             continue
         rows = o["rows"][(tw.prem[o["rows"]] == p) & (tw.direction[o["rows"]] == "import")]
         end = min(o["t1"], T)
