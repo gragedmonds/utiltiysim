@@ -876,6 +876,32 @@
           "x-advanced": true,
           "x-unit": "V"
         },
+        "section_max_share": {
+          "default": 0.15,
+          "description": "Sectionalising switches cut each feeder's three-phase backbone into sections of at most this share of the feeder's customers (at least section_min_customers), so a crew isolates a fault within a bounded section and ties back-feed the healthy sections beyond it.",
+          "maximum": 1.0,
+          "minimum": 0.05,
+          "title": "Section Max Share",
+          "type": "number",
+          "x-effects": [
+            "sectionalising switches",
+            "tie switches",
+            "outage size after isolation"
+          ]
+        },
+        "section_min_customers": {
+          "default": 100,
+          "description": "Smallest section limit: a feeder is not cut into sections smaller than this many customers.",
+          "maximum": 5000,
+          "minimum": 10,
+          "title": "Section Min Customers",
+          "type": "integer",
+          "x-advanced": true,
+          "x-effects": [
+            "sectionalising switches",
+            "outage size after isolation"
+          ]
+        },
         "severe_turn_deg": {
           "default": 60.0,
           "description": "A trunk turn at least this sharp counts as severe in the routing metrics.",
@@ -899,21 +925,22 @@
           "x-unit": "MVA"
         },
         "tie_max_length_m": {
-          "default": 800.0,
-          "description": "Longest new line built to tie a feeder that touches no other feeder.",
+          "default": 1200.0,
+          "description": "Longest new line built for a tie: to a feeder that touches no other feeder, or from a switched section to another feeder's three-phase line (or round to its own feeder's). Along a street a line already uses, a metre counts 1.25 (single-phase) or 2 (three-phase).",
           "maximum": 5000,
           "minimum": 0,
           "title": "Tie Max Length M",
           "type": "number",
           "x-advanced": true,
           "x-effects": [
-            "tie switches"
+            "tie switches",
+            "back-feed options"
           ],
           "x-unit": "m"
         },
         "ties_per_feeder_pair": {
           "default": 1,
-          "description": "Normally-open tie switches between each pair of neighbouring feeders.",
+          "description": "Normally-open tie switches between each pair of neighbouring feeders (0: no ties at all, section ties included).",
           "maximum": 4,
           "minimum": 0,
           "title": "Ties Per Feeder Pair",
@@ -2965,5 +2992,5 @@
   },
   "title": "SimConfig",
   "type": "object",
-  "x-generator-version": "0.8.0"
+  "x-generator-version": "0.9.0"
 }

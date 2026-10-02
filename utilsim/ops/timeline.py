@@ -22,10 +22,16 @@ day and ``type``:
   are dispatched automatically after detection unless ``settings.autoDispatch`` is false).
 
 Electric: the nearest upstream fuse (lateral) or recloser (feeder head) trips; AMI last-gasp messages detect the
-outage; the crew isolates the faulted span and re-closes the device (customers upstream of the fault come back),
-repairs, and restores the rest. Water/gas: the break leaks until the crew closes the valves around the damaged
-section (customers inside it lose supply), repairs (and flushes water mains), and restores. A field visit takes an
-interim meter read at the premise. Crews start from the depot and drive the road graph at the configured speeds.
+outage. The crew isolates the faulted section between the nearest switches: the nearest switching device upstream
+(a sectionalising switch, a fuse or the tripped recloser itself) and the nearest sectionalising switches downstream.
+It re-closes the tripped device when the section has its own upstream switch (customers upstream come back), closes
+normally-open ties one at a time to back-feed the healthy sections beyond (opening one more switch to split the load
+when a tie cannot carry it all), repairs, and restores the rest. A failed transformer, a service, a supply line or a
+tie is cut clear on its own.
+
+Water/gas: the break leaks until the crew closes the valves around the damaged section (customers inside it lose
+supply), repairs (and flushes water mains), and restores. A field visit takes an interim meter read at the premise.
+Crews start from the depot and drive the road graph at the configured speeds.
 """
 
 from __future__ import annotations
@@ -185,6 +191,7 @@ class Run:
         self.intervals: list[_Interval] = []
         self.warnings: list[str] = []
         self._routes: dict[tuple, Route] = {}
+        self._volts: dict[tuple, object] = {}  # back-feed checks: power flows by (time, switching)
         self.read_outcomes = read_outcomes  # premise id -> the meter-to-cash read on this day (when linked)
         self.m2c_cycle = m2c_cycle  # the linked run's day: AMI collection, VEE batch, bills, invoices
         # Scheduled work first (fixed for the day, own crews), so appending a command never changes it. Background
@@ -502,13 +509,7 @@ class Run:
         net = self.ops.nets[u]
         f = inc["_f"]
         if u == "electric":
-            restored_now = self._unsupplied(u, {f})
-            inc["unsupplied"]["afterIsolation"] = len(restored_now)
-            self._event(isolated, "fault.isolated", "incident", inc["id"], inc, job["id"],
-                        {"openedEdgeId": net.edge_ids[f], "reclosedDeviceEdgeId": inc["device"]["edgeId"],
-                         "stillUnsupplied": len(restored_now)})
-            if restored_now and s["tieBackfeed"]:
-                self._backfeed(inc, f, restored_now, isolated, repaired, job["id"])
+            self._isolate(inc, isolated, repaired, job["id"])
         else:
             valves = [f] if net.kind[f] == "service" else self._segment(u, f)  # a service: its own shut-off
             inc["_valves"] = valves
@@ -530,44 +531,200 @@ class Run:
         if u == "gas":
             self._relight(inc, inc["_relight"], restored, job["id"])
 
-    def _backfeed(self, inc: dict, f: int, still: list[str], isolated: float, repaired: float, cause: str) -> None:
-        """Close the normally-open tie that restores the most customers cut off downstream of the isolated fault;
-        open it again when the repair is done."""
+    # ---- electric switching ----------------------------------------------------------------------------------
+    @staticmethod
+    def _kids(net) -> dict[int, list[int]]:
+        """Child edges per node in the construction forest (cached on the network)."""
+        if not hasattr(net, "_kids"):
+            kids: dict[int, list[int]] = {}
+            for k in range(len(net.a)):
+                if net.parent_edge[int(net.b[k])] == k:
+                    kids.setdefault(int(net.a[k]), []).append(k)
+            net._kids = kids
+        return net._kids
+
+    def _bounds(self, inc: dict) -> tuple[int | None, list[int]]:
+        """The switches that isolate the faulted section: the nearest switching device upstream of the fault (a
+        sectionalising switch, a fuse or the tripped recloser) and the nearest sectionalising switches downstream.
+        (None, []) when the fault is cut clear on its own: a failed transformer, a service, a supply line or a span
+        outside the feeder trees (a tie)."""
+        net, f = self.ops.nets["electric"], inc["_f"]
+        if inc["kind"] == "transformer_failure" or net.kind[f] not in ("trunk", "distribution") or \
+                net.parent_edge[int(net.b[f])] != f:
+            return None, []
+        devices = net.switch_edges | net.recloser_edges | net.fuse_edges
+        up = f
+        while up >= 0 and up not in devices:
+            up = int(net.parent_edge[int(net.a[up])])
+        if up < 0:
+            up = inc["_dev"]
+        kids, down, stack = self._kids(net), [], [int(net.b[up])]  # the whole section below the upstream switch
+        while stack:
+            for k in kids.get(stack.pop(), ()):
+                if k in net.switch_edges:
+                    down.append(k)
+                else:
+                    stack.append(int(net.b[k]))
+        return up, sorted(down)
+
+    def _switch(self, k: int) -> dict:
+        net = self.ops.nets["electric"]
+        kind = "sectionalising_switch" if k in net.switch_edges else "fuse" if k in net.fuse_edges else \
+            "recloser" if k in net.recloser_edges else "tie_switch" if k in net.tie_edges else "conductor"
+        return {"id": net.device_ids.get(k), "edgeId": net.edge_ids[k], "kind": kind}
+
+    def _isolate(self, inc: dict, isolated: float, repaired: float, cause: str) -> None:
+        """Open the switches around the faulted section, re-close the tripped device if the section has its own
+        upstream switch, then back-feed what lies beyond through ties."""
+        net, f, dev = self.ops.nets["electric"], inc["_f"], inc["_dev"]
+        up, down = self._bounds(inc)
+        keep_dev = up == dev  # the tripped device itself bounds the section: it stays open until the repair
+        opened = sorted({up, *down} - {dev}) if up is not None else []
+        dis = {f, *opened} | ({dev} if keep_dev else set())
+        still = self._unsupplied("electric", dis)
+        beyond = set(self._unsupplied("electric", set(down))) if down else set()
+        inc["_opened"], inc["_dev_open"] = opened, keep_dev
+        inc["unsupplied"]["afterIsolation"] = len(still)
+        inc["isolation"] = {
+            "method": "span" if up is None else "switches",
+            "upstream": self._switch(up) if up is not None else None,
+            "downstream": [self._switch(k) for k in down],
+            "deviceReclosed": not keep_dev, "sectionUnsupplied": sum(1 for p in still if p not in beyond)}
+        self._event(isolated, "fault.isolated", "incident", inc["id"], inc, cause,
+                    {"openedEdgeId": net.edge_ids[f], "switchIds": [self._switch(k)["id"] for k in inc["_opened"]],
+                     "openedEdgeIds": [net.edge_ids[k] for k in inc["_opened"]],
+                     "reclosedDeviceEdgeId": None if keep_dev else inc["device"]["edgeId"],
+                     "stillUnsupplied": len(still), "sectionUnsupplied": inc["isolation"]["sectionUnsupplied"]})
+        for k in inc["_opened"]:
+            sw = self._switch(k)
+            self._event(isolated, "switch.opened", "switch", sw["id"] or sw["edgeId"], inc, cause,
+                        {"incidentId": inc["id"], **sw})
+            self._event(repaired, "switch.closed", "switch", sw["id"] or sw["edgeId"], inc, cause,
+                        {"incidentId": inc["id"], **sw})
+        if still and self.settings["tieBackfeed"]:
+            # The faulted section must stay dead: the nodes just inside its upstream switch and below the fault.
+            probes = [int(net.b[up]), int(net.b[f])] if up is not None else []
+            self._backfeed(inc, dis, still, probes, isolated, repaired, cause)
+
+    def _backfeed(self, inc: dict, dis_edges: set[int], still: list[str], probes: list[int], isolated: float,
+                  repaired: float, cause: str) -> None:
+        """Close normally-open ties one at a time (every ``tieSwitchMinutes``), each the one that restores the most
+        customers still cut off without re-energising the faulted section and within the receiving feeder's
+        emergency rating and the voltage floor. A tie that cannot carry all it would pick up may still carry part:
+        the crew first opens a sectionalising switch in the island, so the tie picks up only its own side. Ties open
+        and switches close again when the repair is done."""
         net = self.ops.nets["electric"]
         dis = np.zeros(len(net.a), dtype=bool)
-        dis[f] = True
-        at = isolated + 60.0 * float(self.settings["tieSwitchMinutes"])
-        if at >= repaired:
-            return
-        options = []
-        for k in sorted(net.tie_edges):
-            cl = np.zeros(len(net.a), dtype=bool)
-            cl[k] = True
-            out = self.ops.unsupplied("electric", dis, cl)
-            if len(out) < len(still):
-                options.append((len(out), k, cl, out))
-        best, declined = None, []
-        for _, k, cl, out in sorted(options, key=lambda o: (o[0], o[1])):  # most restored first
-            loading, low = self._backfeed_check(dis, cl, at, repaired)
-            if loading <= float(self.settings["tieMaxLoading"]) and low >= float(self.settings["tieMinVoltage"]):
-                best = (k, out, loading, low)
+        dis[list(dis_edges)] = True
+        cl = np.zeros(len(net.a), dtype=bool)
+        step = 60.0 * float(self.settings["tieSwitchMinutes"])
+        at, out, ties, declined = isolated, list(still), [], {}
+        while out:
+            at += step
+            if at >= repaired:
                 break
-            declined.append({"tieEdgeId": net.edge_ids[k], "maxLoading": round(loading, 3), "minVoltage": round(low, 1)})
+            best = self._next_tie(dis, cl, out, probes, at, repaired, declined)
+            if best is None:
+                break
+            k, split, after, loading, low = best
+            cl[k] = True
+            tie = {"edgeId": net.edge_ids[k], "id": net.device_ids.get(k), "closedAt": at, "openedAt": repaired,
+                   "restored": len(out) - len(after), "maxLoading": round(loading, 3), "minVoltage": round(low, 1)}
+            if split is not None:
+                dis[split] = True
+                sw = self._switch(split)
+                tie["openedSwitch"] = sw
+                self.intervals.append(_Interval(at, repaired, "electric", [split], incident=inc["id"] + ":tie"))
+                self._event(at, "switch.opened", "switch", sw["id"] or sw["edgeId"], inc, cause,
+                            {"incidentId": inc["id"], **sw, "reason": "split the load for a tie"})
+                self._event(repaired, "switch.closed", "switch", sw["id"] or sw["edgeId"], inc, cause,
+                            {"incidentId": inc["id"], **sw})
+            self.intervals.append(_Interval(at, repaired, "electric", closed=[k], incident=inc["id"] + ":tie"))
+            self._event(at, "tie.closed", "incident", inc["id"], inc, cause,
+                        {"tieEdgeId": tie["edgeId"], "tieId": tie["id"], "restored": tie["restored"],
+                         "stillUnsupplied": len(after)})
+            self._event(repaired, "tie.opened", "incident", inc["id"], inc, cause,
+                        {"tieEdgeId": tie["edgeId"], "tieId": tie["id"]})
+            ties.append(tie)
+            out = after
         if declined:
-            inc["tiesDeclined"] = declined
-            self._event(at, "backfeed.declined", "incident", inc["id"], inc, cause,
-                        {"ties": declined, "reason": "the receiving feeder would exceed its emergency rating or "
-                                                     "customers would drop below the voltage floor"})
-        if best is None:
-            return
-        k, out, loading, low = best
-        inc["unsupplied"]["afterBackfeed"] = len(out)
-        inc["tie"] = {"edgeId": net.edge_ids[k], "closedAt": at, "openedAt": repaired,
-                      "maxLoading": round(loading, 3), "minVoltage": round(low, 1)}
-        self.intervals.append(_Interval(at, repaired, "electric", closed=[k], incident=inc["id"] + ":tie"))
-        self._event(at, "tie.closed", "incident", inc["id"], inc, cause,
-                    {"tieEdgeId": net.edge_ids[k], "restored": len(still) - len(out), "stillUnsupplied": len(out)})
-        self._event(repaired, "tie.opened", "incident", inc["id"], inc, cause, {"tieEdgeId": net.edge_ids[k]})
+            inc["tiesDeclined"] = list(declined.values())
+            self._event(isolated + step, "backfeed.declined", "incident", inc["id"], inc, cause,
+                        {"ties": inc["tiesDeclined"], "reason": "the receiving feeder would exceed its emergency "
+                                                                "rating or customers would drop below the voltage floor"})
+        if ties:
+            inc["unsupplied"]["afterBackfeed"] = len(out)
+            inc["tie"] = {k: v for k, v in ties[0].items() if k in ("edgeId", "closedAt", "openedAt", "maxLoading",
+                                                                    "minVoltage")}
+            inc["ties"] = ties
+
+    def _next_tie(self, dis: np.ndarray, cl: np.ndarray, out: list[str], probes: list[int], at: float,
+                  repaired: float, declined: dict) -> tuple | None:
+        """The next tie to close: (tie edge, switch opened first or None, premises still out, loading, voltage)."""
+        net, ops = self.ops.nets["electric"], self.ops
+        limit, floor = float(self.settings["tieMaxLoading"]), float(self.settings["tieMinVoltage"])
+
+        def option(d: np.ndarray, c: np.ndarray) -> list[str] | None:
+            if any(ops.flow_model.forest("electric", d, c).reached[p] for p in probes):
+                return None  # would re-energise the faulted section
+            after = ops.unsupplied("electric", d, c)
+            return after if len(after) < len(out) else None
+
+        live = ops.flow_model.forest("electric", dis, cl).reached
+        whole = []
+        for k in sorted(net.tie_edges):
+            if cl[k] or live[int(net.a[k])] == live[int(net.b[k])]:  # only a tie from live to dead can help
+                continue
+            c = cl.copy()
+            c[k] = True
+            after = option(dis, c)
+            if after is not None:
+                whole.append((len(after), k, None, dis, c, after))
+        for tries in (whole, None):
+            if tries is None:  # nothing fits whole: open a switch in a tie's island first, to give it less
+                tries = []
+                for _, k, _, _, c, _ in whole:
+                    for sw in self._island_switches(k, dis, cl):
+                        d = dis.copy()
+                        d[sw] = True
+                        after = option(d, c)
+                        if after is not None:
+                            tries.append((len(after), k, sw, d, c, after))
+            for _, k, sw, d, c, after in sorted(tries, key=lambda o: (o[0], o[1], -1 if o[2] is None else o[2])):
+                loading, low = self._backfeed_check(d, c, at, repaired, (dis, cl))
+                if loading <= limit and low >= floor:
+                    return k, sw, after, loading, low
+                if sw is None:
+                    declined.setdefault(k, {"tieEdgeId": net.edge_ids[k], "maxLoading": round(loading, 3),
+                                            "minVoltage": round(low, 1)})
+        return None
+
+    def _island_switches(self, k: int, dis: np.ndarray, cl: np.ndarray) -> list[int]:
+        """Closed sectionalising switches in the dead island at tie ``k``'s far end: opening one leaves the tie only
+        the part of the island on its own side."""
+        net = self.ops.nets["electric"]
+        if not hasattr(net, "_adj"):
+            adj: dict[int, list[int]] = {}
+            for e in range(len(net.a)):
+                adj.setdefault(int(net.a[e]), []).append(e)
+                adj.setdefault(int(net.b[e]), []).append(e)
+            net._adj = adj
+        live = self.ops.flow_model.forest("electric", dis, cl).reached
+        start = int(net.b[k]) if live[int(net.a[k])] else int(net.a[k])
+        seen, stack, out = {start}, [start], set()
+        while stack:
+            x = stack.pop()
+            for e in net._adj.get(x, ()):
+                if dis[e] or (e in net.tie_edges and not cl[e]):
+                    continue
+                y = int(net.b[e]) if int(net.a[e]) == x else int(net.a[e])
+                if live[y] or y in seen:
+                    continue
+                if e in net.switch_edges:
+                    out.add(e)
+                seen.add(y)
+                stack.append(y)
+        return sorted(out)
 
     def _leak_rate(self, u: str, node: int, edge: int, t0: float, opening: float) -> float:
         """Water out of a break: orifice flow at the local pressure, which the leak itself pulls down (a few damped
@@ -586,19 +743,38 @@ class Run:
             q = nxt if q == 0 else 0.5 * (q + nxt)
         return round(q, 1)
 
-    def _backfeed_check(self, dis: np.ndarray, cl: np.ndarray, start: float, end: float) -> tuple[float, float]:
-        """Worst primary loading and lowest service voltage with a tie closed, hourly across the back-feed window."""
-        net, fm = self.ops.nets["electric"], self.ops.flow_model
+    def _backfeed_check(self, dis: np.ndarray, cl: np.ndarray, start: float, end: float,
+                        base: tuple[np.ndarray, np.ndarray] | None = None) -> tuple[float, float]:
+        """Worst primary loading and lowest service voltage with a tie closed, hourly across the back-feed window.
+        Against ``base`` (the switching before the tie), only what the tie changes counts: edges it loads more and
+        premises it supplies or lowers, so a line already over its rating or a street already low elsewhere does
+        not decline it."""
+        net = self.ops.nets["electric"]
         primary = np.array([kd not in ("service", "transformer", "supply") for kd in net.kind])
-        month = date.fromisoformat(self.day).month
         worst, low = 0.0, math.inf
         for t in np.arange(start, end, 3600.0).tolist() + [end]:
-            v = fm.flows(t / 3600.0 % 24.0, month=month, disabled={"electric": dis}, closed={"electric": cl}).voltage
+            v = self._voltage(t, dis, cl)
             if v is None:
                 return 0.0, math.inf
-            worst = max(worst, float(np.nanmax(np.where(primary, v.loading, np.nan), initial=0.0)))
-            low = min(low, float(np.nanmin(v.premise_v, initial=math.inf)))
+            more, lower = primary, np.ones(len(v.premise_v), dtype=bool)
+            v0 = self._voltage(t, *base) if base is not None else None
+            if v0 is not None:
+                more = primary & (np.nan_to_num(v.loading) > np.nan_to_num(v0.loading) + 1e-3)
+                lower = (np.isnan(v0.premise_v) & ~np.isnan(v.premise_v)) | (v.premise_v < v0.premise_v - 0.05)
+            worst = max(worst, float(np.nanmax(np.where(more, v.loading, np.nan), initial=0.0)))
+            low = min(low, float(np.nanmin(np.where(lower, v.premise_v, np.nan), initial=math.inf)))
         return worst, low
+
+    def _voltage(self, t: float, dis: np.ndarray, cl: np.ndarray):
+        """The electric power flow at ``t`` with this switching (cached for the run)."""
+        key = (round(t, 3), np.packbits(dis).tobytes(), np.packbits(cl).tobytes())
+        if key not in self._volts:
+            if len(self._volts) > 256:
+                self._volts.clear()
+            month = date.fromisoformat(self.day).month
+            self._volts[key] = self.ops.flow_model.flows(t / 3600.0 % 24.0, month=month, disabled={"electric": dis},
+                                                         closed={"electric": cl}).voltage
+        return self._volts[key]
 
     def _relight(self, inc: dict, pids: list[str], restored: float, cause: str) -> None:
         """Gas back in the main does not mean gas at the stove: techs visit every shut premise, nearest first, and
@@ -651,8 +827,11 @@ class Run:
         t0, iso, end = inc["createdAt"], inc["isolatedAt"] or math.inf, inc["restoredAt"]
         if u == "electric":
             self.intervals.append(_Interval(t0, end, u, [f], incident=iid))
-            if inc["_dev"] != f:
-                self.intervals.append(_Interval(inc["_trip"], iso, u, [inc["_dev"]], incident=iid))
+            if inc["_dev"] != f:  # tripped until the crew re-closes it, or until the repair when it bounds the section
+                until = end if inc.get("_dev_open") else iso
+                self.intervals.append(_Interval(inc["_trip"], until, u, [inc["_dev"]], incident=iid))
+            if inc.get("_opened") and iso < end:
+                self.intervals.append(_Interval(iso, end, u, list(inc["_opened"]), incident=iid))
         else:
             self.intervals.append(_Interval(t0, iso, u, [], inc["_leak"], incident=iid))
             if iso < math.inf:

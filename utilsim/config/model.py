@@ -243,10 +243,22 @@ class ElectricConfig(BaseModel):
                                          advanced=True, effects=["express sections", "feeder separation"])
     severe_turn_deg: float = F(60.0, "A trunk turn at least this sharp counts as severe in the routing metrics.",
                                unit="deg", ge=20, le=170, advanced=True)
-    ties_per_feeder_pair: int = F(1, "Normally-open tie switches between each pair of neighbouring feeders.",
-                                  ge=0, le=4, effects=["tie switches", "back-feed options"])
-    tie_max_length_m: float = F(800.0, "Longest new line built to tie a feeder that touches no other feeder.",
-                                unit="m", ge=0, le=5000, advanced=True, effects=["tie switches"])
+    ties_per_feeder_pair: int = F(1, "Normally-open tie switches between each pair of neighbouring feeders (0: no "
+                                  "ties at all, section ties included).", ge=0, le=4,
+                                  effects=["tie switches", "back-feed options"])
+    tie_max_length_m: float = F(1200.0, "Longest new line built for a tie: to a feeder that touches no other "
+                                "feeder, or from a switched section to another feeder's three-phase line (or round "
+                                "to its own feeder's). Along a street a line already uses, a metre counts 1.25 "
+                                "(single-phase) or 2 (three-phase).", unit="m", ge=0, le=5000, advanced=True,
+                                effects=["tie switches", "back-feed options"])
+    section_max_share: float = F(0.15, "Sectionalising switches cut each feeder's three-phase backbone into "
+                                 "sections of at most this share of the feeder's customers (at least "
+                                 "section_min_customers), so a crew isolates a fault within a bounded section and "
+                                 "ties back-feed the healthy sections beyond it.", ge=0.05, le=1.0,
+                                 effects=["sectionalising switches", "tie switches", "outage size after isolation"])
+    section_min_customers: int = F(100, "Smallest section limit: a feeder is not cut into sections smaller than "
+                                   "this many customers.", ge=10, le=5000, advanced=True,
+                                   effects=["sectionalising switches", "outage size after isolation"])
     overhead_before_year: int = F(1978, "Districts built before this year are overhead (poles); later underground.",
                                   ge=1850, le=2030, effects=["poles", "lightning exposure", "storm outages"])
     pole_spacing_m: float = F(42.0, "Pole span on overhead lines.", unit="m", ge=20, le=90, advanced=True)

@@ -18,7 +18,7 @@ All vehicles start at the depot and drive shortest paths on the road graph at cl
 | AMR van | drives its route's streets on the scheduled day; reads meters within `drive_by_radius_m` as it passes |
 | Walker | visits premises in route `sequenceNo` order at `walker_meters_per_hour`; may log no-access |
 | Gas crew | responds to odour calls within the target; makes safe, closes the upstream valve, repairs, relights |
-| Electric trouble crew | patrols from the predicted device, isolates, restores via ties, repairs |
+| Electric trouble crew | patrols from the predicted device, isolates the faulted section with the nearest switches, re-closes upstream, restores the sections beyond through ties, repairs |
 | Water crew | isolates a break with N−1 valves, repairs, flushes, restores |
 | Meter technician | planned exchanges and investigations |
 
@@ -29,10 +29,31 @@ Each incident is the **initiating event** of a causal chain; its downstream even
 | Incident | Physical effect | Process effect |
 |---|---|---|
 | Gas service/main leak | odour call → crew → valve closed → downstream services at zero flow → repair → relight | post-meter leaks raise consumption → VEE spike |
-| Lightning on overhead primary | recloser/fuse trips → subtree outage → AMI last-gasp → trouble calls → OMS predicts device → patrol, isolate, partial restore by tie, repair | zero usage, estimated reads if meters are offline at read time |
+| Lightning on overhead primary | recloser/fuse trips → subtree outage → AMI last-gasp → trouble calls → OMS predicts device → patrol, isolate the section, re-close upstream, restore beyond by ties, repair | zero usage, estimated reads if meters are offline at read time |
 | Water main break | pressure drop → crew → valve isolation → repair → flush | outage window, high-bill complaints |
 | Transformer failure | 4–10 homes out → replacement (upsized if overloaded) | zero-usage reads |
 | AMI collector outage | cluster of comm failures | estimates, consecutive-estimate flags |
+
+**Switching after an electric fault** (`utilsim/ops/timeline.py`). Feeders are built in sections: a recloser at the
+head, sectionalising switches along the three-phase backbone and normally-open ties to neighbouring feeders or
+round to another part of the same feeder (`docs/NETWORK_RULES.md`). When a pole or a span of primary breaks:
+
+1. The nearest protective device above it trips (a lateral's fuse, else the feeder's recloser): everyone below it
+   is out (`unsupplied.atFault`).
+2. The crew arrives and isolates the faulted section between the nearest switches: the nearest switching device
+   above the fault (a sectionalising switch, or the fuse or recloser that tripped) and every nearest
+   sectionalising switch below that device. If the section has its own upstream switch, the tripped device
+   re-closes and the sections above come back (`afterIsolation`). A fused lateral has no switch below its fuse, so
+   it waits for the repair; a failed transformer, a service drop or a tie is cut clear on its own.
+3. Every `tieSwitchMinutes` it closes the tie that restores the most customers still out, never one that would
+   re-energise the faulted section, and only within the receiving feeder's emergency rating and the voltage floor.
+   When no tie can carry a whole island it opens one more switch in it first and the tie takes its own side
+   (`afterBackfeed`).
+4. The faulted section itself waits for the repair; then the ties open, the switches close and everyone is back.
+
+On the packs at the scenario day's 08:00, no trunk break leaves more than 15 % of a feeder out after back-feed on
+Ayr or Cobourg (before: one tie per feeder pair, and a break on Ayr's second feeder kept up to all of it out until
+the repair).
 
 Hazard rates are per asset per year; overhead faults happen on storm days (`weather.storm_days_per_year`) and a
 transformer loaded above its rating fails three times as often. `manual_only` disables random hazards for scripted

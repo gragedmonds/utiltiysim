@@ -55,6 +55,8 @@ class NetOps:
     recloser_edges: set[int]
     valve_edges: set[int]
     tie_edges: set[int] = field(default_factory=set)  # normally-open ties between feeders (back-feed)
+    switch_edges: set[int] = field(default_factory=set)  # normally-closed sectionalising switches (crew-operated)
+    device_ids: dict[int, str] = field(default_factory=dict)  # edge -> its switch, tie, fuse or recloser id
     diameter_in: np.ndarray | None = None  # pipe inside diameter per edge (water and gas)
     length: np.ndarray | None = None  # metres per edge
     material: list | None = None  # per edge (pipes), else None
@@ -191,6 +193,13 @@ class OpsTown:
         no.placement = [e.get("placement") for e in edges]
         no.tie_edges = {k for k, e in enumerate(edges) if e.get("normallyOpen") or (e.get("enabled") is False
                                                                                     and e["kind"] != "service")}
+        no.switch_edges = {edge_index[q["edgeId"]] for q in eq
+                           if q["kind"] == "sectionalising_switch" and q.get("edgeId") in edge_index}
+        for q in eq:
+            if q["kind"] in ("sectionalising_switch", "tie_switch", "fuse") and q.get("edgeId") in edge_index:
+                no.device_ids.setdefault(edge_index[q["edgeId"]], q["id"])
+            elif q["kind"] == "recloser" and q.get("nodeId") in node_index and parent[node_index[q["nodeId"]]] >= 0:
+                no.device_ids.setdefault(int(parent[node_index[q["nodeId"]]]), q["id"])
         return no
 
     def _net_inputs(self, u: str, net: dict) -> NetInputs:

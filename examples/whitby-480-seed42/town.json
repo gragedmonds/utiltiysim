@@ -1,7 +1,7 @@
 {
   "schemaVersion": "utility-town/2.0",
-  "generatorVersion": "0.8.0",
-  "id": "town-5e097b1660f83972",
+  "generatorVersion": "0.9.0",
+  "id": "town-d67a4b0567a0570e",
   "seed": "WHITBY-042",
   "count": 609,
   "premiseCount": 609,
@@ -49,7 +49,7 @@
     "vacant": 23,
     "roadKm": 15.933,
     "mainsKm": {
-      "electric": 11.149,
+      "electric": 11.737,
       "water": 12.842,
       "gas": 12.505
     },
@@ -58,7 +58,7 @@
     "substations": 1,
     "hydrants": 62,
     "poles": 169,
-    "ties": 1,
+    "ties": 2,
     "districtRegulators": 2,
     "waterZones": 1,
     "mrus": 21,
@@ -107,7 +107,7 @@
         }
       },
       "feeders": 2,
-      "ties": 1,
+      "ties": 2,
       "expressKm": 0.564,
       "corridors": 11,
       "corridorKm": 7.133,
@@ -117,13 +117,13 @@
     },
     "timingsS": {
       "roads": 0.031,
-      "land_use": 1.377,
-      "buildings": 0.229,
-      "electric": 0.153,
-      "water": 0.253,
-      "gas": 0.136,
-      "customers": 0.318,
-      "total": 2.497
+      "land_use": 1.464,
+      "buildings": 0.216,
+      "electric": 0.117,
+      "water": 0.203,
+      "gas": 0.105,
+      "customers": 0.281,
+      "total": 2.417
     }
   },
   "validation": {
@@ -131,7 +131,7 @@
     "errors": [],
     "errorCount": 0,
     "connectedServices": 1750,
-    "networkEdges": 3469,
+    "networkEdges": 3470,
     "checks": [
       "Unique identifiers",
       "Valid edge endpoints",
@@ -148,5 +148,5 @@
       "Referential integrity"
     ]
   },
-  "configHash": "cd80e70aca43c80196ef3a198ed36fd890c027ff271c72072c8abfb8a70a0010"
+  "configHash": "3cf0ae694a30e04049c5730377c0fa249a866d39a3cd02c08e4b492e82e9a77f"
 }
