@@ -49,6 +49,12 @@ def test_ayr_generates_a_valid_town():
     assert town.geo.source["label"] == "Ayr street snapshot"
     snap = build_snapshot(town, include_reads=False, detail="viewer", embed_state=False)
     assert snap["homes"] == load_preset("ayr").town.houses and snap["count"] == len(snap["premises"])
+    # Corridor routing: two or more feeders from the substation, joined by normally-open ties.
+    el = snap["networks"]["electric"]
+    assert len(el["meta"]["feeders"]) >= 2 and el["meta"]["ties"] >= 1 and el["corridors"]
+    ties = [e for e in el["edges"] if e.get("loop")]
+    assert ties and all(e["normallyOpen"] and not e["enabled"] for e in ties)
+    assert snap["stats"]["electricRouting"]["trunk"]["corridorShare"] >= 0.9
 
 
 def test_sources_listing_and_endpoint():
@@ -66,6 +72,8 @@ def test_every_real_town_generates_valid(name):
     town = generate(load_preset(name))
     res = validate_town(town)
     assert res["valid"], res["errors"][:5]
+    meta = town.networks["electric"].meta
+    assert len(meta["feeders"]) >= 2 and meta["ties"] >= 1
     # Substation exits carry the whole substation: parallel getaway cables when one is not enough.
     for e in town.networks["electric"].edges:
         if e.attrs.get("conductor", "").endswith("duct bank)"):

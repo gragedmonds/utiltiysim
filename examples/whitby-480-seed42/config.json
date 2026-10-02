@@ -29,9 +29,15 @@
     "era_noise_years": 8.0,
     "park_share": 0.04,
     "commercial_strip_m": 700.0,
+    "commercial_share_arterial": 0.45,
+    "commercial_share_collector": 0.15,
+    "commercial_share_local": 0.02,
+    "commercial_cluster_m": 120.0,
     "industrial_lots": 2,
     "houses_per_school": 2500,
-    "margin_m": 120.0
+    "margin_m": 120.0,
+    "corridor_max_deflection_deg": 35.0,
+    "corridor_name_bonus_deg": 20.0
   },
   "housing": {
     "lot_frontage_m": {
@@ -110,10 +116,24 @@
       167.0
     ],
     "transformer_max_loading": 1.3,
+    "conductor_planning_margin": 1.25,
     "max_houses_per_transformer_overhead": 6,
     "max_houses_per_transformer_underground": 10,
     "feeder_design_mva": 6.0,
+    "feeder_max_customers": 1200,
+    "min_feeders_per_substation": 2,
     "substation_mva": 25.0,
+    "route_weight_arterial": 1.0,
+    "route_weight_collector": 1.4,
+    "route_weight_local": 2.0,
+    "route_turn_penalty_m": 60.0,
+    "route_corridor_change_penalty_m": 80.0,
+    "route_hierarchy_penalty_m": 60.0,
+    "trunk_min_load_share": 0.04,
+    "route_shared_trunk_factor": 1.2,
+    "severe_turn_deg": 60.0,
+    "ties_per_feeder_pair": 1,
+    "tie_max_length_m": 800.0,
     "overhead_before_year": 1978,
     "pole_spacing_m": 42.0,
     "voltage_min_pu": 0.95,
@@ -257,7 +277,17 @@
     "analyst_queue_days_min": 1,
     "analyst_queue_days_max": 3,
     "carry_rate_per_day": 1.25,
-    "receivable_carry_ratio": 0.4
+    "receivable_carry_ratio": 0.4,
+    "analysts": 2,
+    "analyst_hours_per_day": 6.0,
+    "review_minutes_min": 15.0,
+    "review_minutes_max": 30.0,
+    "supervisors": 1,
+    "supervisor_hours_per_day": 2.0,
+    "supervisor_minutes": 40.0,
+    "field_orders_per_day": 6,
+    "field_days_min": 1,
+    "analyst_accuracy": 0.95
   },
   "anomalies": {
     "enabled": true,
@@ -279,5 +309,47 @@
     "target_premise": null,
     "leak_m3h": 0.65,
     "tick_minutes": 5
+  },
+  "reading": {
+    "ami_missed_read": 0.012,
+    "amr_missed_read": 0.03,
+    "manual_no_access": 0.06,
+    "no_access_repeat": 0.4,
+    "read_cost_ami": 0.1,
+    "read_cost_amr": 0.35,
+    "read_cost_manual": 1.2
+  },
+  "vee": {
+    "high_ratio": 2.0,
+    "low_ratio": 0.35,
+    "zero_at_occupied": true,
+    "max_consecutive_estimates": 2,
+    "min_period_days": 25,
+    "max_period_days": 38,
+    "accept_confidence": 0.75,
+    "reject_confidence": 0.35,
+    "escalate_impact": 150.0,
+    "trend_ratio": 0.8,
+    "trend_periods": 3,
+    "oms_events": true,
+    "estimation": "prior_year",
+    "history_noise": 0.1
+  },
+  "billing": {
+    "rate_change_date": "2026-11-01",
+    "rate_change_pct": 3.5,
+    "high_bill_ratio": 2.5,
+    "high_bill_min": 150.0,
+    "first_bill_limit": 600.0,
+    "credit_review": 75.0,
+    "data_error_rate": 3.0,
+    "print_lag_days": 1,
+    "pad_reject_rate": 0.015,
+    "nsf_fee": 20.0,
+    "late_fee_pct": 1.5,
+    "reminder_days": 7,
+    "notice_days": 21,
+    "disconnect_days": 45,
+    "winter_moratorium": true
   }
 }

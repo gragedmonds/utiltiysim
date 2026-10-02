@@ -61,6 +61,11 @@ class Purpose(IntEnum):
     FEEDER = 30
     ROUTE = 31
     CUSTOMER = 32
+    LAND_USE = 33
+    M2C_READ = 34
+    M2C_ANOMALY = 35
+    M2C_WORK = 36
+    M2C_BILL = 37
 
 
 def normalize_seed(seed: int | str) -> int:

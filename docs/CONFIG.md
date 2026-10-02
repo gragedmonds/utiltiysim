@@ -30,6 +30,7 @@ uses them (their groups will then say `x-applies: run`).
 | `ami.ami_route_share` ↓ | More AMR van and manual walker routes; more estimated reads (M3) |
 | `customers_billing.mru_target_meters` ↓ | More, smaller meter reading routes |
 | `town.houses` ↑ beyond the OSM extract | Synthetic districts grown around the Whitby core; second substation; more feeders |
+| `town.commercial_share_arterial` / `_collector` / `_local` ↑ | More storefronts on that class of street, clustered at main-road intersections and towards downtown; homes pushed outward (still exactly `houses`); more 3φ pads, commercial accounts and closer hydrant spacing |
 | A real-place preset (`ayr`, `elora`, `cobourg`, `whitby_wide`) | The place's own streets at their natural size; set `expansion: grow` and more `houses` to add synthetic districts around it |
 
 
@@ -70,10 +71,16 @@ Size, road skeleton source, terrain and land use.
 | `era_span_years` | `85` | 0–150 |  | Years added from centre to edge (era = core + span·(d/R)^1.2 + noise). |
 | `era_noise_years` | `8.0` | 0–30 | yr | (advanced) Std-dev of era noise per district. |
 | `park_share` | `0.04` | 0–0.2 |  | (advanced) Share of blocks kept as parks. |
-| `commercial_strip_m` | `700.0` | 0–3000 | m | Length of the commercial strip along the main arterial. |
+| `commercial_strip_m` | `700.0` | 0–3000 | m | Length of the downtown main street: arterial frontage within half this distance of the centre is all commercial (up to 80 lots). The frontage shares below apply beyond it. *Affects: downtown storefronts, homes pushed outward.* |
+| `commercial_share_arterial` | `0.45` | 0–1 |  | Share of developed lots fronting an arterial (beyond the downtown main street) that become commercial or mixed-use premises. The rest are homes, or rear yards where modern subdivisions back onto the arterial. *Affects: commercial premises, plazas at major intersections, commercial hydrant spacing, transformer pads, commercial accounts.* |
+| `commercial_share_collector` | `0.15` | 0–1 |  | Share of developed lots fronting a collector that become commercial or mixed-use premises. *Affects: commercial premises, corner shops on collectors, commercial accounts.* |
+| `commercial_share_local` | `0.02` | 0–1 |  | Share of developed lots on local streets that become commercial (corner stores near downtown and where local streets meet main roads). *Affects: commercial premises, homes pushed outward.* |
+| `commercial_cluster_m` | `120.0` | 20–1000 | m | (advanced) Distance over which commercial frontage clusters around main-road intersections and downtown. Smaller gives tight corner clusters, larger gives long strips. *Affects: where storefronts sit along main roads.* |
 | `industrial_lots` | `2` | 0–10 |  | Number of large industrial customers. |
 | `houses_per_school` | `2500` | 500–20000 |  | (advanced) One school per this many houses. |
 | `margin_m` | `120.0` | 0–1000 | m | (advanced) Empty margin around the developed area. |
+| `corridor_max_deflection_deg` | `35.0` | 5–90 | deg | (advanced) Arterial/collector road edges continue one corridor through a junction when the heading changes by at most this much. *Affects: corridors, trunk routes, corridor changes.* |
+| `corridor_name_bonus_deg` | `20.0` | 0–60 | deg | (advanced) Extra deflection allowed when both edges carry the same street name (a name is weak evidence of continuity). *Affects: corridors.* |
 
 ## Housing & households
 
@@ -117,10 +124,24 @@ Bulk supply, substations, feeders, transformers, services.
 | `coincidence_floor` | `0.33` | 0.1–1.0 |  | (advanced) Coincidence factor CF(n) = a + (1-a)/√n; a is the floor as n → ∞. *Affects: every electric size.* |
 | `transformer_kva_steps` | `[25, 50, 75, 100, 167]` |  | kVA | (advanced) Single-phase transformer sizes. |
 | `transformer_max_loading` | `1.3` | 0.8–2.0 |  | (advanced) Allowed peak loading relative to nameplate. |
+| `conductor_planning_margin` | `1.25` | 1.0–2.0 |  | (advanced) Primary conductors are sized for design load × this margin (winter peaks, load growth). *Affects: primary conductor sizes, loading in power flow.* |
 | `max_houses_per_transformer_overhead` | `6` | 1–20 |  | Max houses on a pole-mount transformer. |
 | `max_houses_per_transformer_underground` | `10` | 1–25 |  | Max houses on a pad-mount transformer. |
 | `feeder_design_mva` | `6.0` | 1–20 | MVA | Design peak per feeder. *Affects: feeder count, tie switches.* |
+| `feeder_max_customers` | `1200` | 100–10000 |  | Most customers planned on one feeder (limits how many lose supply when a feeder breaker trips). *Affects: feeder count, feeder territories, tie switches.* |
+| `min_feeders_per_substation` | `2` | 1–12 |  | Feeders leaving each substation at least (fewer only when it serves fewer transformer groups), so normally-open ties can back-feed. *Affects: feeder count, tie switches, outage size.* |
 | `substation_mva` | `25.0` | 5–100 | MVA | Firm capacity per substation. *Affects: substation count.* |
+| `route_weight_arterial` | `1.0` | 0.1–10 |  | (advanced) Feeder routing cost per metre along an arterial (trunks follow the cheapest corridors). *Affects: trunk routes, feeder territories.* |
+| `route_weight_collector` | `1.4` | 0.1–10 |  | (advanced) Feeder routing cost per metre along a collector. *Affects: trunk routes.* |
+| `route_weight_local` | `2.0` | 0.1–10 |  | (advanced) Feeder routing cost per metre along a local street. *Affects: trunk routes, lateral routes.* |
+| `route_turn_penalty_m` | `60.0` | 0–2000 | m | (advanced) Routing cost of a 90° turn, in weighted metres; it grows with the square of the angle (a U-turn costs 4×). Bends under 10° are free. *Affects: trunk continuity, severe turns.* |
+| `route_corridor_change_penalty_m` | `80.0` | 0–2000 | m | (advanced) Routing cost of switching from one arterial/collector corridor to another. *Affects: trunk continuity, corridor changes.* |
+| `route_hierarchy_penalty_m` | `60.0` | 0–2000 | m | (advanced) Routing cost per step up or down the road hierarchy (arterial ↔ collector ↔ local). *Affects: trunks staying on main roads.* |
+| `trunk_min_load_share` | `0.04` | 0–0.5 |  | (advanced) A feeder trunk extends along a corridor while at least this share of the feeder's connected load lies at or beyond that point; smaller tails are served by laterals. *Affects: trunk length, three-phase backbone.* |
+| `route_shared_trunk_factor` | `1.2` | 1.0–5.0 |  | (advanced) Cost multiplier for running a feeder express through another feeder's territory or alongside its trunk. *Affects: express sections, feeder separation.* |
+| `severe_turn_deg` | `60.0` | 20–170 | deg | (advanced) A trunk turn at least this sharp counts as severe in the routing metrics. |
+| `ties_per_feeder_pair` | `1` | 0–4 |  | Normally-open tie switches between each pair of neighbouring feeders. *Affects: tie switches, back-feed options.* |
+| `tie_max_length_m` | `800.0` | 0–5000 | m | (advanced) Longest new line built to tie a feeder that touches no other feeder. *Affects: tie switches.* |
 | `overhead_before_year` | `1978` | 1850–2030 |  | Districts built before this year are overhead (poles); later underground. *Affects: poles, lightning exposure, storm outages.* |
 | `pole_spacing_m` | `42.0` | 20–90 | m | (advanced) Pole span on overhead lines. |
 | `voltage_min_pu` | `0.95` | 0.85–1.0 |  | (advanced) Lower service voltage limit (CSA CAN3-C235 / ANSI Range A). |
@@ -266,7 +287,7 @@ Accounts, reading routes, calendars and tariffs.
 
 ## Meter-to-cash process
 
-Work queues, automation, costs and carrying cost.
+Work queues, automation, workforce, costs and carrying cost.
 
 | Field | Default | Range | Unit | Description |
 |---|---|---|---|---|
@@ -276,6 +297,16 @@ Work queues, automation, costs and carrying cost.
 | `analyst_queue_days_max` | `3` | 1–20 |  | Maximum queue wait. |
 | `carry_rate_per_day` | `1.25` | 0–20 | $ | Carrying cost per account per day before invoicing. |
 | `receivable_carry_ratio` | `0.4` | 0–1 |  | (advanced) Receivable carry as a share of the billing carry rate. |
+| `analysts` | `2` | 0–200 |  | Billing analysts working the exception queues. *Affects: queue backlog, days to bill, carrying cost.* |
+| `analyst_hours_per_day` | `6.0` | 0.5–10 | h | Productive queue hours per analyst per business day. |
+| `review_minutes_min` | `15.0` | 1–240 | min | (advanced) Shortest analyst review. |
+| `review_minutes_max` | `30.0` | 1–480 | min | (advanced) Longest analyst review. |
+| `supervisors` | `1` | 0–50 |  | Supervisors approving escalations. *Affects: escalation backlog.* |
+| `supervisor_hours_per_day` | `2.0` | 0.25–10 | h | (advanced) Supervisor hours on escalations per business day. |
+| `supervisor_minutes` | `40.0` | 5–240 | min | (advanced) Supervisor review time per escalation. |
+| `field_orders_per_day` | `6` | 0–500 |  | Meter investigations, re-reads and exchanges completed per business day. *Affects: field order backlog, estimates.* |
+| `field_days_min` | `1` | 0–20 | d | (advanced) Earliest a field order is worked after it is raised. |
+| `analyst_accuracy` | `0.95` | 0.5–1 |  | (advanced) Share of reviews where the analyst finds the true cause. *Affects: billing errors, wasted truck rolls.* |
 
 ## Meter & read anomalies
 
@@ -307,3 +338,60 @@ Demonstration scenario on the live clock.
 | `target_premise` | `None` |  |  | Premise targeted by the leak scenario (default: first premise). |
 | `leak_m3h` | `0.65` | 0–50 | m3/h | Leak rate added to the target premise's water demand. |
 | `tick_minutes` | `5` | 1–60 | min | Live clock step. |
+
+## Meter reading
+
+How periodic billing reads succeed or fail, by meter technology.
+
+| Field | Default | Range | Unit | Description |
+|---|---|---|---|---|
+| `ami_missed_read` | `0.012` | 0–0.5 |  | AMI billing reads still missing after the head-end retry window. *Affects: comm-fail exceptions, estimates.* |
+| `amr_missed_read` | `0.03` | 0–0.5 |  | Drive-by reads missed (no signal, street skipped). |
+| `manual_no_access` | `0.06` | 0–0.8 |  | Manual reads with no access (locked gate, dog, meter inside). *Affects: no-access exceptions, consecutive estimates.* |
+| `no_access_repeat` | `0.4` | 0–1 |  | (advanced) Chance a missed manual read is missed again the next month. |
+| `read_cost_ami` | `0.1` | 0–20 | $ | (advanced) Cost of one AMI read. |
+| `read_cost_amr` | `0.35` | 0–20 | $ | (advanced) Cost of one drive-by read. |
+| `read_cost_manual` | `1.2` | 0–50 | $ | (advanced) Cost of one walked read. |
+
+## VEE rules
+
+Validation, estimation and editing: the five-test battery, confidence and disposition (VEE v5 shape).
+
+| Field | Default | Range | Unit | Description |
+|---|---|---|---|---|
+| `high_ratio` | `2.0` | 1.1–10 |  | Flag consumption above this multiple of expected (tolerance high). *Affects: flagged reads, analyst workload.* |
+| `low_ratio` | `0.35` | 0–0.95 |  | Flag consumption below this share of expected (tolerance low). |
+| `zero_at_occupied` | `True` |  |  | Flag zero consumption at an occupied premise. |
+| `max_consecutive_estimates` | `2` | 1–12 |  | Estimates in a row before a field read is ordered. *Affects: field orders.* |
+| `min_period_days` | `25` | 1–40 | d | (advanced) Shortest plausible read period. |
+| `max_period_days` | `38` | 20–120 | d | (advanced) Longest plausible read period. |
+| `accept_confidence` | `0.75` | 0–1 |  | Auto-accept at or above this confidence. *Affects: auto-accept rate, billing errors.* |
+| `reject_confidence` | `0.35` | 0–1 |  | Reject below this confidence. |
+| `escalate_impact` | `150.0` | 0–10000 | $ | Escalate a doubtful read when its bill impact exceeds this. *Affects: supervisor workload.* |
+| `trend_ratio` | `0.8` | 0.3–1.0 |  | Persistent low use: flag reads below this share of expected … *Affects: slow and tampered meters found.* |
+| `trend_periods` | `3` | 2–12 |  | … for this many periods in a row. |
+| `oms_events` | `True` |  |  | Use outage events (OMS, AMI last gasps) from operations: hours without service lower the expected use. *Affects: low-usage flags after outages.* |
+| `estimation` | `prior_year` |  |  | Estimation method for missing or rejected reads. |
+| `history_noise` | `0.1` | 0–0.5 |  | (advanced) Spread of prior-year history around this year's normal usage. |
+
+## Billing & collections
+
+Bill checks, tariff versions, invoicing, payments and dunning.
+
+| Field | Default | Range | Unit | Description |
+|---|---|---|---|---|
+| `rate_change_date` | `2026-11-01` |  |  | Date a new tariff version takes effect (volumetric prices). |
+| `rate_change_pct` | `3.5` | -50–100 | % | Volumetric price change in the new tariff version. *Affects: bills after the change, proration.* |
+| `high_bill_ratio` | `2.5` | 1.1–20 |  | Block a bill above this multiple of its expected amount (prior-year use at current prices). *Affects: billing blocks, analyst workload.* |
+| `high_bill_min` | `150.0` | 0–5000 | $ | …and at least this much above the expected amount. |
+| `first_bill_limit` | `600.0` | 0–10000 | $ | (advanced) Block a bill with no expected use (vacant, new) above this total. |
+| `credit_review` | `75.0` | 0–5000 | $ | (advanced) Block a bill that is a credit larger than this. |
+| `data_error_rate` | `3.0` | 0–200 |  | Installations with a wrong rate class in billing master data (per 1,000 per year). *Affects: rate-class billing blocks.* |
+| `print_lag_days` | `1` | 0–10 | d | (advanced) Days from invoice creation to issue. |
+| `pad_reject_rate` | `0.015` | 0–0.5 |  | Pre-authorized debits returned for insufficient funds. *Affects: payment rejections, collections.* |
+| `nsf_fee` | `20.0` | 0–100 | $ | (advanced) Fee for a returned payment. |
+| `late_fee_pct` | `1.5` | 0–5 | % | Late payment charge on overdue amounts (per notice). |
+| `reminder_days` | `7` | 1–60 | d | Days after the due date for a reminder. |
+| `notice_days` | `21` | 1–90 | d | Days after the due date for an overdue notice and late fee. |
+| `disconnect_days` | `45` | 5–180 | d | Days after the due date for a disconnection notice. *Affects: disconnection notices.* |
+| `winter_moratorium` | `True` |  |  | No disconnection notices for electricity and water from Nov 15 to Apr 30 (Ontario). |

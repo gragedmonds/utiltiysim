@@ -68,14 +68,14 @@ Premises also carry a content `uid`.
 
 | Collection | Fields the 3D view uses |
 |---|---|
-| `roads[]` | `points[{x,z}]`, `class` (`primary`/`tertiary`/`residential`), `roadClass` (`arterial`/`collector`/`local`), `pavementWidthM`, `rowWidthM`, `name` |
+| `roads[]` | `points[{x,z}]`, `class` (`primary`/`tertiary`/`residential`), `roadClass` (`arterial`/`collector`/`local`), `pavementWidthM`, `rowWidthM`, `name`, `corridorId` (arterial/collector corridor, when on one) |
 | `premises[]` | `x`, `z`, `width` (along street), `depth`, `height`, `angle` (road direction `atan2(dz,dx)`; mesh `rotation.y = -angle`), `side` (±1), `front {x,z}`, `roofTone`, `roof` (`gable`/`hip`/`flat`), `stories`, `premiseType`, `buildingType`, `solar`, `solarKW`, `occupied`, `services {electric,water,gas}`, `uid` |
 | `buildings[]` | exact `footprint.polygon[{x,z}]`, `heightM`, `roof` |
 | `facilities[]` | `kind` (`substation`, `pump_station`, `elevated_tank`, `city_gate`, `depot`, `industrial`, `school`), `polygon`, `label` |
-| `networks.{u}` | `sourceIds` (every `external_supply` node), `sourceId` (the first), `unit`, `nodes`, `edges`, `equipment` |
+| `networks.{u}` | `sourceIds` (every `external_supply` node), `sourceId` (the first), `unit`, `nodes`, `edges`, `equipment`; electric also `corridors[{id, name, hierarchy, roadIds (ordered), lengthM, entranceNodeId, exitNodeId, ring, feederIds, trunkLengthM}]` |
 | `networks.{u}.nodes[]` | `kind` (`external_supply`, `substation`, `pump_station`, `city_gate_regulator`, `elevated_tank`, `district_regulator`, `junction`, `transformer`, `meter`), `subkind` render hint (`tank`, `regulator`), `x`, `z`, `elevationM`, `label`, `premiseId`, `servicePointId`, `parentEdgeId` |
-| `networks.{u}.edges[]` | `from`, `to`, `kind` (`supply`, `trunk`, `distribution`, `transformer`, `tank_riser`, `service`), `enabled`, `loop`, `normallyOpen` and `boundaryValve` (present when set), `tier`, `placement` (`overhead`/`underground`), `points`, `lengthM`, `sizeMm`, `nominalLabel`, `diameterIn`, `voltageKV`, `phase`, `ratingKVA`, `feeder`, `pressureTier`, `zone` |
-| `networks.{u}.equipment[]` | `kind` (`pole`, `recloser`, `fuse`, `tie_switch`, `hydrant`, `valve`, `district_regulator`, `prv`, `booster_station`), `x`, `z` (markers, not graph nodes) |
+| `networks.{u}.edges[]` | `from`, `to`, `kind` (`supply`, `trunk`, `distribution`, `transformer`, `tank_riser`, `service`), `enabled`, `loop`, `normallyOpen` and `boundaryValve` (present when set), `tier`, `placement` (`overhead`/`underground`), `points`, `lengthM`, `sizeMm`, `nominalLabel`, `diameterIn`, `voltageKV`, `phase`, `ratingKVA`, `feeder`, `pressureTier`, `zone`; electric also `feederId`, `designRole` (`supply`, `getaway`, `trunk`, `express`, `lateral`, `tie`, `transformer`, `service`), `corridorId`, and on ties `feeders`, `switchId` |
+| `networks.{u}.equipment[]` | `kind` (`pole`, `recloser`, `fuse`, `tie_switch`, `riser`, `hydrant`, `valve`, `district_regulator`, `prv`, `booster_station`), `x`, `z` (markers, not graph nodes) |
 | `amiNetwork` | `headend`, `collectors[{id,x,z,mountedOn,coverageRadiusM}]` |
 | `mrus[]` | `technology` (`AMI`/`AMR`/`MANUAL`), `readerId`, `path[{x,z}]` (route order), `portionId` |
 
@@ -163,10 +163,11 @@ net-exports at noon in July. M2 weather-driven profiles replace them.
 | `GET /api/towns/{id}/tables/{name}.{parquet\|csv\|json}` | flat tables |
 | `GET /api/towns/{id}/fixtures/vee.json` · `/fixtures/vee/{premiseId}/{commodity}.json?variant=actual\|stuck\|missing\|spike` | `vee-input-fixture/1.1` (`truth` stripped unless `include_truth=true`) |
 | `GET /api/towns/{id}/render.png` | static render |
+| `GET /api/packs` · `POST /api/sim/timeline` · `POST /api/sim/frame` | operations (below); also served by the hosted engine |
 
 Scenarios: `normal`, `solar_noon`, `leak` (`target` = premise id; default the first premise), `substation_outage`.
 
-**Scenario writes are not enabled.** The `/state` and `/replay` reads above are the only scenario surface in M1.
+**Scenario writes are not enabled** (operations commands are, see below). The `/state` and `/replay` reads above are the only scenario surface in M1.
 The M2 command endpoint will be `POST /api/sim/{simId}/scenario` `{scenario, target?, effectiveAt}` →
 `{simulationId, sequence}`. It starts a new `simulationId` (a run reset) and is idempotent on
 `(simId, scenario, target, effectiveAt)`. Until that endpoint exists, viewers keep scenario controls read-only.
@@ -175,6 +176,89 @@ Reserved for M2/M3 (same snapshot ids): `POST /api/sim`, `POST /api/sim/{id}/adv
 `WS /api/sim/{id}/stream?afterSequence=` (frames, events, vehicle trajectories, AMI pulses),
 `GET /api/sim/{id}/{incidents,outages,crews}`, `POST /api/sim/{id}/incidents`, `/process/{graph,queue,costs}`,
 `/billing/{reads,documents,invoices}`.
+
+## Operations (hammer, crews, field visits)
+
+Stateless: the viewer keeps a run's **command list** (append-only, in Astra's `DemoOperations` shape) and sends it
+whole; the engine replays it deterministically. Served by the local API and by the hosted engine (`api/index.py`,
+Vercel) for the prebuilt towns in `packs/`.
+
+| Method & path | Body | Returns |
+|---|---|---|
+| `GET /api/packs` | – | prebuilt towns (`town-pack/1.0`) |
+| `GET /api/sim/settings` | – | default response timings (detection, mobilisation, isolate/repair/flush minutes, leak rates, visit minutes, `autoDispatch`) |
+| `POST /api/sim/timeline` | `{town, date?, commands[], settings?}` | `utility-timeline/1.0` |
+| `POST /api/sim/frame` | `{town, date?, commands[], settings?, at, premises?}` | a complete `utility-state/1.0` frame with the run's switching, valves and leaks |
+
+`town` is a pack preset (`ayr`) or a town id. `at` and every time below are **seconds since local midnight of the
+run day** (default: the town's scenario date).
+
+Commands: `{id, at, type, payload}`.
+* `break_asset` `{id, kind: pole|main, utility, edgeId, x, z}`: a pole (its edge comes from the engine's equipment
+  list) or a point on a conductor or water/gas main.
+* `dispatch` `{targetId}` for a field visit (meter technician, special read) or `{incidentId}` for a repair crew.
+  Repairs are dispatched automatically once the incident is detected (`settings.autoDispatch`, default true), so an
+  explicit repair dispatch is only needed when that is off.
+
+What the engine does:
+* **Electric:** the nearest upstream fuse (lateral) or recloser (feeder head) trips; AMI last-gasp detects the outage;
+  the crew isolates the faulted span and re-closes the device (customers upstream of the fault come back), repairs,
+  and restores the rest.
+* **Water / gas:** the break leaks (flow injected at the nearer node) until the crew closes the valves bounding the
+  damaged section; customers inside it lose supply; repair (and flush for water), then restore.
+* **Field visit:** a meter technician drives out, takes interim reads of the premise's meters (`meter-read/1.1`,
+  `readReason: interim`, `source: field-visit`) and returns.
+* Crews (`operations.*_crews`, `meter_techs`) start at the depot, are assigned first come first served and are never
+  reassigned; a job waits (`workorder.queued`) when none is free. Routes are the fastest by travel time on the road
+  graph at the configured class speeds, in the right-hand lane, with a timestamp at every vertex.
+
+`GET /api/sim/settings` returns the operations defaults. `GET /api/sim/settings/schema` returns the same settings as
+JSON Schema, with titles, units, bounds and effects. Groups marked `x-flat` hold top-level keys; the others are the
+nested per-utility or per-incident settings. A timeline or frame request's `settings` overrides only what it names;
+the viewer's Configuration → Scenario tab sends them.
+
+`utility-timeline/1.0`: `simulationId` (the same as the town's frames for that day), `incidents` (with protective
+device, detection, isolation and restoration times, unsupplied counts), `jobs` (Astra's job shape: `startAt`,
+`arrivalAt`, `workSeconds`, `returnStartAt`, `endAt`, `route` + `routeTimes`, `returnRoute` + `returnTimes`,
+`roadPoint`, `visitPoint`, `crewId`), `events` (`event/1.0` envelope, `eventId = <correlation>:<n>`, sequence by
+time), `stateChanges` (times where supply changes, with unsupplied premise ids, disabled edges and leaks per utility),
+`interruptions` (who lost which service and when: `{utility, start, end, premiseIds}` grouped by identical spans, `end`
+null if still out at the end of the day; the meter-to-cash run's `outages`), `reads`, `warnings`.
+
+Frames from `/api/sim/frame` add `premises.unsupplied` (`{electric: [premiseId…], …}`) when anyone is without supply.
+Every frame also carries the radial power flow: `networks.electric.loading` per edge (apparent power over capacity),
+`networks.electric.lossesKW`, and `premises.voltage` (service voltage on a 120 V base, null when unsupplied).
+They also carry `premises.pressure.water` and `premises.pressure.gas`: service pressure in kPa gauge from the radial
+hydraulics. It is null when the premise is unsupplied or not served.
+
+Back-feed closes a tie only if the feeder picking up the load stays within `tieMaxLoading` (1.3, the emergency
+rating) and every customer keeps at least `tieMinVoltage` (110 V), checked hourly across the repair. Otherwise the
+incident lists `tiesDeclined` and a `backfeed.declined` event explains why. An accepted tie reports its `maxLoading`
+and `minVoltage`.
+
+**Determinism:** the same town, day, settings and commands give byte-identical timelines and frames. Commands run in
+time order and nothing decides using a later command, so **appending a command never changes events, jobs or routes
+that happened before it** (events after it may be renumbered). The viewer sends commands with `at` ≥ the last one.
+
+A water main break leaks at orifice flow (`leakOpening`, 5 % of the bore, at the local pressure; `leak.started`
+reports the m³/h) until its valves close. An elevated tank feeds whatever the supply can no longer reach.
+
+A gas main break ends with a relight sweep:
+- once the main is back, `relight` crews visit every shut premise, nearest first, with at least `relightCrews`
+  crews and one per `relightPerCrew` premises (mutual aid);
+- each premise stays in `premises.unsupplied.gas` until relit (`premise.relit` events);
+- the timeline reports relight progress in 5-minute steps (`stateChanges[].awaitingRelight`), while frames are exact.
+
+Scheduled work (see [M2C.md](M2C.md)) appears in the same timeline: the day's reading rounds (`meter_reading`,
+with `walkRoute`/`walkTimes`) and, when the request carries `m2c`, the run's field orders (`field_order`). Both run
+before commands on their own crews, so appending a command still never changes earlier jobs.
+
+## Meter-to-cash (reads, VEE, work queues)
+
+`utilsim/m2c/` replays a year of reads, VEE decisions and exception work queues for a run of `(town, settings,
+actions)`; see [M2C.md](M2C.md) for the model, settings and endpoints. Reads keep `meter-read/1.1` with additive
+fields (`veeStatus`, `veeDecisionId`, `veeConfidence`, `caseId`, `billStatus`, `registerRegression`, `revisions[]`).
+Read, VEE and bill statuses stay distinct. Truth is returned only when a request asks for it (`truth: true`).
 
 ## Reads
 

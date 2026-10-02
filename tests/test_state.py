@@ -79,3 +79,37 @@ def test_sequence_is_minutes_since_local_midnight(town120):
     # A replay past midnight keeps counting from the run day, so sequences stay increasing.
     late = fb.replay("2026-07-15", start_hour=23, hours=2, step_minutes=60, include_premises=False)
     assert [f["sequence"] for f in late["frames"]] == [1380, 1440]
+
+
+def test_weather_year_drives_seasonal_demand(town120):
+    from utilsim.sim.weather import daily_temps
+
+    temps = daily_temps(town120.cfg)
+    assert len(temps) == 396 and np.array_equal(temps, daily_temps(town120.cfg))
+    fb = FrameBuilder(town120)
+    jan = fb.frame(local_time(town120, "2026-01-15", 7.0))
+    jul = fb.frame(local_time(town120, "2026-07-15", 7.0))
+    assert jan["networks"]["gas"]["sourceFlow"] > 3 * jul["networks"]["gas"]["sourceFlow"]
+    assert jan["clock"]["tempC"] < jul["clock"]["tempC"]
+
+
+def test_closing_a_normally_open_tie_backfeeds_downstream_premises():
+    from utilsim.sim.flows import FlowInputs, FlowModel, NetInputs
+
+    # source 0 -> 1 -> 2 -> 3, and an open tie 0 - 3; meters at 2 (premise 0) and 3 (premise 1).
+    net = NetInputs(n_nodes=4, a=np.array([0, 1, 2, 0]), b=np.array([1, 2, 3, 3]), loop=np.array([False] * 3 + [True]),
+                    enabled=np.array([True, True, True, False]), meter=np.array([-1, -1, 0, 1]), sources=np.array([0]),
+                    unit="kW")
+    daily = {"dailyKWh": np.array([24.0, 24.0]), "dailyWaterM3": np.zeros(2), "dailyGasM3": np.zeros(2),
+             "solarPeakKW": np.zeros(2)}
+    fm = FlowModel(FlowInputs({"electric": net}, daily, np.array([True, True]), np.array([False, False]),
+                              ["P-1", "P-2"], 0.0))
+    fault = {"electric": np.array([False, True, False, False])}
+    out = fm.flows(12.0, disabled=fault)
+    assert out.unsupplied["electric"].tolist() == [True, True]
+    tie = {"electric": np.array([False, False, False, True])}
+    back = fm.flows(12.0, disabled=fault, closed=tie)
+    assert back.unsupplied["electric"].tolist() == [False, False]
+    flows = back.edge_flows["electric"]
+    assert flows[1] == 0 and flows[3] != 0 and back.source["electric"] == out.source["electric"] + sum(back.homes["electric"])
+    assert fm.flows(12.0).edge_flows["electric"][3] == 0  # the tie stays open as built

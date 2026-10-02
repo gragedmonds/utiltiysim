@@ -53,7 +53,7 @@ def build_water(ctx: NetContext) -> Network:
     n_prem = len(prem)
     tap_edge = np.concatenate([prem.edge, [f.edge for f in pumps + tanks]]).astype(np.int64)
     tap_s = np.concatenate([prem.s, [f.s for f in pumps + tanks]])
-    sg = SplitGraph.build(roads, tap_edge, tap_s)
+    sg = SplitGraph.build(roads, tap_edge, tap_s, ctx.corridors.side)
     prem_tap = sg.n_road + np.arange(n_prem)
     pump_tap = [sg.n_road + n_prem + i for i in range(len(pumps))]
     tank_tap = [sg.n_road + n_prem + len(pumps) + i for i in range(len(tanks))]
@@ -114,7 +114,8 @@ def build_water(ctx: NetContext) -> Network:
     node_of: dict[int, int] = {}
     root_tap = pump_tap[0]
     node_of[root_tap] = net.add_node(f"water-J-T{root_tap}", "junction",
-                                     sg.point_at(int(sg.tap_edge[root_tap - sg.n_road]), float(sg.tap_s[root_tap - sg.n_road]), off))
+                                     sg.street_point(int(sg.tap_edge[root_tap - sg.n_road]),
+                                                     float(sg.tap_s[root_tap - sg.n_road]), off))
     trunk_mm = int(max(size[forest.order].max() if len(forest.order) else 0, w.arterial_main_mm))
     _sized_edge(net, "trunk", st, node_of[root_tap], None, trunk_mm, "trunk", zone=0)
     _emit_tree(net, sg, forest, node_of, size, zone, off, prem_tap, tank_tap, sub_n, ph, fire_need)

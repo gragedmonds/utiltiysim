@@ -75,14 +75,18 @@ def build_snapshot(town, *, include_reads: bool = True, units: str | None = None
     minx, miny, maxx, maxy = lu.bounds
     g = lu.roads.graph
 
+    corridor_of = {rid: c["id"] for c in town.networks["electric"].corridors for rid in c["roadIds"]}
     roads = []
     for e in range(g.n_edges):
         c = int(g.edge_class[e])
-        roads.append({"id": f"R-{e}", "a": f"RN-{int(g.uv[e, 0])}", "b": f"RN-{int(g.uv[e, 1])}",
-                      "points": _pts(g.geometry[e]), "name": lu.roads.names[e] or "Unnamed Road",
-                      "class": OSM_TAG_FOR_CLASS[c], "roadClass": CLASS_NAMES[c], "length": _r(g.length[e]),
-                      "lengthM": _r(g.length[e]), "rowWidthM": float(ROW_WIDTH[c]),
-                      "pavementWidthM": float(PAVEMENT_WIDTH[c]), "origin": lu.roads.origin[e]})
+        rec = {"id": f"R-{e}", "a": f"RN-{int(g.uv[e, 0])}", "b": f"RN-{int(g.uv[e, 1])}",
+               "points": _pts(g.geometry[e]), "name": lu.roads.names[e] or "Unnamed Road",
+               "class": OSM_TAG_FOR_CLASS[c], "roadClass": CLASS_NAMES[c], "length": _r(g.length[e]),
+               "lengthM": _r(g.length[e]), "rowWidthM": float(ROW_WIDTH[c]),
+               "pavementWidthM": float(PAVEMENT_WIDTH[c]), "origin": lu.roads.origin[e]}
+        if rec["id"] in corridor_of:
+            rec["corridorId"] = corridor_of[rec["id"]]
+        roads.append(rec)
 
     premises, buildings, parcels = [], [], []
     extra = cust.premise_extra if cust else {}
@@ -169,9 +173,13 @@ def build_snapshot(town, *, include_reads: bool = True, units: str | None = None
                        "topology": "construction forest (parentEdgeId) plus loop edges; connectivity = enabled edges",
                        "assumptions": {"losses": "excluded in M1 flows", "sizing": "engineering step tables",
                                        "pressureVoltageSolution": "M2"}}
+        if net.corridors:
+            networks[u]["corridors"] = _clean(net.corridors)
 
+    # roadId/t: where the site meets the street (crews leave the depot there), like premises' roadId/t.
     facilities = [{"id": f.id, "kind": f.kind, "label": f.label, "x": _r(f.xy[0]), "z": _r(-f.xy[1]),
-                   "polygon": _poly(f.poly), "premiseId": f.attrs.get("premise_id")} for f in lu.facilities]
+                   "polygon": _poly(f.poly), "premiseId": f.attrs.get("premise_id"), "roadId": f"R-{int(f.edge)}",
+                   "t": round(float(f.s / max(g.length[int(f.edge)], 1e-9)), 5)} for f in lu.facilities]
     district_ids = sorted(set(int(d) for d in prem.district))
     dxy = geo.era.district_xy
     vor = shapely.voronoi_polygons(MultiPoint([tuple(p) for p in dxy]), extend_to=box(minx, miny, maxx, maxy))
@@ -282,16 +290,27 @@ def town_stats(town) -> dict:
         "mainsKm": length, "transformers": nets["electric"].meta.get("transformers"),
         "feeders": len(nets["electric"].meta.get("feeders", [])), "substations": nets["electric"].meta.get("substations"),
         "hydrants": sum(1 for q in nets["water"].equipment if q["kind"] == "hydrant"),
-        "poles": nets["electric"].meta.get("poles"), "districtRegulators": nets["gas"].meta.get("districtRegulators"),
+        "poles": nets["electric"].meta.get("poles"), "ties": nets["electric"].meta.get("ties"),
+        "districtRegulators": nets["gas"].meta.get("districtRegulators"),
         "waterZones": nets["water"].meta.get("zones"),
         "mrus": len(town.customers.mrus) if town.customers else None,
         "amiCollectors": len(town.customers.ami.get("collectors", [])) if town.customers else None,
+        "electricRouting": electric_routing(town),
         "timingsS": town.timings,
     }
+
+
+def electric_routing(town) -> dict:
+    """Corridor-routing metrics for the electric network (docs/CORRIDOR_ROUTING_REQUIREMENTS.md)."""
+    from utilsim.net.corridors import extract_corridors, routing_metrics
+
+    t = town.cfg.town
+    cor = extract_corridors(town.roads, t.corridor_max_deflection_deg, t.corridor_name_bonus_deg)
+    return routing_metrics(town.networks["electric"], town.roads, cor, town.cfg.electric.severe_turn_deg)
 
 
 def angle_note() -> str:
     return "angle = road direction atan2(dz, dx) in viewer coords; mesh rotation.y = -angle (prototype convention)"
 
 
-__all__ = ["build_snapshot", "town_stats", "math"]
+__all__ = ["build_snapshot", "town_stats", "electric_routing", "math"]

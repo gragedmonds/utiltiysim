@@ -31,5 +31,6 @@ def test_pack_matches_its_preset(town):
     snap = orjson.loads(gzip.decompress((PACKS / town["files"]["snapshot"]["path"]).read_bytes()))
     assert snap["id"] == town["townId"] and snap["homes"] == town["homes"]
     assert snap["topologyRevision"] == town["topologyRevision"] and snap["indexRevision"] == town["indexRevision"]
-    stray = [p.name for p in (PACKS / town["preset"]).iterdir() if not p.name.startswith(town["townId"] + ".")]
+    listed = {Path(f["path"]).name for f in town["files"].values()}
+    stray = sorted(p.name for p in (PACKS / town["preset"]).iterdir() if p.name not in listed)
     assert not stray, f"old pack files left behind: {stray}"

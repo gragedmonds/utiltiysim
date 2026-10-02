@@ -1,14 +1,14 @@
 {
   "schemaVersion": "utility-town/2.0",
-  "generatorVersion": "0.2.0",
-  "id": "town-629f54bde38fe9d7",
+  "generatorVersion": "0.7.0",
+  "id": "town-a5025bda20b8028f",
   "seed": "WHITBY-042",
-  "count": 552,
-  "premiseCount": 552,
+  "count": 609,
+  "premiseCount": 609,
   "bounds": {
     "minX": -825.18,
-    "maxX": 1065.46,
-    "minZ": -181.99,
+    "maxX": 1053.42,
+    "minZ": -163.8,
     "maxZ": 1009.88
   },
   "source": {
@@ -41,44 +41,97 @@
   },
   "stats": {
     "houses": 480,
-    "premises": 552,
-    "commercial": 68,
-    "solarHomes": 80,
-    "evHomes": 44,
-    "gasServices": 479,
+    "premises": 609,
+    "commercial": 125,
+    "solarHomes": 82,
+    "evHomes": 45,
+    "gasServices": 532,
     "vacant": 23,
-    "roadKm": 16.01,
+    "roadKm": 15.933,
     "mainsKm": {
-      "electric": 10.48,
-      "water": 11.977,
-      "gas": 11.46
+      "electric": 11.149,
+      "water": 12.842,
+      "gas": 12.505
     },
-    "transformers": 138,
-    "feeders": 1,
+    "transformers": 162,
+    "feeders": 2,
     "substations": 1,
-    "hydrants": 52,
-    "poles": 157,
+    "hydrants": 62,
+    "poles": 169,
+    "ties": 1,
     "districtRegulators": 2,
     "waterZones": 1,
     "mrus": 21,
     "amiCollectors": 2,
+    "electricRouting": {
+      "basis": "designRole",
+      "severeTurnDeg": 60.0,
+      "trunk": {
+        "km": 4.098,
+        "kmByClass": {
+          "arterial": 2.637,
+          "collector": 1.461,
+          "local": 0.0
+        },
+        "corridorShare": 1.0,
+        "turns": 5,
+        "severeTurns": 2,
+        "severeTurnsPerKm": 0.488,
+        "corridorChanges": 2,
+        "corridorChangesPerKm": 0.488,
+        "branches": 6,
+        "transitions": {
+          "hierarchyDown": 1,
+          "hierarchyUp": 1,
+          "construction": 2
+        }
+      },
+      "primary": {
+        "km": 10.937,
+        "kmByClass": {
+          "arterial": 3.313,
+          "collector": 1.902,
+          "local": 5.722
+        },
+        "corridorShare": 0.4768,
+        "turns": 15,
+        "severeTurns": 9,
+        "severeTurnsPerKm": 0.823,
+        "corridorChanges": 5,
+        "corridorChangesPerKm": 0.457,
+        "branches": 45,
+        "transitions": {
+          "hierarchyDown": 4,
+          "hierarchyUp": 1,
+          "construction": 4
+        }
+      },
+      "feeders": 2,
+      "ties": 1,
+      "expressKm": 0.564,
+      "corridors": 11,
+      "corridorKm": 7.133,
+      "corridorComponents": 1,
+      "disconnectedCorridorComponents": 0,
+      "exceptions": 0
+    },
     "timingsS": {
-      "roads": 0.031,
-      "land_use": 1.259,
-      "buildings": 0.181,
-      "electric": 0.133,
-      "water": 0.188,
-      "gas": 0.093,
-      "customers": 0.116,
-      "total": 2.001
+      "roads": 0.032,
+      "land_use": 1.741,
+      "buildings": 0.363,
+      "electric": 0.121,
+      "water": 0.192,
+      "gas": 0.119,
+      "customers": 0.451,
+      "total": 3.019
     }
   },
   "validation": {
     "valid": true,
     "errors": [],
     "errorCount": 0,
-    "connectedServices": 1583,
-    "networkEdges": 3121,
+    "connectedServices": 1750,
+    "networkEdges": 3469,
     "checks": [
       "Unique identifiers",
       "Valid edge endpoints",
@@ -90,9 +143,10 @@
       "Sizes non-increasing away from source",
       "Capacity covers design load",
       "Electric voltage stages",
+      "Electric radial: no cycles through energized edges; feeder ties explicit and normally open",
       "No gas service without gas mains in the district",
       "Referential integrity"
     ]
   },
-  "configHash": "3c2d68190ecba5f36f0f643178beaf067d522ec4c16a606a38c6232ac23105b0"
+  "configHash": "e50ac289625a557455cd98e52957cbd6b3da835c639b4473fa37cd069e480913"
 }

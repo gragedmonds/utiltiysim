@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import cached_property
 
 import numpy as np
 
@@ -25,6 +26,14 @@ class NetContext:
     @property
     def roads(self):
         return self.lu.roads
+
+    @cached_property
+    def corridors(self):
+        """Arterial/collector corridors and street sides of the town's roads (shared by every network)."""
+        from utilsim.net.corridors import extract_corridors
+
+        t = self.cfg.town
+        return extract_corridors(self.roads, t.corridor_max_deflection_deg, t.corridor_name_bonus_deg)
 
     def facilities(self, kind: str) -> list[Facility]:
         return [f for f in self.lu.facilities if f.kind == kind]

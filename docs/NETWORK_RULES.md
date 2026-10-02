@@ -1,12 +1,15 @@
 # Network rules
 
-All three networks share one construction: split the street graph at every tap (premise service, transformer,
-facility access), grow a class-weighted shortest-path forest from the sources (arterials 0.5–0.55, collectors
-0.7–0.75, locals 1.0 per metre, so trunks follow main roads), prune to what serves customers, aggregate diversified
-demand bottom-up, size from step tables, then enforce "a parent is never smaller than its child". Loops are added
-after sizing as loop edges between existing nodes (`loop: true`, never a parent edge), each with `enabled`:
-water and gas loops enabled, electric feeder ties normally open (`enabled: false`), water ties across a
-pressure-zone boundary closed (`enabled: false`, `boundaryValve: "closed"`).
+All three networks split the street graph at every tap (premise service, transformer, facility access), prune to
+what serves customers, aggregate diversified demand bottom-up, size from step tables, then enforce "a parent is never
+smaller than its child". Water and gas grow a class-weighted shortest-path forest from their sources (arterials 0.55,
+collectors 0.75, locals 1.0 per metre, so mains follow main roads). Electric builds its backbone first along road
+corridors with a turn-aware router (below). Loops are added after sizing as loop edges between existing nodes
+(`loop: true`, never a parent edge), each with `enabled`: water and gas loops enabled, electric feeder ties normally
+open (`enabled: false`), water ties across a pressure-zone boundary closed (`enabled: false`,
+`boundaryValve: "closed"`). Each utility keeps its lateral offset in the road allowance (water −4.5 m, gas +4.5 m,
+electric underground +6.2 m, overhead −6.8 m) on the same side along a whole street: road edges are chained by heading
+continuity (corridors, then local streets) and offsets are taken relative to the street's direction, not each edge's.
 
 ## Electric (defaults: 115 kV in, 13.8 kV primary, 120/240 V)
 
@@ -16,12 +19,59 @@ pressure-zone boundary closed (`enabled: false`, `boundaryValve: "closed"`).
 | Coincidence | CF(n) = 0.33 + 0.67/√n applied per edge to the subtree sum |
 | Transformer groups | consecutive homes on one street, ≤ 6 (overhead) / ≤ 10 (underground), span ≤ 90 m, CF·ΣP ≤ 167 kVA × 1.3 |
 | Transformer sizes | 25, 50, 75, 100, 167 kVA (1φ); 75–2,500 kVA pads (3φ) for commercial, school, industry |
-| Overhead vs underground | districts built before 1978 overhead (poles every 42 m); arterials overhead before 2000 |
-| Three-phase mains | subtree > 150 customers, any 3φ customer, any collector/arterial, or load beyond 1φ capacity |
-| Conductors | OH ACSR #2 / 1/0 / 4/0 / 336 / 477 / 795; UG AL 1/0 / 4/0 / 500 / 750 / 1000 (ampacity, R, X tabled) |
-| Feeders | carved from each substation's tree when CF·ΣP exceeds 6 MVA; reclosers at heads, fuses at lateral taps |
+| Overhead vs underground | per road edge (so construction changes only at junctions, with a `riser` at each change): districts built before 1978 overhead (poles every 42 m), arterials overhead before 2000; a street takes the older of the districts on its two sides |
+| Three-phase mains | every trunk and express section; laterals with subtree > 150 customers, any 3φ customer, any collector/arterial, or load beyond 1φ capacity |
+| Conductors | OH ACSR #2 / 1/0 / 4/0 / 336 / 477 / 795; UG AL 1/0 / 4/0 / 500 / 750 / 1000 (ampacity, R, X tabled). Primary pieces are sized for design load × 1.25 (`conductor_planning_margin`: winter peaks, load growth) |
+| Services | houses 120/240 V split-phase (1/0 or 4/0 triplex overhead, 4/0 or 350 kcmil URD underground); three-phase customers 120/208 V, or 347/600 V above 150 kVA design load; parallel sets (`N × …`) until the design current fits |
+| Shared corridors | where a piece carries more than the largest cable can (the substation getaway and the street feeders share before they part), the largest cable runs in parallel: `parallelCables`, a duct bank underground or a multi-circuit pole line overhead |
+| Corridors | chains of arterial/collector road edges paired at each junction by heading continuity (≤ 35°, or ≤ 55° when both carry the same name); exported as `networks.electric.corridors` and `corridorId` on roads and edges |
+| Feeders | per substation max(2, ⌈CF·ΣP / 6 MVA⌉, ⌈customers / 1,200⌉), each its own circuit with a getaway cable and a recloser at its head; fuses at single-phase lateral taps |
+| Territories | the substation's turn-aware preference tree is cut into feeder territories of about equal connected load, preferably where a branch leaves a corridor; the final territory of a transformer group is its nearest trunk |
+| Trunk routing | edge-state Dijkstra (state = incoming piece): length × class weight (arterial 1.0, collector 1.4, local 2.0) + 60 m × (turn/90°)² (bends under 10° free) + 80 m per corridor change + 60 m per hierarchy step; stable piece ids break ties. Each trunk runs from the substation to the corridor points where at least 4 % of its territory's load leaves the corridors, farthest first, each branch starting from the trunk built so far |
+| Express sections | a trunk crossing another feeder's territory has no taps (`designRole: "express"`, 1.5 m further out per lane, on the other line's poles); 1.2 × routing cost discourages them |
+| Laterals | one multi-source run of the same router from all trunks: every transformer group hangs from its nearest trunk node; trunk ends continue with the turn penalty, interior trunk nodes branch |
 | Substations | one per 25 MVA of town design load; 115 kV backbone in-and-out between substations |
-| Ties | one normally-open tie per pair of adjacent feeders, on the shortest unused street piece |
+| Ties | normally-open (`normallyOpen: true`, `enabled: false`), one per pair of neighbouring feeders on a street piece between them: both ends three-phase first, then farthest along both feeders, then shortest. A feeder touching no other gets the shortest new line (≤ 800 m, `newLine: true`) to the nearest one |
+| Exceptions | trunk sections on local streets are listed in `meta.routingExceptions` with the reason (no corridor reaches the territory, or the trunk bridges corridors) |
+
+**Power flow** (`utilsim/sim/voltage.py`, every frame): linearised DistFlow on the energized radial forest.
+- Each edge drops `factor · (P·R + Q·X) / (1000 · V²)` per unit, with R and X from the tables, divided by parallel
+  circuits.
+- Single-phase primary uses line-to-neutral kV with factor 2, and services use 0.24 kV with factor 2.
+- Transformers drop `(P·1.1 % + Q·1.6 %)` on their rating.
+- The substation tap changer holds 1.03 pu. Loads run at power factor 0.95, and rooftop solar nets against load, so
+  reverse flow raises voltage.
+- Frames report `loading` per electric edge (S / capacity), `lossesKW`, and `premises.voltage` on a 120 V base.
+- On Ayr, a typical July evening stays within ANSI Range A (114–126 V) with losses near 3 %. A January evening
+  pushes transformers serving electric-heat streets past nameplate; the primary stays within rating.
+
+Routing metrics (`stats.electricRouting`, `utilsim.net.corridors.routing_metrics`): trunk km by road class and the
+corridor share, severe turns (≥ 60°) and corridor changes per trunk km, hierarchy-down/up and overhead↔underground
+transitions along trunk continuations, express km, feeders, ties, corridor components (`disconnectedCorridorComponents`
+counts arterial/collector islands beyond the first). The same numbers are reported for all primary (`primary`).
+
+**Hydraulics** (`utilsim/sim/hydraulics.py`, every frame): radial, on the same forest as the flows.
+
+Water:
+- Hazen-Williams head loss, with C 150 for PVC, 140 for copper, 130 for ductile iron and 120 for concrete.
+- The grade starts at the zone tank's overflow, held there by the pump station. It resets to another zone's tank
+  where a pipe enters that zone.
+- Service pressure is grade minus elevation. On Ayr it is about 410–570 kPa (59–83 psi) and follows the ground.
+
+Gas:
+- Medium-pressure pipes use Weymouth P², starting from the city gate outlet.
+- Low-pressure pipes use Spitzglass, starting from a district regulator's outlet.
+- Low-pressure services stay between 1.5 and 1.74 kPa at a January peak.
+
+Elevated tanks are standby sources. The supply's built forest wins wherever it still connects, so in normal
+operation a tank neither fills nor drains. When the path from the pump station is cut, the tank feeds what it can
+reach. Its level is not tracked.
+
+A water main break leaks like an orifice: `leakOpening` (5 %) of the bore open, at the local pressure, which the leak
+itself pulls down (damped iterations). That gives about 390 m³/h on a 16" main and 100 m³/h on an 8" one. A gas
+break keeps the fixed `leakM3h`.
+
+Known limit: loops carry no flow in the radial model, so looped areas read a little low.
 
 ## Gas (defaults: 414 kPa / 60 psig MP, 1.74 kPa / 7" w.c. LP)
 

@@ -19,9 +19,14 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from utilsim.sim.hydraulics import HydParams, node_pressure
 from utilsim.sim.shapes import hourly
+from utilsim.sim.voltage import ElecParams, VoltageResult, solve
 
 UTILITIES = ("electric", "water", "gas")
+# Nodes that can feed a network. An elevated tank only feeds what the supply can no longer reach (it floats on the
+# system, so the built forest from the supply wins wherever it still connects).
+SOURCE_KINDS = ("external_supply", "elevated_tank")
 
 
 @dataclass
@@ -39,15 +44,18 @@ class NetInputs:
 @dataclass
 class FlowInputs:
     nets: dict[str, NetInputs]
-    daily: dict[str, np.ndarray]  # dailyKWh, dailyWaterM3, dailyGasM3, solarPeakKW per premise
+    daily: dict[str, np.ndarray]  # dailyKWh, dailyWaterM3, dailyGasM3, solarPeakKW per premise (July)
     occupied: np.ndarray
     has_gas: np.ndarray
     premise_ids: list[str]
     leak_m3h: float
+    monthly: dict[str, np.ndarray] | None = None  # the same per month (12, n), from the weather year
+    elec: ElecParams | None = None  # impedances and ratings for the electric power flow (sim.voltage)
+    hyd: dict[str, HydParams] | None = None  # water and gas pressures (sim.hydraulics)
 
     @classmethod
     def from_town(cls, town) -> FlowInputs:
-        from utilsim.sim.demand import july_daily
+        from utilsim.sim.usage import UsageInputs, monthly_daily
 
         index = {pid: i for i, pid in enumerate(town.prem.ids)}
         nets = {}
@@ -60,11 +68,30 @@ class FlowInputs:
                 enabled=np.array([bool(e.enabled) for e in net.edges]),
                 meter=np.array([index.get(nd.attrs.get("premiseId"), -1) if nd.kind == "meter" else -1
                                 for nd in net.nodes], dtype=np.int64),
-                sources=np.array([i for i, nd in enumerate(net.nodes) if nd.kind == "external_supply"],
+                sources=np.array([i for i, nd in enumerate(net.nodes) if nd.kind in SOURCE_KINDS],
                                  dtype=np.int64),
                 unit=net.unit)
-        return cls(nets, july_daily(town.prem, town.cfg), np.asarray(town.prem.attrs["occupied"], dtype=bool),
-                   np.asarray(town.prem.attrs["has_gas"], dtype=bool), list(town.prem.ids), town.cfg.scenario.leak_m3h)
+        monthly = monthly_daily(UsageInputs.from_premises(town.prem), town.cfg)
+        el = town.networks["electric"]
+        elec = ElecParams.from_edges([_edge_dict(e, el) for e in el.edges], [nd.kind for nd in el.nodes])
+        hyd = {u: HydParams.from_network(u, [_edge_dict(e, town.networks[u]) for e in town.networks[u].edges],
+                                         [_node_dict(nd) for nd in town.networks[u].nodes]) for u in ("water", "gas")}
+        return cls(nets, {k: v[6] for k, v in monthly.items()}, np.asarray(town.prem.attrs["occupied"], dtype=bool),
+                   np.asarray(town.prem.attrs["has_gas"], dtype=bool), list(town.prem.ids), town.cfg.scenario.leak_m3h,
+                   monthly, elec, hyd)
+
+
+def _edge_dict(e, net) -> dict:
+    """A generated edge in the snapshot's shape (what ``sim.voltage`` and ``sim.hydraulics`` read)."""
+    d = {**e.attrs, "kind": e.kind, "lengthM": e.length, "id": e.id, "from": net.nodes[e.a].id,
+         "to": net.nodes[e.b].id}
+    if e.size_mm and "sizeMm" not in d:
+        d["sizeMm"] = e.size_mm
+    return d
+
+
+def _node_dict(nd) -> dict:
+    return {**nd.attrs, "id": nd.id, "kind": nd.kind}
 
 
 @dataclass
@@ -74,6 +101,9 @@ class FlowResult:
     homes: dict[str, np.ndarray]
     unit: dict[str, str]
     unsupplied: dict[str, np.ndarray] | None = None  # per commodity, bool per premise (no source reaches its meter)
+    voltage: VoltageResult | None = None  # electric power flow: voltages, loading, losses
+    pressure: dict[str, np.ndarray] | None = None  # water and gas: kPa per premise (sim.hydraulics)
+    node_pressure: dict[str, np.ndarray] | None = None  # the same per network node
 
 
 @dataclass
@@ -108,10 +138,13 @@ class FlowModel:
             self._orig_pe[u] = pe
 
     # ---- topology --------------------------------------------------------------------------------------------
-    def forest(self, u: str, disabled: np.ndarray | None = None) -> _Forest:
-        """Repaired forest for a disabled-edge mask (``None`` = as built). Cached per mask."""
+    def forest(self, u: str, disabled: np.ndarray | None = None, closed: np.ndarray | None = None) -> _Forest:
+        """Repaired forest for a disabled-edge mask (``None`` = as built), with normally-open switches in ``closed``
+        closed. Cached per mask."""
         net = self.inputs.nets[u]
-        off = ~net.enabled if disabled is None else (~net.enabled | disabled)
+        off = ~net.enabled if closed is None else (~net.enabled & ~closed)
+        if disabled is not None:
+            off = off | disabled
         key = (u, np.packbits(off).tobytes())
         hit = self._cache.get(key)
         if hit is not None:
@@ -162,18 +195,30 @@ class FlowModel:
     # ---- flows -----------------------------------------------------------------------------------------------
     def flows(self, hour: float, scenario: str = "normal", target: str | None = None, *,
               disabled: dict[str, np.ndarray] | None = None,
-              injections: dict[str, dict[int, float]] | None = None) -> FlowResult:
+              injections: dict[str, dict[int, float]] | None = None,
+              premises_off: dict[str, np.ndarray] | None = None, month: int | None = None,
+              closed: dict[str, np.ndarray] | None = None) -> FlowResult:
+        """``premises_off`` (bool per premise) takes premises off a commodity although the network reaches them
+        (e.g. gas meters shut until relit)."""
         inp = self.inputs
         ti = self.index.get(target) if target else None
-        d = hourly(self.daily, inp.occupied, inp.has_gas, hour, scenario, ti, inp.leak_m3h)
+        daily = self.daily if month is None or inp.monthly is None else {k: v[month - 1] for k, v in inp.monthly.items()}
+        d = hourly(daily, inp.occupied, inp.has_gas, hour, scenario, ti, inp.leak_m3h)
         source, edge_flows, unit, unsupplied = {}, {}, {}, {}
         homes = dict(d)
+        voltage, pressure, nodes_p = None, {}, {}
         for u, net in inp.nets.items():
-            f = self.forest(u, None if disabled is None else disabled.get(u))
-            off = ~net.enabled if disabled is None or u not in disabled else (~net.enabled | disabled[u])
+            dis = None if disabled is None else disabled.get(u)
+            cl = None if closed is None else closed.get(u)
+            f = self.forest(u, dis, cl)
+            off = ~net.enabled if cl is None else (~net.enabled & ~cl)
+            if dis is not None:
+                off = off | dis
             dead_meter = (net.meter >= 0) & ~f.reached
             lost = np.zeros(len(inp.premise_ids), dtype=bool)
             lost[net.meter[dead_meter]] = True
+            if premises_off is not None and u in premises_off:
+                lost |= premises_off[u]
             if lost.any():
                 homes[u] = np.where(lost, 0.0, homes[u])
             unsupplied[u] = lost
@@ -192,7 +237,22 @@ class FlowModel:
             # Edges with both ends unreached carry nothing (a dead island), even if their switch is closed.
             dead = ~f.reached[net.a] & ~f.reached[net.b]
             ef[dead] = 0.0
+            # A standby source (an elevated tank) the supply still reaches neither fills nor drains in this model.
+            root = np.zeros(net.n_nodes, dtype=bool)
+            root[net.sources] = True
+            ef[np.isnan(ef) & ~net.loop & (root[net.a] | root[net.b])] = 0.0
             source[u] = float(sum(tot[int(s)] for s in net.sources))
             edge_flows[u] = ef
             unit[u] = net.unit
-        return FlowResult(source, edge_flows, homes, unit, unsupplied)
+            if u == "electric" and inp.elec is not None:
+                load = np.zeros(net.n_nodes)
+                load[m] = np.where(lost, 0.0, homes["loadKW"])[net.meter[m]]
+                for lvl in reversed(f.levels[1:]):
+                    np.add.at(load, f.parent[lvl], load[lvl])
+                voltage = solve(inp.elec, f, tot, load, net.meter, len(inp.premise_ids))
+            if inp.hyd is not None and u in inp.hyd:
+                nodes_p[u] = node_pressure(inp.hyd[u], f, tot)
+                pressure[u] = np.full(len(inp.premise_ids), np.nan)
+                mr = (net.meter >= 0) & f.reached
+                pressure[u][net.meter[mr]] = nodes_p[u][mr]
+        return FlowResult(source, edge_flows, homes, unit, unsupplied, voltage, pressure or None, nodes_p or None)

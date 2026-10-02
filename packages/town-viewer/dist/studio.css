@@ -1,0 +1,343 @@
+/* Utility Studio shell (Astra's prototype, prototypes/utility-studio): a fixed header with Map and Workspace as the
+   only primary navigation and Configuration on the cog. Pages and the map sit below it. */
+.studio-header{--studio-accent:#7357d8}
+.focus-layout .topbar.studio-header{position:absolute;left:0;right:0;top:0;height:62px;min-height:62px;padding:0 20px 0 24px;gap:28px;display:flex;align-items:stretch;justify-content:flex-start;background:#fff;border:0;border-top:3px solid var(--studio-accent);border-bottom:1px solid #dfdfe9;pointer-events:auto;z-index:40;box-sizing:border-box}
+.studio-brand{display:flex;align-items:center;gap:10px;font-size:17px;font-weight:750;letter-spacing:-.5px;color:#211d2e;white-space:nowrap;flex:none}
+.studio-logo{width:26px;height:26px;display:grid;place-items:center;border:2px solid var(--studio-accent);color:var(--studio-accent);border-radius:4px;font-size:20px;line-height:1}
+.studio-town{font-size:12px;font-weight:500;letter-spacing:0;color:#8a8497;margin-left:4px;max-width:28ch;overflow:hidden;text-overflow:ellipsis}
+.studio-tabs{display:flex;align-items:stretch;gap:4px;flex:1;margin:0}
+.studio-tabs a{display:flex;align-items:center;padding:0 18px;font-size:14px;color:#777187;text-decoration:none;border-bottom:3px solid transparent;margin-bottom:-1px;white-space:nowrap}
+.studio-tabs a[aria-current="page"]{color:#684bc5;font-weight:650;border-bottom-color:var(--studio-accent);background:#f7f5fd}
+.studio-header .top-actions{display:flex;align-items:center;gap:6px;pointer-events:auto}
+.studio-header .tool-button{width:38px;height:38px;border-radius:6px;background:none;border:0;box-shadow:none;color:#8a8497}
+.studio-header .tool-button:hover{background:#f0ecfc;color:var(--studio-accent)}
+.studio-header .studio-cog[aria-current="page"]{background:#f0ecfc;color:var(--studio-accent)}
+.focus-layout .map-shell{top:62px;height:auto}
+.focus-layout .settings-page{top:62px}
+.studio-page{padding:0;background:#eef4f9;overflow:hidden;display:flex;flex-direction:column}
+.studio-workspace{flex:1;min-height:0;display:flex;flex-direction:column;--line:#e3e7ee;--muted:#737f94;--surface:#fff;--accent:#325aec}
+@media (max-width:600px){
+ .focus-layout .topbar.studio-header{padding:0 8px 0 12px;gap:8px}
+ .studio-town{display:none}
+ .studio-brand>span:nth-child(2){display:none}
+ .studio-tabs a{padding:0 12px;font-size:13px}
+ .studio-header .tool-button{width:34px;height:34px}
+}
+/* Utility Studio: SAP transaction geometry, from Astra's prototype (prototypes/utility-studio). */
+.spacer{flex:1}
+/* 02: dense operations workspace */
+.control{--accent:#5ed5c2;--soft:#173b3d;--bg:#0e1826;--surface:#152131;--line:#28364a;--text:#e6edf7;--muted:#8c9bb0;display:grid;grid-template-columns:218px 1fr}
+/* 04: spatial workspace */
+.spatial{--accent:#3066e5;--soft:#edf3ff;--bg:#edf0f4;--surface:#fff;--line:#e1e6ee;--text:#20314d;--muted:#7b879a;position:relative}
+.sap-context{display:flex;gap:28px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:17px 20px;margin-bottom:20px}
+.sap-context>div{display:flex;flex-direction:column;gap:6px}
+.sap-context>div span{font-size:10px;letter-spacing:1px;color:var(--muted)}
+.sap-context b{font-size:13px;font-weight:600}
+.sap-context .btn{margin-left:auto}
+.sap-app{font-family:Arial,Helvetica,sans-serif;background:#eef4f9;color:#193b53;border:1px solid #a7bacc;border-radius:0;overflow:hidden;box-shadow:0 5px 15px #0000000a}
+.sap-top{height:47px;background:#aac6df;display:flex;align-items:center;gap:22px;padding:0 15px;color:#376c97;border-bottom:1px solid #aecce6;font-size:14px}
+.sap-top>span:nth-child(2){margin:auto}
+.sap-top small{font-size:12px}
+.sap-emblem{font:bold italic 19px Arial;color:#fff;background:linear-gradient(130deg,#20b7ea,#008cc9);width:47px;height:26px;padding:2px;letter-spacing:-1.5px;clip-path:polygon(0 0,100% 0,48% 100%,0 100%)}
+.sap-toolbar{display:flex;align-items:center;gap:6px;padding:9px 13px;border-bottom:1px solid #d0e0ee;flex-wrap:wrap}
+.sap-toolbar button{background:transparent;color:#2c6290;padding:3px 7px;border:1px solid transparent;min-height:26px;display:flex;align-items:center;gap:4px;font-size:12px;white-space:nowrap}
+.sap-toolbar button:hover{background:#dce8f1;border-color:#b8c8d3}
+.sap-toolbar svg{width:15px;height:15px}
+.sap-toolbar-rule{height:18px;width:1px;background:#bfd2e1;margin:0 7px}
+.sap-tabs{display:flex;gap:4px;overflow:auto;padding:17px 12px 0;border-bottom:2px solid #d3e4f3;white-space:nowrap}
+.sap-tabs button{display:flex;align-items:center;gap:6px;font-size:12px;color:#102d44;background:none;padding:7px 12px;height:32px;border:0;border-bottom:2px solid transparent}
+.sap-tabs svg{width:13px;height:13px;color:#487899}
+.sap-tabs button.active{color:#4589be;border-bottom-color:#539bd0}
+.sap-body{padding:0 14px 30px;background:#fff;min-height:390px;overflow:auto}
+.sap-section-title{font-size:14px;font-weight:400;color:#244967;background:#eef4f9;margin:0 -14px;padding:12px 16px 10px}
+.sap-table{overflow:auto;border:1px solid #c9c9c9;min-height:215px;background:repeating-linear-gradient(to bottom,#f4f4f4 0,#f4f4f4 24px,#e5e5e5 24px,#e5e5e5 25px);position:relative}
+.sap-table table{font-family:Arial,Helvetica,sans-serif;color:#14324a;font-size:12px;white-space:nowrap;line-height:1.3}
+.sap-table th{font-size:12px;font-weight:400;text-transform:none;letter-spacing:0;background:#e7edf2;color:#193b53;border:1px solid #ccc;height:27px;padding:3px 8px}
+.sap-table td{border:1px solid #d2d2d2;padding:4px 8px;height:25px;background:#fff}
+.sap-table tbody tr:first-child td{background:#fffadb}
+.sap-table .sap-row-no{background:#edf1f4!important;color:#8a96a1;font-size:10px}
+.sap-link{background:transparent;color:#102e44;text-decoration:underline;text-underline-offset:1px;font:inherit;padding:0;border:0;text-align:left;cursor:pointer}
+.sap-square{width:10px;height:10px;background:#c3972e;display:inline-block;margin-right:6px}
+.sap-square.green{background:#318138}
+.sap-explain{font-size:12px;line-height:1.55;padding:12px 13px;border:1px solid #ced9e3;background:#eef4f9;color:#698398;margin-top:18px}
+.sap-object{display:flex;flex-direction:column;gap:5px;margin:20px 0}
+.sap-object:has(>div>div){display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.sap-field{display:flex;align-items:center;gap:8px;min-height:25px;font-size:12px;margin-bottom:6px;white-space:nowrap}
+.sap-field label{width:180px;flex-shrink:0;text-align:right;color:#7e8c99}
+.sap-input{background:#f5f7f8;min-width:165px;min-height:23px;border:1px solid #ccc;padding:3px 5px;color:#27425a;font-family:Consolas,'Courier New',monospace}
+.sap-field .sap-link{border:1px solid #ccc;background:#f5f7f8;padding:3px 5px;min-width:165px;min-height:23px;font-family:Consolas,'Courier New',monospace}
+.sap-minitabs{display:flex;gap:20px;font-size:12px;color:#284764;border-bottom:2px solid #d3e4f3;padding:8px 10px;margin-bottom:15px}
+.sap-minitabs .selected{color:#4589be}
+.sap-form{margin:15px 0 30px;min-width:450px;max-width:800px}
+.sap-form h3{font-size:14px;font-weight:400;border-bottom:1px solid #c8d0d7;margin:0 0 12px;padding:0 0 6px}
+.sap-document-layout{display:grid;grid-template-columns:230px minmax(500px,1fr);gap:25px;padding-top:18px}
+.sap-document-layout aside h3{font-size:14px;font-weight:400;border-bottom:2px solid #ccc;padding-bottom:7px;margin-bottom:14px}
+.sap-document-layout aside .sap-field{display:block}
+.sap-document-layout aside .sap-field label{display:block;text-align:left;margin-bottom:6px}
+.sap-tree{background:#ededed;min-height:320px;border:1px solid #ddd;padding:9px;font-size:12px;line-height:2;color:#4b7b9e;margin-top:16px}
+.sap-status{display:flex;gap:5px;align-items:center;min-height:27px;background:#e0ebf4;padding:6px 10px;font-size:11px;color:#526f87;border-top:1px solid #c4d6e5}
+.control .sap-app{border-color:#47667e}
+.control .sap-context{background:#152131}
+.spatial .sap-context .btn{width:auto;margin-top:0}
+@media(max-width:900px){.sap-context{flex-wrap:wrap;gap:15px}.sap-context .btn{margin-left:0}.sap-document-layout{gap:15px;grid-template-columns:210px 500px}.sap-object:has(>div>div){display:flex}.sap-field label{width:160px}.sap-body{padding:0 10px 24px}.sap-status>span:last-child{display:none}}
+@media(max-width:600px){.sap-context{padding:15px}.sap-context>div{flex:1 0 42%}.sap-context .btn{width:100%}.sap-top{gap:8px;font-size:12px}.sap-top>span:nth-child(2){white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.sap-tabs{padding-top:8px}.sap-tabs button{font-size:11px;padding:7px 8px}.sap-toolbar{gap:2px;padding:8px}.sap-toolbar button{font-size:11px;padding:3px 5px}.sap-field label{width:148px}.sap-form{min-width:370px}.sap-input,.sap-field .sap-link{min-width:150px}.sap-section-title{font-size:13px}.sap-context b{font-size:12px}.sap-status{font-size:10px}}
+.focus-main.focus-sap{overflow:hidden;background:#eef4f9}
+.focus-main>.sap-app{height:100%;display:flex;flex-direction:column;border:0;border-radius:0;box-shadow:none;min-width:0}
+.focus-main>.sap-app .sap-top{height:38px;min-height:38px;flex-shrink:0}
+.focus-main>.sap-app .sap-toolbar{flex-shrink:0;padding-top:6px;padding-bottom:6px}
+.focus-main>.sap-app .sap-tabs{flex-shrink:0;padding-top:7px}
+.focus-main>.sap-app .sap-body{flex:1;min-height:0;overflow:auto;padding-bottom:14px;display:flex;flex-direction:column}
+.focus-main>.sap-app .sap-body>.sap-table{flex:1;min-height:210px}
+.focus-main>.sap-app .sap-status{flex-shrink:0;min-height:24px;padding:4px 10px}
+.focus-main>.sap-app .sap-explain{margin-top:10px;padding:8px 10px}
+@media(max-width:720px){.focus-main>.sap-app .sap-top{height:34px;min-height:34px}.focus-main>.sap-app .sap-tabs{padding-top:3px}.focus-main>.sap-app .sap-toolbar{padding-top:5px;padding-bottom:5px}}
+/* Native SAP workspaces, matched to the supplied list screenshots. */
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+
+
+
+.focus-main.focus-billing,.focus-main.focus-vee,.focus-main.focus-exceptions{overflow:hidden;background:#f4f8fb}
+.fiori-shell{height:100%;min-height:0;display:flex;flex-direction:column;font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#223b4d;background:#f5f9fc;--muted:#526979}
+.fiori-shell button{font:inherit;color:#285f87;background:transparent;border:1px solid transparent;border-radius:3px;padding:6px 9px;min-height:30px}
+.fiori-shell button:hover:not(:disabled){background:#e3edf6;border-color:#bfd1e0}
+.fiori-shell button:focus-visible,.fiori-shell [tabindex]:focus-visible{outline:2px solid #267ab5;outline-offset:-2px}
+.fiori-shell select,.fiori-shell input:not([type=checkbox]){border:1px solid #aabfce;background:#fff;color:#24465d;min-height:29px;font-size:13px;padding:4px 8px;border-radius:2px}
+.fiori-shell input[type=checkbox]{width:16px;height:16px;accent-color:#297fb4;margin:0;vertical-align:middle}
+.fiori-top{display:flex;align-items:center;gap:18px;min-height:46px;flex-shrink:0;background:linear-gradient(#dcebf6,#d4e5f2);border-bottom:1px solid #c7dae8;padding:0 22px;color:#244b68}
+.fiori-top .sap-emblem{width:49px;flex-shrink:0}
+.fiori-top select{font-size:15px;font-weight:600;background:transparent;border:0;max-width:410px;min-width:0;padding-right:22px;height:36px;color:#315f82}
+.fiori-top .fiori-back{font-size:28px;line-height:1;padding:0 6px;min-width:28px}
+.fiori-icon{display:inline-grid;place-items:center;min-width:32px}.fiori-icon .icon{width:17px;height:17px}
+.fiori-status{min-height:27px;display:flex;align-items:center;gap:5px;flex-shrink:0;border-top:1px solid #cbdce9;background:#e6eff6;padding:4px 14px;font-size:11px;color:#607b90}
+.fiori-status .sap-square{width:8px;height:8px;margin-right:3px}
+.vee-variant{position:relative;flex-shrink:0;background:#f1f7fb;border-bottom:1px solid #d3e0e9;padding:20px 46px 26px}
+.vee-variant-line{display:flex;align-items:center;justify-content:space-between;gap:18px}
+.vee-variant-line>button{font-size:23px;font-weight:600;padding-left:0;color:#21465f;border:0;display:flex;align-items:center;gap:22px}
+.chevron-down{width:9px;height:9px;border-right:2px solid #3675a0;border-bottom:2px solid #3675a0;transform:rotate(45deg);display:inline-block;vertical-align:middle;margin:0 3px 5px}
+.chevron-down.up{transform:rotate(225deg);margin:5px 3px 0}
+.vee-filter-summary{font-size:12px;color:#60778a;margin:10px 0 0}
+.vee-views select{width:140px;background:transparent}
+.vee-variant .vee-filter-toggle{position:absolute;bottom:-14px;left:50%;transform:translateX(-50%);border:1px solid #ccdeeb;background:#e1edf6;border-radius:0 0 3px 3px;width:42px;min-height:24px;padding:2px;z-index:2}
+.vee-filters{display:flex;gap:20px;align-items:flex-end;padding-top:22px}
+.vee-filters[hidden]{display:none}
+.vee-filters label{display:flex;flex-direction:column;gap:7px;color:#506d82;font-size:12px}
+.vee-filters input{width:280px}.vee-filters select{min-width:160px}
+.vee-list{flex:1;min-height:0;display:flex;flex-direction:column;margin:24px 32px 0}
+.vee-list-toolbar{min-height:52px;display:flex;gap:12px;align-items:center;padding:8px 10px 12px;flex-shrink:0}
+.vee-list-toolbar h2{font-size:19px;letter-spacing:0;font-weight:600;color:#263f51}
+.vee-list-toolbar #vee-release{padding:5px 14px}.vee-selected{font-size:12px;color:#567d98}
+.vee-scroll{overflow:auto;flex:1;min-height:0;background:#fff;border-top:1px solid #d4dfe7;border-left:1px solid #e0e8ee;border-right:1px solid #e0e8ee}
+.fiori-shell table{font-family:Arial,Helvetica,sans-serif;font-size:13px;border-collapse:separate;border-spacing:0;white-space:normal}
+.fiori-shell th{text-transform:none;font-size:12px;letter-spacing:0;font-weight:400;color:#506879;background:#eef4f8;line-height:1.45}
+.vee-table{min-width:1130px;table-layout:fixed}
+.vee-table th{padding:13px 10px;border:0;border-bottom:1px solid #ccdbe5;position:sticky;top:0;z-index:1}
+.vee-table th:first-child{width:38px}.vee-table th:nth-child(2){width:110px}.vee-table th:nth-child(3){width:160px}.vee-table th:nth-child(4){width:135px}.vee-table th:nth-child(5){width:92px}.vee-table th:nth-child(6){width:205px}.vee-table th:nth-child(7){width:200px}.vee-table th:last-child{width:35px}
+.vee-table td{border:0;padding:19px 10px 8px;vertical-align:top;line-height:1.55;color:#405c6d}
+.vee-table .vee-main-row td:first-child{padding-top:28px}.vee-main-row td:nth-child(5){padding-top:26px}
+.vee-table .fiori-link{padding:0;min-height:0;border:0;text-align:left;color:#246b98;font-size:14px}
+.vee-table .fiori-link:hover{background:none;text-decoration:underline}.vee-overdue{color:#d03a3d;font-weight:600}.vee-released{color:#258052;font-weight:600}
+.vee-main-row td>span:not(.vee-overdue):not(.vee-released){font-size:12px}
+.vee-table .row-chevron{font-size:27px;padding:8px 0;min-width:20px;color:#6b7e8c}
+.vee-table .vee-detail-row td{padding-top:8px;padding-bottom:23px;border-bottom:1px solid #d9e2e9}
+.vee-line{display:flex;gap:16px;margin:5px 0 12px;font-size:12px;line-height:1.5}
+.vee-line>span{min-width:143px;text-align:right;color:#7c909e}.vee-line>div{color:#597182}.vee-line:last-child{margin-bottom:0}
+.vee-record.released{background:#fbfdfc}.fiori-shell .fiori-empty{padding:36px!important;color:#718899;text-align:center;font-size:13px;background:#fafcfe}
+.clarification-main-toolbar{display:flex;align-items:center;gap:14px;padding:6px 18px;border-bottom:1px solid #ccdeeb;background:#eef5fa;min-height:40px;flex-shrink:0}
+.clarification-layout{display:flex;flex:1;min-height:0;padding:15px 16px 12px;gap:14px;position:relative}
+.clarification-sidebar{width:194px;flex:0 0 194px;overflow:auto;padding:3px 6px 0 0;border-right:1px solid #d2e0ea}
+.clarification-sidebar>div{font-size:17px;margin:0 7px 16px;color:#3c6684;font-weight:400}
+.clarification-sidebar nav{display:flex;flex-direction:column;gap:6px;padding:0 6px}
+.clarification-sidebar button{border:1px solid #bfcfdb;background:linear-gradient(#f9fcfe,#e9f1f7);text-align:left;padding:5px 10px;font-size:12px;min-height:31px;white-space:nowrap;color:#365e7c;box-shadow:0 1px 1px #244b6810}
+.clarification-sidebar button.active{background:#dcecf9;border-color:#72a8cf;color:#1c587f;box-shadow:inset 3px 0 #3d8dc4}
+.clarification-main{flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;background:#f4f8fb}
+.clarification-title{font-size:16px;color:#3f6986;border-bottom:2px solid #bfcfdb;min-height:34px;padding:1px 2px 9px}
+.clarification-table-toolbar{display:flex;align-items:center;gap:6px;min-height:45px;flex-shrink:0;padding:7px 3px;font-size:12px;color:#617c8e}
+.clarification-table-toolbar .native-tool{padding:3px 5px;min-height:27px;font-size:12px;white-space:nowrap}
+.clarification-table-toolbar .icon{height:16px;width:16px}
+.clarification-table-toolbar select{font-size:12px;min-height:27px;max-width:100px;padding:3px 6px}
+.clarification-table-toolbar input{width:190px;min-width:80px;max-width:240px;min-height:27px;font-size:12px!important}
+#exception-count{white-space:nowrap;padding-right:5px}
+.clarification-table-scroll{flex:1;min-height:0;overflow:auto;border:1px solid #b7cbd9;background:repeating-linear-gradient(to bottom,#f4f6f7 0,#f4f6f7 29px,#e0e6ea 29px,#e0e6ea 30px)}
+.fiori-shell .clarification-table{white-space:nowrap;width:100%;min-width:1150px;font-size:12px}
+.clarification-table th{position:sticky;top:0;z-index:1;background:#e1eaf1;min-height:29px;padding:7px 7px;border-right:1px solid #becedb;border-bottom:1px solid #b7c8d6;color:#23455f;line-height:1.2}
+.clarification-table td{height:35px;padding:8px 7px;background:#fdfefe;border-right:1px solid #d2dce4;border-bottom:1px solid #d2dce4!important;color:#2d4a61;line-height:1.4}
+.clarification-table th:nth-child(4){min-width:270px}.clarification-table th:first-child{width:23px;min-width:23px}
+.clarification-row{cursor:pointer}.clarification-row:hover td{background:#eef6fc}.clarification-row.is-selected td{background:#fff8d7}
+.clarification-status{display:block;width:9px;height:9px;background:#d1a842;border:1px solid #b99033}.clarification-status.complete{background:#62a96e;border-color:#3d8a4a}
+.clarification-table td.overdue-cell{color:#b23e3b}.compact .clarification-table td{height:26px;padding:4px 6px}
+.read-review,.clarification-action-form{font-family:Arial,Helvetica,sans-serif;color:#35556b;font-size:13px;--muted:#7991a2}
+.read-review-context{padding-bottom:20px;color:#6c8293}.read-review-fields{display:grid;grid-template-columns:1fr 1fr;gap:13px 18px;font-size:13px}.read-review-fields>span{color:#7e92a0}.read-review-fields>b{font-weight:400}
+.read-review-diagnosis{background:#f2f7fb;border-left:3px solid #82accc;margin:22px 0;padding:15px 18px}.read-review-diagnosis h3{font-size:13px;margin-bottom:10px;font-weight:600}.read-review-diagnosis p{line-height:1.7}
+.read-review-actions{display:flex;gap:9px;flex-wrap:wrap;margin:20px 0}
+.read-review-actions button{font:13px Arial,sans-serif;color:#2e688f;background:#f4f8fc;border:1px solid #b7cddd;border-radius:3px;padding:8px 12px;min-height:33px;font-weight:400}
+.read-review-actions button:hover:not(:disabled){background:#e2edf7}.clarification-action-form label{display:flex;flex-direction:column;gap:8px;margin:18px 0;font-size:13px}
+.clarification-action-form textarea,.clarification-action-form input,.clarification-action-form select{font:14px Arial,sans-serif;border:1px solid #b2c7d7;padding:9px;color:#2d536f;max-width:100%;border-radius:2px}
+.clarification-action-form textarea{resize:vertical;min-height:80px}.clarification-action-form .case-resolve-check{flex-direction:row;align-items:center}
+@media(min-width:1550px){.vee-list{margin-left:46px;margin-right:46px}.vee-table td{padding-top:24px}.vee-table .vee-detail-row td{padding-bottom:30px}.clarification-sidebar{width:206px;flex-basis:206px}}
+@media(max-width:1100px){.clarification-table-toolbar input{width:155px}.clarification-sidebar{width:178px;flex-basis:178px}.vee-list{margin-left:20px;margin-right:20px}}
+@media(max-width:720px){.fiori-top{padding:0 8px;gap:7px;min-height:42px}.fiori-top .sap-emblem{width:38px;height:23px;font-size:17px}.fiori-top select{font-size:12px;max-width:calc(100vw - 135px)}.fiori-top .fiori-icon{padding:4px;min-width:24px}.vee-variant{padding:14px 20px 22px}.vee-variant-line>button{font-size:20px}.vee-views select{width:113px}.vee-filters{flex-wrap:wrap;gap:14px}.vee-filters input{width:230px;max-width:100%}.vee-list{margin:18px 8px 0}.vee-list-toolbar{padding-left:8px;gap:5px}.vee-list-toolbar h2{font-size:16px}.vee-selected{font-size:11px}.vee-list-toolbar #vee-release{padding:4px 7px}.clarification-main-toolbar{gap:1px;padding:5px 8px;overflow:auto;white-space:nowrap}.clarification-main-toolbar button{font-size:11px;padding:5px 7px}.clarification-layout{padding:10px 7px 7px;gap:8px}.clarification-sidebar{width:143px;flex-basis:143px;padding-right:0}.clarification-sidebar nav{padding:0 3px;gap:5px}.clarification-sidebar button{font-size:11px;padding:5px;min-height:29px}.clarification-sidebar>div{font-size:15px;margin:3px 6px 14px}.clarification-title{font-size:14px;padding-top:4px}.clarification-table-toolbar{flex-wrap:wrap;gap:3px}.clarification-table-toolbar input{order:5;width:100%;max-width:none}.clarification-table-toolbar .sort-tool{font-size:10px;padding:4px}.clarification-table-toolbar select{font-size:11px;max-width:77px}.clarification-table-toolbar>span.spacer{display:none}#exception-count{margin-left:auto;font-size:10px}.fiori-status{font-size:10px;padding:4px 8px}.fiori-status>span:last-child{max-width:111px;text-align:right}.read-review-fields{grid-template-columns:1fr 1fr;font-size:12px}}
+/* Clarification Case Detail: classic SAP GUI, full transaction screen. */
+.gui-case-shell{background:#e8f0f6;color:#101719;font:12px Arial,Helvetica,sans-serif}
+.gui-titlebar{height:37px;min-height:37px;background:linear-gradient(#dbe8f1,#afc6d8);border:1px solid #99b0c2;border-top-color:#f7fcff;display:flex;align-items:center;padding:3px 15px}
+.experiment .gui-titlebar h1{font:italic bold 21px Arial,Helvetica,sans-serif;letter-spacing:0;color:#060d12}
+.gui-transaction-toolbar{display:flex;align-items:center;gap:3px;flex-wrap:wrap;min-height:36px;padding:4px 7px;background:#d1dfe9;border-bottom:1px solid #aebfcd;flex-shrink:0}
+.gui-transaction-toolbar button{font-size:12px;color:#173444;padding:3px 8px;min-height:25px;border-radius:0;border-right:1px solid #aabfce;display:flex;gap:4px;align-items:center}
+.gui-transaction-toolbar button:last-child{border-right:0}.gui-transaction-toolbar .icon{width:14px;height:14px}
+.gui-case-scroll{min-height:0;flex:1;overflow:auto}
+.gui-case-content{padding:8px 5px 20px;min-width:700px}
+.gui-case-header{display:grid;grid-template-columns:420px 330px;gap:30px;min-height:76px;padding:0 9px 3px;align-items:start}
+.gui-field{display:flex;align-items:center;gap:6px;min-height:23px;line-height:1.35;white-space:nowrap;font-size:12px;color:#121e28}
+.gui-field>span:first-child{width:120px;flex:0 0 120px}
+.gui-value,.gui-code{display:inline-flex;align-items:center;min-height:21px;border:1px solid #a8b5bf;border-top-color:#8f9da8;border-left-color:#8f9da8;box-shadow:inset 1px 1px 1px #1c3e5220;background:#e4eef5;padding:1px 4px;font-family:'Courier New',monospace;color:#243647;line-height:1.4}
+.gui-value{min-width:140px;max-width:270px}.gui-code{min-width:28px;justify-content:center}.gui-inline-text{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:265px}
+.gui-case-header>div:last-child .gui-value{min-width:130px}.gui-case-header>div:last-child .gui-field>span:first-child{width:105px;flex-basis:105px}
+.gui-group{margin:3px 0 10px;border:1px solid #9bb7cc;border-radius:3px;background:#deebf4;overflow:hidden}
+.gui-group h3{font:12px Arial,sans-serif;letter-spacing:0;font-weight:400;color:#0d1c27;padding:2px 8px;min-height:19px;background:linear-gradient(#cddfec,#bcd3e5);border-top:1px solid #f2f8fc;border-bottom:1px solid #9bb7cc}
+.gui-group-body{padding:5px 8px 9px}.gui-master-grid{display:grid;grid-template-columns:420px 1fr;gap:30px;max-width:1100px}
+.gui-case-shell .gui-object-link{padding:1px 4px;min-height:21px;min-width:140px;border:1px solid #9daebd;border-radius:0;text-align:left;justify-content:flex-start;background:#e4eef5;color:#152d42;text-decoration:underline;font:12px 'Courier New',monospace}
+.gui-reason-text{color:#102fd0;white-space:normal;padding-left:30px}.gui-reason-description{margin:4px 0 0 126px;color:#48647a;font-size:12px;line-height:1.5}
+.gui-primary-actions{display:flex;gap:3px;margin:-2px 4px 1px;flex-wrap:wrap}
+.gui-case-shell button.gui-yellow,.sap-workspace .read-review-actions button{display:inline-flex;align-items:center;justify-content:center;gap:10px;padding:2px 10px;min-height:23px;border:1px solid #858a78;border-top-color:#a4a691;border-left-color:#a4a691;border-radius:3px;background:linear-gradient(#fffce2 0,#fff2a8 48%,#ffefa0 100%);box-shadow:inset 1px 1px #fffdf0;color:#171a18;font:12px Arial,sans-serif;white-space:nowrap}
+.gui-primary-actions .gui-yellow{min-width:206px;justify-content:flex-start}
+.gui-action-check{font-size:18px;line-height:16px;color:#398643;font-weight:bold;text-shadow:1px 1px #d6e188}.gui-action-stop{font-size:17px;line-height:16px;color:#b75122;text-shadow:1px 1px #e6d588}
+.gui-case-shell button.gui-yellow:hover:not(:disabled),.sap-workspace .read-review-actions button:hover:not(:disabled){border-color:#688cab;background:linear-gradient(#fffef0,#ffea84)}
+.gui-case-shell button.gui-yellow:disabled{opacity:.45}
+.gui-status-grid{display:grid;grid-template-columns:480px 1fr;gap:24px;max-width:1100px}
+.gui-status-fields>.gui-field>span:first-child{width:210px;flex-basis:210px}.gui-status-fields>.gui-field>.gui-value{width:246px;max-width:none}
+.gui-select-display{position:relative;padding-right:24px;display:flex;justify-content:space-between;font-family:Arial,sans-serif}
+.gui-select-display:after{content:'';width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:5px solid #426786;position:absolute;right:5px;top:7px}
+.gui-lock-row{display:flex;align-items:center;gap:10px;min-height:24px;margin-top:1px;color:#7e8f9b}
+.gui-lock-row>label:first-child{display:flex;align-items:center;gap:4px;width:142px;flex-shrink:0;font-size:12px;color:#758998}
+.gui-case-shell .gui-lock-row input[type=checkbox]{width:13px;height:13px;accent-color:#7991a5}
+.gui-lock-row .gui-field>span:first-child{width:128px;flex-basis:128px}.gui-lock-row .gui-value{min-width:130px}
+.gui-date-label{display:flex;align-items:center;gap:12px;color:#162735;font-size:12px;white-space:nowrap}
+.gui-case-shell input#case-resubmit{margin-left:28px;min-height:21px;height:22px;background:#fff1a6;border:1px solid #a4a989;border-radius:0;padding:0 3px;font:12px 'Courier New',monospace;color:#182c3c;width:130px;color-scheme:light}
+.gui-status-right{display:flex;flex-direction:column;align-items:flex-start;padding-top:20px;gap:5px}
+.gui-status-right>.gui-yellow{margin-left:100px;min-width:104px}
+.gui-status-right>.gui-field>span:first-child{width:96px;flex-basis:96px}.gui-status-right>.gui-field>.gui-value{min-width:150px}
+.gui-inline-actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:8px 0 0}.gui-processing-hint{color:#6b8293;font-size:11px;margin-left:7px}
+.gui-next{margin-top:5px;align-items:flex-start}.gui-next>span:last-child{white-space:normal;padding-top:3px}.gui-next>span:first-child{padding-top:3px}
+.gui-case-shell .gui-history-table{font-size:12px;background:#f1f6fa;white-space:normal;max-width:1100px;border-collapse:collapse}
+.gui-history-table th{position:static;font-size:12px;background:#d1e1ed;border:1px solid #a7bece;color:#254b64;padding:4px 7px}.gui-history-table td{padding:5px 7px;border:1px solid #bfced9!important;color:#264657}.gui-history-table th:first-child{width:50px}
+.sap-workspace dialog{border:1px solid #829cb3;border-radius:0;background:#e6f0f7;color:#172f40;font-family:Arial,Helvetica,sans-serif;box-shadow:3px 6px 20px #182d4d55;width:min(720px,calc(100vw - 24px))}
+.sap-workspace dialog::backdrop{background:#263f572e;backdrop-filter:none}
+.sap-workspace #dialog-content{padding:0 12px 14px}
+.sap-workspace .dialog-head{background:linear-gradient(#dbe8f1,#aec5d8);margin:0 -12px 14px;padding:5px 10px;border-bottom:1px solid #9bafbf;min-height:34px;gap:10px}
+.sap-workspace .dialog-head h2{font:bold italic 17px Arial,sans-serif;letter-spacing:0;color:#111820}
+.sap-workspace .dialog-head button{border-radius:0;border:1px solid #849aaa;background:#d9e8f2;color:#37556f;width:22px;height:22px;font-size:18px;line-height:16px;padding:0}
+.sap-workspace .read-review,.sap-workspace .clarification-action-form{font-size:12px;color:#27475e}
+.sap-workspace .read-review-context{padding:0 0 13px}.sap-workspace .read-review-fields{gap:5px 12px;font-size:12px;grid-template-columns:170px 1fr}
+.sap-workspace .read-review-fields>b{border:1px solid #a4b8c7;background:#e0ebf3;padding:2px 5px;max-width:245px;font:12px 'Courier New',monospace}
+.sap-workspace .read-review-fields>span{align-self:center;color:#405b71}
+.sap-workspace .read-review-diagnosis{border:1px solid #a3bbcc;background:#dceaf5;padding:0 8px 10px;margin:15px 0;border-radius:2px}
+.sap-workspace .read-review-diagnosis h3{font-size:12px;font-weight:400;background:linear-gradient(#cddfec,#bcd3e5);padding:3px 8px;margin:0 -8px 8px;border-bottom:1px solid #a3bbcc}
+.sap-workspace .read-review-actions{gap:5px;margin:13px 0}
+.sap-workspace .clarification-action-form label{font-size:12px;margin:13px 0;gap:5px}
+.sap-workspace .clarification-action-form input,.sap-workspace .clarification-action-form textarea,.sap-workspace .clarification-action-form select{font-size:12px;padding:5px;background:#fff6c4;border:1px solid #a7b5ba;border-radius:0}
+.sap-workspace .read-review .small,.sap-workspace .clarification-action-form .small{font-size:11px;color:#748b9c}
+@media(max-width:900px){.gui-case-header{grid-template-columns:400px 250px;gap:16px}.gui-master-grid{grid-template-columns:365px 1fr;gap:14px}.gui-master-grid>div:last-child .gui-field>span:first-child{width:95px;flex-basis:95px}.gui-status-grid{grid-template-columns:440px 1fr;gap:8px}.gui-status-fields>.gui-field>span:first-child{width:190px;flex-basis:190px}.gui-status-fields>.gui-field>.gui-value{width:240px}.gui-status-right>.gui-field{gap:4px}.gui-status-right>.gui-field>span:first-child{width:80px;flex-basis:80px}.gui-status-right>.gui-field>.gui-value{min-width:128px}.gui-status-right>.gui-yellow{margin-left:84px}.gui-lock-row>label:first-child{width:132px}.gui-lock-row .gui-field>span:first-child{width:117px;flex-basis:117px}.gui-case-shell input#case-resubmit{margin-left:17px}.gui-case-content{padding-right:5px}}
+@media(max-width:720px){.gui-titlebar{height:33px;min-height:33px;padding-left:10px}.experiment .gui-titlebar h1{font-size:18px}.gui-transaction-toolbar{flex-wrap:nowrap;overflow:auto;gap:0;min-height:33px}.gui-transaction-toolbar button{font-size:11px;white-space:nowrap}.sap-workspace .read-review-fields{grid-template-columns:145px 1fr}.sap-workspace .read-review-actions button{font-size:11px}}
+/* One native SAP transaction selector across lists and records. */
+.sap-transaction-header{display:flex;align-items:center;gap:19px;flex:0 0 44px;min-height:44px;padding:0 19px;background:linear-gradient(#dcebf6,#c6dceb);border-bottom:1px solid #aac4d7;color:#315d7d;font-family:Arial,Helvetica,sans-serif}
+.sap-transaction-header .sap-emblem{flex:0 0 47px}
+.sap-transaction-header select,.fiori-shell .sap-transaction-header select{font:600 15px Arial,Helvetica,sans-serif;color:#2d5674;background:transparent;border:1px solid transparent;border-radius:2px;min-height:33px;width:385px;max-width:calc(100% - 125px);padding:3px 27px 3px 7px;cursor:pointer}
+.sap-transaction-header select:hover{background:#e9f3fa;border-color:#a8c3d6}
+.sap-transaction-header select:focus-visible{outline:2px solid #2e7eac;outline-offset:1px}
+.sap-transaction-header optgroup{background:#f2f7fb;color:#2f4d63;font-size:12px;font-style:normal}
+.sap-transaction-header option{background:#fff;color:#24445c;font-size:13px;font-style:normal;font-weight:400}
+.sap-transaction-header button,.fiori-shell .sap-transaction-header button{display:grid;place-items:center;padding:4px;min-width:27px;min-height:27px;border:1px solid transparent;background:transparent;color:#315f81;border-radius:2px}
+.sap-transaction-header button:hover{background:#e4f0f8;border-color:#a7c3d7}.sap-transaction-header .icon{width:17px;height:17px}.sap-transaction-header small{font-size:11px;color:#63819a;flex-shrink:0}
+.sap-transaction-classic{background:linear-gradient(#dbe8f1,#afc6d8)}
+.fiori-shell .sap-transaction-classic select{font-style:italic;font-weight:700;color:#182c3b}
+@media(max-width:720px){.sap-transaction-header{gap:9px;padding:0 9px;flex-basis:39px;min-height:39px}.sap-transaction-header .sap-emblem{flex-basis:39px;width:39px;height:23px;font-size:17px}.sap-transaction-header select,.fiori-shell .sap-transaction-header select{font-size:12px;padding-left:3px;padding-right:18px;max-width:calc(100% - 82px);width:325px}.sap-transaction-header small{display:none}}
+/* Two destinations, with configuration in the corner. */
+.focus-settings-link{display:grid;place-items:center;flex:none;width:34px;height:34px;color:#7c778a;border-radius:4px}
+.focus-settings-link:hover,.focus-settings-link.active{background:#f0ecfc;color:#684bc5}
+.focus-settings-link .icon{width:20px;height:20px}
+.experiment.focus-shell .simple-header .studio-tabs{flex:1}
+.simple-header .studio-tabs a{padding:0 23px}
+.sap-query-app{display:flex;flex-direction:column;min-height:0;height:100%}
+#sap-query-form{display:flex;flex-direction:column;flex:1;min-height:0}
+.sap-query-body{flex:1;padding:17px 14px;overflow:auto;background:#e8f0f6}
+.sap-query-body .gui-group{max-width:820px;min-height:108px}
+.sap-query-body .gui-group-body{padding:18px 14px}
+.sap-query-field{display:flex;align-items:center;gap:3px;color:#233d52;font:13px Arial,sans-serif}
+.sap-query-field label{width:180px;flex:0 0 180px}
+.sap-query-field input{width:225px;height:26px;padding:3px 5px;border:1px solid #93a7b4;border-radius:0;background:#fff2ad;font:13px 'Courier New',monospace;color:#142e42}
+.sap-query-field button{border:1px solid #8b9ea8;min-width:26px;height:26px;background:linear-gradient(#fffef0,#ffeda0);color:#325574;padding:0;border-radius:2px}
+#sap-query-error{color:#a92424;font:12px Arial,sans-serif;margin:12px 0 0 180px;min-height:16px}
+.sap-query-help{overflow:auto}.sap-query-help table{font:12px Arial,sans-serif;border-collapse:collapse}.sap-query-help th{text-transform:none;letter-spacing:0;font-size:12px;background:#cbdfea;color:#24485f;border:1px solid #a7becd;padding:6px 8px}.sap-query-help td{border:1px solid #b6cbd9!important;padding:7px 8px;background:#f3f8fb}
+.vee-doc-id{color:#7991a3;font:11px 'Courier New',monospace}
+@media(max-width:720px){.experiment.focus-shell .simple-header{display:flex;flex-direction:row;height:54px;min-height:54px;padding:0 12px;gap:10px}.simple-header .brand{font-size:14px}.simple-header .studio-tabs{flex:1;flex-basis:auto;order:0;margin:0;overflow:visible;justify-content:flex-end;align-self:stretch}.simple-header .studio-tabs a{flex:0 1 auto;padding:0 14px;font-size:12px}.simple-header .focus-settings-link{width:30px;height:30px}.sap-query-body{padding:12px 8px}.sap-query-field{flex-wrap:wrap}.sap-query-field label{width:100%;flex-basis:100%;margin-bottom:7px}.sap-query-field input{width:calc(100% - 30px);max-width:270px}#sap-query-error{margin-left:0}}
+@media(max-width:430px){.simple-header .brand>span:last-child{display:none}.simple-header .studio-tabs{justify-content:flex-start}.simple-header .studio-tabs a{padding:0 20px}}
+/* Field service order: classic SAP central-header form and tabbed sections. */
+#field-service-form{display:flex;flex-direction:column;flex:1;min-height:0}
+.fo-shell .gui-transaction-toolbar button{min-height:24px;padding:3px 10px;font-size:12px}
+.fo-shell .gui-transaction-toolbar button[data-field-save=release]{color:#244e38;font-weight:600}
+.fo-scroll{flex:1;min-height:0;overflow:auto;background:#e3edf5}
+.fo-order-line{display:flex;align-items:flex-start;gap:9px;padding:10px 9px 4px;min-width:780px}
+.fo-order-line .fo-field{margin:0}.fo-order-line .fo-field:first-child{flex:0 0 244px}.fo-order-line .fo-field:first-child label{width:40px;flex-basis:40px}.fo-order-line .fo-field:first-child select{width:190px}
+.fo-order-line .fo-order-id{min-width:160px;font-size:12px;margin-top:1px}
+.fo-order-line .fo-field:last-child{flex:1;max-width:750px}.fo-order-line .fo-field:last-child label{width:82px;flex-basis:82px}.fo-order-line .fo-field:last-child input{flex:1;min-width:180px;max-width:560px;background:#fff2b0}
+.fo-system-status{display:flex;align-items:center;gap:16px;padding:0 10px 10px;font-size:12px;color:#1f3c52;min-width:780px}.fo-system-status .gui-value{font-size:12px;min-width:250px;box-shadow:none}
+.fo-tabs{display:flex;gap:2px;border-bottom:2px solid #4d93c2;padding:3px 12px 0;min-width:780px;margin-top:9px;background:#e7f0f6}
+.fo-shell .fo-tabs button{font-size:11px;min-height:23px;padding:3px 14px 4px;color:#315777;border:1px solid #a7bdce;border-bottom:0;border-radius:6px 6px 0 0;background:linear-gradient(#e8f3fc,#b9d1e4);white-space:nowrap}
+.fo-shell .fo-tabs button.active{background:linear-gradient(#c6e0f3,#8bbce0);color:#122d41;border-color:#739abb}
+.fo-tab-body{padding:11px 10px 20px;min-width:780px}
+.fo-columns{display:grid;grid-template-columns:minmax(355px,1fr) minmax(355px,1fr);gap:12px;max-width:1480px}
+.fo-shell .gui-group{border-color:#9fb8cb;margin-top:0;margin-bottom:9px;background:#dceaf5}
+.fo-shell .gui-group h3{font-size:12px;background:linear-gradient(#d8e7f2,#b9d1e3)}
+.fo-shell .gui-group-body{padding:8px 8px 10px}
+.fo-field{display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-height:26px;margin:2px 0;color:#173345}
+.fo-field label{width:130px;flex:0 0 130px;font-size:12px;line-height:1.3}
+.fo-required{color:#a54226;font-size:10px}
+.fo-shell .fo-field input:not([type=checkbox]),.fo-shell .fo-field select{font:12px 'Courier New',monospace;color:#223c50;min-height:23px;height:23px;max-width:calc(100% - 140px);width:240px;padding:1px 4px;border:1px solid #96aabb;border-top-color:#8599a7;border-left-color:#8599a7;box-shadow:inset 1px 1px 1px #24415719;background:#f7fbfd;border-radius:0}
+.fo-shell .fo-field select{font-family:Arial,sans-serif}
+.fo-shell .fo-field input[type=date]{width:160px}.fo-shell .fo-field input[type=number]{width:100px}
+.fo-field.fo-wide{display:block}.fo-field.fo-wide label{display:block;width:auto;margin-bottom:6px}
+.fo-shell textarea{font:13px/24px 'Courier New',monospace;resize:vertical;width:100%;min-height:130px;border:1px solid #95adbf;border-radius:0;padding:3px 7px;color:#1f3c52;background:repeating-linear-gradient(to bottom,#fff 0,#fff 23px,#d0dce5 23px,#d0dce5 24px)}
+.fo-shell .fo-field textarea:focus{background-color:#fff6cb}
+.fo-shell input:disabled,.fo-shell select:disabled,.fo-shell textarea:disabled{opacity:1;color:#526b7d!important;background:#e4eef5!important;box-shadow:none!important}
+.fo-shell [aria-invalid=true]{border:1px solid #bf5550!important;background:#fff0eb!important}
+.fo-field-error{display:block;color:#af2b2b;font:11px Arial,sans-serif;width:100%;padding-left:136px;line-height:1.4}.fo-wide .fo-field-error{padding-left:0}
+.fo-validation{padding:7px 12px;background:#fff0d6;border-top:1px solid #d9bf8c;border-bottom:1px solid #d9bf8c;color:#92550c;font-size:12px;min-width:780px}
+.fo-checks{display:flex;gap:18px;align-items:center;margin:9px 0 3px;flex-wrap:wrap}.fo-checks label{display:flex;gap:5px;align-items:center;font-size:12px;color:#35546b}.fo-shell .fo-checks input[type=checkbox]{width:13px;height:13px}
+.fo-shell .gui-field{font-size:12px;min-height:25px}.fo-shell .gui-field>span:first-child{width:130px;flex-basis:130px}.fo-shell .gui-value{min-width:160px;max-width:none}
+.fo-operation-number{display:flex;align-items:center;gap:6px;margin:1px 0 12px;font-size:12px}
+.fo-tab-body>.gui-group{max-width:1100px}
+.fo-component-scroll{overflow:auto;min-height:180px;border:1px solid #a9bfce;background:repeating-linear-gradient(#f8fbfd 0,#f8fbfd 26px,#d9e4ec 26px,#d9e4ec 27px)}
+.fo-shell .fo-components{white-space:nowrap;font-size:12px;border-collapse:collapse}.fo-components th{padding:5px 8px;background:#d6e2eb;border:1px solid #b5c4d1;color:#264c67}.fo-components td{padding:3px 5px;border:1px solid #c2d1dd!important;background:#f6fafc}.fo-components td:first-child{width:45px}.fo-components td:nth-child(3){width:110px}.fo-components td:nth-child(4){width:70px}.fo-components td:last-child{width:70px}
+.fo-shell .fo-components input,.fo-shell .fo-components select{width:100%;height:23px;min-height:23px;font-size:12px;padding:2px 4px;border-radius:0;background:white;border:1px solid #b4c6d3}.fo-shell .fo-components button{font-size:11px;min-height:23px;padding:2px 7px}.fo-no-components{text-align:center;color:#7a91a1;height:80px}.fo-components+.fo-field-error{padding:8px 0}
+@media(max-width:1100px){.vee-list-toolbar{flex-wrap:wrap;gap:5px}.vee-list-toolbar h2{font-size:17px}.vee-list-toolbar #vee-field-order{font-size:11px}.fo-columns{grid-template-columns:380px minmax(365px,1fr)}.fo-order-line .fo-field:first-child{flex-basis:220px}.fo-order-line .fo-field:first-child select{width:170px}.fo-order-line .fo-order-id{min-width:145px}}
+@media(max-width:720px){.vee-list-toolbar #vee-field-order{font-size:10px;padding:4px 6px}.fo-shell .gui-transaction-toolbar{overflow:auto;flex-wrap:nowrap}.fo-shell .gui-transaction-toolbar button{font-size:11px;white-space:nowrap;padding:3px 7px}}
+.studio-workspace .gui-value{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+.studio-workspace .ws-asof{display:flex;align-items:center;gap:6px;margin-right:12px}
+.studio-workspace .ws-asof input{font:inherit;font-size:12px;padding:1px 4px}
+.studio-workspace .ws-empty{padding:40px;text-align:center}
+.studio-workspace .ws-tests{margin:8px 0 4px;max-width:900px}
+.studio-workspace .ws-record{white-space:pre-wrap;font-size:11px;background:#fff;border:1px solid #c9d6e2;padding:10px;max-height:60vh;overflow:auto}
+/* Configuration (the cog): Astra's tabbed form, cards on a pale ground. */
+.studio-page-config,.focus-layout #settings-page{background:#f7f7fa}
+#settings-page .studio-config-head{display:block;max-width:1030px;margin:0 auto 18px;padding:0;border:0;background:none}
+.studio-config-tabs{display:flex;gap:26px;border-bottom:1px solid #dfdfe9}
+.studio-config-tabs button{background:none;border:0;border-bottom:3px solid transparent;padding:12px 2px;font-size:14px;color:#777187;font-weight:600;cursor:pointer;border-radius:0}
+.studio-config-tabs button[aria-current="page"]{color:#684bc5;border-bottom-color:#7357d8}
+#settings-page .settings-layout{display:block;max-width:1030px;margin:0 auto}
+#settings-page .settings-content h2{font-size:21px;letter-spacing:-.3px}
+#settings-page .settings-card{background:#fff;border:1px solid #e4e2ee;border-radius:10px;box-shadow:0 1px 3px #20183a0a}
+.studio-card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.studio-pill{background:#f0ecfc;color:#684bc5;font-size:12px;font-weight:650;border-radius:6px;padding:5px 9px;white-space:nowrap}
+@media (max-width:600px){.studio-config-tabs{gap:14px;overflow-x:auto}.studio-config-tabs button{font-size:13px;white-space:nowrap}}
+/* Map lenses: one analytic view at a time, with its legend. */
+.lens-panel{position:absolute;right:16px;top:64px;z-index:12;background:#ffffffee;border:1px solid #dde2da;border-radius:9px;box-shadow:0 3px 15px #18231c12;padding:5px;min-width:0;max-width:300px}
+.lens-tabs{display:flex;gap:2px}
+.lens-tabs button{border:0;background:none;padding:7px 10px;border-radius:6px;font-size:12.5px;color:#56645a;cursor:pointer}
+.lens-tabs button[aria-pressed="true"]{background:#efeafd;color:#5d43b8;font-weight:650}
+.lens-legend{font-size:12px;color:#4d5b51;padding:2px 6px 4px}
+.lens-legend:empty{display:none}
+.lens-legend .lens-row{display:flex;align-items:center;gap:7px;padding:2px 0}
+.lens-legend .lens-swatch{width:11px;height:11px;border-radius:50%;flex:none}
+.lens-legend .lens-swatch.ring{background:none!important;border:3px solid currentColor;width:7px;height:7px}
+.lens-legend .lens-count{margin-left:auto;color:#7a877d;font-variant-numeric:tabular-nums}
+.lens-legend .lens-note{color:#7a877d;margin-top:3px;line-height:1.35}
+@media (max-width:600px){.lens-panel{top:58px;right:8px;left:auto;max-width:calc(100% - 70px)}.lens-tabs button{padding:6px 7px;font-size:12px}}

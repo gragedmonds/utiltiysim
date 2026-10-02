@@ -1,6 +1,466 @@
 {
   "components": {
     "schemas": {
+      "Action": {
+        "properties": {
+          "at": {
+            "anyOf": [
+              {
+                "exclusiveMaximum": 86400.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "field_read: seconds since local midnight.",
+            "title": "At"
+          },
+          "caseId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The case acted on (all types except field_read).",
+            "title": "Caseid"
+          },
+          "day": {
+            "description": "Local date of the decision (YYYY-MM-DD), in 2026, never before the previous action.",
+            "title": "Day",
+            "type": "string"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "premiseId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "field_read: the premise a field visit read on the map.",
+            "title": "Premiseid"
+          },
+          "type": {
+            "enum": [
+              "accept",
+              "override",
+              "estimate",
+              "field_order",
+              "escalate",
+              "field_read"
+            ],
+            "title": "Type",
+            "type": "string"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Register value for an override.",
+            "title": "Value"
+          }
+        },
+        "required": [
+          "day",
+          "type"
+        ],
+        "title": "Action",
+        "type": "object"
+      },
+      "CaseRequest": {
+        "properties": {
+          "actions": {
+            "items": {
+              "$ref": "#/components/schemas/Action"
+            },
+            "maxItems": 2000,
+            "title": "Actions",
+            "type": "array"
+          },
+          "asOf": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "View date (YYYY-MM-DD); default: the town's scenario date.",
+            "title": "Asof"
+          },
+          "caseId": {
+            "title": "Caseid",
+            "type": "string"
+          },
+          "outages": {
+            "description": "Service interruptions from the operations simulator (a timeline's ``interruptions``): consumption stops, AMI meters without power miss their reads, and VEE sees the outage.",
+            "items": {
+              "$ref": "#/components/schemas/Outage"
+            },
+            "maxItems": 500,
+            "title": "Outages",
+            "type": "array"
+          },
+          "settings": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing); see GET /api/m2c/settings.",
+            "title": "Settings"
+          },
+          "town": {
+            "description": "Pack preset (e.g. 'ayr') or town id.",
+            "title": "Town",
+            "type": "string"
+          },
+          "truth": {
+            "default": false,
+            "title": "Truth",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "town",
+          "caseId"
+        ],
+        "title": "CaseRequest",
+        "type": "object"
+      },
+      "Command": {
+        "properties": {
+          "at": {
+            "description": "Seconds since local midnight of the run day.",
+            "minimum": 0.0,
+            "title": "At",
+            "type": "number"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "title": "Payload",
+            "type": "object"
+          },
+          "type": {
+            "description": "break_asset | dispatch",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "at",
+          "type"
+        ],
+        "title": "Command",
+        "type": "object"
+      },
+      "DecisionRequest": {
+        "properties": {
+          "actions": {
+            "items": {
+              "$ref": "#/components/schemas/Action"
+            },
+            "maxItems": 2000,
+            "title": "Actions",
+            "type": "array"
+          },
+          "asOf": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "View date (YYYY-MM-DD); default: the town's scenario date.",
+            "title": "Asof"
+          },
+          "outages": {
+            "description": "Service interruptions from the operations simulator (a timeline's ``interruptions``): consumption stops, AMI meters without power miss their reads, and VEE sees the outage.",
+            "items": {
+              "$ref": "#/components/schemas/Outage"
+            },
+            "maxItems": 500,
+            "title": "Outages",
+            "type": "array"
+          },
+          "readId": {
+            "title": "Readid",
+            "type": "string"
+          },
+          "settings": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing); see GET /api/m2c/settings.",
+            "title": "Settings"
+          },
+          "town": {
+            "description": "Pack preset (e.g. 'ayr') or town id.",
+            "title": "Town",
+            "type": "string"
+          }
+        },
+        "required": [
+          "town",
+          "readId"
+        ],
+        "title": "DecisionRequest",
+        "type": "object"
+      },
+      "Disposition": {
+        "properties": {
+          "decidedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Decision date (YYYY-MM-DD); default: the request's asOf.",
+            "title": "Decidedat"
+          },
+          "decisionId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decisionid"
+          },
+          "disposition": {
+            "enum": [
+              "accept",
+              "reject",
+              "estimate",
+              "escalate",
+              "review",
+              "field_order"
+            ],
+            "title": "Disposition",
+            "type": "string"
+          },
+          "readId": {
+            "title": "Readid",
+            "type": "string"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Adjusted register value (an edit), when the engine made one.",
+            "title": "Value"
+          }
+        },
+        "required": [
+          "readId",
+          "disposition"
+        ],
+        "title": "Disposition",
+        "type": "object"
+      },
+      "DispositionRequest": {
+        "properties": {
+          "actions": {
+            "items": {
+              "$ref": "#/components/schemas/Action"
+            },
+            "maxItems": 2000,
+            "title": "Actions",
+            "type": "array"
+          },
+          "asOf": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "View date (YYYY-MM-DD); default: the town's scenario date.",
+            "title": "Asof"
+          },
+          "decisions": {
+            "items": {
+              "$ref": "#/components/schemas/Disposition"
+            },
+            "maxItems": 2000,
+            "title": "Decisions",
+            "type": "array"
+          },
+          "outages": {
+            "description": "Service interruptions from the operations simulator (a timeline's ``interruptions``): consumption stops, AMI meters without power miss their reads, and VEE sees the outage.",
+            "items": {
+              "$ref": "#/components/schemas/Outage"
+            },
+            "maxItems": 500,
+            "title": "Outages",
+            "type": "array"
+          },
+          "settings": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing); see GET /api/m2c/settings.",
+            "title": "Settings"
+          },
+          "town": {
+            "description": "Pack preset (e.g. 'ayr') or town id.",
+            "title": "Town",
+            "type": "string"
+          }
+        },
+        "required": [
+          "town"
+        ],
+        "title": "DispositionRequest",
+        "type": "object"
+      },
+      "FrameRequest": {
+        "properties": {
+          "at": {
+            "description": "Seconds since local midnight of the run day.",
+            "minimum": 0.0,
+            "title": "At",
+            "type": "number"
+          },
+          "commands": {
+            "items": {
+              "$ref": "#/components/schemas/Command"
+            },
+            "maxItems": 500,
+            "title": "Commands",
+            "type": "array"
+          },
+          "date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Run day (local); default: the town's scenario date.",
+            "title": "Date"
+          },
+          "m2c": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The meter-to-cash run ({settings, actions, outages}) whose field orders for this day become crew jobs (see /api/m2c/*).",
+            "title": "M2C"
+          },
+          "premises": {
+            "default": true,
+            "title": "Premises",
+            "type": "boolean"
+          },
+          "settings": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Overrides for response timings (see GET /api/sim/settings).",
+            "title": "Settings"
+          },
+          "town": {
+            "description": "Pack preset (e.g. 'ayr') or town id.",
+            "title": "Town",
+            "type": "string"
+          }
+        },
+        "required": [
+          "town",
+          "at"
+        ],
+        "title": "FrameRequest",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -12,6 +472,484 @@
           }
         },
         "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "MonthRequest": {
+        "properties": {
+          "actions": {
+            "items": {
+              "$ref": "#/components/schemas/Action"
+            },
+            "maxItems": 2000,
+            "title": "Actions",
+            "type": "array"
+          },
+          "asOf": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "View date (YYYY-MM-DD); default: the town's scenario date.",
+            "title": "Asof"
+          },
+          "month": {
+            "maximum": 12.0,
+            "minimum": 1.0,
+            "title": "Month",
+            "type": "integer"
+          },
+          "outages": {
+            "description": "Service interruptions from the operations simulator (a timeline's ``interruptions``): consumption stops, AMI meters without power miss their reads, and VEE sees the outage.",
+            "items": {
+              "$ref": "#/components/schemas/Outage"
+            },
+            "maxItems": 500,
+            "title": "Outages",
+            "type": "array"
+          },
+          "portion": {
+            "anyOf": [
+              {
+                "maximum": 31.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Billing portion (export pages); default: all.",
+            "title": "Portion"
+          },
+          "settings": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing); see GET /api/m2c/settings.",
+            "title": "Settings"
+          },
+          "town": {
+            "description": "Pack preset (e.g. 'ayr') or town id.",
+            "title": "Town",
+            "type": "string"
+          }
+        },
+        "required": [
+          "town",
+          "month"
+        ],
+        "title": "MonthRequest",
+        "type": "object"
+      },
+      "Outage": {
+        "properties": {
+          "day": {
+            "description": "Local date the interruption began (YYYY-MM-DD), in 2026.",
+            "title": "Day",
+            "type": "string"
+          },
+          "end": {
+            "description": "Seconds since local midnight of ``day`` (may pass midnight).",
+            "exclusiveMinimum": 0.0,
+            "title": "End",
+            "type": "number"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "premiseIds": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 20000,
+            "minItems": 1,
+            "title": "Premiseids",
+            "type": "array"
+          },
+          "start": {
+            "description": "Seconds since local midnight of ``day``.",
+            "exclusiveMaximum": 86400.0,
+            "minimum": 0.0,
+            "title": "Start",
+            "type": "number"
+          },
+          "utility": {
+            "enum": [
+              "electric",
+              "water",
+              "gas"
+            ],
+            "title": "Utility",
+            "type": "string"
+          }
+        },
+        "required": [
+          "day",
+          "utility",
+          "start",
+          "end",
+          "premiseIds"
+        ],
+        "title": "Outage",
+        "type": "object"
+      },
+      "PremiseRequest": {
+        "properties": {
+          "actions": {
+            "items": {
+              "$ref": "#/components/schemas/Action"
+            },
+            "maxItems": 2000,
+            "title": "Actions",
+            "type": "array"
+          },
+          "asOf": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "View date (YYYY-MM-DD); default: the town's scenario date.",
+            "title": "Asof"
+          },
+          "outages": {
+            "description": "Service interruptions from the operations simulator (a timeline's ``interruptions``): consumption stops, AMI meters without power miss their reads, and VEE sees the outage.",
+            "items": {
+              "$ref": "#/components/schemas/Outage"
+            },
+            "maxItems": 500,
+            "title": "Outages",
+            "type": "array"
+          },
+          "premiseId": {
+            "title": "Premiseid",
+            "type": "string"
+          },
+          "settings": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing); see GET /api/m2c/settings.",
+            "title": "Settings"
+          },
+          "town": {
+            "description": "Pack preset (e.g. 'ayr') or town id.",
+            "title": "Town",
+            "type": "string"
+          },
+          "truth": {
+            "default": false,
+            "description": "Include simulation ground truth (never send it to a VEE engine).",
+            "title": "Truth",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "town",
+          "premiseId"
+        ],
+        "title": "PremiseRequest",
+        "type": "object"
+      },
+      "QueueRequest": {
+        "properties": {
+          "actions": {
+            "items": {
+              "$ref": "#/components/schemas/Action"
+            },
+            "maxItems": 2000,
+            "title": "Actions",
+            "type": "array"
+          },
+          "asOf": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "View date (YYYY-MM-DD); default: the town's scenario date.",
+            "title": "Asof"
+          },
+          "commodity": {
+            "anyOf": [
+              {
+                "enum": [
+                  "electric",
+                  "water",
+                  "gas"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commodity"
+          },
+          "outages": {
+            "description": "Service interruptions from the operations simulator (a timeline's ``interruptions``): consumption stops, AMI meters without power miss their reads, and VEE sees the outage.",
+            "items": {
+              "$ref": "#/components/schemas/Outage"
+            },
+            "maxItems": 500,
+            "title": "Outages",
+            "type": "array"
+          },
+          "page": {
+            "default": 1,
+            "minimum": 1.0,
+            "title": "Page",
+            "type": "integer"
+          },
+          "pageSize": {
+            "default": 50,
+            "maximum": 200.0,
+            "minimum": 1.0,
+            "title": "Pagesize",
+            "type": "integer"
+          },
+          "queue": {
+            "anyOf": [
+              {
+                "enum": [
+                  "VEE_REVIEW",
+                  "ESTIMATION",
+                  "SUPERVISOR",
+                  "FIELD"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Queue"
+          },
+          "search": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Search"
+          },
+          "settings": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing); see GET /api/m2c/settings.",
+            "title": "Settings"
+          },
+          "sort": {
+            "default": "age",
+            "enum": [
+              "age",
+              "impact",
+              "confidence",
+              "created"
+            ],
+            "title": "Sort",
+            "type": "string"
+          },
+          "status": {
+            "default": "open",
+            "enum": [
+              "open",
+              "resolved",
+              "all"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "town": {
+            "description": "Pack preset (e.g. 'ayr') or town id.",
+            "title": "Town",
+            "type": "string"
+          },
+          "type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Type"
+          }
+        },
+        "required": [
+          "town"
+        ],
+        "title": "QueueRequest",
+        "type": "object"
+      },
+      "RunRequest": {
+        "properties": {
+          "actions": {
+            "items": {
+              "$ref": "#/components/schemas/Action"
+            },
+            "maxItems": 2000,
+            "title": "Actions",
+            "type": "array"
+          },
+          "asOf": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "View date (YYYY-MM-DD); default: the town's scenario date.",
+            "title": "Asof"
+          },
+          "outages": {
+            "description": "Service interruptions from the operations simulator (a timeline's ``interruptions``): consumption stops, AMI meters without power miss their reads, and VEE sees the outage.",
+            "items": {
+              "$ref": "#/components/schemas/Outage"
+            },
+            "maxItems": 500,
+            "title": "Outages",
+            "type": "array"
+          },
+          "settings": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing); see GET /api/m2c/settings.",
+            "title": "Settings"
+          },
+          "town": {
+            "description": "Pack preset (e.g. 'ayr') or town id.",
+            "title": "Town",
+            "type": "string"
+          }
+        },
+        "required": [
+          "town"
+        ],
+        "title": "RunRequest",
+        "type": "object"
+      },
+      "TimelineRequest": {
+        "properties": {
+          "commands": {
+            "items": {
+              "$ref": "#/components/schemas/Command"
+            },
+            "maxItems": 500,
+            "title": "Commands",
+            "type": "array"
+          },
+          "date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Run day (local); default: the town's scenario date.",
+            "title": "Date"
+          },
+          "m2c": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The meter-to-cash run ({settings, actions, outages}) whose field orders for this day become crew jobs (see /api/m2c/*).",
+            "title": "M2C"
+          },
+          "settings": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Overrides for response timings (see GET /api/sim/settings).",
+            "title": "Settings"
+          },
+          "town": {
+            "description": "Pack preset (e.g. 'ayr') or town id.",
+            "title": "Town",
+            "type": "string"
+          }
+        },
+        "required": [
+          "town"
+        ],
+        "title": "TimelineRequest",
         "type": "object"
       },
       "TownRequest": {
@@ -133,7 +1071,7 @@
   "info": {
     "description": "Seeded utility-town engine: geography, networks, customers, simulation, meter-to-cash.",
     "title": "utilsim",
-    "version": "0.2.0"
+    "version": "0.7.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -222,6 +1160,262 @@
         "summary": "Health"
       }
     },
+    "/api/m2c/case": {
+      "post": {
+        "description": "``work-case/1.0``: the case, its VEE decision (five tests), read history, events and causal edges, and the\nactions it accepts now.",
+        "operationId": "post_case_api_m2c_case_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CaseRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Case"
+      }
+    },
+    "/api/m2c/premise": {
+      "post": {
+        "description": "One premise: registers, every read to date with VEE status and revisions, and its cases.",
+        "operationId": "post_premise_api_m2c_premise_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PremiseRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Premise"
+      }
+    },
+    "/api/m2c/settings": {
+      "get": {
+        "description": "Run settings for meter-to-cash: JSON Schema (groups, defaults, bounds, units, effects), defaults, vocabulary.",
+        "operationId": "get_settings_api_m2c_settings_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Settings"
+      }
+    },
+    "/api/m2c/summary": {
+      "post": {
+        "description": "``m2c-summary/1.0``: KPIs, queues with aging and daily series, exception mix, cost, carry, VEE precision and\nrecall against truth, and one status per premise (for the map).",
+        "operationId": "post_summary_api_m2c_summary_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Summary"
+      }
+    },
+    "/api/packs": {
+      "get": {
+        "description": "Prebuilt engine towns available to the operations endpoints (and as static files under /packs/).",
+        "operationId": "get_packs_api_packs_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Packs"
+      }
+    },
+    "/api/process/costs": {
+      "post": {
+        "description": "Cost (labor, system, CX), carry and days to release by exception type.",
+        "operationId": "post_costs_api_process_costs_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Costs"
+      }
+    },
+    "/api/process/graph": {
+      "post": {
+        "description": "Activity Sequence graph (nodes, causal edges) of the exceptions raised in a month.",
+        "operationId": "post_graph_api_process_graph_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MonthRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Graph"
+      }
+    },
+    "/api/process/queue": {
+      "post": {
+        "description": "A worklist page: cases in a queue (or all queues) as of a date, filtered, sorted and paged.",
+        "operationId": "post_queue_api_process_queue_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QueueRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Queue"
+      }
+    },
     "/api/schemas/{name}.json": {
       "get": {
         "description": "Published JSON Schemas: utility-town-2.0, utility-state-1.0, utility-replay-1.0, meter-read-1.1,\nvee-input-fixture-1.1, config, openapi.",
@@ -258,6 +1452,114 @@
           }
         },
         "summary": "Get Published Schema"
+      }
+    },
+    "/api/sim/frame": {
+      "post": {
+        "description": "One complete ``utility-state/1.0`` frame at ``at`` with the run's incidents applied (open switches, closed\nvalves, leaks); ``premises.unsupplied`` lists customers without supply.",
+        "operationId": "post_frame_api_sim_frame_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FrameRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Frame"
+      }
+    },
+    "/api/sim/settings": {
+      "get": {
+        "description": "Default response timings for operations runs (override per request with ``settings``).",
+        "operationId": "get_settings_api_sim_settings_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Settings"
+      }
+    },
+    "/api/sim/settings/schema": {
+      "get": {
+        "description": "Operations settings as JSON Schema (titles, units, bounds, effects) with their defaults, for the viewer's\nConfiguration. Send overrides as a timeline or frame request's ``settings``.",
+        "operationId": "get_settings_schema_api_sim_settings_schema_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Settings Schema"
+      }
+    },
+    "/api/sim/timeline": {
+      "post": {
+        "description": "``utility-timeline/1.0``: incidents, crew jobs with road routes, events, state changes and field-visit reads\nfor a run's command list. Appending a command never changes what earlier commands produced.",
+        "operationId": "post_timeline_api_sim_timeline_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TimelineRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Timeline"
       }
     },
     "/api/sources": {
@@ -1254,6 +2556,154 @@
           }
         },
         "summary": "Get Table"
+      }
+    },
+    "/api/vee/decision": {
+      "post": {
+        "description": "``vee-decision/1.0`` for one read: five tests with rationale, confidence and disposition.",
+        "operationId": "post_decision_api_vee_decision_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecisionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Decision"
+      }
+    },
+    "/api/vee/dispositions": {
+      "post": {
+        "description": "Import decisions from an external VEE engine (m2c.vee v5).\n\nEach decision on a read becomes the equivalent append-only action on the case that holds the read:\n- accept → accept;\n- reject or estimate → estimate;\n- an edit (a value) → override;\n- escalate and field_order map one to one;\n- review keeps the case open.\n\nReturns the actions to append to the run, plus the decisions that matched no open case. Nothing is stored.",
+        "operationId": "post_dispositions_api_vee_dispositions_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DispositionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Dispositions"
+      }
+    },
+    "/api/vee/export": {
+      "post": {
+        "description": "``vee-input-fixture/1.1`` for one month (and portion): the reads an external VEE engine would receive,\nwith truth stripped.",
+        "operationId": "post_vee_export_api_vee_export_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MonthRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Vee Export"
+      }
+    },
+    "/api/vee/scorecard": {
+      "post": {
+        "description": "``vee-scorecard/1.0``: VEE against simulation truth, per anomaly type (recall, days to flag) and per exception\ntype (precision).",
+        "operationId": "post_scorecard_api_vee_scorecard_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Scorecard"
       }
     }
   }

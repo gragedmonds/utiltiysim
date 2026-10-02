@@ -17,8 +17,9 @@ from scipy.spatial import cKDTree
 from utilsim.core import ids
 from utilsim.core.ids import str_key
 from utilsim.core.rng import Purpose, hash_choice, hash_u01
-from utilsim.customers.calendar import month_fraction, scheduled_read_date, to_utc_iso
+from utilsim.customers.calendar import scheduled_read_date, to_utc_iso
 from utilsim.customers.names import BUSINESS, GIVEN, SURNAME
+from utilsim.m2c import registers
 from utilsim.sim.demand import monthly_energy
 from utilsim.version import READ_SCHEMA_VERSION
 
@@ -187,17 +188,10 @@ def build_customers(town) -> Customers:
 
     # ---------------- monthly energy for reads
     energy = monthly_energy(prem, cfg)
-    cum = {k: np.vstack([np.zeros((1, n)), np.cumsum(v, axis=0)]) for k, v in energy.items()}
+    cum = {k: registers.cumulative(v) for k, v in energy.items()}
+    december = {k: v[11] for k, v in energy.items()}
     digits = {"electric": cfg.ami.meter_digits_electric, "water": cfg.ami.meter_digits_water,
               "gas": cfg.ami.meter_digits_gas}
-
-    def register_at(key: str, i: int, t_month: float, base: float) -> float:
-        m0 = int(np.floor(t_month))
-        frac = t_month - m0
-        c = cum[key]
-        m0 = min(max(m0, 0), 11)
-        v = c[m0, i] + frac * (c[m0 + 1, i] - c[m0, i])
-        return base + float(v)
 
     # ---------------- per-premise entities
     payment = hash_choice(seed, Purpose.PAYMENT, keys, [cb.on_time_payer_share, cb.late_payer_share,
@@ -250,7 +244,7 @@ def build_customers(town) -> Customers:
             if not suffix:
                 ca_current = ca
         mru = int(mru_of[i])
-        t_route = str(route_tech[mru])
+        t_route = str(tech[mru])
         extra = {"mruId": f"MRU-{mru + 1:03d}", "sequenceNo": int(seq_of[i]),
                  "billingCycle": int(portion_of_route[mru]), "meterTechnology": t_route,
                  "moveInAt": _date_iso(move_in), "moveOutAt": _date_iso(move_out) if move_out else None,
@@ -313,13 +307,12 @@ def build_customers(town) -> Customers:
             for d in dirs:
                 reg = ids.register_id(mid, d)
                 key = "electric_" + d if c == "electric" else c
-                base = float(1000 + str_key(reg + str(cfg.seeds.master)) % 50000)
-                t0 = month_fraction(prev_d, read_hour)
-                t1 = month_fraction(this_d, read_hour)
+                base = registers.register_base(reg, cfg.seeds.master)
                 mod = 10.0 ** digits[c]
-                v0_true = register_at(key, i, t0, base)
-                v1_true = register_at(key, i, t1, base)
-                prev_val, val = round(v0_true % mod, 3), round(v1_true % mod, 3)
+                true = base + registers.advance(cum[key], december[key], np.array([i, i]),
+                                                np.array([registers.day_of(prev_d), registers.day_of(this_d)]),
+                                                np.array([read_hour, read_hour]))
+                prev_val, val = (float(x) for x in registers.observe(true, digits[c]))
                 consumption = round((val - prev_val) % mod, 3)
                 active_ctr = next((ids.contract_id(pid, c) + sfx for t_in, t_out, sfx in tenancies
                                    if t_in <= prev_d and (t_out is None or t_out > prev_d)),

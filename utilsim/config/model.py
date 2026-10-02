@@ -100,11 +100,38 @@ class TownConfig(BaseModel):
                             le=150)
     era_noise_years: float = F(8.0, "Std-dev of era noise per district.", unit="yr", ge=0, le=30, advanced=True)
     park_share: float = F(0.04, "Share of blocks kept as parks.", ge=0, le=0.2, advanced=True)
-    commercial_strip_m: float = F(700.0, "Length of the commercial strip along the main arterial.", unit="m", ge=0,
-                                  le=3000)
+    commercial_strip_m: float = F(700.0, "Length of the downtown main street: arterial frontage within half this "
+                                  "distance of the centre is all commercial (up to 80 lots). The frontage shares "
+                                  "below apply beyond it.", unit="m", ge=0, le=3000,
+                                  effects=["downtown storefronts", "homes pushed outward"])
+    commercial_share_arterial: float = F(0.45, "Share of developed lots fronting an arterial (beyond the downtown "
+                                         "main street) that become commercial or mixed-use premises. The rest are "
+                                         "homes, or rear yards where modern subdivisions back onto the arterial.",
+                                         ge=0, le=1,
+                                         effects=["commercial premises", "plazas at major intersections",
+                                                  "commercial hydrant spacing", "transformer pads",
+                                                  "commercial accounts"])
+    commercial_share_collector: float = F(0.15, "Share of developed lots fronting a collector that become "
+                                          "commercial or mixed-use premises.", ge=0, le=1,
+                                          effects=["commercial premises", "corner shops on collectors",
+                                                   "commercial accounts"])
+    commercial_share_local: float = F(0.02, "Share of developed lots on local streets that become commercial "
+                                      "(corner stores near downtown and where local streets meet main roads).",
+                                      ge=0, le=1, effects=["commercial premises", "homes pushed outward"])
+    commercial_cluster_m: float = F(120.0, "Distance over which commercial frontage clusters around main-road "
+                                    "intersections and downtown. Smaller gives tight corner clusters, larger gives "
+                                    "long strips.", unit="m", ge=20, le=1000, advanced=True,
+                                    effects=["where storefronts sit along main roads"])
     industrial_lots: int = F(2, "Number of large industrial customers.", ge=0, le=10)
     houses_per_school: int = F(2500, "One school per this many houses.", ge=500, le=20_000, advanced=True)
     margin_m: float = F(120.0, "Empty margin around the developed area.", unit="m", ge=0, le=1000, advanced=True)
+    corridor_max_deflection_deg: float = F(35.0, "Arterial/collector road edges continue one corridor through a "
+                                           "junction when the heading changes by at most this much.", unit="deg",
+                                           ge=5, le=90, advanced=True,
+                                           effects=["corridors", "trunk routes", "corridor changes"])
+    corridor_name_bonus_deg: float = F(20.0, "Extra deflection allowed when both edges carry the same street name "
+                                       "(a name is weak evidence of continuity).", unit="deg", ge=0, le=60,
+                                       advanced=True, effects=["corridors"])
 
 
 class HousingConfig(BaseModel):
@@ -165,12 +192,50 @@ class ElectricConfig(BaseModel):
                                            advanced=True)
     transformer_max_loading: float = F(1.3, "Allowed peak loading relative to nameplate.", ge=0.8, le=2.0,
                                        advanced=True)
+    conductor_planning_margin: float = F(1.25, "Primary conductors are sized for design load × this margin (winter "
+                                         "peaks, load growth).", ge=1.0, le=2.0,
+                                         effects=["primary conductor sizes", "loading in power flow"], advanced=True)
     max_houses_per_transformer_overhead: int = F(6, "Max houses on a pole-mount transformer.", ge=1, le=20)
     max_houses_per_transformer_underground: int = F(10, "Max houses on a pad-mount transformer.", ge=1, le=25)
     feeder_design_mva: float = F(6.0, "Design peak per feeder.", unit="MVA", ge=1, le=20,
                                  effects=["feeder count", "tie switches"])
+    feeder_max_customers: int = F(1200, "Most customers planned on one feeder (limits how many lose supply when a "
+                                  "feeder breaker trips).", ge=100, le=10_000,
+                                  effects=["feeder count", "feeder territories", "tie switches"])
+    min_feeders_per_substation: int = F(2, "Feeders leaving each substation at least (fewer only when it serves "
+                                        "fewer transformer groups), so normally-open ties can back-feed.", ge=1,
+                                        le=12, effects=["feeder count", "tie switches", "outage size"])
     substation_mva: float = F(25.0, "Firm capacity per substation.", unit="MVA", ge=5, le=100,
                               effects=["substation count"])
+    route_weight_arterial: float = F(1.0, "Feeder routing cost per metre along an arterial (trunks follow the "
+                                     "cheapest corridors).", ge=0.1, le=10, advanced=True,
+                                     effects=["trunk routes", "feeder territories"])
+    route_weight_collector: float = F(1.4, "Feeder routing cost per metre along a collector.", ge=0.1, le=10,
+                                      advanced=True, effects=["trunk routes"])
+    route_weight_local: float = F(2.0, "Feeder routing cost per metre along a local street.", ge=0.1, le=10,
+                                  advanced=True, effects=["trunk routes", "lateral routes"])
+    route_turn_penalty_m: float = F(60.0, "Routing cost of a 90° turn, in weighted metres; it grows with the "
+                                    "square of the angle (a U-turn costs 4×). Bends under 10° are free.", unit="m",
+                                    ge=0, le=2000, advanced=True, effects=["trunk continuity", "severe turns"])
+    route_corridor_change_penalty_m: float = F(80.0, "Routing cost of switching from one arterial/collector "
+                                               "corridor to another.", unit="m", ge=0, le=2000, advanced=True,
+                                               effects=["trunk continuity", "corridor changes"])
+    route_hierarchy_penalty_m: float = F(60.0, "Routing cost per step up or down the road hierarchy "
+                                         "(arterial ↔ collector ↔ local).", unit="m", ge=0, le=2000, advanced=True,
+                                         effects=["trunks staying on main roads"])
+    trunk_min_load_share: float = F(0.04, "A feeder trunk extends along a corridor while at least this share of "
+                                    "the feeder's connected load lies at or beyond that point; smaller tails are "
+                                    "served by laterals.", ge=0, le=0.5, advanced=True,
+                                    effects=["trunk length", "three-phase backbone"])
+    route_shared_trunk_factor: float = F(1.2, "Cost multiplier for running a feeder express through another "
+                                         "feeder's territory or alongside its trunk.", ge=1.0, le=5.0,
+                                         advanced=True, effects=["express sections", "feeder separation"])
+    severe_turn_deg: float = F(60.0, "A trunk turn at least this sharp counts as severe in the routing metrics.",
+                               unit="deg", ge=20, le=170, advanced=True)
+    ties_per_feeder_pair: int = F(1, "Normally-open tie switches between each pair of neighbouring feeders.",
+                                  ge=0, le=4, effects=["tie switches", "back-feed options"])
+    tie_max_length_m: float = F(800.0, "Longest new line built to tie a feeder that touches no other feeder.",
+                                unit="m", ge=0, le=5000, advanced=True, effects=["tie switches"])
     overhead_before_year: int = F(1978, "Districts built before this year are overhead (poles); later underground.",
                                   ge=1850, le=2030, effects=["poles", "lightning exposure", "storm outages"])
     pole_spacing_m: float = F(42.0, "Pole span on overhead lines.", unit="m", ge=20, le=90, advanced=True)
@@ -349,7 +414,8 @@ class CustomersBillingConfig(BaseModel):
 
 
 class ProcessConfig(BaseModel):
-    model_config = group("Meter-to-cash process", 11, "Work queues, automation, costs and carrying cost.")
+    model_config = group("Meter-to-cash process", 11, "Work queues, automation, workforce, costs and carrying cost.",
+                         applies="run")
     sequences: str = F("builtin", "Activity sequence library: 'builtin' or a path to a YAML file.")
     rpa_coverage: float = F(0.35, "Share of exception types with an RPA/auto-resolve rule.", ge=0, le=1,
                             effects=["analyst workload", "days to invoice", "carrying cost"])
@@ -359,11 +425,28 @@ class ProcessConfig(BaseModel):
                                   le=20)
     receivable_carry_ratio: float = F(0.4, "Receivable carry as a share of the billing carry rate.", ge=0, le=1,
                                       advanced=True)
+    analysts: int = F(2, "Billing analysts working the exception queues.", ge=0, le=200,
+                      effects=["queue backlog", "days to bill", "carrying cost"])
+    analyst_hours_per_day: float = F(6.0, "Productive queue hours per analyst per business day.", unit="h", ge=0.5,
+                                     le=10)
+    review_minutes_min: float = F(15.0, "Shortest analyst review.", unit="min", ge=1, le=240, advanced=True)
+    review_minutes_max: float = F(30.0, "Longest analyst review.", unit="min", ge=1, le=480, advanced=True)
+    supervisors: int = F(1, "Supervisors approving escalations.", ge=0, le=50, effects=["escalation backlog"])
+    supervisor_hours_per_day: float = F(2.0, "Supervisor hours on escalations per business day.", unit="h", ge=0.25,
+                                        le=10, advanced=True)
+    supervisor_minutes: float = F(40.0, "Supervisor review time per escalation.", unit="min", ge=5, le=240,
+                                  advanced=True)
+    field_orders_per_day: int = F(6, "Meter investigations, re-reads and exchanges completed per business day.",
+                                  ge=0, le=500, effects=["field order backlog", "estimates"])
+    field_days_min: int = F(1, "Earliest a field order is worked after it is raised.", unit="d", ge=0, le=20,
+                            advanced=True)
+    analyst_accuracy: float = F(0.95, "Share of reviews where the analyst finds the true cause.", ge=0.5, le=1,
+                                advanced=True, effects=["billing errors", "wasted truck rolls"])
 
 
 class AnomaliesConfig(BaseModel):
     model_config = group("Meter & read anomalies", 12, "Injected faults with ground truth. Rates per 1,000 meters "
-                         "per year.")
+                         "per year.", applies="run")
     enabled: bool = F(True, "Inject anomalies into observed reads (truth is always kept separately).")
     leak: float = F(8.0, "Continuous post-meter water leaks.", ge=0, le=200)
     stuck_meter: float = F(5.0, "Registers that stop advancing.", ge=0, le=200)
@@ -377,6 +460,76 @@ class AnomaliesConfig(BaseModel):
                                              le=100)
     vacant_consuming: float = F(3.0, "Vacant premises that still consume.", ge=0, le=100)
     tamper: float = F(1.0, "Bypass/tamper (50–90% under-registration).", ge=0, le=50)
+
+
+class ReadingConfig(BaseModel):
+    model_config = group("Meter reading", 14, "How periodic billing reads succeed or fail, by meter technology.",
+                         applies="run")
+    ami_missed_read: float = F(0.012, "AMI billing reads still missing after the head-end retry window.", ge=0, le=0.5,
+                               effects=["comm-fail exceptions", "estimates"])
+    amr_missed_read: float = F(0.03, "Drive-by reads missed (no signal, street skipped).", ge=0, le=0.5)
+    manual_no_access: float = F(0.06, "Manual reads with no access (locked gate, dog, meter inside).", ge=0, le=0.8,
+                                effects=["no-access exceptions", "consecutive estimates"])
+    no_access_repeat: float = F(0.4, "Chance a missed manual read is missed again the next month.", ge=0, le=1,
+                                advanced=True)
+    read_cost_ami: float = F(0.10, "Cost of one AMI read.", unit="$", ge=0, le=20, advanced=True)
+    read_cost_amr: float = F(0.35, "Cost of one drive-by read.", unit="$", ge=0, le=20, advanced=True)
+    read_cost_manual: float = F(1.20, "Cost of one walked read.", unit="$", ge=0, le=50, advanced=True)
+
+
+class VeeConfig(BaseModel):
+    model_config = group("VEE rules", 15, "Validation, estimation and editing: the five-test battery, confidence "
+                         "and disposition (VEE v5 shape).", applies="run")
+    high_ratio: float = F(2.0, "Flag consumption above this multiple of expected (tolerance high).", ge=1.1, le=10,
+                          effects=["flagged reads", "analyst workload"])
+    low_ratio: float = F(0.35, "Flag consumption below this share of expected (tolerance low).", ge=0, le=0.95)
+    zero_at_occupied: bool = F(True, "Flag zero consumption at an occupied premise.")
+    max_consecutive_estimates: int = F(2, "Estimates in a row before a field read is ordered.", ge=1, le=12,
+                                       effects=["field orders"])
+    min_period_days: int = F(25, "Shortest plausible read period.", unit="d", ge=1, le=40, advanced=True)
+    max_period_days: int = F(38, "Longest plausible read period.", unit="d", ge=20, le=120, advanced=True)
+    accept_confidence: float = F(0.75, "Auto-accept at or above this confidence.", ge=0, le=1,
+                                 effects=["auto-accept rate", "billing errors"])
+    reject_confidence: float = F(0.35, "Reject below this confidence.", ge=0, le=1)
+    escalate_impact: float = F(150.0, "Escalate a doubtful read when its bill impact exceeds this.", unit="$", ge=0,
+                               le=10000, effects=["supervisor workload"])
+    trend_ratio: float = F(0.8, "Persistent low use: flag reads below this share of expected …", ge=0.3, le=1.0,
+                           effects=["slow and tampered meters found"])
+    trend_periods: int = F(3, "… for this many periods in a row.", ge=2, le=12)
+    oms_events: bool = F(True, "Use outage events (OMS, AMI last gasps) from operations: hours without service "
+                         "lower the expected use.", effects=["low-usage flags after outages"])
+    estimation: Literal["prior_year", "recent_average"] = F("prior_year", "Estimation method for missing or "
+                                                            "rejected reads.")
+    history_noise: float = F(0.10, "Spread of prior-year history around this year's normal usage.", ge=0, le=0.5,
+                             advanced=True)
+
+
+class BillingConfig(BaseModel):
+    model_config = group("Billing & collections", 16, "Bill checks, tariff versions, invoicing, payments and dunning.",
+                         applies="run")
+    rate_change_date: str = F("2026-11-01", "Date a new tariff version takes effect (volumetric prices).")
+    rate_change_pct: float = F(3.5, "Volumetric price change in the new tariff version.", unit="%", ge=-50, le=100,
+                               effects=["bills after the change", "proration"])
+    high_bill_ratio: float = F(2.5, "Block a bill above this multiple of its expected amount (prior-year use at "
+                               "current prices).", ge=1.1, le=20, effects=["billing blocks", "analyst workload"])
+    high_bill_min: float = F(150.0, "…and at least this much above the expected amount.", unit="$", ge=0, le=5000)
+    first_bill_limit: float = F(600.0, "Block a bill with no expected use (vacant, new) above this total.", unit="$",
+                                ge=0, le=10000, advanced=True)
+    credit_review: float = F(75.0, "Block a bill that is a credit larger than this.", unit="$", ge=0, le=5000,
+                             advanced=True)
+    data_error_rate: float = F(3.0, "Installations with a wrong rate class in billing master data (per 1,000 per "
+                               "year).", ge=0, le=200, effects=["rate-class billing blocks"])
+    print_lag_days: int = F(1, "Days from invoice creation to issue.", unit="d", ge=0, le=10, advanced=True)
+    pad_reject_rate: float = F(0.015, "Pre-authorized debits returned for insufficient funds.", ge=0, le=0.5,
+                               effects=["payment rejections", "collections"])
+    nsf_fee: float = F(20.0, "Fee for a returned payment.", unit="$", ge=0, le=100, advanced=True)
+    late_fee_pct: float = F(1.5, "Late payment charge on overdue amounts (per notice).", unit="%", ge=0, le=5)
+    reminder_days: int = F(7, "Days after the due date for a reminder.", unit="d", ge=1, le=60)
+    notice_days: int = F(21, "Days after the due date for an overdue notice and late fee.", unit="d", ge=1, le=90)
+    disconnect_days: int = F(45, "Days after the due date for a disconnection notice.", unit="d", ge=5, le=180,
+                             effects=["disconnection notices"])
+    winter_moratorium: bool = F(True, "No disconnection notices for electricity and water from Nov 15 to Apr 30 "
+                                "(Ontario).")
 
 
 class ScenarioConfig(BaseModel):
@@ -410,6 +563,9 @@ class SimConfig(BaseModel):
     process: ProcessConfig = Field(default_factory=ProcessConfig)
     anomalies: AnomaliesConfig = Field(default_factory=AnomaliesConfig)
     scenario: ScenarioConfig = Field(default_factory=ScenarioConfig)
+    reading: ReadingConfig = Field(default_factory=ReadingConfig)
+    vee: VeeConfig = Field(default_factory=VeeConfig)
+    billing: BillingConfig = Field(default_factory=BillingConfig)
 
     @model_validator(mode="after")
     def _check(self) -> SimConfig:
@@ -424,6 +580,12 @@ class SimConfig(BaseModel):
             raise ValueError("on-time + late payer shares must not exceed 1")
         if self.process.analyst_queue_days_max < self.process.analyst_queue_days_min:
             raise ValueError("process.analyst_queue_days_max must be >= min")
+        if self.process.review_minutes_max < self.process.review_minutes_min:
+            raise ValueError("process.review_minutes_max must be >= min")
+        if self.vee.reject_confidence > self.vee.accept_confidence:
+            raise ValueError("vee.reject_confidence must not exceed vee.accept_confidence")
+        if self.vee.max_period_days < self.vee.min_period_days:
+            raise ValueError("vee.max_period_days must be >= min_period_days")
         if sorted(self.electric.transformer_kva_steps) != list(self.electric.transformer_kva_steps):
             raise ValueError("electric.transformer_kva_steps must be ascending")
         return self
@@ -432,7 +594,7 @@ class SimConfig(BaseModel):
     def generation_dict(self) -> dict[str, Any]:
         """The part of the config that determines the generated town and its fixtures."""
         d = self.model_dump(mode="json")
-        for k in ("name", "description", "scenario"):
+        for k in ("name", "description", *RUN_GROUPS):
             d.pop(k, None)
         return d
 
@@ -445,6 +607,11 @@ class SimConfig(BaseModel):
 
     def content_hash(self) -> str:
         return hashlib.sha256(self.canonical_json() + b"|" + GENERATOR_VERSION.encode()).hexdigest()
+
+
+RUN_GROUPS = tuple(k for k, f in SimConfig.model_fields.items()
+                   if (getattr(f.annotation, "model_config", None) or {}).get("json_schema_extra", {}).get("x-applies")
+                   == "run")
 
 
 def config_schema() -> dict[str, Any]:
