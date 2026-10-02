@@ -1,7 +1,8 @@
 # Vercel deployment input. The site is built by scripts/build_site.mjs (viewer + packs/).
-# The full local API (generation, LRU store) is not deployed; the hosted engine is api/index.py (phase 1).
+# The full local API (api/app.py) is not deployed; the hosted engine is api/index.py. Its helper modules live beside
+# it with a leading underscore (api/_*.py), which keeps Vercel from deploying them as functions of their own;
+# tests/test_hosted_deploy.py checks that everything api/index.py imports reaches Vercel.
 /api/app.py
-/api/store.py
 /out
 /.utilsim_cache
 /.venv

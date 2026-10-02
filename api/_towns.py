@@ -23,7 +23,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 from api._ops import SNAPSHOT_SOURCES, TOWN_KEYS, J, pack_index
-from api.store import SERVERLESS, store
+from api._store import SERVERLESS, store
 from utilsim.config.model import SimConfig
 from utilsim.version import GENERATOR_VERSION, SCHEMA_VERSION
 
