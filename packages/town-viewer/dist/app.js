@@ -90,7 +90,7 @@ function renderHome(){
  const h=selected,scroll=$('inspector').scrollTop;
  if(profileTab==='service')renderServiceHome();
  else{const p=customerProfile(town,customerData,h,profileTime()),reads=mode==='demo'?monthlyReads(town,h):p.reads;
-  $('inspector-body').innerHTML=profileHeader(p,mode)+customerTabs(profileTab)+(!h.services[utility]?`<div class="billing-empty">No ${escape(LABELS[utility].toLowerCase())} service at this property.</div>`:'')+(profileTab==='customer'?customerMarkup(p,reads):billingMarkup(p,m2cReads(h)||reads)+m2cCases(h));
+  $('inspector-body').innerHTML=profileHeader(p,mode)+customerTabs(profileTab)+(!h.services[utility]?`<div class="billing-empty">No ${escape(LABELS[utility].toLowerCase())} service at this property.</div>`:'')+(profileTab==='customer'?customerMarkup(p,reads):billingMarkup(m2cProfile(p,h),m2cReads(h)||reads)+m2cCases(h));
   $('focus-home').onclick=()=>scene.select(h,utility,true);
   document.querySelectorAll('[data-service-detail]').forEach(btn=>btn.onclick=()=>{utility=btn.dataset.serviceDetail;profileTab='service';fixture='actual';setLayer(utility,true);scene.select(h,utility);renderHome();$('inspector').scrollTop=0;});
  }
@@ -117,6 +117,8 @@ function m2cKey(id){return id+'|'+(m2c?.asOf||'')+'|'+(m2c?.actions.length||0)+'
 function m2cReads(h){if(!m2c)return null;const key=m2cKey(h.id),view=m2cPremise.get(key);if(view)return view.reads;
  if(!m2cPremise.has(key)){m2cPremise.set(key,null);m2c.premise(h.id).then(v=>{m2cPremise.set(key,v);if(selected===h&&profileTab==='billing')renderHome();}).catch(e=>{m2cPremise.delete(key);if(!e.superseded)toast('Engine: '+e.message);});}
  return null;}
+function m2cProfile(p,h){const view=m2c&&m2cPremise.get(m2cKey(h.id));if(!view)return p;const acct=view.accounts.find(a=>a.accountId===p.account?.id)||view.accounts[0];const mine=d=>!acct||d.accountId===acct.accountId;
+ return {...p,bills:view.billingDocuments.filter(mine).slice(-12).reverse(),invoices:view.invoices.filter(mine).slice(-12).reverse(),account:{...(p.account||{}),id:acct?.accountId||p.account?.id,currency:'CAD',balance:acct?.balance}};}
 function m2cCases(h){if(!m2c)return '';const view=m2cPremise.get(m2cKey(h.id));if(!view)return '<p class="small-note">Loading the engine\'s reads for this premise…</p>';
  const open=view.cases.filter(c=>!c.resolvedAt);return `<section class="detail-section"><h3>Work cases · ${escape(view.asOf)}</h3>${view.cases.length?view.cases.slice(-6).reverse().map(c=>`<div class="detail-line"><span>${escape(c.icon)} ${escape(c.label)} · ${escape(c.readDate)}</span><a class="small-link" href="${routeHash({queue:c.queue,caseId:c.caseId})}">${escape(c.resolvedAt?String(c.outcome).replaceAll('_',' '):String(c.status).replaceAll('_',' '))}</a></div>`).join(''):'<p class="small-note">No exceptions for this premise in 2026 so far.</p>'}${open.length?`<p class="small-note">${open.length} open: billing waits for these reads.</p>`:''}</section>`;}
 function applyM2CMarkers(){if(!m2cMarkers||!m2cSummary){scene.setMarkers([]);return;}const at=new Map(town.premises.map(h=>[h.id,h]));scene.setMarkers(m2cSummary.premises.ids.map((id,i)=>m2cSummary.premises.status[i]>=2?at.get(id):null).filter(Boolean).map(h=>({x:h.x,z:h.z})));}
