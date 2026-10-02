@@ -20,6 +20,9 @@ A run is stateless and deterministic: `(town, settings, actions, outages, seed)`
   - `type` is one of `accept`, `override` (with a register value), `estimate`, `field_order` or `escalate`.
   - The Utility Studio adds field service orders (`order_save`, `order_release`, `order_dispatch`,
     `order_complete`) and case work (`note`, `assign`, `invoice_hold`, `invoice_unhold`); see "Studio work" below.
+  - Collections work on an account or an invoice: `payment_arrangement`, `extend_due`, `dunning_hold`,
+    `low_income_referral`, `budget_billing`, `waive_fee`, `disconnect_approve`, `disconnect_cancel`; see
+    "Collections" below.
   - Actions are append-only by `day`. An action never changes anything before its day, so a reply for an earlier
     date stays valid.
   - A refused action is HTTP 422 with a clear `detail` (for an order form, an object with `fieldErrors`), so the
@@ -90,7 +93,8 @@ ids: Field Work `CASE-{yymmdd}-F{nnnn}` and invoice holds `CASE-{yymmdd}-H{nnnn}
 | `meter_reading_route` | Walked (no access) and drive-by reads that were missed |
 | `vee_batch` | Value exceptions, consecutive estimates, periods with no read document |
 | `billing_run` | Billing blocks (`HIGH_BILL`, `BILL_CREDIT`, `RATE_CLASS`, `TRUE_UP`) |
-| `studio` | Your Field Work and invoice hold cases |
+| `collections` | The call centre's low-income referrals (`LOW_INCOME`) and budget billing enrolments (`BUDGET_BILL`) |
+| `studio` | Your Field Work, invoice hold, low-income referral and budget billing cases |
 
 **Missing reads explain themselves.** A missing-read case (its read record and its VEE decision too) carries
 `cause`: `{code, label, reasonCode, reason}`, plus `outageStart` and `outageEnd` for an outage. `code` is
@@ -114,6 +118,17 @@ VEE tests stay `not_applicable`, each saying what it would have checked. A case 
 
 Worklist rows carry `actionableFrom`, `createdBy`, `createdByLabel`, `cause`, `registerDelta`,
 `registerWentBackwards`, `previousEstimated` and `releasedMethod` as well.
+
+**The AMI collector behind a missed read.** Each AMI meter reports through one collector (the snapshot's
+`meters[].ami.collectorId`; `amiNetwork.collectors` mounts them on poles, streetlights and transformer pads), so a
+collector outage or a street of comm fails is one problem, not many cases:
+- rows carry `collectorId` (null for AMR and walked meters) and `collectorCases`: the AMI missed reads (comm fail,
+  power outage, collector outage) on that collector raised the same day, this one included (0 for other cases);
+- a case view adds `network`: `{collectorId, mountedOn, mountId, day, cases, relatedCases[]}` (up to 50 related
+  cases, each with `caseId`, `address`, `status`, `outcome`, `reasonCode`); null for a meter without a collector;
+- `POST /api/m2c/collector-groups` lists the groups (collector and day, at least `minCases`, newest first) with
+  their case ids, open count, shared `cause`, premises, streets and the collector's mount, plus the town's
+  collectors (`meters` each); `POST /api/process/queue` with `collector` and `createdOn` lists one group's cases.
 
 **Backwards registers.** A register below its last actual read (as read, corrected or field read; not an estimate),
 and not a plausible rollover, is never released as read:
@@ -244,21 +259,97 @@ invoice and billing carry grow.
 - an overdue notice with a `late_fee_pct` fee at due + `notice_days`;
 - a disconnection notice at due + `disconnect_days`.
 
-Disconnection notices for electricity and water are held from Nov 15 to Apr 30 (`winter_moratorium`). An account's
-ledger (invoices, payments, fees) gives its balance.
+Disconnection notices for electricity and water are held from Nov 15 to Apr 30 (`winter_moratorium`): the invoice
+gets a `MORATORIUM_HOLD`, and the notice is issued on May 1 if the bill is still unpaid. An account's ledger
+(invoices, payments, fees, grants, waivers, budget deferrals) gives its balance.
 
 The summary's `billing` block reports:
 - documents and blocked documents;
-- billed, invoiced and collected amounts;
-- receivable and overdue amounts;
+- billed, invoiced and collected amounts (collected counts instalments and low-income grants too);
+- receivable and overdue amounts (overdue is what is still owed on overdue invoices);
 - days to invoice and days to pay;
 - billing and receivable carry;
 - billing error;
-- dunning counts.
+- dunning counts (every step and collections event on an invoice, by type);
+- `collections`: arrangements (made, active, completed, broken, amount), dunning holds, low-income referrals (open,
+  approved, declined, grants), budget plans (master data, enrolled in the run, active), disconnections (notices,
+  pending, approved, disconnected, reconnected, cancelled) and fees waived.
 
 The premise view carries `billingDocuments` (with lines), `invoices` (with payments and dunning) and `accounts` (with
-balance and recent ledger). Reads show `billStatus` (`billed`, `billing_blocked`, `rebilled`), `billingDocumentId`,
-`invoiceId` and `invoiceStatus`.
+balance and recent ledger). Invoices also carry `amountDue` (a budget plan's instalment, else the total),
+`outstanding`, `budgetBilling`, `disconnection` (its state) and `originalDueAt` when the due date was extended. Reads
+show `billStatus` (`billed`, `billing_blocked`, `rebilled`), `billingDocumentId`, `invoiceId` and `invoiceStatus`.
+
+## Collections
+
+Payments, dunning and collections run after the year's billing (`collections.py`), one account at a time in time
+order, so your collections actions change the books from their day on and never before. Each lands at 09:00 on its
+`day` like every Studio action, and is refused (422, or a warning for an older action) when it does not apply, with
+the reason ("account CA-… has nothing overdue on 2026-01-02", "the disconnection for invoice INV-… was cancelled on
+…").
+
+| Action | Body | Effect |
+|---|---|---|
+| `payment_arrangement` | `{day, accountId, instalments (2–12, default 3), note?}` | What is overdue at 09:00 becomes equal monthly instalments, the first due 7 days later. The customer's own payments on those bills stop; instalments pay them oldest first. Dunning on them waits while the arrangement runs. On-time payers and debits pay on each due date, late payers 1–10 days late; an at-risk payer breaks it after a few instalments (`arrangement_break_rate`), and dunning resumes. One at a time per account |
+| `extend_due` | `{day, invoiceId, days (1–60, default 14), note?}` | The due date moves; the next dunning step is counted from the new date (a late fee may never come). Not after a disconnection notice |
+| `dunning_hold` | `{day, accountId, days (1–90, default 30), note}` | No reminder, notice or disconnection on the account until the hold ends; a step that fell in it comes at the end |
+| `low_income_referral` | `{day, accountId, note?}` | Opens a Low Income Process case `CASE-{yymmdd}-L{nnnn}`. Dunning waits until the agency decides, `low_income_review_days` business days later at 14:00; it approves with `low_income_approval_rate` and credits a grant (up to `low_income_grant_max`) to the oldest unpaid bills |
+| `budget_billing` | `{day, accountId, note?}` | Opens a Budget Bill Cases case `CASE-{yymmdd}-B{nnnn}`. A collections agent sets the plan up after the analyst pickup lag (10:00); invoices issued after that owe the plan's instalment (the account's average monthly expected bill: prior-year use at current prices, whole dollars, at least $10) and the difference goes to `budget_deferral` on the ledger. Refused for an account already on a plan (master data `budgetBilling`, or enrolled) |
+| `waive_fee` | `{day, invoiceId, fee: late_fee \| nsf_fee, note?}` | Credits the invoice's posted late fee (or NSF fee) back (`fee_waived` on the ledger) |
+| `disconnect_approve` | `{day, invoiceId, note?}` | After a disconnection notice: a crew disconnects at 10:00 on the earliest disconnection day (notice + `disconnect_notice_days`), or the next morning, if the bill is still unpaid. A dunning hold or an open referral moves it to their end; under a payment arrangement the approval lapses. A customer who would not have paid within a week pays the overdue bills 2–7 days later with `disconnect_payment_rate` and is reconnected the next business day at 10:00 |
+| `disconnect_cancel` | `{day, invoiceId, note}` | No disconnection for that notice |
+
+The engine never disconnects without your approval. **The call centre** (simulated, `createdBy: collections`)
+refers a customer to a low-income programme after a disconnection notice or a moratorium hold
+(`low_income_referral_rate`, once a year per account), and enrols one in budget billing after an overdue notice
+(`budget_billing_offer_rate`, once a year per account); the agency and a collections agent (`CC-01`) then work them as
+above. Accounts with `budgetBilling` in master data are on a plan all year.
+
+Collections cases are account work (`Case.work` `low_income` or `budget_bill`, `ref` the account) in the
+`COLLECTIONS` queue: their case view has `collections` (the account's overdue and outstanding, the referral's
+outcome and grant, or the plan) and no read, decision or read history; `studioActions` are `note` and `assign`
+(your notes on a call-centre case wait in the day loop and land in time order).
+
+**Worklists** (`POST /api/m2c/collections`, `m2c-collections/1.0`): `{list, status (open, closed, all), sort (age
+oldest first, amount largest first, created newest first), page, pageSize ≤ 200, search, commodity}`.
+
+| `list` | One row per | Open while | Row fields beyond the invoice's (`invoiceId`, `accountId`, `name`, `premiseId`, `address`, `commodities`, `dueAt`, `amountDue`, `outstanding`, `daysOverdue`) |
+|---|---|---|---|
+| `disconnect` | disconnection notice | `pending`, `approved` or `disconnected` | `noticeAt`, `earliestDisconnectAt`, `state` (`pending`, `approved`, `disconnected`, `reconnected`, `cancelled`, `paid`, `arranged`), `approvedAt`, `scheduledAt`, `disconnectedAt`, `reconnectedAt`, `cancelledAt`, `heldBy` |
+| `moratorium` | winter moratorium hold | `held` | `heldAt`, `heldUntil` (May 1), `state` (`held`, `notice issued`, `paid`), `noticeAt`, `heldBy` |
+| `rejected` | returned pre-authorized debit | unpaid | `rejectedAt`, `amount`, `nsfFee`, `nsfWaived`, `repaidAt`, `state` |
+| `overdue` | account with overdue bills | always | `overdue`, `invoices`, `invoiceIds`, `oldestDueAt`, `ageDays`, `balance`, `lastDunning` |
+
+Each row carries `flags` (`arrangementId`, `dunningHoldUntil`, `lowIncome`, `budgetBilling`, `disconnected`),
+`actions` (the collections actions the engine takes from an action dated the view's day; `waive_fee:late_fee` and
+`waive_fee:nsf_fee` name the fee) and, for invoice rows, `fees` (what is left to waive). `counts` gives each list's
+open items and `amount` the matching total. `POST /api/m2c/collections/account {accountId}`
+(`m2c-collections-account/1.0`) gives one account: balance, overdue, outstanding, `flags`, `budgetPlan`
+(instalment, source, start, `budgetBalance`), `arrangements` (with their schedule), `holds`, `referrals`, the account
+log, its invoices (with payments, dunning, disconnection, `heldBy` and `actions`), its collections cases, the last 40
+ledger postings and the account-level `actions`.
+
+## Follow-up worklists
+
+**Outage follow-up** (`POST /api/m2c/outage-followup`, `m2c-outage-followup/1.0`): one row per premise per
+interruption in the run's `outages`, newest first: `outageId`, `utility` (or `collectorOutage`), `start`, `end`,
+`day`, `startSeconds`, `ongoing`, `minutes`; the premise; `lastGasp` and `lastGaspAt` (an electric AMI meter lost
+power); `lostUse` and `unit` (the import use that never flowed while the service was off); `collectorId`;
+`missedReads` (each read scheduled during the interruption that its outage cost: `readId`, `meterId`,
+`scheduledReadAt`, `reasonCode`, `caseId`, `caseStatus`, `outcome`); and `followUp` (`open missed-read case`, `missed
+read worked`, `no read missed`). Filters: `utility`, `kind` (`last_gasp`, `lost_use`, `missed_read`), `status`
+(`open`: an open missed-read case), `outageId`, `search`, paged. `outages` sums up each interruption (premises, last
+gasps, use lost, missed reads, open cases).
+
+## Run statistics for a period
+
+`POST /api/m2c/summary` with `since` (a date) adds `window`: the summary's measures counted between that day (00:00)
+and `asOf` (24:00): `kpis` (reads, actual, missing, auto-accepted, flagged, released, estimated, adjusted, cases
+opened and resolved, field orders, truck rolls, days to release, costs, carry, plus `casesOpenAtStart` and
+`casesOpen`), `billing` (documents, blocked, released, billed, invoices, invoiced, paid, collected, dunning, and
+overdue and receivable at the start and the end), `collections` (arrangements, dunning holds, low-income referrals
+and grants, budget enrolments, disconnections, fees waived) and `reliability` (interruptions that began in it). From
+January 1 the window equals the year to date; two adjacent windows add up to the longer one.
 
 ## Studio work
 
@@ -327,10 +418,13 @@ keeps the queue it was resolved from). `POST /api/process/queue` filters by `cat
 | Billing Errors | Billing blocks `RATE_CLASS` (wrong rate class in master data) |
 | Invoice Outsorts | Your invoice holds (`INVOICE_HOLD` cases) |
 | Field Work | Any case in the `FIELD` queue, and your field service orders (`FIELD_SERVICE` cases) |
+| Low Income Process | Low-income referrals (`LOW_INCOME`, `COLLECTIONS` queue) by the call centre or you, open until the agency decides |
+| Budget Bill Cases | Budget billing enrolments (`BUDGET_BILL`, `COLLECTIONS` queue) by the call centre or you, open until the plan is set up |
 
 Field Work comes first: a case in the `FIELD` queue is Field Work whatever its type. A category is a view of the
-engine's queues, so a case moves category only when it moves queue. The Studio's other categories (AMP, Bill Correction, Bill Print Errors, Billing- see IT Supp, Budget Bill Cases,
-Invoice Errors, Low Income Process) have no engine meaning yet: they are accepted and return empty lists.
+engine's queues, so a case moves category only when it moves queue. The Studio's other categories (AMP, Bill
+Correction, Bill Print Errors, Billing- see IT Supp, Invoice Errors) have no engine meaning yet: they are accepted and
+return empty lists.
 
 Rows also carry the read the case is about (`meterId`, `mruId`, `portion`, `unit`, `readType`, `observed`,
 `previous`, `consumption`, `expected`, `scheduledReadAt`, `validationText`), so a reading list renders without
@@ -354,8 +448,12 @@ opening each case.
 |---|---|
 | `GET /api/m2c/settings?town=` | Schema, defaults (the town's with `?town=`), the run `seed` (default: the town seed), queues, exception vocabulary, action types, clarification categories |
 | `GET /api/m2c/vocabulary?town=` | `m2c-vocabulary/1.0`: the field service order form as data (fields with label, tab, required, kind, bounds and choices; the town's planning plant; component units; stages and system status), action types, queues and categories |
-| `POST /api/m2c/summary` | `m2c-summary/1.0`: KPIs, cost (labour, system, CX, reads), carry, VEE precision/recall against truth, `billing`, `reliability`, `weather`, queues with aging and daily opened/closed/backlog, exception mix, RPA rules, one status per premise |
-| `POST /api/process/queue` | Paged worklist: `queue` (incl. `BILLING`), `category`, `assignee`, `status`, `sort` (`age` oldest first, `impact`, `confidence`, `created` newest first; ties by case id, so pages never overlap), `page`, `pageSize` ≤ 200, `type`, `commodity`, `search` (case, address, premise, account, meter or order id). `total` counts every matching row |
+| `POST /api/m2c/summary` | `m2c-summary/1.0`: KPIs, cost (labour, system, CX, reads), carry, VEE precision/recall against truth, `billing` (with `collections`), `reliability`, `weather`, queues with aging and daily opened/closed/backlog, exception mix, RPA rules, one status per premise. `since` adds `window`, the figures for a period (see "Run statistics for a period") |
+| `POST /api/process/queue` | Paged worklist: `queue` (incl. `BILLING`, `COLLECTIONS`), `category`, `assignee`, `status`, `sort` (`age` oldest first, `impact`, `confidence`, `created` newest first; ties by case id, so pages never overlap), `page`, `pageSize` ≤ 200, `type`, `commodity`, `search` (case, address, premise, account, meter or order id), `collector` and `createdOn` (an AMI collector's cases raised that day). `total` counts every matching row |
+| `POST /api/m2c/collections` | `m2c-collections/1.0`: a Collections worklist (`disconnect`, `moratorium`, `rejected`, `overdue`), filtered, sorted and paged, rows with `actions` and `flags`, `counts` per list (see "Collections") |
+| `POST /api/m2c/collections/account` | `m2c-collections-account/1.0` for one `accountId`; 404 for an unknown account |
+| `POST /api/m2c/outage-followup` | `m2c-outage-followup/1.0`: last gasps, lost use and missed reads per premise per interruption (see "Follow-up worklists") |
+| `POST /api/m2c/collector-groups` | `m2c-collector-groups/1.0`: AMI missed reads grouped by collector and day, and the town's collectors |
 | `POST /api/m2c/case` | `work-case/1.0`: the case, its VEE decision, the read, 12-month history and `readHistory`, `expected`, `released`, the register check, `cause`, `createdBy`, `actionableFrom`, events (`event/1.0`) with causal edges, allowed decisions (`actions`) and Studio actions (`studioActions`), `notes`, linked `orders`, the account's `invoiceHold`, and for a Field Work case its `order` (`truth: true` adds ground truth); see "Cases" |
 | `POST /api/m2c/order` | `m2c-order/1.0`: a field service order (`field-order/1.0`: form, stage, SAP system status, history, source, reference installation/meter/contract, crew visit) by `orderId`, or the order of a `sourceCaseId` / `readId` (`order: null` and a `proposal` when there is none) |
 | `POST /api/m2c/installation` | `m2c-installation/1.0` for one `installationId` (see "Lookups") |
@@ -423,6 +521,9 @@ which service and when; the viewer keeps them per operations day and sends them 
   lists it among its `outages` with `utility: "ami"`, `collectorOutage: true` and no use lost.
 - **Reliability:** the summary's `reliability` reports interruptions, customers interrupted, customer-minutes, SAIDI
   minutes per customer served, use lost and AMI last gasps, per utility. A premise view lists its `outages`.
+- **Follow-up:** `POST /api/m2c/outage-followup` lists, per premise per interruption, the last gasp, the use lost and
+  the reads it cost with their missing-read cases; `POST /api/m2c/collector-groups` shows a collector outage as one
+  group of cases (see "Follow-up worklists" and "The AMI collector behind a missed read").
 
 The morning's field orders for a day never depend on that day's own outages, so linking the two runs cannot loop.
 The day's read outcomes and its `meterToCash` cycle do include them: a pole broken at 01:40 shows on the card as

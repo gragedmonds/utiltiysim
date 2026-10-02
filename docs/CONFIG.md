@@ -404,4 +404,12 @@ Bill checks, tariff versions, invoicing, payments and dunning.
 | `reminder_days` | `7` | 1–60 | d | Days after the due date for a reminder. |
 | `notice_days` | `21` | 1–90 | d | Days after the due date for an overdue notice and late fee. |
 | `disconnect_days` | `45` | 5–180 | d | Days after the due date for a disconnection notice. *Affects: disconnection notices.* |
-| `winter_moratorium` | `True` |  |  | No disconnection notices for electricity and water from Nov 15 to Apr 30 (Ontario). |
+| `winter_moratorium` | `True` |  |  | No disconnection notices for electricity and water from Nov 15 to Apr 30 (Ontario); a notice held for the winter is issued on May 1 if the bill is still unpaid. |
+| `disconnect_notice_days` | `10` | 1–60 | d | Days from a disconnection notice to the earliest disconnection. A disconnection also needs a person's approval (the Collections worklist). *Affects: disconnections.* |
+| `disconnect_payment_rate` | `0.6` | 0–1 |  | (advanced) Disconnected customers who pay within a week of the disconnection (and are reconnected the next business day); the rest stay off until they pay. *Affects: collections, reconnections.* |
+| `arrangement_break_rate` | `0.3` | 0–1 |  | (advanced) At-risk payers who break a payment arrangement after a few instalments (dunning resumes); other payers pay every instalment. *Affects: collections.* |
+| `low_income_referral_rate` | `0.15` | 0–1 |  | Disconnection notices and winter moratorium holds after which the call centre refers the customer to a low-income programme (once a year per account). *Affects: Low Income Process cases, disconnections.* |
+| `low_income_review_days` | `10` | 1–60 | d | (advanced) Business days the low-income agency takes to decide a referral; dunning waits meanwhile. |
+| `low_income_approval_rate` | `0.7` | 0–1 |  | Referrals the agency approves with a grant. *Affects: collections, receivable.* |
+| `low_income_grant_max` | `500.0` | 0–5000 | $ | (advanced) Largest low-income grant credited to an account's arrears. |
+| `budget_billing_offer_rate` | `0.08` | 0–1 |  | Overdue notices after which the call centre enrols the customer in budget billing (once a year per account); the plan levels later invoices. *Affects: Budget Bill Cases, collections.* |

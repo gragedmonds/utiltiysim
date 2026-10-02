@@ -32,7 +32,14 @@ export class EngineM2C{
   const data=await r.json();if(this.tickets[channel]!==ticket){const e=Error('superseded');e.superseded=true;throw e;}
   this.cache.set(key,data);if(this.cache.size>48)this.cache.delete(this.cache.keys().next().value);return data;
  }
- summary(){return this.post('/m2c/summary',{},'summary');}
+ // Year to date; `since` (YYYY-MM-DD) adds the engine's `window`: the same figures for that period.
+ summary(since=null){return this.post('/m2c/summary',since?{since}:{},since?'summary:window':'summary');}
+ // Collections worklists, an account's collections, the outage follow-up list and AMI collector groups.
+ collections(params){return this.post('/m2c/collections',params,'collections');}
+ collectionsAccount(accountId){return this.post('/m2c/collections/account',{accountId},'collections:account');}
+ outageFollowup(params={}){return this.post('/m2c/outage-followup',params,'outages');}
+ collectorGroups(params={}){return this.post('/m2c/collector-groups',params,'collectors:'+(params.collector||''));}
+ firstActionDay(){return this.actions[0]?.day||null;}
  queue(params={}){return this.post('/process/queue',params,'queue');}
  caseView(caseId,truth=false){return this.post('/m2c/case',{caseId,truth},'case');}
  premise(premiseId){return this.post('/m2c/premise',{premiseId},'premise:'+premiseId);}

@@ -223,6 +223,18 @@
       "additionalProperties": false,
       "description": "Bill checks, tariff versions, invoicing, payments and dunning.",
       "properties": {
+        "arrangement_break_rate": {
+          "default": 0.3,
+          "description": "At-risk payers who break a payment arrangement after a few instalments (dunning resumes); other payers pay every instalment.",
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Arrangement Break Rate",
+          "type": "number",
+          "x-advanced": true,
+          "x-effects": [
+            "collections"
+          ]
+        },
         "billing_queue_worked_by": {
           "default": "analysts",
           "description": "Who works the BILLING queue (high bills, large credits, true-ups, rate-class errors): the simulated analysts and RPA, or only you. With 'you', no analyst or RPA touches a billing block, so every outsort waits in the Studio for your release, rebill or escalation.",
@@ -236,6 +248,18 @@
             "billing blocks",
             "days to invoice",
             "billing carry"
+          ]
+        },
+        "budget_billing_offer_rate": {
+          "default": 0.08,
+          "description": "Overdue notices after which the call centre enrols the customer in budget billing (once a year per account); the plan levels later invoices.",
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Budget Billing Offer Rate",
+          "type": "number",
+          "x-effects": [
+            "Budget Bill Cases",
+            "collections"
           ]
         },
         "credit_review": {
@@ -270,6 +294,31 @@
             "disconnection notices"
           ],
           "x-unit": "d"
+        },
+        "disconnect_notice_days": {
+          "default": 10,
+          "description": "Days from a disconnection notice to the earliest disconnection. A disconnection also needs a person's approval (the Collections worklist).",
+          "maximum": 60,
+          "minimum": 1,
+          "title": "Disconnect Notice Days",
+          "type": "integer",
+          "x-effects": [
+            "disconnections"
+          ],
+          "x-unit": "d"
+        },
+        "disconnect_payment_rate": {
+          "default": 0.6,
+          "description": "Disconnected customers who pay within a week of the disconnection (and are reconnected the next business day); the rest stay off until they pay.",
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Disconnect Payment Rate",
+          "type": "number",
+          "x-advanced": true,
+          "x-effects": [
+            "collections",
+            "reconnections"
+          ]
         },
         "first_bill_limit": {
           "default": 600.0,
@@ -310,6 +359,50 @@
           "title": "Late Fee Pct",
           "type": "number",
           "x-unit": "%"
+        },
+        "low_income_approval_rate": {
+          "default": 0.7,
+          "description": "Referrals the agency approves with a grant.",
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Low Income Approval Rate",
+          "type": "number",
+          "x-effects": [
+            "collections",
+            "receivable"
+          ]
+        },
+        "low_income_grant_max": {
+          "default": 500.0,
+          "description": "Largest low-income grant credited to an account's arrears.",
+          "maximum": 5000,
+          "minimum": 0,
+          "title": "Low Income Grant Max",
+          "type": "number",
+          "x-advanced": true,
+          "x-unit": "$"
+        },
+        "low_income_referral_rate": {
+          "default": 0.15,
+          "description": "Disconnection notices and winter moratorium holds after which the call centre refers the customer to a low-income programme (once a year per account).",
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Low Income Referral Rate",
+          "type": "number",
+          "x-effects": [
+            "Low Income Process cases",
+            "disconnections"
+          ]
+        },
+        "low_income_review_days": {
+          "default": 10,
+          "description": "Business days the low-income agency takes to decide a referral; dunning waits meanwhile.",
+          "maximum": 60,
+          "minimum": 1,
+          "title": "Low Income Review Days",
+          "type": "integer",
+          "x-advanced": true,
+          "x-unit": "d"
         },
         "notice_days": {
           "default": 21,
@@ -409,7 +502,7 @@
         },
         "winter_moratorium": {
           "default": true,
-          "description": "No disconnection notices for electricity and water from Nov 15 to Apr 30 (Ontario).",
+          "description": "No disconnection notices for electricity and water from Nov 15 to Apr 30 (Ontario); a notice held for the winter is issued on May 1 if the bill is still unpaid.",
           "title": "Winter Moratorium",
           "type": "boolean"
         }

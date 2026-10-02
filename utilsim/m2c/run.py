@@ -33,6 +33,7 @@ from utilsim.core.ids import str_key
 from utilsim.core.rng import Purpose, hash_normal, hash_u01
 from utilsim.customers.calendar import business_days, to_utc_iso
 from utilsim.m2c import catalog as cat
+from utilsim.m2c import collections as colls
 from utilsim.m2c import orders as ords
 from utilsim.m2c import registers as regs
 from utilsim.m2c import vee as vee_mod
@@ -49,7 +50,8 @@ YEAR_DAYS = 365
 DECISIONS = ("accept", "override", "estimate", "field_order", "escalate")  # an analyst's decision on a case
 ORDER_ACTIONS = ("order_save", "order_release", "order_dispatch", "order_complete")
 CASE_WORK = ("note", "assign", "invoice_hold", "invoice_unhold")
-ACTION_TYPES = (*DECISIONS, "field_read", *ORDER_ACTIONS, *CASE_WORK)
+COLLECTION_ACTIONS = colls.ACTIONS  # collections work on an account or an invoice (utilsim/m2c/collections.py)
+ACTION_TYPES = (*DECISIONS, "field_read", *ORDER_ACTIONS, *CASE_WORK, *COLLECTION_ACTIONS)
 ActionError = ords.ActionError
 STATUS = ("pending", "released", "estimated", "adjusted", "held", "missing")
 # How a released register value was obtained (``released.method`` in case views, ``method`` in read histories).
@@ -253,6 +255,11 @@ class M2CRun:
                 extra = {"premiseId": a["premiseId"], "at": float(at)}
             elif a["type"] in ORDER_ACTIONS:
                 extra = self.ledger.apply(k, a, day)
+            elif a["type"] in COLLECTION_ACTIONS:
+                try:
+                    extra = colls.check(self.town, a)
+                except ValueError as exc:
+                    raise ActionError(f"action {k} ({a['type']}): {exc}") from None
             else:
                 extra = self._check_case_work(k, a)
             last = day
@@ -552,6 +559,7 @@ class M2CRun:
         self.case_index: dict[str, Case] = {}
         self.open: list[Case] = []
         self._unseen: list[tuple[int, dict, float]] = []  # actions on a case id the run has not raised (yet)
+        self._handled: set[int] = set()  # of those, the ones a collections case opened after the year took
         for day in range(YEAR_DAYS):
             acts = by_day.get(day, [])
             self._roll_orders(day)  # crews for your dispatched orders that start today (07:00-09:00)
@@ -578,10 +586,14 @@ class M2CRun:
                 self._same_day_rpa()
                 self.books.invoice(day)
                 self.open = [c for c in self.open if c.resolved is None]
+        self.books.collect()  # payments, dunning and collections; opens the collections cases (notes on them too)
         for k, a, t in self._unseen:  # raised later (that evening, or a later day), or never: say which
-            self._reject(k, a, self.not_open(self.case_index.get(a.get("caseId") or ""), a.get("caseId"), t)
-                         or f"case {a.get('caseId')} is opened by a later action")
-        self.books.collect()
+            if k in self._handled:
+                continue
+            case = self.case_index.get(a.get("caseId") or "")
+            self._reject(k, a, self.not_open(case, a.get("caseId"), t) or (
+                self.decision_refusal(case, a["type"], t, None) if case is not None and case.work else None)
+                or f"case {a.get('caseId')} is opened by a later action")
         diff = {q: np.zeros(YEAR_DAYS + 2, dtype=np.int64) for q in cat.QUEUES}
         for case in self.cases:  # backlog at the end of each day, from each case's queue moves
             for (t0, q, _), nxt in zip(case.moves, [*case.moves[1:], None], strict=True):
@@ -954,7 +966,10 @@ class M2CRun:
     def actor_label(actor: str | None) -> str:
         if actor is None or actor in ("RPA", "you"):
             return actor or "the engine"
-        kind = {"AN": "analyst", "SUP": "supervisor", "FIELD": "field crew"}.get(actor.split("-")[0])
+        if actor == "AGENCY":
+            return "the low-income agency"
+        kind = {"AN": "analyst", "SUP": "supervisor", "FIELD": "field crew", "CC": "collections agent"}.get(
+            actor.split("-")[0])
         return f"{kind} {actor}" if kind else actor
 
     def not_open(self, case: Case | None, case_id: str | None, t: float) -> str | None:
@@ -975,7 +990,9 @@ class M2CRun:
         if case.work is not None:
             return f"{typ} does not apply to {case.id}, " + (
                 f"the Field Work case of order {case.ref} (use order_complete)" if case.work == "order" else
-                f"the invoice hold on account {case.ref} (use invoice_unhold)")
+                f"the invoice hold on account {case.ref} (use invoice_unhold)" if case.work == "hold" else
+                f"the low-income referral of account {case.ref} (the agency decides it)" if case.work == "low_income"
+                else f"the budget billing enrolment of account {case.ref} (billing sets the plan up)")
         if case.doc >= 0:
             if typ in ("override", "field_order"):
                 return f"{typ} does not apply to {case.id}, a billing block (use accept, estimate or escalate)"
@@ -1052,6 +1069,8 @@ class M2CRun:
             self._order_action(day, k, a)
         elif typ in ("note", "assign"):
             self._note_or_assign(day, k, a)
+        elif typ in COLLECTION_ACTIONS:
+            return  # replayed with the account's payments and dunning after the year (books.collect)
         else:
             self._hold(day, k, a)
 
@@ -1219,7 +1238,7 @@ class M2CRun:
 
     def account_of(self, case: Case) -> str:
         """The contract account a case bills to (the one an invoice hold through this case applies to)."""
-        if case.work == "hold":
+        if case.work in cat.ACCOUNT_WORK:
             return str(case.ref)
         if case.doc >= 0:
             return self.books.account(self.books.docs[case.doc])
