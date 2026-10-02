@@ -63,11 +63,15 @@ Gas:
 - Low-pressure pipes use Spitzglass, starting from a district regulator's outlet.
 - Low-pressure services stay between 1.5 and 1.74 kPa at a January peak.
 
-Known limits:
-- Loops carry no flow in the radial model, so looped areas read a little low.
-- The elevated tank is not a source. Isolating the main at the pump station cuts off the town, though in reality
-  the tank would carry it for hours.
-- A main break's leak is a fixed 40 m³/h, too small to move pressure on mains sized for fire flow.
+Elevated tanks are standby sources. The supply's built forest wins wherever it still connects, so in normal
+operation a tank neither fills nor drains. When the path from the pump station is cut, the tank feeds what it can
+reach. Its level is not tracked.
+
+A water main break leaks like an orifice: `leakOpening` (5 %) of the bore open, at the local pressure, which the leak
+itself pulls down (damped iterations). That gives about 390 m³/h on a 16" main and 100 m³/h on an 8" one. A gas
+break keeps the fixed `leakM3h`.
+
+Known limit: loops carry no flow in the radial model, so looped areas read a little low.
 
 ## Gas (defaults: 414 kPa / 60 psig MP, 1.74 kPa / 7" w.c. LP)
 

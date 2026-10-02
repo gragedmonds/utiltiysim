@@ -19,12 +19,14 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from utilsim.sim.hydraulics import HydParams
-from utilsim.sim.hydraulics import solve as solve_pressure
+from utilsim.sim.hydraulics import HydParams, node_pressure
 from utilsim.sim.shapes import hourly
 from utilsim.sim.voltage import ElecParams, VoltageResult, solve
 
 UTILITIES = ("electric", "water", "gas")
+# Nodes that can feed a network. An elevated tank only feeds what the supply can no longer reach (it floats on the
+# system, so the built forest from the supply wins wherever it still connects).
+SOURCE_KINDS = ("external_supply", "elevated_tank")
 
 
 @dataclass
@@ -66,7 +68,7 @@ class FlowInputs:
                 enabled=np.array([bool(e.enabled) for e in net.edges]),
                 meter=np.array([index.get(nd.attrs.get("premiseId"), -1) if nd.kind == "meter" else -1
                                 for nd in net.nodes], dtype=np.int64),
-                sources=np.array([i for i, nd in enumerate(net.nodes) if nd.kind == "external_supply"],
+                sources=np.array([i for i, nd in enumerate(net.nodes) if nd.kind in SOURCE_KINDS],
                                  dtype=np.int64),
                 unit=net.unit)
         monthly = monthly_daily(UsageInputs.from_premises(town.prem), town.cfg)
@@ -101,6 +103,7 @@ class FlowResult:
     unsupplied: dict[str, np.ndarray] | None = None  # per commodity, bool per premise (no source reaches its meter)
     voltage: VoltageResult | None = None  # electric power flow: voltages, loading, losses
     pressure: dict[str, np.ndarray] | None = None  # water and gas: kPa per premise (sim.hydraulics)
+    node_pressure: dict[str, np.ndarray] | None = None  # the same per network node
 
 
 @dataclass
@@ -203,7 +206,7 @@ class FlowModel:
         d = hourly(daily, inp.occupied, inp.has_gas, hour, scenario, ti, inp.leak_m3h)
         source, edge_flows, unit, unsupplied = {}, {}, {}, {}
         homes = dict(d)
-        voltage, pressure = None, {}
+        voltage, pressure, nodes_p = None, {}, {}
         for u, net in inp.nets.items():
             dis = None if disabled is None else disabled.get(u)
             cl = None if closed is None else closed.get(u)
@@ -234,6 +237,10 @@ class FlowModel:
             # Edges with both ends unreached carry nothing (a dead island), even if their switch is closed.
             dead = ~f.reached[net.a] & ~f.reached[net.b]
             ef[dead] = 0.0
+            # A standby source (an elevated tank) the supply still reaches neither fills nor drains in this model.
+            root = np.zeros(net.n_nodes, dtype=bool)
+            root[net.sources] = True
+            ef[np.isnan(ef) & ~net.loop & (root[net.a] | root[net.b])] = 0.0
             source[u] = float(sum(tot[int(s)] for s in net.sources))
             edge_flows[u] = ef
             unit[u] = net.unit
@@ -244,5 +251,8 @@ class FlowModel:
                     np.add.at(load, f.parent[lvl], load[lvl])
                 voltage = solve(inp.elec, f, tot, load, net.meter, len(inp.premise_ids))
             if inp.hyd is not None and u in inp.hyd:
-                pressure[u] = solve_pressure(inp.hyd[u], f, tot, net.meter, len(inp.premise_ids))
-        return FlowResult(source, edge_flows, homes, unit, unsupplied, voltage, pressure or None)
+                nodes_p[u] = node_pressure(inp.hyd[u], f, tot)
+                pressure[u] = np.full(len(inp.premise_ids), np.nan)
+                mr = (net.meter >= 0) & f.reached
+                pressure[u][net.meter[mr]] = nodes_p[u][mr]
+        return FlowResult(source, edge_flows, homes, unit, unsupplied, voltage, pressure or None, nodes_p or None)

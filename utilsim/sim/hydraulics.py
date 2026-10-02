@@ -94,6 +94,15 @@ class HydParams:
 
 def solve(params: HydParams, forest, q_down: np.ndarray, meter: np.ndarray, n_premises: int) -> np.ndarray:
     """Pressure per premise (kPa; nan where unsupplied). ``q_down`` is the flow (m³/h) beyond each node."""
+    press = node_pressure(params, forest, q_down)
+    out = np.full(n_premises, np.nan)
+    m = (meter >= 0) & forest.reached
+    out[meter[m]] = press[m]
+    return out
+
+
+def node_pressure(params: HydParams, forest, q_down: np.ndarray) -> np.ndarray:
+    """Pressure per node (kPa gauge; nan where unreached)."""
     has = forest.pedge >= 0
     n = len(forest.parent)
     val = np.full(n, np.nan)  # water: grade (m); gas: pressure (kPa gauge)
@@ -118,11 +127,13 @@ def solve(params: HydParams, forest, q_down: np.ndarray, meter: np.ndarray, n_pr
             nxt = np.where(t == 1, mp_kpa, np.where(t == 2, np.maximum(lp_kpa, 0.0), up))
         r = params.reset[child]
         val[child] = np.where(np.isnan(r), nxt, r)
-    if params.utility == "water":
-        press = (val - params.elevation) * KPA_PER_M
-    else:
-        press = val
-    out = np.full(n_premises, np.nan)
-    m = (meter >= 0) & forest.reached
-    out[meter[m]] = press[m]
-    return out
+    return (val - params.elevation) * KPA_PER_M if params.utility == "water" else val
+
+
+def orifice_m3h(pressure_kpa: float, diameter_in: float, opening: float, cd: float = 0.6) -> float:
+    """Water escaping a break: Cd · A · √(2 g h), with A the opened share of the pipe's cross-section."""
+    if not pressure_kpa > 0 or diameter_in <= 0 or opening <= 0:
+        return 0.0
+    area = opening * np.pi * (diameter_in * 0.0254) ** 2 / 4.0
+    head = pressure_kpa / KPA_PER_M
+    return float(cd * area * np.sqrt(2 * 9.80665 * head) * 3600.0)

@@ -24,10 +24,11 @@ Done:
 - **Radial power flow:** voltage, loading, losses and solar reverse flow in every frame. Back-feed only closes a tie
   the receiving feeder can carry.
 - **Radial hydraulics:** water service pressure (Hazen-Williams from the tank grade) and two-tier gas pressure
-  (Weymouth and Spitzglass) in every frame.
+  (Weymouth and Spitzglass) in every frame. Elevated tanks feed when the supply path is cut, and main breaks leak at
+  orifice flow.
 
 Next:
-- looped hydraulics, to fill today's `null` loop flows; elevated tanks as sources; leak rates from pressure;
+- looped hydraulics, to fill today's `null` loop flows; tank levels over a day;
 - tank and pump control;
 - nightly AMI collection visualised;
 - frames over WebSocket.

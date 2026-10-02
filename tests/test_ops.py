@@ -146,10 +146,21 @@ def test_water_main_break_leaks_until_valves_isolate_it(ayr, ayr_snapshot):
                                  "x": float(x), "z": float(z)}}])
     tl = run.timeline()
     inc = tl["incidents"][0]
-    base = run.ops.frames.frame(run._when(9 * 3600 + 300))["networks"]["water"]["sourceFlow"]
+    base = run.ops.frames.frame(run._when(9 * 3600 + 300))
     leaking = run.frame(9 * 3600 + 300)
     validate_frame(ayr_snapshot, leaking)
-    assert leaking["networks"]["water"]["sourceFlow"] == pytest.approx(base + 40.0, abs=0.01)
+    # The break leaks like an orifice: 5 % of the bore open, at the main's pressure (which the leak pulls down).
+    from utilsim.sim.hydraulics import orifice_m3h
+
+    q = next(e for e in tl["events"] if e["eventType"] == "leak.started")["payload"]["m3h"]
+    node = ayr.nearest_node("water", k, float(x), float(z))
+    at_rest = float(ayr.flow_model.flows(9.0, month=7).node_pressure["water"][node])
+    assert 0.8 * orifice_m3h(at_rest, float(net.diameter_in[k]), 0.05) < q <= orifice_m3h(at_rest, float(net.diameter_in[k]), 0.05)
+    assert leaking["networks"]["water"]["sourceFlow"] == pytest.approx(base["networks"]["water"]["sourceFlow"] + q, abs=0.01)
+    press = [(a, b) for a, b in zip(base["premises"]["pressure"]["water"], leaking["premises"]["pressure"]["water"],
+                                     strict=True) if a is not None and b is not None]
+    assert all(b <= a + 1e-6 for a, b in press) and any(b < a - 1 for a, b in press)  # the leak pulls pressure down
+    base = base["networks"]["water"]["sourceFlow"]
     isolated = run.frame(inc["isolatedAt"] + 60)
     assert isolated["networks"]["water"]["sourceFlow"] < base + 1
     assert len(isolated["premises"].get("unsupplied", {}).get("water", [])) == inc["unsupplied"]["afterIsolation"]

@@ -87,3 +87,17 @@ def test_frames_carry_service_pressure(ayr, ayr_snapshot):
     assert set(pr) == {"water", "gas"} and len(pr["water"]) == len(ayr.premise_ids)
     gas = [x for x in pr["gas"] if x is not None]
     assert len(gas) == int(ayr.flow_inputs.has_gas.sum()) and all(x > 0 for x in gas)
+
+
+def test_elevated_tank_carries_the_town_when_the_pump_station_is_cut_off(ayr):
+    net = ayr.nets["water"]
+    trunk = next(k for k, kind in enumerate(net.kind) if kind == "trunk")  # pump station → town
+    cut = np.zeros(len(net.a), dtype=bool)
+    cut[trunk] = True
+    assert len(ayr.unsupplied("water", cut)) < 0.05 * len(ayr.premise_ids)  # the tank floats on the system
+    normal = ayr.flow_model.flows(7.5, month=7)
+    tank = next(i for i, kind in enumerate(net.node_kind) if kind == "elevated_tank")
+    riser = int(np.flatnonzero((net.a == tank) | (net.b == tank))[0])
+    assert normal.edge_flows["water"][riser] == 0.0  # in normal operation the supply feeds everyone
+    fed = ayr.flow_model.flows(7.5, month=7, disabled={"water": cut})
+    assert abs(fed.edge_flows["water"][riser]) > 0 and np.nanmin(fed.pressure["water"]) > 0

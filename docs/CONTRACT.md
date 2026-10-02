@@ -235,6 +235,9 @@ and `minVoltage`.
 time order and nothing decides using a later command, so **appending a command never changes events, jobs or routes
 that happened before it** (events after it may be renumbered). The viewer sends commands with `at` ≥ the last one.
 
+A water main break leaks at orifice flow (`leakOpening`, 5 % of the bore, at the local pressure; `leak.started`
+reports the m³/h) until its valves close. An elevated tank feeds whatever the supply can no longer reach.
+
 A gas main break ends with a relight sweep:
 - once the main is back, `relight` crews visit every shut premise, nearest first, with at least `relightCrews`
   crews and one per `relightPerCrew` premises (mutual aid);

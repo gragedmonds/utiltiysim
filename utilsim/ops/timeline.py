@@ -32,6 +32,7 @@ import numpy as np
 from utilsim.customers.calendar import scheduled_read_date
 from utilsim.ops.reading import nearest_order, path_through, reading_path, stops
 from utilsim.ops.routing import Route, Router, access_point
+from utilsim.sim.hydraulics import orifice_m3h
 from utilsim.sim.state import run_sequence
 from utilsim.version import EVENT_SCHEMA_VERSION, READ_SCHEMA_VERSION
 
@@ -45,7 +46,8 @@ DEFAULTS = {
     "repairMinutes": {"broken_pole": 120, "line_fault": 60, "water_main_break": 150, "gas_leak": 120},
     "flushMinutes": 20,
     "visitMinutes": 15,
-    "leakM3h": {"water": 40.0, "gas": 25.0},
+    "leakM3h": {"water": 40.0, "gas": 25.0},  # fixed leak rates, used when leakOpening is 0
+    "leakOpening": {"water": 0.05, "gas": 0.0},  # a water break opens this share of the pipe's bore (orifice flow)
     "meterReading": True,  # the day's walked and drive-by reading rounds
     "readerStartHour": {"MANUAL": 8.0, "AMR": 9.0},
     "walkKmh": 4.5,
@@ -286,7 +288,11 @@ class Run:
                         {"utility": u, "premiseIds": out, "count": len(out)})
         else:
             node = self.ops.nearest_node(u, f, x, z)
-            inc["_leak"] = (node, float(self.settings["leakM3h"][u]))
+            q = float(self.settings["leakM3h"][u])
+            opening = float((self.settings.get("leakOpening") or {}).get(u) or 0.0)
+            if opening > 0 and self.ops.flow_inputs.hyd and u in self.ops.flow_inputs.hyd:
+                q = self._leak_rate(u, node, f, t0, opening) or q
+            inc["_leak"] = (node, q)
             self._event(t0, "leak.started", "incident", inc["id"], inc, cmd["id"],
                         {"utility": u, "nodeId": net.node_ids[node], "m3h": inc["_leak"][1]})
         inc["detectedAt"] = detect
@@ -415,6 +421,23 @@ class Run:
         self._event(at, "tie.closed", "incident", inc["id"], inc, cause,
                     {"tieEdgeId": net.edge_ids[k], "restored": len(still) - len(out), "stillUnsupplied": len(out)})
         self._event(repaired, "tie.opened", "incident", inc["id"], inc, cause, {"tieEdgeId": net.edge_ids[k]})
+
+    def _leak_rate(self, u: str, node: int, edge: int, t0: float, opening: float) -> float:
+        """Water out of a break: orifice flow at the local pressure, which the leak itself pulls down (a few damped
+        iterations of the flow and pressure solve)."""
+        disabled, leaks, _, closed = self.state_at(t0)
+        month = date.fromisoformat(self.day).month
+        d_in = float(self.ops.nets[u].diameter_in[edge])
+        q = 0.0
+        for _ in range(5):
+            inj = {k: dict(v) for k, v in leaks.items()}
+            inj[u][node] = inj[u].get(node, 0.0) + q
+            res = self.ops.flow_model.flows(t0 / 3600.0 % 24.0, month=month, disabled=disabled, injections=inj,
+                                            closed={k: v for k, v in closed.items() if v.any()} or None)
+            p = float(res.node_pressure[u][node]) if res.node_pressure and u in res.node_pressure else math.nan
+            nxt = orifice_m3h(p, d_in, opening)
+            q = nxt if q == 0 else 0.5 * (q + nxt)
+        return round(q, 1)
 
     def _backfeed_check(self, dis: np.ndarray, cl: np.ndarray, start: float, end: float) -> tuple[float, float]:
         """Worst primary loading and lowest service voltage with a tie closed, hourly across the back-feed window."""

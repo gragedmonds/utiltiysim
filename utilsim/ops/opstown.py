@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from utilsim.config.model import SimConfig
-from utilsim.sim.flows import FlowInputs, FlowModel, NetInputs
+from utilsim.sim.flows import SOURCE_KINDS, FlowInputs, FlowModel, NetInputs
 from utilsim.sim.hydraulics import HydParams
 from utilsim.sim.state import FrameBuilder, FrameContext
 from utilsim.sim.usage import UsageInputs, monthly_daily
@@ -54,6 +54,7 @@ class NetOps:
     recloser_edges: set[int]
     valve_edges: set[int]
     tie_edges: set[int] = field(default_factory=set)  # normally-open ties between feeders (back-feed)
+    diameter_in: np.ndarray | None = None  # pipe inside diameter per edge (water and gas)
     edge_index: dict[str, int] = field(default_factory=dict)
     node_index: dict[str, int] = field(default_factory=dict)
 
@@ -167,6 +168,7 @@ class OpsTown:
             points=[np.array([[p["x"], p["z"]] for p in e["points"]], dtype=float) for e in edges],
             parent_edge=parent, equipment=eq, fuse_edges=fuses, recloser_edges=reclosers, valve_edges=valves)
         no.edge_index, no.node_index = edge_index, node_index
+        no.diameter_in = np.array([float(e.get("diameterIn") or float(e.get("sizeMm") or 0) / 25.4) for e in edges])
         no.tie_edges = {k for k, e in enumerate(edges) if e.get("normallyOpen") or (e.get("enabled") is False
                                                                                     and e["kind"] != "service")}
         return no
@@ -182,7 +184,7 @@ class OpsTown:
             enabled=np.array([bool(e.get("enabled", True)) for e in edges]),
             meter=np.array([self.premise_index.get(n.get("premiseId"), -1) if n["kind"] == "meter" else -1
                             for n in nodes], dtype=np.int64),
-            sources=np.array([i for i, n in enumerate(nodes) if n["kind"] == "external_supply"], dtype=np.int64),
+            sources=np.array([i for i, n in enumerate(nodes) if n["kind"] in SOURCE_KINDS], dtype=np.int64),
             unit=net["unit"])
 
     # ---- helpers ---------------------------------------------------------------------------------------------
