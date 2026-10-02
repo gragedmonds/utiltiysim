@@ -163,10 +163,11 @@ net-exports at noon in July. M2 weather-driven profiles replace them.
 | `GET /api/towns/{id}/tables/{name}.{parquet\|csv\|json}` | flat tables |
 | `GET /api/towns/{id}/fixtures/vee.json` · `/fixtures/vee/{premiseId}/{commodity}.json?variant=actual\|stuck\|missing\|spike` | `vee-input-fixture/1.1` (`truth` stripped unless `include_truth=true`) |
 | `GET /api/towns/{id}/render.png` | static render |
+| `GET /api/packs` · `POST /api/sim/timeline` · `POST /api/sim/frame` | operations (below); also served by the hosted engine |
 
 Scenarios: `normal`, `solar_noon`, `leak` (`target` = premise id; default the first premise), `substation_outage`.
 
-**Scenario writes are not enabled.** The `/state` and `/replay` reads above are the only scenario surface in M1.
+**Scenario writes are not enabled** (operations commands are, see below). The `/state` and `/replay` reads above are the only scenario surface in M1.
 The M2 command endpoint will be `POST /api/sim/{simId}/scenario` `{scenario, target?, effectiveAt}` →
 `{simulationId, sequence}`. It starts a new `simulationId` (a run reset) and is idempotent on
 `(simId, scenario, target, effectiveAt)`. Until that endpoint exists, viewers keep scenario controls read-only.
@@ -175,6 +176,54 @@ Reserved for M2/M3 (same snapshot ids): `POST /api/sim`, `POST /api/sim/{id}/adv
 `WS /api/sim/{id}/stream?afterSequence=` (frames, events, vehicle trajectories, AMI pulses),
 `GET /api/sim/{id}/{incidents,outages,crews}`, `POST /api/sim/{id}/incidents`, `/process/{graph,queue,costs}`,
 `/billing/{reads,documents,invoices}`.
+
+## Operations (hammer, crews, field visits)
+
+Stateless: the viewer keeps a run's **command list** (append-only, in Astra's `DemoOperations` shape) and sends it
+whole; the engine replays it deterministically. Served by the local API and by the hosted engine (`api/index.py`,
+Vercel) for the prebuilt towns in `packs/`.
+
+| Method & path | Body | Returns |
+|---|---|---|
+| `GET /api/packs` | – | prebuilt towns (`town-pack/1.0`) |
+| `GET /api/sim/settings` | – | default response timings (detection, mobilisation, isolate/repair/flush minutes, leak rates, visit minutes, `autoDispatch`) |
+| `POST /api/sim/timeline` | `{town, date?, commands[], settings?}` | `utility-timeline/1.0` |
+| `POST /api/sim/frame` | `{town, date?, commands[], settings?, at, premises?}` | a complete `utility-state/1.0` frame with the run's switching, valves and leaks |
+
+`town` is a pack preset (`ayr`) or a town id. `at` and every time below are **seconds since local midnight of the
+run day** (default: the town's scenario date).
+
+Commands: `{id, at, type, payload}`.
+* `break_asset` `{id, kind: pole|main, utility, edgeId, x, z}`: a pole (its edge comes from the engine's equipment
+  list) or a point on a conductor or water/gas main.
+* `dispatch` `{targetId}` for a field visit (meter technician, special read) or `{incidentId}` for a repair crew.
+  Repairs are dispatched automatically once the incident is detected (`settings.autoDispatch`, default true), so an
+  explicit repair dispatch is only needed when that is off.
+
+What the engine does:
+* **Electric:** the nearest upstream fuse (lateral) or recloser (feeder head) trips; AMI last-gasp detects the outage;
+  the crew isolates the faulted span and re-closes the device (customers upstream of the fault come back), repairs,
+  and restores the rest.
+* **Water / gas:** the break leaks (flow injected at the nearer node) until the crew closes the valves bounding the
+  damaged section; customers inside it lose supply; repair (and flush for water), then restore.
+* **Field visit:** a meter technician drives out, takes interim reads of the premise's meters (`meter-read/1.1`,
+  `readReason: interim`, `source: field-visit`) and returns.
+* Crews (`operations.*_crews`, `meter_techs`) start at the depot, are assigned first come first served and are never
+  reassigned; a job waits (`workorder.queued`) when none is free. Routes are the fastest by travel time on the road
+  graph at the configured class speeds, in the right-hand lane, with a timestamp at every vertex.
+
+`utility-timeline/1.0`: `simulationId` (the same as the town's frames for that day), `incidents` (with protective
+device, detection, isolation and restoration times, unsupplied counts), `jobs` (Astra's job shape: `startAt`,
+`arrivalAt`, `workSeconds`, `returnStartAt`, `endAt`, `route` + `routeTimes`, `returnRoute` + `returnTimes`,
+`roadPoint`, `visitPoint`, `crewId`), `events` (`event/1.0` envelope, `eventId = <correlation>:<n>`, sequence by
+time), `stateChanges` (times where supply changes, with unsupplied premise ids, disabled edges and leaks per utility),
+`reads`, `warnings`.
+
+Frames from `/api/sim/frame` add `premises.unsupplied` (`{electric: [premiseId…], …}`) when anyone is without supply.
+
+**Determinism:** the same town, day, settings and commands give byte-identical timelines and frames. Commands run in
+time order and nothing decides using a later command, so **appending a command never changes events, jobs or routes
+that happened before it** (events after it may be renumbered). The viewer sends commands with `at` ≥ the last one.
 
 ## Reads
 

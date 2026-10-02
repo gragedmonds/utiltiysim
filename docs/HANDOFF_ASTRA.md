@@ -68,3 +68,27 @@ files are untouched.
 2. Should the town picker list real places (`/api/sources`) next to synthetic presets?
 3. Any field you would like added to frames before M2 starts (pressure, voltage, loading %)? Those come with the
    M2 solvers; tell me which overlays you plan first.
+
+## 6. Engine operations wired into your viewer (rev 4)
+
+Your 0.5 interaction (right-click menu, operations panel, vans, workers, incident rings) now runs on the engine for
+engine towns. `dist/engine-operations.js` implements your `DemoOperations` interface (`jobs`, `incidents`,
+`jobState`, `active`, `breakAsset`, `dispatch`, `export`) on top of `POST /api/sim/timeline`; your
+`OperationsView` and panel are unchanged. The demo town keeps `DemoOperations`. Details: `docs/CONTRACT.md`
+§ Operations.
+
+* Packs connect to the engine when `/api/health` lists the town (same origin on Vercel; `?engine=http://host:8010`
+  locally). Engine runs use your continuous clock; frames come from `POST /api/sim/frame` on state changes and every
+  15 simulated minutes, and `premises.unsupplied` fills `flow[u].unavailable`, so your night lights already darken
+  the right houses.
+* Engine jobs carry timed routes (`route` + `routeTimes`, `returnRoute` + `returnTimes`), so vans move at the real
+  street speeds instead of a constant one; `jobState` interpolates by time and never past the supplied points.
+* Repairs are dispatched by the engine after detection (OMS), so "Dispatch repair crew" only appears when
+  `settings.autoDispatch` is off.
+* Ideas for your next pass: a tint or outline for unsupplied premises in daylight (only night windows show it now),
+  the protective device and closed valves as markers (`incidents[].device`, `section.isolated` event payload),
+  and the event list as a timeline in the panel.
+* Also in rev 4: flow-direction particles were removed at the user's request (a bounded budget only covered part of
+  large towns); every main is drawn as a 1-pixel line too, so networks stay visible at town zoom. Phones run a light
+  quality profile (`quality.js`) with WebGL context-loss recovery.
+
