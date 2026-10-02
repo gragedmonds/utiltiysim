@@ -109,22 +109,32 @@ def run(b: Batch, vee) -> Result:
     exc = np.where(b.regression, "REGISTER_REGRESSION", exc)
     exc = np.where((exc == "") & (disp > 0), "ERRATIC", exc)
     exc = np.where(disp == 0, "", exc)
+    # Every exception carries a validation code: the consistency and temporal ones get their own diagnosis.
+    for kind, sim in (("PERSISTENT_LOW", "SIM-T03"), ("ERRATIC", "SIM-E01"), ("PERIOD_LENGTH", "SIM-D01")):
+        code = np.where((code < 0) & (exc == kind), CODE_LIST.index(sim), code)
     return Result(risk, applicable, code, ratio, confidence, disp, exc, impact)
 
 
 def explain(test: int, risk: float, *, code: str | None, ratio: float, days: float, expected: float, unit: str,
             consec: int, prior_cases: int, occupied: bool, moved: bool, manual: bool, vee,
-            outage_h: float = 0.0) -> str:
-    """One-line rationale for a test outcome (built when a decision is viewed)."""
+            outage_h: float = 0.0, true_up: bool = False) -> str:
+    """One-line rationale for a test outcome (built when a decision is viewed). ``true_up``: the register is below the
+    previous (estimated) register but not below the last actual read."""
     if test == 0:
         if code is None:
             return f"No validation code: {ratio:.2f}× expected ({expected:.1f} {unit}) is within tolerance."
         tail = " (half weight: a move in the period explains some change)" if moved and code != "SIM-C01" else ""
-        return {"SIM-C01": "Register went backwards and the previous value was not near rollover.",
+        return {"SIM-C01": "Register is below the previous estimate but not below the last actual read: a true-up "
+                           "of an over-estimate." if true_up else
+                "Register went backwards from the last actual read and the previous value was not near rollover.",
                 "SIM-T01": f"{ratio:.2f}× expected use is above the high tolerance ({vee.high_ratio}×){tail}.",
                 "SIM-T02": f"{ratio:.2f}× expected use is below the low tolerance ({vee.low_ratio}×){tail}.",
                 "SIM-Z01": "No consumption at an occupied premise where use is expected.",
                 "SIM-L01": "A move-in or move-out falls inside this read period.",
+                # Diagnoses whose risk the consistency or temporal test carries (this test adds none).
+                "SIM-T03": f"Persistent low use ({ratio:.2f}× expected); weighed in the consistency test.",
+                "SIM-E01": f"Erratic use ({ratio:.2f}× expected); weighed in the consistency test.",
+                "SIM-D01": f"A {days:.0f}-day read period; weighed in the temporal test.",
                 }.get(code, code)
     if test == 1:
         if risk == 0:
@@ -132,9 +142,11 @@ def explain(test: int, risk: float, *, code: str | None, ratio: float, days: flo
         return f"{days:.0f}-day period is outside {vee.min_period_days}–{vee.max_period_days} days."
     if test == 2:
         parts = []
-        if risk >= 0.16 and ratio < vee.trend_ratio:
+        if ratio < 0:  # a register that went backwards has no use to compare
+            parts.append("the register went backwards, so there is no period use to compare with history")
+        elif risk >= 0.16 and ratio < vee.trend_ratio:
             parts.append(f"use has stayed below {vee.trend_ratio:.0%} of expected for {vee.trend_periods}+ periods")
-        if risk and (ratio > 1.6 or ratio < 0.55):
+        if risk and ratio >= 0 and (ratio > 1.6 or ratio < 0.55):
             parts.append(f"use is erratic against history ({ratio:.2f}×)")
         if consec:
             parts.append(f"follows {consec} estimate{'s' if consec > 1 else ''}")

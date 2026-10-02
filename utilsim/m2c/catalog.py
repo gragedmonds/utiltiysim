@@ -46,6 +46,7 @@ EVENTS: dict[str, tuple[str, str, str, float, float, float]] = {
     "HIGH_BILL": ("High bill", "💸", "billing", 0, 0.25, 0),
     "BILL_CREDIT": ("Large credit", "🧾", "billing", 0, 0.25, 0),
     "RATE_CLASS": ("Billing block: rate class", "🏷️", "billing", 0, 0.25, 0),
+    "TRUE_UP": ("Implausible true-up", "⚖️", "billing", 0, 0.25, 0),
     "BILL_CREATED": ("Billing document", "🧾", "billing", 0, 0.05, 0),
     "BILL_RELEASED": ("Bill released", "✅", "billing", 0, 0.05, 0),
     "BILL_REVERSED": ("Bill reversed", "↩️", "billing", 0, 0.5, 0),
@@ -79,9 +80,15 @@ EDGE_TYPES = ("caused_by", "triggered", "resulted_in", "blocked_by", "resolved_b
 EXCEPTIONS = ("COMM_FAIL", "NO_ACCESS", "NO_READ", "ZERO_USAGE", "BILL_CREDIT", "LOW_USAGE", "PERIOD_LENGTH",
               "ERRATIC", "HIGH_USAGE", "VACANT_CONSUMING", "REGISTER_REGRESSION", "PERSISTENT_LOW",
               "CONSECUTIVE_ESTIMATES", "RATE_CLASS", "HIGH_BILL")
-BILL_TYPES = ("HIGH_BILL", "BILL_CREDIT", "RATE_CLASS")
+HUMAN_ONLY = ("TRUE_UP",)  # exception types no RPA rule covers, whatever process.rpa_coverage says
+EXCEPTION_TYPES = (*EXCEPTIONS, *HUMAN_ONLY)
+BILL_TYPES = ("HIGH_BILL", "BILL_CREDIT", "RATE_CLASS", "TRUE_UP")
+OUTSORTS = ("HIGH_BILL", "BILL_CREDIT")  # billing outsorts RPA may release, up to billing.outsort_auto_release_max
 MISSING_TYPES = ("COMM_FAIL", "NO_ACCESS", "NO_READ", "CONSECUTIVE_ESTIMATES")
 WORK_TYPES = ("FIELD_SERVICE", "INVOICE_HOLD")  # cases you open in the Studio (an order, an invoice hold)
+# Who raised a case (``createdBy`` on rows and case views).
+CREATED_BY = {"ami_head_end": "AMI head-end", "meter_reading_route": "Meter-reading route", "vee_batch": "VEE batch",
+              "billing_run": "Billing run", "studio": "You (Utility Studio)"}
 
 QUEUES = {
     "VEE_REVIEW": "VEE review",
@@ -96,7 +103,8 @@ QUEUES = {
 CATEGORIES = {
     "MR Implausibles": "Value exceptions from VEE (VEE_REVIEW, SUPERVISOR)",
     "Meter Read Follow-Up": "Missing reads: comm fail, no access, no read document, consecutive estimates",
-    "Billing Outsorts": "Billing blocks for a high bill or a large credit (HIGH_BILL, BILL_CREDIT)",
+    "Billing Outsorts": "Billing blocks for a high bill, a large credit or an implausible true-up (HIGH_BILL, "
+                        "BILL_CREDIT, TRUE_UP)",
     "Billing Errors": "Billing blocks for a wrong rate class in master data (RATE_CLASS)",
     "Invoice Outsorts": "Invoice holds you placed on an account (INVOICE_HOLD)",
     "Field Work": "Cases in the FIELD queue and your field service orders (FIELD_SERVICE)",
@@ -129,6 +137,10 @@ CODES = {
     "SIM-Z01": ("zero consumption", "Zero consumption at an occupied premise"),
     "SIM-P01": ("process", "Too many consecutive estimates"),
     "SIM-L01": ("lifecycle", "Move-in or move-out inside the read period"),
+    # Diagnoses for the exceptions the consistency and temporal tests raise (no tolerance code of their own).
+    "SIM-T03": ("tolerance", "Consumption persistently below the trend share of expected"),
+    "SIM-E01": ("consistency", "Consumption erratic against the register's history"),
+    "SIM-D01": ("temporal", "Read period shorter or longer than plausible"),
 }
 CODE_LIST = tuple(CODES)
 TESTS = ("SAP VEE diagnosis", "Temporal validity", "Consistency checks", "Process corroboration", "Context signals")

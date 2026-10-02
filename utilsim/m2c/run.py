@@ -52,6 +52,10 @@ CASE_WORK = ("note", "assign", "invoice_hold", "invoice_unhold")
 ACTION_TYPES = (*DECISIONS, "field_read", *ORDER_ACTIONS, *CASE_WORK)
 ActionError = ords.ActionError
 STATUS = ("pending", "released", "estimated", "adjusted", "held", "missing")
+# How a released register value was obtained (``released.method`` in case views, ``method`` in read histories).
+METHODS = (None, "as_read", "estimated", "corrected", "field_read")
+ACTUAL = (1, 3, 4)  # methods that give a real register value (an estimate is not one)
+CODE_ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"  # Crockford base 32 (no I, L, O, U)
 UTILITIES = ("electric", "water", "gas")
 OUTAGE_KINDS = (*UTILITIES, "ami")  # "ami": a collector outage (no service lost; AMI meters cannot report)
 OUTAGE_REASON = "SIM_POWER_OUTAGE"
@@ -90,6 +94,12 @@ def settings_schema() -> dict:
 
 def _hash(obj) -> str:
     return hashlib.blake2b(orjson.dumps(obj, option=orjson.OPT_SORT_KEYS), digest_size=6).hexdigest()
+
+
+def case_code(*parts) -> str:
+    """A six-character code from a hash of ``parts`` (Crockford base 32): the content part of an engine case id."""
+    h = int.from_bytes(hashlib.blake2b("|".join(map(str, parts)).encode(), digest_size=8).digest(), "big")
+    return "".join(CODE_ALPHABET[(h >> (5 * k)) & 31] for k in range(6))
 
 
 def _merge_spans(spans: dict[int, list[tuple[float, float]]], n: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -163,6 +173,8 @@ class Case:
     ref: str | None = None  # the order id (work "order") or the account id (work "hold")
     source: str | None = None  # the case an order or a hold was raised from
     orders: list[str] = field(default_factory=list)  # field service orders raised from this case
+    by: str | None = None  # who resolved it: RPA, an analyst (AN-nn), a supervisor (SUP-nn), a crew (FIELD-n), you
+    created_by: str = "vee_batch"  # who raised it (a key of catalog.CREATED_BY)
 
     def ev(self, t: float, kind: str, payload: dict | None = None, cause: int | None = -1) -> int:
         self.events.append((t, kind, payload or {}, (len(self.events) - 1 if cause == -1 else cause)))
@@ -319,6 +331,7 @@ class M2CRun:
         self.normal_at = np.zeros(shape)
         self.read_t = tw.read_day + tw.hour[:, None] / 24.0
         self.status = np.zeros(shape, dtype=np.int8)
+        self.method = np.zeros(shape, dtype=np.int8)  # index into METHODS once released
         self.released = np.full(shape, np.nan)
         self.release_t = np.full(shape, np.nan)
         self.case_of = np.full(shape, -1, dtype=np.int64)
@@ -338,7 +351,7 @@ class M2CRun:
         self.normal_at[:, 0] = adv
         self.truth[:, 0] = regs.observe(tw.base + adv, tw.digits)
         self.obs[:, 0] = self.released[:, 0] = self.truth[:, 0]
-        self.status[:, 0] = 1
+        self.status[:, 0] = self.method[:, 0] = 1
         self.release_t[:, 0] = self.read_t[:, 0]
         self.prev_val = self.truth[:, 0].copy()
         self.prev_t = self.read_t[:, 0].copy()
@@ -422,7 +435,6 @@ class M2CRun:
         self.order_rolls: dict[int, list[ords.Order]] = {}  # day -> dispatched orders whose crew rolls that day
         self.rolls_now: dict[int, int] = {}  # day -> crews rolled the same day they were dispatched
         self.holds: dict[str, list[list]] = {}  # account -> [[t on, t off | None, hold case], ...]
-        self.n_work = 0  # cases you opened (Field Work, invoice holds); engine case ids do not count them
 
     def _setup_outages(self) -> None:
         """Per register, the merged spans (start, end as day + fraction) during which it had no service, and those
@@ -476,6 +488,14 @@ class M2CRun:
         np.add.at(loss, pos, lost)
         np.add.at(hours, pos, (tc - a) * 24.0)
         return loss, hours
+
+    def outage_span(self, r: int, t: float, comms: bool = False) -> tuple[float, float] | None:
+        """(start, end) of the outage (``comms``: collector outage) covering register ``r`` at ``t``, if any."""
+        ptr, t0, t1 = (self.c_ptr, self.c_t0, self.c_t1) if comms else (self.o_ptr, self.o_t0, self.o_t1)
+        for s in range(int(ptr[r]), int(ptr[r + 1])):
+            if t0[s] <= t < t1[s]:
+                return float(t0[s]), float(t1[s])
+        return None
 
     def _dark(self, rows: np.ndarray, t: np.ndarray, comms: bool = False) -> np.ndarray:
         """When the outage (``comms``: collector outage) covering ``t`` began, per register (nan if none)."""
@@ -531,6 +551,7 @@ class M2CRun:
             by_day.setdefault(parse_day(a["day"], 0), []).append((k, a))
         self.case_index: dict[str, Case] = {}
         self.open: list[Case] = []
+        self._unseen: list[tuple[int, dict, float]] = []  # actions on a case id the run has not raised (yet)
         for day in range(YEAR_DAYS):
             acts = by_day.get(day, [])
             self._roll_orders(day)  # crews for your dispatched orders that start today (07:00-09:00)
@@ -557,6 +578,9 @@ class M2CRun:
                 self._same_day_rpa()
                 self.books.invoice(day)
                 self.open = [c for c in self.open if c.resolved is None]
+        for k, a, t in self._unseen:  # raised later (that evening, or a later day), or never: say which
+            self._reject(k, a, self.not_open(self.case_index.get(a.get("caseId") or ""), a.get("caseId"), t)
+                         or f"case {a.get('caseId')} is opened by a later action")
         self.books.collect()
         diff = {q: np.zeros(YEAR_DAYS + 2, dtype=np.int64) for q in cat.QUEUES}
         for case in self.cases:  # backlog at the end of each day, from each case's queue moves
@@ -671,7 +695,7 @@ class M2CRun:
         clean = ~missed & (res.disposition == 0) & (self.open_case[rows] < 0)
         acc = rows[clean]
         if len(acc):
-            self.status[acc, m] = 1
+            self.status[acc, m] = self.method[acc, m] = 1
             self.released[acc, m] = obs[clean]
             self.release_t[acc, m] = day + 18.5 / 24
             self.prev_val[acc] = obs[clean]
@@ -697,8 +721,10 @@ class M2CRun:
                 gasp, down = dark_of[int(tw.meter_of[r])], mute_of[int(tw.meter_of[r])]
                 pre = (gasp, "AMI_LAST_GASP", OUTAGE_REASON) if gasp == gasp else \
                     (down, "AMI_COLLECTOR_OUTAGE", COLLECTOR_REASON) if down == down else None
+                by = "vee_batch" if kind in ("CONSECUTIVE_ESTIMATES", "NO_READ") else \
+                    ("ami_head_end" if tw.tech[r] == "AMI" else "meter_reading_route")
                 self._raise(day, r, m, kind, disposition=-1, impact=float(expected[k] * self.price[r]),
-                            confidence=float("nan"), truth="clean", queue="ESTIMATION", precursor=pre)
+                            confidence=float("nan"), truth="clean", queue="ESTIMATION", precursor=pre, created_by=by)
             else:
                 self.status[r, m] = 4
                 d = int(res.disposition[k])
@@ -706,16 +732,29 @@ class M2CRun:
                             confidence=float(res.confidence[k]), truth=cat.TRUTH[int(cls[k])],
                             queue="SUPERVISOR" if d == 2 else "VEE_REVIEW")
 
+    def case_id(self, day: int, kind: str, r: int, m: int, t: float) -> str:
+        """``CASE-{yymmdd}-{code}``: the code hashes what the case is about (exception type, register, read period,
+        creation minute), so a case keeps its id when anything else in the run changes (an outage on an earlier day,
+        a setting), and stored actions keep naming the same case. A collision takes the next salt (deterministic)."""
+        stamp = date_of(day).strftime("%y%m%d")
+        key = (kind, self.town.reg_ids[r], m, int(round(t * 1440)))
+        salt = 0
+        while (cid := f"CASE-{stamp}-{case_code(*key, salt)}") in self.case_index:
+            salt += 1
+        return cid
+
     def new_case(self, *, day: int, r: int, m: int, kind: str, disposition: int, impact: float, confidence: float,
-                 truth: str, queue: str, t: float, cause_payload: dict, precursor: tuple | None = None) -> Case:
-        """Open a case in ``queue``: initiating event, EXCEPTION_QUEUED, pickup lag, and RPA when its type is covered.
+                 truth: str, queue: str, t: float, cause_payload: dict, precursor: tuple | None = None,
+                 created_by: str = "vee_batch", rpa: bool = True) -> Case:
+        """Open a case in ``queue``: initiating event, EXCEPTION_QUEUED, pickup lag, and RPA when its type is covered
+        (and ``rpa``: a large billing outsort waits for a person).
 
         ``precursor`` (time, event, reason) is an upstream signal that explains the exception: an AMI last gasp or a
         collector outage."""
         idx = len(self.cases)
         p = self.cfg.process
-        case = Case(idx, f"CASE-{date_of(day).strftime('%y%m%d')}-{idx - self.n_work + 1:05d}", r, m, kind, t,
-                    disposition, round(impact, 2), confidence, truth)
+        case = Case(idx, self.case_id(day, kind, r, m, t), r, m, kind, t, disposition, round(impact, 2), confidence,
+                    truth, created_by=created_by)
         self.cases.append(case)
         self.open.append(case)
         self.case_index[case.id] = case
@@ -731,7 +770,7 @@ class M2CRun:
         lag = p.analyst_queue_days_min + int(u * (p.analyst_queue_days_max - p.analyst_queue_days_min + 1))
         case.eligible = add_bdays(day, lag if queue != "SUPERVISOR" else 1)
         self.series[queue][day, 0] += 1
-        if kind in self.rpa_types and disposition != 2:
+        if kind in self.rpa_types and disposition != 2 and rpa:
             if float(self._u(P_WORK, key, m, 2)) < 0.5:
                 case.rpa_at = None
                 self._rpa_later.append((case, t + 1.0 / 24))
@@ -741,11 +780,11 @@ class M2CRun:
         return case
 
     def _raise(self, day: int, r: int, m: int, kind: str, *, disposition: int, impact: float, confidence: float,
-               truth: str, queue: str, precursor: tuple | None = None) -> None:
+               truth: str, queue: str, precursor: tuple | None = None, created_by: str = "vee_batch") -> None:
         case = self.new_case(day=day, r=r, m=m, kind=kind, disposition=disposition, impact=impact,
                              confidence=confidence, truth=truth, queue=queue, t=day + 18.0 / 24,
                              cause_payload={"registerId": self.town.reg_ids[r], "readId": self.read_id(r, m)},
-                             precursor=precursor)
+                             precursor=precursor, created_by=created_by)
         case.reads.append(m)
         self.case_of[r, m] = case.idx
         self.open_case[r] = case.idx
@@ -761,10 +800,14 @@ class M2CRun:
             return "field_order"
         if case.type in cat.MISSING_TYPES:
             return "estimate"
+        # A register below its last actual read is never released as read: whoever misjudges it estimates instead.
+        back = self.backwards(case.r, case.month, float(self.obs[case.r, case.month]), INF) >= 0
         right = {"clean": "accept", "read_error": "correct", "meter_fault": "field_order",
                  "physics": "accept_callback"}[case.truth]
+        if back and right in ("accept", "accept_callback"):
+            right = "estimate"
         if float(self._u(P_WORK, self.reg_keys[case.r], case.month, 3)) >= self.cfg.process.analyst_accuracy:
-            return "field_order" if case.truth == "clean" else "accept"
+            return "field_order" if case.truth == "clean" else ("estimate" if back else "accept")
         return right
 
     def _same_day_rpa(self) -> None:
@@ -811,7 +854,9 @@ class M2CRun:
             return
         cap = p.analysts * p.analyst_hours_per_day * 60.0
         used = 0.0
-        todo = [c for c in self.open if c.resolved is None and c.queue in ("VEE_REVIEW", "ESTIMATION", "BILLING")
+        queues = ("VEE_REVIEW", "ESTIMATION", "BILLING") if self.cfg.billing.billing_queue_worked_by == "analysts" \
+            else ("VEE_REVIEW", "ESTIMATION")  # billing blocks wait for you
+        todo = [c for c in self.open if c.resolved is None and c.queue in queues
                 and c.eligible <= day and c.rpa_at is None and c.owner is None]
         for case in todo:
             minutes = p.review_minutes_min + float(self._u(P_WORK, self.reg_keys[case.r], case.month, 5)) * \
@@ -842,7 +887,8 @@ class M2CRun:
                 and c.owner is None][:n]
         for k, case in enumerate(todo):
             t0 = day + (9.0 + k * p.supervisor_minutes / 60.0 / p.supervisors) / 24
-            case.ev(t0, "SUPERVISOR_REVIEW", {"supervisor": f"SUP-{(k % p.supervisors) + 1:02d}"})
+            sup = f"SUP-{(k % p.supervisors) + 1:02d}"
+            case.ev(t0, "SUPERVISOR_REVIEW", {"supervisor": sup})
             case.move(t0, "SUPERVISOR", "in_review")
             proposal = case.proposal or self._proposal(case)
             t1 = t0 + p.supervisor_minutes / 1440.0
@@ -850,7 +896,7 @@ class M2CRun:
             if proposal == "field_order":
                 self._to_field(case, t1)
             else:
-                self._resolve(case, t1, proposal, actor="supervisor")
+                self._resolve(case, t1, proposal, actor=sup)
 
     def _field(self, day: int) -> None:
         p = self.cfg.process
@@ -858,8 +904,9 @@ class M2CRun:
                 and c.owner is None]  # your own orders are dispatched by you (order_dispatch), not by this pool
         for k, case in enumerate(todo[: max(0, p.field_orders_per_day)]):
             t0 = day + (8.0 + 7.0 * k / max(1, p.field_orders_per_day)) / 24
-            case.ev(t0, "TRUCK_ROLL", {"crew": f"FIELD-{(k % 2) + 1}"})
-            self._visit_case(case, t0 + 1.0 / 24, actor="field")
+            crew = f"FIELD-{(k % 2) + 1}"
+            case.ev(t0, "TRUCK_ROLL", {"crew": crew})
+            self._visit_case(case, t0 + 1.0 / 24, actor=crew)
 
     def _visit_case(self, case: Case, t: float, *, actor: str) -> None:
         """A meter tech at the meter: a faulty meter is exchanged (and the read estimated); otherwise a special read
@@ -873,7 +920,7 @@ class M2CRun:
         else:
             case.ev(t, "SPECIAL_READ", {"by": actor})
             action = {"read_error": "correct", "physics": "accept_callback"}.get(case.truth, "special_read")
-            self._resolve(case, t, action, actor=actor)
+            self._resolve(case, t, action, actor=actor, field=True)
 
     def _field_read(self, day: int, a: dict) -> None:
         """A field visit on the map read this premise's meters: its open read cases are settled on the spot."""
@@ -890,24 +937,92 @@ class M2CRun:
                 case.rpa_at = INF
             self._visit_case(case, t + 0.0005, actor="you")
 
+    # ---- when an action applies ----------------------------------------------------------------------------------
+    @staticmethod
+    def actionable_from(case: Case) -> int:
+        """The first day your actions (09:00) can work ``case``: its own day if raised by 09:00, else the next."""
+        d = int(np.floor(case.created))
+        return d if case.created <= d + 9.0 / 24 else d + 1
+
+    def clock(self, t: float) -> str:
+        """``HH:MM on YYYY-MM-DD`` (local)."""
+        day = int(np.floor(t))
+        minutes = min(int(round((t - day) * 1440)), 1439)
+        return f"{minutes // 60:02d}:{minutes % 60:02d} on {date_of(day).isoformat()}"
+
+    @staticmethod
+    def actor_label(actor: str | None) -> str:
+        if actor is None or actor in ("RPA", "you"):
+            return actor or "the engine"
+        kind = {"AN": "analyst", "SUP": "supervisor", "FIELD": "field crew"}.get(actor.split("-")[0])
+        return f"{kind} {actor}" if kind else actor
+
+    def not_open(self, case: Case | None, case_id: str | None, t: float) -> str | None:
+        """Why an action landing at ``t`` cannot work the case (it does not exist, is not raised yet or is already
+        resolved), or None."""
+        if case is None:
+            return f"case {case_id} does not exist in this run"
+        if case.created > t:
+            return (f"{case.id} was raised at {self.clock(case.created)}; work it from "
+                    f"{date_of(self.actionable_from(case)).isoformat()}")
+        if case.resolved is not None and case.resolved <= t:
+            return f"{case.id} was already completed by {self.actor_label(case.by)} at {self.clock(case.resolved)}"
+        return None
+
+    def decision_refusal(self, case: Case, typ: str, t: float, hold: list | None) -> str | None:
+        """Why the decision ``typ`` does not apply to the open ``case`` at ``t`` (``hold``: the account's invoice
+        hold in force), or None. Case views offer only the decisions this lets through."""
+        if case.work is not None:
+            return f"{typ} does not apply to {case.id}, " + (
+                f"the Field Work case of order {case.ref} (use order_complete)" if case.work == "order" else
+                f"the invoice hold on account {case.ref} (use invoice_unhold)")
+        if case.doc >= 0:
+            if typ in ("override", "field_order"):
+                return f"{typ} does not apply to {case.id}, a billing block (use accept, estimate or escalate)"
+            if typ in ("accept", "estimate") and hold is not None:
+                return (f"account {hold[2].ref} has an invoice hold ({hold[2].id}, since "
+                        f"{date_of(int(hold[0])).isoformat()}): remove it with invoice_unhold before releasing this "
+                        "outsort")
+            return None
+        if typ == "accept":
+            r, m = case.r, case.month
+            obs = float(self.obs[r, m])
+            j = -1 if np.isnan(obs) else self.backwards(r, m, obs, t)
+            if j >= 0:
+                return (f"the register of {case.id} went backwards ({obs:,.3f} against the last actual read "
+                        f"{self.released[r, j]:,.3f} on {date_of(int(self.town.read_day[r, j])).isoformat()}), so "
+                        "accepting it would bill the difference as a credit: estimate it, correct the value "
+                        "(override) or send a field order")
+        return None
+
+    def last_actual(self, r: int, m: int, t: float) -> int:
+        """The latest month before ``m`` whose read was released by ``t`` as a real register value (as read,
+        corrected or a field read; not an estimate), or -1."""
+        for j in range(m - 1, -1, -1):
+            if self.release_t[r, j] <= t and self.method[r, j] in ACTUAL:
+                return j
+        return -1
+
+    def backwards(self, r: int, m: int, value: float, t: float) -> int:
+        """The month of the last actual read that ``value`` (month ``m``'s register) is below, when it is not a
+        plausible rollover; -1 when the register did not go backwards. A value below an earlier *estimate* only is a
+        true-up, not a backwards register."""
+        j = self.last_actual(r, m, t)
+        if j < 0 or not value < self.released[r, j] - 5e-4:
+            return -1
+        mod = 10.0 ** int(self.town.digits[r])
+        return -1 if self.released[r, j] > 0.8 * mod and value < 0.2 * mod else j
+
     def _apply_action(self, day: int, a: dict, k: int = -1) -> None:
         case = self.case_index.get(a.get("caseId") or "")
         t = day + 9.0 / 24
-        if case is None or case.created > t or case.resolved is not None:
-            self.warnings.append(f"{a['id']}: case {a.get('caseId')} is not open on {a['day']}")
+        why = self.not_open(case, a.get("caseId"), t)
+        if why is None:
+            hold = self.hold_in_force(self.account_of(case), t) if case.doc >= 0 else None
+            why = self.decision_refusal(case, a["type"], t, hold)
+        if why is not None:
+            self._refuse(k, a, case, t, why)
             return
-        if case.work is not None:
-            self._reject(k, a, f"{a['type']} does not apply to {case.id}, " + (
-                f"the Field Work case of order {case.ref} (use order_complete)" if case.work == "order" else
-                f"the invoice hold on account {case.ref} (use invoice_unhold)"))
-            return
-        if case.doc >= 0 and a["type"] in ("accept", "estimate"):
-            hold = self.hold_in_force(self.account_of(case), t)
-            if hold is not None:
-                self._reject(k, a, f"account {hold[2].ref} has an invoice hold ({hold[2].id}, since "
-                                   f"{date_of(int(hold[0])).isoformat()}): remove it with invoice_unhold before "
-                                   "releasing this outsort")
-                return
         case.assignee = "you"
         if a["type"] in ("escalate", "field_order"):
             case.owner = None  # handed to supervisors or the field crews: they work it even if you owned it
@@ -915,10 +1030,6 @@ class M2CRun:
                                                                                 if "value" in a else {}),
                                    **({"note": a["note"]} if "note" in a else {})})
         case.rpa_at = INF if case.rpa_at is not None else None  # your decision replaces a pending RPA run
-        if case.doc >= 0 and a["type"] in ("override", "field_order"):
-            self.warnings.append(f"{a['id']}: {a['type']} does not apply to a billing block (accept, estimate, escalate)")
-            case.events.pop()
-            return
         if case.doc >= 0 and a["type"] in ("accept", "estimate"):
             self._resolve(case, t, "release" if a["type"] == "accept" else "rebill", actor="you")
         elif a["type"] == "field_order":
@@ -955,13 +1066,19 @@ class M2CRun:
 
     def _open_case(self, k: int, a: dict, t: float) -> Case | None:
         case = self.case_index.get(a.get("caseId") or "")
-        if case is None or case.created > t:
-            self._reject(k, a, f"case {a.get('caseId')} does not exist on {a['day']}")
-            return None
-        if case.resolved is not None and case.resolved <= t:
-            self._reject(k, a, f"case {case.id} is already resolved")
+        why = self.not_open(case, a.get("caseId"), t)
+        if why is not None:
+            self._refuse(k, a, case, t, why)
             return None
         return case
+
+    def _refuse(self, k: int, a: dict, case: Case | None, t: float, why: str) -> None:
+        """Refuse an action on ``case``. A case id the run has not raised by ``t`` is judged after the year: a case
+        raised later (the 18:00 VEE batch, the 19:30 billing run, a later day) says when it can be worked."""
+        if case is None:
+            self._unseen.append((k, a, t))
+        else:
+            self._reject(k, a, why)
 
     @staticmethod
     def _user_t(case: Case, day: int) -> float:
@@ -980,8 +1097,7 @@ class M2CRun:
                    payload: dict, status: str) -> Case:
         """A case for work you opened (a Field Work order, an invoice hold), owned by you from the start."""
         case = Case(len(self.cases), case_id, r, m, kind, t, -1, 0.0, float("nan"), "clean", work=work, ref=ref,
-                    owner="you", assignee="you", eligible=10 ** 6)
-        self.n_work += 1
+                    owner="you", assignee="you", eligible=10 ** 6, created_by="studio")
         self.cases.append(case)
         self.open.append(case)
         self.case_index[case.id] = case
@@ -995,6 +1111,7 @@ class M2CRun:
         self.series[case.queue][int(t), 1] += 1
         case.resolved = t
         case.outcome = outcome
+        case.by = "you"
         case.move(t, None, "resolved")
 
     def _order_action(self, day: int, k: int, a: dict) -> None:
@@ -1158,11 +1275,15 @@ class M2CRun:
         self._close_work(hc, tt, "released")
         self.books.unhold(acct, tt)
 
-    def _resolve(self, case: Case, t: float, action: str, *, actor: str, value: float | None = None) -> None:
-        """Close the case and release its reads (first read per ``action``; held reads as observed)."""
+    def _resolve(self, case: Case, t: float, action: str, *, actor: str, value: float | None = None,
+                 field: bool = False) -> None:
+        """Close the case and release its reads (first read per ``action``; held reads as observed). A register
+        below its last actual read is never released as read: it is estimated (your ``override`` value is yours).
+        ``field``: the first read's value comes from a field visit."""
         tw = self.town
         r = case.r
         self.series[case.queue][int(t), 1] += 1
+        case.by = actor
         if case.doc >= 0:
             self.books.resolve(case, t, action, actor)
             case.resolved = t
@@ -1176,20 +1297,28 @@ class M2CRun:
             act = action if first else ("estimate" if np.isnan(obs) or action == "estimate" else "accept")
             if act in ("accept", "accept_callback", "verified") and np.isnan(obs):
                 act = "estimate"
+            why = {}
+            if act in ("accept", "accept_callback", "verified", "special_read", "correct"):
+                seen = float(self.meter_true[r, m] if act in ("special_read", "correct") else obs)
+                j = self.backwards(r, m, seen, t)
+                if j >= 0:
+                    act = "estimate"
+                    why = {"reason": f"register went backwards ({seen:,.3f} against the last actual read "
+                                     f"{self.released[r, j]:,.3f}): estimated, not released as read"}
             if act == "estimate":
-                val, kind = self._estimate(r, m), 2
-                case.ev(t, "ESTIMATE_CREATED", {"readId": self.read_id(r, m), "value": val}, cause)
+                val, kind, method = self._estimate(r, m), 2, 2
+                case.ev(t, "ESTIMATE_CREATED", {"readId": self.read_id(r, m), "value": val, **why}, cause)
             elif act == "special_read" or (act == "correct"):
-                val, kind = float(self.meter_true[r, m]), 3
+                val, kind, method = float(self.meter_true[r, m]), 3, 4 if field and first or act == "special_read" else 3
                 case.ev(t, "READ_ADJUSTED", {"readId": self.read_id(r, m), "value": val}, cause)
             elif act == "override":
-                val, kind = float(value if first else obs), 3 if first else 1
+                val, kind, method = float(value if first else obs), 3 if first else 1, 3 if first else 1
                 case.ev(t, "READ_ADJUSTED", {"readId": self.read_id(r, m), "value": val}, cause)
             else:
-                val, kind = float(obs), 1
+                val, kind, method = float(obs), 1, 4 if field and first else 1
                 if first and actor not in ("RPA", "you"):
                     case.ev(t, "ANALYST_OVERRIDE", {"action": "approve as read"}, cause)
-            self._release(r, m, val, kind, t)
+            self._release(r, m, val, kind, t, method)
             case.ev(t + 0.0005, "READ_RELEASED", {"readId": self.read_id(r, m), "value": val,
                                                    "status": STATUS[kind]}, len(case.events) - 1)
         if action == "accept_callback":
@@ -1216,8 +1345,9 @@ class M2CRun:
                 use = max(0.0, rate * (self.read_t[r, m] - self.prev_t[r]))
         return float(regs.observe(np.array([prev + use]), np.array([self.town.digits[r]]))[0])
 
-    def _release(self, r: int, m: int, value: float, kind: int, t: float) -> None:
+    def _release(self, r: int, m: int, value: float, kind: int, t: float, method: int) -> None:
         self.status[r, m] = kind
+        self.method[r, m] = method
         self.released[r, m] = value
         self.release_t[r, m] = t
         if self.read_t[r, m] >= self.prev_t[r]:

@@ -206,7 +206,7 @@ def get_settings(town: str | None = None):
                        "analyst work, bill checks) on the same town; send it as the request's top-level seed. Blank "
                        "or null runs on the town's seed (the default shown); the same seed always gives the same run."},
               "queues": cat.QUEUES, "exceptions": {k: {"label": cat.EVENTS[k][0], "icon": cat.EVENTS[k][1]}
-                                                    for k in cat.EXCEPTIONS},
+                                                    for k in cat.EXCEPTION_TYPES},
               "actions": list(DECISIONS), "actionTypes": list(ACTION_TYPES), "categories": cat.CATEGORIES})
 
 
@@ -325,19 +325,24 @@ def m2c_day(town: str, day: str, m2c: dict) -> tuple[list[dict], dict[str, dict]
     """What the meter-to-cash run puts on an operations day: its field orders, its walked/drive-by read outcomes and
     the day's cycle (AMI collection, VEE batch, bills, invoices).
 
-    Outages from ``day`` itself or later are left out: they come from this operations run, and the morning's work
-    orders cannot depend on what happens later that day."""
+    The field orders leave out outages from ``day`` itself or later: those come from this operations run, and the
+    morning's work orders cannot depend on what happens later that day. The read outcomes and the cycle are what
+    meter-to-cash records that day, so they come from the run with every outage (the one the Workspace shows): a pole
+    broken at 01:40 shows as missed AMI reads, comm-fail cases and the bills they hold back."""
     try:
         d = parse_day(day, -1)
-        req = RunRequest(town=town, settings=m2c.get("settings"), actions=m2c.get("actions") or [],
-                         outages=[o for o in m2c.get("outages") or [] if parse_day(o.get("day"), YEAR_DAYS) < d],
-                         seed=m2c.get("seed"))
+        outages = m2c.get("outages") or []
+        base = {"town": town, "settings": m2c.get("settings"), "actions": m2c.get("actions") or [],
+                "seed": m2c.get("seed")}
+        req = RunRequest(**base, outages=[o for o in outages if parse_day(o.get("day"), YEAR_DAYS) < d])
+        full = RunRequest(**base, outages=outages) if len(req.outages) < len(outages) else req
     except ValidationError as exc:
         raise HTTPException(422, orjson.loads(exc.json(include_url=False))) from exc
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
     run = run_for(req, strict=False)  # a stored action list always replays here; refusals belong to /api/m2c/*
-    return _field_orders(run, d), read_outcomes(run, d), views.day_cycle(run, d)
+    seen = run if full is req else run_for(full, strict=False)
+    return _field_orders(run, d), read_outcomes(seen, d), views.day_cycle(seen, d)
 
 
 RANK = {"read": 0, "flagged": 1, "missed": 2}
@@ -444,11 +449,18 @@ def post_dispositions(req: DispositionRequest):
             reason = "decidedAt or asOf is needed to date the action"
         elif last and day < last:
             reason = f"actions are append-only: {day} is before the last action ({last})"
+        kind = "override" if d.value is not None and d.disposition in ("accept", "reject", "estimate") \
+            else DISPOSITION_ACTION.get(d.disposition)
+        if not reason:  # what the engine would refuse at 09:00 that day (not raised yet, resolved, backwards, …)
+            try:
+                t = parse_day(day, -1) + 9.0 / 24
+            except ValueError:
+                t = None
+            reason = "decidedAt is not a date" if t is None else run.not_open(case, case.id, t) or \
+                run.decision_refusal(case, kind, t, run.hold_on(run.account_of(case), t) if case.doc >= 0 else None)
         if reason:
             unmatched.append({"readId": d.readId, "disposition": d.disposition, "reason": reason})
             continue
-        kind = "override" if d.value is not None and d.disposition in ("accept", "reject", "estimate") \
-            else DISPOSITION_ACTION[d.disposition]
         action = {"id": f"VEE-{d.decisionId or k + 1}", "day": day, "type": kind, "caseId": case.id}
         if kind == "override":
             action["value"] = d.value

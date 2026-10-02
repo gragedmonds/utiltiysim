@@ -14,8 +14,13 @@ from utilsim.m2c import vee as vee_mod
 from utilsim.m2c.base import date_of
 from utilsim.m2c.run import (
     CASE_VERSION,
+    COLLECTOR_REASON,
     DECISION_VERSION,
+    DECISIONS,
     FAULTS,
+    INF,
+    METHODS,
+    OUTAGE_REASON,
     STATUS,
     SUMMARY_VERSION,
     YEAR_DAYS,
@@ -227,6 +232,116 @@ def read_type(run: M2CRun, r: int, m: int, T: float) -> str:
     return "missing" if np.isnan(run.obs[r, m]) else "actual"
 
 
+def billed_use(run: M2CRun, r: int, m: int) -> float:
+    """Consumption between the released registers of months ``m - 1`` and ``m``, as billing computes it."""
+    mod = 10.0 ** int(run.town.digits[r])
+    d = float(run.released[r, m] - run.released[r, m - 1])
+    return d + mod if d < -0.5 * mod else d
+
+
+# Why a read is missing: reasonCode → (cause code, label).
+CAUSES = {"NO_READ": ("no_read_document", "No read document"), OUTAGE_REASON: ("power_outage", "Power outage"),
+          COLLECTOR_REASON: ("collector_outage", "AMI collector outage"),
+          "SIM_TELEMETRY_FAILURE": ("comm_fail", "Comm fail"), "SIM_DRIVE_BY_MISSED": ("comm_fail", "Drive-by missed"),
+          "SIM_NO_ACCESS": ("no_access", "No access")}
+
+
+def missing_cause(run: M2CRun, r: int, m: int) -> dict | None:
+    """Why read ``(r, m)`` is missing: ``{code, label, reasonCode, reason}``, plus ``lastGaspAt`` (power) or
+    ``outageSince`` (collector) and ``outageStart``, ``outageEnd`` for an outage; None when the read came in.
+    ``reason`` is one line that names the cause."""
+    if m <= 0 or not np.isnan(run.obs[r, m]):
+        return None
+    reason = str(run.reason[r, m])
+    code, label = CAUSES.get(reason, ("comm_fail", "Comm fail"))
+    t = float(run.read_t[r, m])
+    hhmm = run.clock(t)[:5]
+    out: dict = {"code": code, "label": label, "reasonCode": reason or None}
+    if code in ("power_outage", "collector_outage"):
+        span = run.outage_span(r, t, comms=code == "collector_outage")
+        when, back = (run.clock(span[0]), run.clock(span[1])) if span else ("before the read", None)
+        if span:
+            out["lastGaspAt" if code == "power_outage" else "outageSince"] = run.iso(span[0])
+            out.update(outageStart=run.iso(span[0]), outageEnd=run.iso(span[1]))
+        text = (f"the meter lost power at {when} (AMI last gasp) and was still without power at the {hhmm} read"
+                if code == "power_outage" else
+                f"the AMI collector serving the meter was down from {when}, so the head-end got no {hhmm} read")
+        if back:
+            text += f" (back at {back})"
+    elif reason == "SIM_TELEMETRY_FAILURE":
+        text = f"the AMI head-end got no {hhmm} billing read from the meter within its retry window (comm fail)"
+    elif reason == "SIM_DRIVE_BY_MISSED":
+        text = "the drive-by van got no radio read from the meter (no signal, or the street was skipped)"
+    elif code == "no_access":
+        again = m > 1 and np.isnan(run.obs[r, m - 1]) and str(run.reason[r, m - 1]) == reason
+        text = "the meter reader could not get to the meter (locked gate, dog, meter indoors)" + \
+            (", as at the previous read" if again else "")
+    else:
+        text = "no meter-reading document was created for this period, so nothing was read"
+    temp = run.temp(int(run.town.read_day[r, m]))
+    if code in ("comm_fail", "no_access") and temp <= -10.0:
+        text += f", in deep cold ({temp:.0f} °C)"
+    case = run.cases[run.case_of[r, m]] if run.case_of[r, m] >= 0 else None
+    if case is not None and case.type == "CONSECUTIVE_ESTIMATES" and case.month == m:
+        n = int(run.consec_at[r, m]) + 1
+        text += (f"; it would be estimate {n} in a row (limit {run.cfg.vee.max_consecutive_estimates}), so a field "
+                 "read is needed")
+    out["reason"] = f"No read: {text}."
+    return out
+
+
+def register_check(run: M2CRun, r: int, m: int, T: float) -> dict:
+    """The read against the register before it: ``registerDelta`` (observed − previous released register),
+    ``registerWentBackwards`` (below the last actual read, not a rollover: an impossible register) and
+    ``previousEstimated`` (the previous register was an estimate, so a negative delta alone is a true-up)."""
+    obs = float(run.obs[r, m]) if m > 0 else float("nan")
+    if m <= 0 or run.read_t[r, m] > T or np.isnan(obs):
+        return {"registerDelta": None, "registerWentBackwards": False, "previousEstimated": False}
+    vee_t = float(run.town.read_day[r, m]) + 18.0 / 24
+    prev = next((j for j in range(m - 1, -1, -1) if run.release_t[r, j] <= vee_t), 0)
+    return {"registerDelta": _r3(obs - run.prev_at_read[r, m]),
+            "registerWentBackwards": run.backwards(r, m, obs, T) >= 0,
+            "previousEstimated": bool(run.method[r, prev] == 2)}
+
+
+def read_history(run: M2CRun, r: int, T: float) -> list[dict]:
+    """The register's periods read by ``T`` (up to 13: December 2025 and the months of 2026), oldest first: what
+    each read showed or released, its consumption, type and VEE status."""
+    out = []
+    for j in range(13):
+        if run.read_t[r, j] > T:
+            break
+        rel = run.release_t[r, j] <= T
+        typ = read_type(run, r, j, T)
+        use = (billed_use(run, r, j) if rel and run.release_t[r, j - 1] <= T else run.cons[r, j]) if j else None
+        c = int(run.case_of[r, j])
+        out.append({"readId": run.read_id(r, j), "date": date_of(int(run.town.read_day[r, j])).isoformat(),
+                    "register": _r3(run.released[r, j] if rel else run.obs[r, j]),
+                    "consumption": _r3(use) if use is not None else None, "type": typ, "estimated": typ == "estimated",
+                    "method": METHODS[int(run.method[r, j])] if rel else None, "veeStatus": vee_status(run, r, j, T),
+                    "caseId": run.cases[c].id if c >= 0 and run.cases[c].created <= T else None})
+    return out
+
+
+def released_json(run: M2CRun, case: Case, T: float) -> dict | None:
+    """What billing used once ``case`` is resolved: ``{registerValue, consumption, method, by, at}`` (method
+    ``as_read``, ``corrected``, ``estimated`` or ``field_read``); a billing case adds the document that went out."""
+    if case.work is not None or case.resolved is None or case.resolved > T or case.month <= 0:
+        return None
+    r, m = case.r, case.month
+    if run.release_t[r, m] > T:
+        return None
+    out = {"registerValue": _r3(run.released[r, m]), "consumption": _r3(billed_use(run, r, m)),
+           "method": METHODS[int(run.method[r, m])], "by": case.by, "at": run.iso(case.resolved)}
+    if case.doc >= 0:
+        bk = run.books
+        doc = bk.docs[int(bk.doc_of[bk.docs[case.doc]["inst"], m])]
+        out.update(consumption=_r3(doc["qImp"]), billingDocumentId=bk.doc_id(doc), totalAmount=doc["total"])
+        if doc.get("rebilledOnEstimate"):
+            out["method"] = "estimated"
+    return out
+
+
 def _row(run: M2CRun, case: Case, T: float) -> dict:
     tw = run.town
     r, m = case.r, case.month
@@ -269,7 +384,14 @@ def _row(run: M2CRun, case: Case, T: float) -> dict:
            "previous": _r3(run.prev_at_read[r, m]), "consumption": _r3(run.cons[r, m]),
            "expected": round(float(run.expected[r, m]), 3) if m else None,
            "scheduledReadAt": run.iso(run.read_t[r, m]),
-           "validationText": f"{label} · {cat.CODES[cat.CODE_LIST[code]][1]}" if code >= 0 else label}
+           "validationText": f"{label} · {cat.CODES[cat.CODE_LIST[code]][1]}" if code >= 0 else label,
+           # Who raised it, and the first day your actions (09:00) can work it.
+           "createdBy": case.created_by, "createdByLabel": cat.CREATED_BY[case.created_by],
+           "actionableFrom": date_of(run.actionable_from(case)).isoformat(),
+           "cause": missing_cause(run, r, m) if case.type in cat.MISSING_TYPES else None,
+           "releasedMethod": (released_json(run, case, T) or {}).get("method") if done else None,
+           **(register_check(run, r, m, T) if case.work is None else
+              {"registerDelta": None, "registerWentBackwards": False, "previousEstimated": False})}
     if case.work == "order":
         o = run.orders[case.ref]
         row.update(orderId=o.id, orderStage=o.stage_at(T), sourceCaseId=case.source)
@@ -322,11 +444,12 @@ def worklist(run: M2CRun, queue: str | None = None, *, as_of: str | None = None,
         if needle and needle not in (f"{row['caseId']} {row['address']} {row['premiseId']} {row['accountId']} "
                                      f"{row['meterId']} {row.get('orderId', '')}").lower():
             continue
-        rows.append(row)
-    key = {"age": lambda x: (-x["ageDays"], x["caseId"]), "impact": lambda x: (-x["impact"], x["caseId"]),
-           "confidence": lambda x: (x["confidence"] if x["confidence"] is not None else -1, x["caseId"]),
-           "created": lambda x: (x["createdAt"], x["caseId"])}[sort]
-    rows.sort(key=key)
+        rows.append((row, case.created))
+    # Every sort ends on the case id, so pages never overlap. "created" is newest first.
+    key = {"age": lambda x: (-x[0]["ageDays"], x[0]["caseId"]), "impact": lambda x: (-x[0]["impact"], x[0]["caseId"]),
+           "confidence": lambda x: (x[0]["confidence"] if x[0]["confidence"] is not None else -1, x[0]["caseId"]),
+           "created": lambda x: (-x[1], x[0]["caseId"])}[sort]
+    rows = [row for row, _ in sorted(rows, key=key)]
     start = (max(1, page) - 1) * page_size
     return {"schemaVersion": "m2c-worklist/1.0", "simulationId": run.simulation_id, "asOf": date_of(day).isoformat(),
             "queue": queue, "category": asked, "status": status, "sort": sort, "total": len(rows), "page": max(1, page),
@@ -366,14 +489,17 @@ def read_record(run: M2CRun, r: int, m: int, T: float, truth: bool = False) -> d
         "scheduledReadAt": run.iso(run.read_t[r, m]), "readAt": None if missing else run.iso(run.read_t[r, m]),
         "previousReadAt": run.iso(run.prev_t_at_read[r, m]), "previousRegisterValue": _r3(run.prev_at_read[r, m]),
         "registerValue": None if missing else _r3(run.obs[r, m]),
-        # As a meter data system records it: a lower register is taken as a rollover (VEE then judges it).
-        "consumption": None if missing else _r3(run.cons[r, m] % 10.0 ** int(tw.digits[r])),
+        # A lower register near the top of the dial is a rollover (consumption wraps); any other lower register went
+        # backwards: no consumption (null) and registerRegression, with the negative registerDelta.
+        "consumption": None if missing or run.cons[r, m] < 0 else _r3(run.cons[r, m]),
+        "registerDelta": None if missing else _r3(run.obs[r, m] - run.prev_at_read[r, m]),
         "multiplier": int(tw.multiplier[r]), "registerDigits": int(tw.digits[r]),
-        "rolloverFlag": bool(not missing and run.obs[r, m] < run.prev_at_read[r, m]),
+        "rolloverFlag": bool(not missing and run.obs[r, m] < run.prev_at_read[r, m] and run.cons[r, m] >= 0),
         "registerRegression": bool(not missing and run.cons[r, m] < 0),
         "readType": "missing" if missing else "actual", "readStatus": "missing" if missing else "received",
         "readReason": "periodic", "source": cat.SOURCE[str(tw.tech[r])], "mruId": tw.mru[r],
-        "reasonCode": run.reason[r, m] or None if missing else None, "consecutiveEstimates": int(run.consec_at[r, m]),
+        "reasonCode": run.reason[r, m] or None if missing else None, "cause": missing_cause(run, r, m),
+        "consecutiveEstimates": int(run.consec_at[r, m]),
         "occupied": bool(tw.occupied[p]), "sapValidationCode": cat.CODE_LIST[code] if code >= 0 else None,
         "veeStatus": vee_status(run, r, m, T), "veeDecisionId": f"VEE-{rid}",
         "veeConfidence": None if np.isnan(run.conf[r, m]) else round(float(run.conf[r, m]), 3),
@@ -409,24 +535,40 @@ def decision(run: M2CRun, r: int, m: int) -> dict:
     missing = bool(np.isnan(run.obs[r, m]))
     code = int(run.code[r, m])
     rid = run.read_id(r, m)
+    cause = missing_cause(run, r, m) if missing else None
+    days = float(run.read_t[r, m] - run.prev_t_at_read[r, m])
+    unit, consec = str(tw.unit[r]), int(run.consec_at[r, m])
     tests = []
-    for k, name in enumerate(cat.TESTS):
-        if missing:
-            tests.append({"test": name, "outcome": "not_applicable", "contribution": 0.0,
-                          "rationale": "No read was received, so there is nothing to validate; an estimate is needed."})
-            continue
+    if missing:  # nothing to validate: each test says what it would have checked, and why it cannot
+        why = cause["reason"] if cause else "No read: nothing was received."
+        oms = f" ({run.outage_h[r, m]:.1f} h without service in the period)" if run.outage_h[r, m] > 0 else ""
+        lines = (f"No register value to diagnose. {why}",
+                 f"No read date closes the {days:.0f}-day period; an estimate or a later read will.",
+                 f"No consumption to compare with history; an estimate would use the expected "
+                 f"{run.expected[r, m]:.1f} {unit}{oms}.",
+                 (f"Follows {consec} estimate{'s' if consec > 1 else ''} in a row (limit "
+                  f"{v.max_consecutive_estimates})." if consec else "No estimates in a row before this period.") +
+                 (f" {int(run.prior_at[r, m])} exception(s) on this register in the last 180 days."
+                  if run.prior_at[r, m] else ""),
+                 f"{cause['label'] if cause else 'Missing read'}: " +
+                 ("walked route" if tw.tech[r] == "MANUAL" else "drive-by route" if tw.tech[r] == "AMR" else "AMI meter")
+                 + ("; the premise is vacant." if not tw.occupied[tw.prem[r]] else "."))
+        tests = [{"test": name, "outcome": "not_applicable", "contribution": 0.0, "rationale": text}
+                 for name, text in zip(cat.TESTS, lines, strict=True)]
+    for k, name in enumerate(cat.TESTS if not missing else ()):
         risk = float(run.risk[r, m, k])
         tests.append({"test": name, "outcome": "failed" if risk > 0 else "passed", "contribution": round(risk, 3),
                       "rationale": vee_mod.explain(
                           k, risk, code=cat.CODE_LIST[code] if code >= 0 and k == 0 else None,
-                          ratio=float(run.ratio[r, m]), days=float(run.read_t[r, m] - run.prev_t_at_read[r, m]),
-                          expected=float(run.expected[r, m]), unit=str(tw.unit[r]), consec=int(run.consec_at[r, m]),
-                          prior_cases=int(run.prior_at[r, m]), occupied=bool(tw.occupied[tw.prem[r]]),
+                          ratio=float(run.ratio[r, m]), days=days, expected=float(run.expected[r, m]), unit=unit,
+                          consec=consec, prior_cases=int(run.prior_at[r, m]), occupied=bool(tw.occupied[tw.prem[r]]),
                           moved=code == cat.CODE_LIST.index("SIM-L01"), manual=str(tw.tech[r]) == "MANUAL", vee=v,
-                          outage_h=float(run.outage_h[r, m]))})
+                          outage_h=float(run.outage_h[r, m]),
+                          true_up=code == cat.CODE_LIST.index("SIM-C01")
+                          and run.backwards(r, m, float(run.obs[r, m]), INF) < 0)})
     d = int(run.disp[r, m])
     return {"schemaVersion": DECISION_VERSION, "decisionId": f"VEE-{rid}", "readId": rid,
-            "ruleSet": "sim-vee-v5", "ruleSetVersion": run.settings_hash, "tests": tests,
+            "ruleSet": "sim-vee-v5", "ruleSetVersion": run.settings_hash, "tests": tests, "cause": cause,
             "confidence": None if missing else round(float(run.conf[r, m]), 3),
             "disposition": "estimate" if missing else cat.DISPOSITIONS[d],
             "sapValidationCode": cat.CODE_LIST[code] if code >= 0 else None,
@@ -501,18 +643,26 @@ def case_view(run: M2CRun, case_id: str, *, as_of: str | None = None, truth: boo
             h["truthClass"] = cat.TRUTH[int(run.truth_cls[r, j])]
         history.append(h)
     row = _row(run, case, T)
-    open_now = row["status"] not in ("resolved", "future")
     acct = run.account_of(case)
     hold = run.hold_on(acct, T)
     linked = [run.orders[oid] for oid in case.orders if run.orders[oid].created <= T]
     read = m > 0 and run.read_t[r, m] <= T  # an invoice hold placed before the account's first 2026 read has none
+    # An action you add today lands at 09:00: offer only what the engine accepts then (the case is open as of today
+    # and was raised by 09:00; decisions the case refuses are left out).
+    t9 = day + 9.0 / 24
+    open_now = row["status"] not in ("resolved", "future") and run.not_open(case, case.id, t9) is None
+    no_value = case.doc < 0 and bool(np.isnan(run.obs[r, m]))  # a missing read: nothing to accept or override
     decisions = () if case.work is not None or not open_now else \
         tuple(a for a in (("accept", "estimate", "escalate") if case.doc >= 0 else
-                          ("accept", "override", "estimate", "field_order", "escalate"))
+                          ("estimate", "field_order", "escalate") if no_value else DECISIONS)
               if not (a == "escalate" and row["queue"] == "SUPERVISOR")
               and not (a == "field_order" and row["queue"] == "FIELD")
-              and not (hold is not None and case.doc >= 0 and a in ("accept", "estimate")))
+              and run.decision_refusal(case, a, t9, hold if case.doc >= 0 else None) is None)
+    expected = {"registerValue": _r3(run.prev_at_read[r, m] + run.expected[r, m]),
+                "consumption": round(float(run.expected[r, m]), 3)} if read else None
     return {"schemaVersion": CASE_VERSION, **row, "simulationId": run.simulation_id, "asOf": date_of(day).isoformat(),
+            "expected": expected, "released": released_json(run, case, T),
+            "readHistory": read_history(run, r, T) if case.work != "hold" else [],
             "decision": decision(run, r, m) if read else None, "read": read_record(run, r, m, T, truth) if read else None,
             "heldReadIds": [run.read_id(r, j) for j in case.reads[1:] if run.read_t[r, j] <= T],
             # Truck rolls as local day and seconds, so the map can show the visit.
@@ -869,7 +1019,10 @@ def doc_json(run: M2CRun, doc: dict, T: float, truth: bool = False) -> dict:
            "days": round(float(run.read_t[r, m] - run.read_t[r, m - 1]), 2),
            "readIds": [run.read_id(int(x), m) for x in rows], "version": doc["version"],
            "replaces": bk.doc_id(bk.docs[doc["replaces"]]) if doc["replaces"] >= 0 else None,
-           "estimated": bool(doc.get("estimated")), "billStatus": status, "status": status, "lines": bk.lines(doc),
+           # Built on an estimated read (or rebilled on an estimate): which of its reads were estimated.
+           "estimated": bool(doc.get("estimated")),
+           "estimatedReadIds": [run.read_id(x, m) for x in doc.get("estRows", ())],
+           "billStatus": status, "status": status, "lines": bk.lines(doc),
            "subtotal": doc["subtotal"], "tax": doc["tax"], "totalAmount": doc["total"],
            "currency": tariff.get("currency", "CAD"), "createdAt": run.iso(doc["created"]),
            "releasedAt": run.iso(doc["released"]) if doc["released"] is not None and doc["released"] <= T else None,
@@ -891,8 +1044,10 @@ def invoice_status(inv: dict, T: float) -> str:
 
 def invoice_json(run: M2CRun, inv: dict, T: float) -> dict:
     bk = run.books
+    est = [bk.doc_id(bk.docs[k]) for k in inv["docs"] if bk.docs[k].get("estimated")]
     return {"id": inv["id"], "schemaVersion": "invoice/1.0", "accountId": inv["account"],
             "billingDocumentIds": [bk.doc_id(bk.docs[k]) for k in inv["docs"]],
+            "estimated": bool(est), "estimatedBillingDocumentIds": est,
             "issuedAt": date_of(inv["issued"]).isoformat(), "dueAt": date_of(int(inv["due"])).isoformat(),
             "totalAmount": inv["total"], "currency": "CAD", "invoiceStatus": invoice_status(inv, T),
             "status": invoice_status(inv, T),

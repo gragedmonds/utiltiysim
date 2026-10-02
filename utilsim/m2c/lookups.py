@@ -18,6 +18,7 @@ from utilsim.m2c.views import (
     doc_json,
     hold_json,
     invoice_json,
+    missing_cause,
     order_brief,
     read_record,
     read_type,
@@ -116,7 +117,7 @@ def read_document(run: M2CRun, read_id: str, *, as_of: str | None = None, truth:
             "order": order_brief(run, order, T) if order is not None else None,
             "history": [{"readId": run.read_id(r, j), "readDate": date_of(int(tw.read_day[r, j])).isoformat(),
                          "readType": read_type(run, r, j, T), "registerValue": _value(run, r, j, T),
-                         "veeStatus": vee_status(run, r, j, T)}
+                         "veeStatus": vee_status(run, r, j, T), "cause": missing_cause(run, r, j)}
                         for j in range(12, 0, -1) if run.read_t[r, j] <= T]}
 
 

@@ -391,6 +391,9 @@ Bill checks, tariff versions, invoicing, payments and dunning.
 | `high_bill_min` | `150.0` | 0–5000 | $ | …and at least this much above the expected amount. |
 | `first_bill_limit` | `600.0` | 0–10000 | $ | (advanced) Block a bill with no expected use (vacant, new) above this total. |
 | `credit_review` | `75.0` | 0–5000 | $ | (advanced) Block a bill that is a credit larger than this. |
+| `outsort_auto_release_max` | `500.0` | 0–100000 | $ | RPA may release a high-bill or large-credit outsort only up to this bill amount (either sign); a larger one waits for an analyst. *Affects: analyst workload, billing errors.* |
+| `billing_queue_worked_by` | `analysts` |  |  | Who works the BILLING queue (high bills, large credits, true-ups, rate-class errors): the simulated analysts and RPA, or only you. With 'you', no analyst or RPA touches a billing block, so every outsort waits in the Studio for your release, rebill or escalation. *Affects: billing blocks, days to invoice, billing carry.* |
+| `trueup_max_ratio` | `3.0` | 1–50 | × | (advanced) Block a bill whose estimate true-up (a negative period quantity) is larger than this multiple of the period's expected use; an analyst decides it. *Affects: billing blocks, billing errors.* |
 | `data_error_rate` | `3.0` | 0–200 |  | Installations with a wrong rate class in billing master data (per 1,000 per year). *Affects: rate-class billing blocks.* |
 | `print_lag_days` | `1` | 0–10 | d | (advanced) Days from invoice creation to issue. |
 | `pad_reject_rate` | `0.015` | 0–0.5 |  | Pre-authorized debits returned for insufficient funds. *Affects: payment rejections, collections.* |

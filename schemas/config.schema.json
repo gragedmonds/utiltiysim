@@ -223,6 +223,21 @@
       "additionalProperties": false,
       "description": "Bill checks, tariff versions, invoicing, payments and dunning.",
       "properties": {
+        "billing_queue_worked_by": {
+          "default": "analysts",
+          "description": "Who works the BILLING queue (high bills, large credits, true-ups, rate-class errors): the simulated analysts and RPA, or only you. With 'you', no analyst or RPA touches a billing block, so every outsort waits in the Studio for your release, rebill or escalation.",
+          "enum": [
+            "analysts",
+            "you"
+          ],
+          "title": "Billing Queue Worked By",
+          "type": "string",
+          "x-effects": [
+            "billing blocks",
+            "days to invoice",
+            "billing carry"
+          ]
+        },
         "credit_review": {
           "default": 75.0,
           "description": "Block a bill that is a credit larger than this.",
@@ -315,6 +330,19 @@
           "x-advanced": true,
           "x-unit": "$"
         },
+        "outsort_auto_release_max": {
+          "default": 500.0,
+          "description": "RPA may release a high-bill or large-credit outsort only up to this bill amount (either sign); a larger one waits for an analyst.",
+          "maximum": 100000,
+          "minimum": 0,
+          "title": "Outsort Auto Release Max",
+          "type": "number",
+          "x-effects": [
+            "analyst workload",
+            "billing errors"
+          ],
+          "x-unit": "$"
+        },
         "pad_reject_rate": {
           "default": 0.015,
           "description": "Pre-authorized debits returned for insufficient funds.",
@@ -364,6 +392,20 @@
           "title": "Reminder Days",
           "type": "integer",
           "x-unit": "d"
+        },
+        "trueup_max_ratio": {
+          "default": 3.0,
+          "description": "Block a bill whose estimate true-up (a negative period quantity) is larger than this multiple of the period's expected use; an analyst decides it.",
+          "maximum": 50,
+          "minimum": 1,
+          "title": "Trueup Max Ratio",
+          "type": "number",
+          "x-advanced": true,
+          "x-effects": [
+            "billing blocks",
+            "billing errors"
+          ],
+          "x-unit": "×"
         },
         "winter_moratorium": {
           "default": true,
