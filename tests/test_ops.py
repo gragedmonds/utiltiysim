@@ -125,12 +125,12 @@ def test_trunk_fault_is_backfed_through_a_normally_open_tie(ayr, ayr_snapshot):
     out = inc["unsupplied"]
     assert inc["device"]["kind"] == "recloser" and out["afterBackfeed"] < out["afterIsolation"] <= out["atFault"]
     tie = inc["tie"]
-    assert net.edge_index[tie["edgeId"]] in net.tie_edges
+    assert net.edge_index[tie["edgeId"]] in net.tie_edges and tie["edgeId"] == inc["ties"][0]["edgeId"]
     assert inc["isolatedAt"] < tie["closedAt"] < tie["openedAt"] <= inc["restoredAt"]
     kinds = [e["eventType"] for e in tl["events"]]
     assert kinds.index("fault.isolated") < kinds.index("tie.closed") < kinds.index("tie.opened")
     k = net.edge_index[tie["edgeId"]]
-    during = run.frame(tie["closedAt"] + 60)
+    during = run.frame(inc["ties"][-1]["closedAt"] + 60)  # once every tie the crew closes is in
     validate_frame(ayr_snapshot, during)
     el = during["networks"]["electric"]
     assert el["enabled"][k] and el["flows"][k] != 0

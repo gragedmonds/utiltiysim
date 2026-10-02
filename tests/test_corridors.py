@@ -159,7 +159,8 @@ def test_feeders_are_radial_trees_with_open_ties(town480):
     ties = [e for e in net.edges if e.loop]
     assert ties and all(e.normally_open and not e.enabled and e.attrs["designRole"] == "tie" for e in ties)
     assert {tuple(e.attrs["feeders"]) for e in ties} <= {(a["id"], b["id"]) for a in feeders for b in feeders}
-    assert all(e.attrs["feeders"][0] != e.attrs["feeders"][1] for e in ties)
+    # A tie joins two feeders, or loops round between two sections of one (its id says so).
+    assert all((e.attrs["feeders"][0] == e.attrs["feeders"][1]) == ("-LOOP" in e.attrs["switchId"]) for e in ties)
     tie_eq = [q for q in net.equipment if q["kind"] == "tie_switch"]
     assert len(tie_eq) == len(ties) and all(q["normally"] == "open" for q in tie_eq)
     assert _enabled_forest(net)
