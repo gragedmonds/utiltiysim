@@ -242,6 +242,126 @@
         "title": "DecisionRequest",
         "type": "object"
       },
+      "Disposition": {
+        "properties": {
+          "decidedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Decision date (YYYY-MM-DD); default: the request's asOf.",
+            "title": "Decidedat"
+          },
+          "decisionId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decisionid"
+          },
+          "disposition": {
+            "enum": [
+              "accept",
+              "reject",
+              "estimate",
+              "escalate",
+              "review",
+              "field_order"
+            ],
+            "title": "Disposition",
+            "type": "string"
+          },
+          "readId": {
+            "title": "Readid",
+            "type": "string"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Adjusted register value (an edit), when the engine made one.",
+            "title": "Value"
+          }
+        },
+        "required": [
+          "readId",
+          "disposition"
+        ],
+        "title": "Disposition",
+        "type": "object"
+      },
+      "DispositionRequest": {
+        "properties": {
+          "actions": {
+            "items": {
+              "$ref": "#/components/schemas/Action"
+            },
+            "maxItems": 2000,
+            "title": "Actions",
+            "type": "array"
+          },
+          "asOf": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "View date (YYYY-MM-DD); default: the town's scenario date.",
+            "title": "Asof"
+          },
+          "decisions": {
+            "items": {
+              "$ref": "#/components/schemas/Disposition"
+            },
+            "maxItems": 2000,
+            "title": "Decisions",
+            "type": "array"
+          },
+          "settings": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing); see GET /api/m2c/settings.",
+            "title": "Settings"
+          },
+          "town": {
+            "description": "Pack preset (e.g. 'ayr') or town id.",
+            "title": "Town",
+            "type": "string"
+          }
+        },
+        "required": [
+          "town"
+        ],
+        "title": "DispositionRequest",
+        "type": "object"
+      },
       "FrameRequest": {
         "properties": {
           "at": {
@@ -2333,6 +2453,43 @@
           }
         },
         "summary": "Post Decision"
+      }
+    },
+    "/api/vee/dispositions": {
+      "post": {
+        "description": "Import decisions from an external VEE engine (m2c.vee v5).\n\nEach decision on a read becomes the equivalent append-only action on the case that holds the read:\n- accept → accept;\n- reject or estimate → estimate;\n- an edit (a value) → override;\n- escalate and field_order map one to one;\n- review keeps the case open.\n\nReturns the actions to append to the run, plus the decisions that matched no open case. Nothing is stored.",
+        "operationId": "post_dispositions_api_vee_dispositions_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DispositionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Dispositions"
       }
     },
     "/api/vee/export": {

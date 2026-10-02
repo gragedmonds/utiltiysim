@@ -168,6 +168,7 @@ balance and recent ledger). Reads show `billStatus` (`billed`, `billing_blocked`
 | `POST /api/m2c/premise` | Registers, every read to date and cases (`billingDocuments` and `invoices` arrive with PR B) |
 | `POST /api/vee/decision` | `vee-decision/1.0` for one `readId` |
 | `POST /api/vee/export` | VEE input fixture for a `month` and optional `portion` |
+| `POST /api/vee/dispositions` | Import decisions from an external VEE engine (m2c.vee v5) by `readId`. Each becomes the equivalent append-only action on the case holding the read: accept → accept; reject or estimate → estimate; an edit → override; escalate and field order map directly; review keeps the case open. Unmatched decisions are returned with a reason. |
 | `POST /api/process/graph` | Activity Sequence nodes and edges for a month |
 | `POST /api/process/costs` | Cost, carry and days to release by exception type |
 

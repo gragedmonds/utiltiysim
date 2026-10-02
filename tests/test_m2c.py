@@ -237,3 +237,24 @@ def test_billing_invoices_payments_and_collections(ayr):
     doc = p["billingDocuments"][0]
     assert doc["totalAmount"] == round(doc["subtotal"] + doc["tax"], 2) and doc["lines"]
     assert any(r["billStatus"] == "billed" and r["invoiceId"] for r in p["reads"])
+
+
+def test_external_vee_dispositions_become_actions():
+    from fastapi.testclient import TestClient
+
+    from api.index import app
+
+    client = TestClient(app)
+    slow = {"process": {"analysts": 0, "rpa_coverage": 0}}
+    body = {"town": "ayr", "settings": slow, "asOf": "2026-06-30"}
+    rows = client.post("/api/process/queue", json={**body, "queue": "VEE_REVIEW", "pageSize": 3}).json()["rows"]
+    assert len(rows) >= 2
+    decisions = [{"readId": rows[0]["readId"], "disposition": "accept", "decidedAt": "2026-06-30"},
+                 {"readId": rows[1]["readId"], "disposition": "reject", "value": 1234.5, "decidedAt": "2026-06-30"},
+                 {"readId": "READ-nope", "disposition": "accept"}]
+    out = client.post("/api/vee/dispositions", json={**body, "decisions": decisions}).json()
+    assert [(a["type"], a["caseId"]) for a in out["actions"]] == [("accept", rows[0]["caseId"]),
+                                                                  ("override", rows[1]["caseId"])]
+    assert out["unmatched"][0]["readId"] == "READ-nope"
+    after = client.post("/api/m2c/case", json={**body, "actions": out["actions"], "caseId": rows[1]["caseId"]}).json()
+    assert after["outcome"] == "override" and after["read"]["revisions"][0]["registerValue"] == 1234.5

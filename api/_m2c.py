@@ -197,3 +197,65 @@ def field_orders_for(town: str, day: str, m2c: dict) -> list[dict]:
                         "minutes": 45 if nxt == "METER_EXCHANGE" else 20,
                         "label": f"{cat.EVENTS[case.type][0]} · {tw.address[p]}"})
     return out
+
+
+class Disposition(BaseModel):
+    readId: str
+    disposition: Literal["accept", "reject", "estimate", "escalate", "review", "field_order"]
+    value: float | None = Field(None, ge=0, description="Adjusted register value (an edit), when the engine made one.")
+    decidedAt: str | None = Field(None, description="Decision date (YYYY-MM-DD); default: the request's asOf.")
+    decisionId: str | None = None
+
+
+class DispositionRequest(RunRequest):
+    decisions: list[Disposition] = Field(default_factory=list, max_length=2000)
+
+
+DISPOSITION_ACTION = {"accept": "accept", "reject": "estimate", "estimate": "estimate", "escalate": "escalate",
+                      "field_order": "field_order"}
+
+
+@router.post("/api/vee/dispositions")
+def post_dispositions(req: DispositionRequest):
+    """Import decisions from an external VEE engine (m2c.vee v5).
+
+    Each decision on a read becomes the equivalent append-only action on the case that holds the read:
+    - accept → accept;
+    - reject or estimate → estimate;
+    - an edit (a value) → override;
+    - escalate and field_order map one to one;
+    - review keeps the case open.
+
+    Returns the actions to append to the run, plus the decisions that matched no open case. Nothing is stored.
+    """
+    run = run_for(req)
+    by_read = {}
+    for case in run.cases:
+        for m in case.reads:
+            by_read[run.read_id(case.r, m)] = case
+    actions, unmatched = [], []
+    last = req.actions[-1].day if req.actions else None
+    for k, d in enumerate(sorted(req.decisions, key=lambda x: x.decidedAt or req.asOf or "")):
+        day = (d.decidedAt or req.asOf or "")[:10]
+        case = by_read.get(d.readId)
+        reason = None
+        if case is None:
+            reason = "no case holds this read (VEE accepted it, or it is unknown)"
+        elif d.disposition == "review":
+            reason = "review keeps the case open"
+        elif not day:
+            reason = "decidedAt or asOf is needed to date the action"
+        elif last and day < last:
+            reason = f"actions are append-only: {day} is before the last action ({last})"
+        if reason:
+            unmatched.append({"readId": d.readId, "disposition": d.disposition, "reason": reason})
+            continue
+        kind = "override" if d.value is not None and d.disposition in ("accept", "reject", "estimate") \
+            else DISPOSITION_ACTION[d.disposition]
+        action = {"id": f"VEE-{d.decisionId or k + 1}", "day": day, "type": kind, "caseId": case.id}
+        if kind == "override":
+            action["value"] = d.value
+        actions.append(action)
+        last = day
+    return J({"schemaVersion": "vee-dispositions/1.0", "simulationId": run.simulation_id, "actions": actions,
+              "unmatched": unmatched})
