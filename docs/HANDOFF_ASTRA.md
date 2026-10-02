@@ -156,6 +156,9 @@ Design passes welcome:
 
 ## 9. Utility Studio in the viewer
 
+For the reworked UI, `docs/STUDIO_BILLING.md` lists what drives each billing page: the engine call and fields, and how
+the shared run date and fast-forward move them.
+
 Your Utility Studio (`prototypes/utility-studio`) is now the viewer's shell. The production map keeps its renderer,
 phone quality profiles and WebGL recovery.
 - Header: Map and Workspace are the primary navigation, and Configuration is the cog. Routes are `#/town`,
