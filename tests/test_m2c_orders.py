@@ -267,6 +267,13 @@ def test_invoice_hold_defers_invoices_and_blocks_the_outsort_release(town, base)
     assert set(deferred) <= issued
     released = run.case_index[bc.id]
     assert released.outcome == "release" and int(released.resolved) == h1
+    # The same day works too: hold, settle the dispute, then release (all three land at 09:00, in order).
+    same = [hold, {"day": iso(h0), "type": "invoice_unhold", "caseId": bc.id, "note": "Settled on the phone"},
+            {"day": iso(h0), "type": "accept", "caseId": bc.id, "note": "Usage confirmed"}]
+    run_same = M2CRun(town, SLOW, same)
+    assert run_same.case_index[bc.id].outcome == "release" and int(run_same.case_index[bc.id].resolved) == h0
+    rehold = M2CRun(town, SLOW, [hold, same[1], {**hold, "note": "Second dispute"}])  # a new hold after the unhold
+    assert sum(c.work == "hold" for c in rehold.cases) == 2
     mid = views.case_view(run, bc.id, as_of=iso(h0))
     assert mid["invoiceHold"]["caseId"] == hc.id and mid["category"] == "Billing Outsorts"
     assert "accept" not in mid["actions"] and "invoice_unhold" in mid["studioActions"]

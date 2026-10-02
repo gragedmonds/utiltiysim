@@ -862,7 +862,7 @@ class M2CRun:
                 f"the invoice hold on account {case.ref} (use invoice_unhold)"))
             return
         if case.doc >= 0 and a["type"] in ("accept", "estimate"):
-            hold = self.hold_on(self.account_of(case), t)
+            hold = self.hold_in_force(self.account_of(case), t)
             if hold is not None:
                 self._reject(k, a, f"account {hold[2].ref} has an invoice hold ({hold[2].id}, since "
                                    f"{date_of(int(hold[0])).isoformat()}): remove it with invoice_unhold before "
@@ -1072,6 +1072,11 @@ class M2CRun:
         """The invoice hold on ``acct`` at ``t`` ([t on, t off, hold case]), if any."""
         return next((h for h in self.holds.get(acct, []) if h[0] <= t and (h[1] is None or h[1] > t)), None)
 
+    def hold_in_force(self, acct: str, t: float) -> list | None:
+        """While replaying your actions: the hold on ``acct`` that no earlier action has removed. An unhold earlier
+        the same day counts even though it is stamped just after the hold case's own 09:00 events."""
+        return next((h for h in self.holds.get(acct, []) if h[0] <= t and h[1] is None), None)
+
     def _hold(self, day: int, k: int, a: dict) -> None:
         t = day + 9.0 / 24
         case = None
@@ -1082,7 +1087,7 @@ class M2CRun:
             acct = self.account_of(case)
         else:
             acct = a["accountId"]
-        held = self.hold_on(acct, t)
+        held = self.hold_in_force(acct, t)
         if a["type"] == "invoice_hold":
             if held is not None:
                 self._reject(k, a, f"account {acct} is already on hold ({held[2].id}, since "
