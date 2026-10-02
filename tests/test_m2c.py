@@ -95,6 +95,23 @@ def test_vee_catches_injected_faults(ayr):
     assert (ayr.disp[:, 1:][clean] == 0).mean() > 0.99
 
 
+def test_vee_scorecard_against_truth(ayr):
+    sc = views.scorecard(ayr, as_of="2026-12-31")
+    kv = views.summary(ayr, "2026-12-31")["kpis"]["vee"]
+    assert {k: sc[k] for k in ("truePositives", "falsePositives", "falseNegatives", "precision", "recall")} == \
+        {k: kv[k] for k in ("truePositives", "falsePositives", "falseNegatives", "precision", "recall")}
+    rows = {a["anomaly"]: a for a in sc["anomalies"]}
+    assert set(rows) == set(views.ANOMALIES) and all(0 <= a["flagged"] <= a["reads"] for a in rows.values())
+    assert rows["stuck_meter"]["recall"] >= 0.6 and rows["stuck_meter"]["medianDaysToFlag"] > 0
+    assert all(x["real"] <= x["cases"] and x["exception"] not in cat.MISSING_TYPES for x in sc["exceptions"])
+    assert sc["precision"] >= 0.65  # history alone no longer flags clean reads (no feedback loop)
+    # Prior cases only corroborate: a read with no other signal never carries more than a soft history weight.
+    got = ~np.isnan(ayr.obs[:, 1:])
+    risk = ayr.risk[:, 1:]
+    alone = got & (risk[..., 0] == 0) & (risk[..., 1] == 0) & (risk[..., 2] == 0) & (risk[..., 4] == 0)
+    assert (risk[..., 3][alone] <= 0.05 + 1e-6).all() and (ayr.disp[:, 1:][alone] == 0).all()
+
+
 def test_queues_follow_the_workforce(ayr_town):
     none = M2CRun(ayr_town, {"process": {"analysts": 0, "rpa_coverage": 0}})
     backlog = none.series["ESTIMATION"][:, 2] + none.series["VEE_REVIEW"][:, 2]

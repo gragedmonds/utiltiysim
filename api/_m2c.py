@@ -185,6 +185,13 @@ def post_decision(req: DecisionRequest):
     return J(views.decision(run, r, m))
 
 
+@router.post("/api/vee/scorecard")
+def post_scorecard(req: RunRequest):
+    """``vee-scorecard/1.0``: VEE against simulation truth, per anomaly type (recall, days to flag) and per exception
+    type (precision)."""
+    return _view(views.scorecard, run_for(req), as_of=req.asOf)
+
+
 @router.post("/api/vee/export")
 def post_vee_export(req: MonthRequest):
     """``vee-input-fixture/1.1`` for one month (and portion): the reads an external VEE engine would receive,

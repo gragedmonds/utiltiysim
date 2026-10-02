@@ -84,8 +84,10 @@ def run(b: Batch, vee) -> Result:
     # Persistent under-registration: this read and the previous ones all below trend_ratio of expected.
     trend = big & ~b.export & (ratio < vee.trend_ratio) & (b.low_streak + 1 >= vee.trend_periods)
     risk[:, 2] = np.where(trend, np.maximum(risk[:, 2], 0.16), risk[:, 2])
-    # 4. Process corroboration (repeat exceptions on the device).
-    risk[:, 3] = np.minimum(0.25, 0.06 * b.prior_cases)
+    # 4. Process corroboration (repeat exceptions on the device). History strengthens a signal in this read; alone it
+    # stays soft, or every read after a run of cases would raise another one.
+    signal = (t1 > 0) | (risk[:, 1] > 0) | (risk[:, 2] > 0)
+    risk[:, 3] = np.where(signal, np.minimum(0.25, 0.06 * b.prior_cases), np.minimum(0.05, 0.01 * b.prior_cases))
     # 5. Context signals (vacancy, technology).
     vacant_use = ~b.occupied & ~b.export & (ratio > 3.0) & (b.cons > floor)
     risk[:, 4] = np.minimum(0.25, np.where(vacant_use, 0.2, 0.0) + np.where(b.manual & (t1 > 0.1), 0.05, 0.0))
@@ -138,8 +140,11 @@ def explain(test: int, risk: float, *, code: str | None, ratio: float, days: flo
             parts.append(f"follows {consec} estimate{'s' if consec > 1 else ''}")
         return ("Consistent with history." if not parts else "; ".join(parts).capitalize() + ".")
     if test == 3:
-        return ("No recent exceptions on this register." if not prior_cases else
-                f"{prior_cases} exception{'s' if prior_cases > 1 else ''} on this register in the last 180 days.")
+        if not prior_cases:
+            return "No recent exceptions on this register."
+        n = f"{prior_cases} exception{'s' if prior_cases > 1 else ''} on this register in the last 180 days"
+        return n + (" corroborate this read's other signals." if risk > 0.05 else
+                    "; with no other signal in this read they weigh lightly.")
     parts = []
     if not occupied:
         parts.append("premise is vacant" + (" but consuming" if risk >= 0.2 else ""))

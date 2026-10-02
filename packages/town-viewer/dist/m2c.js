@@ -31,6 +31,7 @@ export class EngineM2C{
  caseView(caseId,truth=false){return this.post('/m2c/case',{caseId,truth},'case');}
  premise(premiseId){return this.post('/m2c/premise',{premiseId},'premise:'+premiseId);}
  costs(){return this.post('/process/costs',{},'costs');}
+ scorecard(){return this.post('/vee/scorecard',{},'scorecard');}
  graph(month){return this.post('/process/graph',{month},'graph');}
  async schema(){if(!this._schema){const r=await this.fetch(this.api+'/m2c/settings');if(!r.ok)throw Error('Engine '+r.status);this._schema=await r.json();}return this._schema;}
  lastActionDay(){return this.actions.at(-1)?.day||null;}

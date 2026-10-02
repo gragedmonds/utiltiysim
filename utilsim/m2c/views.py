@@ -14,6 +14,7 @@ from utilsim.m2c.base import date_of
 from utilsim.m2c.run import (
     CASE_VERSION,
     DECISION_VERSION,
+    FAULTS,
     STATUS,
     SUMMARY_VERSION,
     YEAR_DAYS,
@@ -457,6 +458,69 @@ def case_view(run: M2CRun, case_id: str, *, as_of: str | None = None, truth: boo
                         and not (a == "field_order" and row["queue"] == "FIELD")],
             **({"billingDocument": doc_json(run, run.books.docs[case.doc], T, truth)} if case.doc >= 0 else {}),
             **({"truth": {"class": case.truth}} if truth else {})}
+
+
+# ---- VEE scorecard ------------------------------------------------------------------------------------------------
+ANOMALIES = ("stuck_meter", "slow_meter", "tamper", "exchange_registration_failure", "transposed_digits", "misread",
+             "leak", "vacant_consuming")
+
+
+def scorecard(run: M2CRun, *, as_of: str | None = None) -> dict:
+    """How VEE did against simulation truth up to ``as_of``.
+
+    Per injected anomaly: affected reads received, how many VEE flagged (recall) and, for lasting ones, the median
+    days from onset to the first flag. Per exception type raised by VEE: cases and the share that were real
+    (precision). Missing-read and billing exceptions are left out: they are not VEE judgements."""
+    tw = run.town
+    day, T = as_of_t(run, as_of)
+    M = slice(1, 13)
+    t = run.read_t[:, M]
+    got = (t <= T) & ~np.isnan(run.obs[:, M])
+    flag = got & (run.disp[:, M] > 0)
+    mt = tw.meter_of
+    imp = (tw.direction == "import")[:, None]
+    ft = run.fault_type[mt][:, None]
+    fault = (run.fault_t[mt][:, None] <= t) & (t < run.fix_t[mt][:, None]) & (imp | (ft == 0) | (ft == 3))
+    tr = run.transposed[mt][:, M] & imp
+    masks = {f: fault & (ft == k) for k, f in enumerate(FAULTS)}
+    masks["transposed_digits"] = tr
+    masks["misread"] = run.misread[mt][:, M] & imp & ~tr
+    masks["leak"] = (run.leak_t[mt][:, None] <= t) & (t < run.leak_end[mt][:, None]) & imp
+    masks["vacant_consuming"] = (run.vac_t[mt][:, None] <= t) & (t < run.vac_end[mt][:, None]) & imp
+    onset = {f: np.where(run.fault_type[mt] == k, run.fault_t[mt], np.inf) for k, f in enumerate(FAULTS)}
+    onset["leak"], onset["vacant_consuming"] = run.leak_t[mt], run.vac_t[mt]
+    rows = []
+    for name in ANOMALIES:
+        mk = masks[name] & got
+        n, caught = int(mk.sum()), int((mk & flag).sum())
+        row = {"anomaly": name, "class": cat.ANOMALY_CLASS[name], "reads": n, "flagged": caught,
+               "recall": round(caught / n, 3) if n else None, "meters": len(np.unique(mt[mk.any(1)]))}
+        if name in onset:  # lasting anomalies: how long until VEE first noticed
+            hit = mk & flag
+            regs = np.flatnonzero(hit.any(1))
+            first = np.where(hit[regs], t[regs], np.inf).min(1) if len(regs) else np.zeros(0)
+            lag = first - onset[name][regs]
+            row["medianDaysToFlag"] = round(float(np.median(lag)), 1) if len(lag) else None
+        rows.append(row)
+    by_type: dict[str, list[int]] = {}
+    for case in run.cases:
+        if case.created > T or case.doc >= 0 or case.type in cat.MISSING_TYPES:
+            continue
+        c = by_type.setdefault(case.type, [0, 0])
+        c[0] += 1
+        c[1] += case.truth != "clean"
+    exceptions = [{"exception": k, "label": cat.EVENTS[k][0], "icon": cat.EVENTS[k][1], "cases": n, "real": real,
+                   "precision": round(real / n, 3) if n else None}
+                  for k, (n, real) in sorted(by_type.items(), key=lambda kv: -kv[1][0])]
+    anom = np.zeros_like(got)
+    for mk in masks.values():
+        anom |= mk
+    tp, fp, fn = int((flag & anom).sum()), int((flag & ~anom).sum()), int((got & ~flag & anom).sum())
+    return {"schemaVersion": "vee-scorecard/1.0", "simulationId": run.simulation_id, "asOf": date_of(day).isoformat(),
+            "settingsHash": run.settings_hash, "reads": int(got.sum()), "flagged": int(flag.sum()),
+            "truePositives": tp, "falsePositives": fp, "falseNegatives": fn,
+            "precision": round(tp / (tp + fp), 3) if tp + fp else None,
+            "recall": round(tp / (tp + fn), 3) if tp + fn else None, "anomalies": rows, "exceptions": exceptions}
 
 
 # ---- exports -----------------------------------------------------------------------------------------------------

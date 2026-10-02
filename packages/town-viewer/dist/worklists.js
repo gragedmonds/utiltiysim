@@ -65,6 +65,18 @@ export function installWorklists({getClient,onShowPremise=()=>{},onSettings=()=>
  let timer=0;$('wl-search').oninput=ev=>{clearTimeout(timer);timer=setTimeout(()=>{search=ev.target.value.trim();page=1;table();},250);};
  $('wl-settings').onclick=onSettings;
  $('wl-reset').onclick=()=>{const m2c=client();if(!m2c||!m2c.actions.length)return;m2c.reset();toast('Your actions were cleared; the engine replays the year without them.');load();};
+ $('wl-scorecard').onclick=()=>openScorecard();$('wl-scorecard-close').onclick=()=>$('wl-scorecard-dialog').close();
+ async function openScorecard(){const m2c=client(),dlg=$('wl-scorecard-dialog');if(!m2c){toast('The scorecard needs the engine.');return;}$('wl-scorecard-body').innerHTML='<p class="small-note">Scoring VEE against the simulation\'s ground truth…</p>';if(!dlg.open)dlg.showModal();
+  try{$('wl-scorecard-body').innerHTML=scorecardMarkup(await m2c.scorecard());}catch(err){if(!err.superseded)$('wl-scorecard-body').innerHTML=`<p class="small-note">${e(err.message)}</p>`;}}
  $('wl-export').onclick=()=>{const m2c=client();if(!m2c)return;const blob=new Blob([JSON.stringify(m2c.export(),null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=(m2c.townId||'town')+'-m2c-run.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);};
  return {open,refresh:load,get summary(){return summary;}};
 }
+
+const NAME=k=>k.replaceAll('_',' ').replace(/^./,c=>c.toUpperCase());
+function bar(x){return x==null?'—':`<span class="sc-bar"><i style="width:${Math.round(x*100)}%"></i></span>${Math.round(x*100)}%`;}
+// VEE against what the simulation knows really happened: recall per injected anomaly, precision per exception type.
+export function scorecardMarkup(sc){
+ return `<p class="small-note">As of ${e(sc.asOf)} · ${sc.reads.toLocaleString('en-CA')} reads received · ${sc.flagged.toLocaleString('en-CA')} flagged. Precision <strong>${sc.precision==null?'—':Math.round(sc.precision*100)+'%'}</strong>, recall <strong>${sc.recall==null?'—':Math.round(sc.recall*100)+'%'}</strong>. Flex the VEE rules under Run settings and compare.</p>
+ <h3>Anomalies the run injected</h3><table class="sc-table"><thead><tr><th>Anomaly</th><th>Kind</th><th>Meters</th><th>Reads</th><th>Flagged</th><th>Recall</th><th>Days to flag</th></tr></thead><tbody>${sc.anomalies.map(a=>`<tr><td>${e(NAME(a.anomaly))}</td><td>${e(NAME(a.class))}</td><td>${a.meters}</td><td>${a.reads}</td><td>${a.flagged}</td><td>${bar(a.recall)}</td><td>${a.medianDaysToFlag==null?'—':a.medianDaysToFlag.toFixed(0)}</td></tr>`).join('')}</tbody></table>
+ <h3>Exceptions VEE raised</h3><table class="sc-table"><thead><tr><th>Exception</th><th>Cases</th><th>Real</th><th>Precision</th></tr></thead><tbody>${sc.exceptions.map(x=>`<tr><td>${e(x.icon)} ${e(x.label)}</td><td>${x.cases}</td><td>${x.real}</td><td>${bar(x.precision)}</td></tr>`).join('')||'<tr><td colspan="4">No VEE exceptions yet.</td></tr>'}</tbody></table>
+ <p class="small-note">Days to flag: median from an anomaly's onset to the first read VEE flagged. Missing-read and billing exceptions are not VEE judgements and are left out.</p>`;}

@@ -90,7 +90,9 @@ There are five tests per read, each with a risk contribution of 0–0.25 and a r
    - `SIM-L01`: lifecycle (a move inside the period).
 2. **Temporal validity**: period length.
 3. **Consistency**: an erratic ratio against prior-year history; true-ups after estimates.
-4. **Process corroboration**: implausible-value cases on the register in the last 180 days.
+4. **Process corroboration**: implausible-value cases on the register in the last 180 days. They strengthen
+   another signal in the read (0.06 each, up to 0.25); alone they weigh at most 0.05, so a run of cases never keeps
+   flagging normal reads.
 5. **Context**: a vacant premise that consumes; walked reads.
 
 Confidence is `1 − 2·Σ risk`. The disposition is decided in this order:
@@ -166,12 +168,13 @@ balance and recent ledger). Reads show `billStatus` (`billed`, `billing_blocked`
 | Endpoint | Returns |
 |---|---|
 | `GET /api/m2c/settings` | Schema, defaults, queues, exception vocabulary |
-| `POST /api/m2c/summary` | `m2c-summary/1.0`: KPIs, cost (labour, system, CX, reads), carry, VEE precision/recall against truth, queues with aging and daily opened/closed/backlog, exception mix, RPA rules, one status per premise |
+| `POST /api/m2c/summary` | `m2c-summary/1.0`: KPIs, cost (labour, system, CX, reads), carry, VEE precision/recall against truth, `billing`, `reliability`, `weather`, queues with aging and daily opened/closed/backlog, exception mix, RPA rules, one status per premise |
 | `POST /api/process/queue` | Paged worklist: `queue`, `status`, `sort` (`age`, `impact`, `confidence`, `created`), `page`, `pageSize` ≤ 200, `type`, `commodity`, `search` |
 | `POST /api/m2c/case` | `work-case/1.0`: the case, its VEE decision, the read, 12-month history, events (`event/1.0`) with causal edges, allowed actions (`truth: true` adds ground truth) |
-| `POST /api/m2c/premise` | Registers, every read to date and cases (`billingDocuments` and `invoices` arrive with PR B) |
+| `POST /api/m2c/premise` | Registers, every read to date, cases, `outages`, `billingDocuments`, `invoices` and `accounts` (balance and ledger) |
 | `POST /api/vee/decision` | `vee-decision/1.0` for one `readId` |
 | `POST /api/vee/export` | VEE input fixture for a `month` and optional `portion` |
+| `POST /api/vee/scorecard` | `vee-scorecard/1.0`: VEE against simulation truth. Per anomaly type: recall and median days from onset to the first flag. Per exception type: precision |
 | `POST /api/vee/dispositions` | Import decisions from an external VEE engine (m2c.vee v5) by `readId`. Each becomes the equivalent append-only action on the case holding the read: accept → accept; reject or estimate → estimate; an edit → override; escalate and field order map directly; review keeps the case open. Unmatched decisions are returned with a reason. |
 | `POST /api/process/graph` | Activity Sequence nodes and edges for a month |
 | `POST /api/process/costs` | Cost, carry and days to release by exception type |

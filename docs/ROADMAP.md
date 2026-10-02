@@ -43,7 +43,8 @@ Next:
 - exception work queues: RPA, analysts, supervisors, field crews;
 - Activity Sequence events, costs and carry;
 - billing documents, blocks, invoices, payments, dunning and ledgers;
-- analyst actions from the viewer.
+- analyst actions from the viewer;
+- a VEE scorecard against simulation truth (recall per anomaly, precision per exception).
 
 **Linked:**
 - the operations day schedules that day's reading rounds and meter-to-cash field orders as crew jobs;

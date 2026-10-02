@@ -70,3 +70,13 @@ test('outages from the map ride every request, per operations day, and replace t
  assert.equal(new EngineM2C({townRef:'ayr',townId:'town-1',storage:store}).outageList().length,1);
  assert.equal(new EngineM2C({townRef:'ayr',townId:'town-9',storage:memory()}).context().outages,undefined);
 });
+
+test('the VEE scorecard renders recall per anomaly and precision per exception',async()=>{
+ const {scorecardMarkup}=await import('../dist/worklists.js');
+ const html=scorecardMarkup({asOf:'2026-12-31',reads:73902,flagged:172,precision:.738,recall:.408,
+  anomalies:[{anomaly:'stuck_meter',class:'meter_fault',meters:32,reads:98,flagged:70,recall:.714,medianDaysToFlag:36},{anomaly:'misread',class:'read_error',meters:5,reads:5,flagged:5,recall:1}],
+  exceptions:[{exception:'ERRATIC',label:'Erratic <pattern>',icon:'〰️',cases:17,real:0,precision:0}]});
+ assert.match(html,/Precision <strong>74%<\/strong>, recall <strong>41%<\/strong>/);
+ assert.match(html,/Stuck meter<\/td><td>Meter fault/);assert.match(html,/width:71%/);assert.match(html,/Erratic &lt;pattern&gt;/);
+ assert.match(scorecardMarkup({asOf:'x',reads:0,flagged:0,precision:null,recall:null,anomalies:[],exceptions:[]}),/No VEE exceptions yet/);
+});

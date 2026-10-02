@@ -2651,6 +2651,43 @@
         },
         "summary": "Post Vee Export"
       }
+    },
+    "/api/vee/scorecard": {
+      "post": {
+        "description": "``vee-scorecard/1.0``: VEE against simulation truth, per anomaly type (recall, days to flag) and per exception\ntype (precision).",
+        "operationId": "post_scorecard_api_vee_scorecard_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Scorecard"
+      }
     }
   }
 }
