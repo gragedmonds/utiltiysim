@@ -53,3 +53,13 @@ test('the linked meter-to-cash day becomes ring groups at their times',async()=>
  const g=cycleGroups({ami:{at:7200,read:['P1','P2'],missed:['P3']},vee:{at:64800,flagged:[]},bills:{at:70200,premiseIds:['P1']},invoices:{at:72000,premiseIds:['P1']}});
  assert.deepEqual(g.map(x=>[x[0],x[1].length,x[2]]),[[7200,2,CYCLE_COLOR.ami],[7200,1,CYCLE_COLOR.amiMissed],[70200,1,CYCLE_COLOR.bills],[72000,1,CYCLE_COLOR.invoices]]);
 });
+
+test('operations settings come with the town\'s own defaults, and $ref groups are understood',async()=>{
+ const {toOpsSettings,opsFormValues}=await import('../dist/engine-operations.js');
+ const log=[];globalThis.fetch=async(url)=>{log.push(url);return {ok:true,json:async()=>({schema:{properties:{}},defaults:{}})};};
+ const ops=new EngineOperations({id:'town-x',facilities:[]},{api:'/api',townRef:'town-d968ce9db1c457bc',storage:null});await ops.schema();
+ assert.deepEqual(log,['/api/sim/settings/schema?town=town-d968ce9db1c457bc']);
+ const schema={properties:{crews:{$ref:'#/$defs/Crews'},incidents:{properties:{random:{type:'boolean'}}}},$defs:{Crews:{'x-flat':true,properties:{fieldCrews:{type:'integer'}}}}};
+ assert.deepEqual(toOpsSettings({crews:{fieldCrews:3},incidents:{random:false}},schema),{fieldCrews:3,incidents:{random:false}});
+ assert.deepEqual(opsFormValues({fieldCrews:3,incidents:{random:false}},schema),{crews:{fieldCrews:3},incidents:{random:false}});
+});

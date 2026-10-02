@@ -31,9 +31,11 @@ export function installFocusUI({getContext,onSettings,onScenario,onWorklists=()=
  $('layers-close').onclick=()=>{closeTools();$('layers-toggle').focus();};$('scenario-close').onclick=()=>{closeTools();$('scenario-toggle').focus();};
  $('performance-panel').addEventListener('toggle',()=>{if($('performance-panel').open)closeTools();});
  function refresh(){
-  const {town,mode}=getContext(),imported=mode==='snapshot';if(!town)return;
+  const {town,mode,engine}=getContext(),imported=mode==='snapshot';if(!town)return;
   document.querySelectorAll('[data-scenario-preset]').forEach(el=>el.disabled=imported);
-  $('preset-availability').textContent=imported?'This snapshot is read-only. Scenario commands need the engine connection.':'Preview one event at a time in the browser demo.';
+  $('preset-availability').textContent=engine?'Presets preview the browser demo. On the engine, break a pole or main from the map (right-click) and dispatch crews.':imported?'This snapshot is read-only. Scenario commands need the engine connection.':'Preview one event at a time in the browser demo.';
+  // The engine's incident settings come from its operations schema (above); these demo sliders are not used there.
+  $('frequency-card').hidden=!!engine;
   $('generator-context').hidden=!imported;
   const config=town.config||town.configuration;
   $('engine-config-preview').textContent=JSON.stringify(config||{mode,seed:town.seed,homes:town.count,source:town.source?.name||'Frozen Whitby street extract'},null,2);

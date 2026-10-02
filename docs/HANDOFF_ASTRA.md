@@ -133,7 +133,9 @@ The routes are a table in `focus-ui.js` (`PAGES`). Opening a pack keeps a deep-l
 - "Watch the truck roll" on a field-order case moves the map to that day and follows the van.
 - A field visit sent on the map is reported to meter-to-cash as a `field_read` action, which settles that premise's open read cases.
 - Outages flow the other way. `EngineM2C.setOutages(day, timeline.interruptions)` keeps each operations day's interruptions; requests send them as `outages`.
-  - `syncOutages()` in `app.js` runs after each timeline refresh with commands; "Reset engine run" clears the day.
+  - `syncOutages()` in `app.js` runs after each timeline refresh (`EngineM2C.recordDay`). Every day's interruptions
+    count, background incidents included. A day you issued commands on keeps its outages after a reload; "Reset
+    engine run" drops the ones your commands caused.
   - The worklists show an "Outages from the map" KPI (customer-minutes, SAIDI, last gasps).
   - The Billing tab lists the premise's "Service interruptions".
   - A last-gasp `COMM_FAIL` case shows `AMI_LAST_GASP` at the head of its trace.
@@ -178,7 +180,14 @@ phone quality profiles and WebGL recovery.
   - A case whose field order the map has scheduled offers "Watch the truck roll". It opens the map on that day and
     follows the van from the depot.
 - Configuration has your tabs: Town & meters, Process & costs (the meter-to-cash schema), Scenario (operations
-  settings from `/api/sim/settings/schema`) and Engine & data.
+  settings from `/api/sim/settings/schema?town=`) and Engine & data.
+  - Town & meters (engine towns, `town-config.js`): every town-scoped group of `/api/config/schema` in `x-order`,
+    starting from the town's own config. Nested values render as sub-rows, lists as checked JSON, and `x-status:
+    "not-modelled"` / `x-deprecated` fields stay disabled with the reason. Generate posts `{config}` to `POST
+    /api/towns` on a local engine, polls and loads `?town=<townId>`. On the hosted engine it is disabled; Download
+    config gives a file for `utilsim gen --config`.
+  - Process & costs has a run seed (`EngineM2C.seed`): sent as `seed` in every M2C body and the operations `m2c`
+    context. Engine & data shows the run identity (town id, master seed, run seed).
 - Engine-backed record screens (section 10 has the engine side):
   - **Display Billing** shows Bil. Order, Bil.Time and Documents tabs. From the billing record you can reach the
     contract (with the account ledger), the installation, a device, a billing document with its line items, a print
