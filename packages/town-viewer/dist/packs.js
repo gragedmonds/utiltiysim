@@ -14,4 +14,8 @@ export async function fetchGzipJSON(url){
  return JSON.parse(await new Response(stream).text());
 }
 export function packLabel(t){return t.place?.name||(t.source?.label||'').replace(/ street snapshot$/i,'')||t.preset.replaceAll('_',' ');}
+// ?town=<ref>: a prebuilt pack (by preset or its town id), else a town the engine generated (its town id; the
+// snapshot then comes from the engine, which is also its live connection).
+export function townRoute(ref,packs){if(!ref)return null;const t=packs?.towns?.find(t=>t.preset===ref||t.townId===ref);if(t)return {pack:t};return /^town-[0-9a-f]{8,64}$/i.test(ref)?{townId:ref}:null;}
+export function engineSnapshotUrl(api,tid){return `${api}/towns/${encodeURIComponent(tid)}/snapshot.json?detail=viewer&profile=viewer`;}
 export function packCaption(t){return `${Number(t.homes).toLocaleString('en-CA')} homes · ${t.source?.type==='osm'?'real streets':'synthetic streets'}`;}

@@ -80,3 +80,30 @@ test('the VEE scorecard renders recall per anomaly and precision per exception',
  assert.match(html,/Stuck meter<\/td><td>Meter fault/);assert.match(html,/width:71%/);assert.match(html,/Erratic &lt;pattern&gt;/);
  assert.match(scorecardMarkup({asOf:'x',reads:0,flagged:0,precision:null,recall:null,anomalies:[],exceptions:[]}),/No VEE exceptions yet/);
 });
+
+test('the run seed rides every request, the cache key and the operations context, and is kept with the run',async()=>{
+ const store=memory(),log=[],m=new EngineM2C({townRef:'ayr',townId:'town-1',storage:store,fetchImpl:fakeEngine(log)});
+ await m.summary();assert.equal('seed' in log[0].body,false);assert.equal('seed' in m.context(),false);
+ assert.equal(m.setSeed('  RUN-7  '),true);assert.equal(m.seed,'RUN-7');assert.equal(m.setSeed('RUN-7'),false);
+ await m.summary();assert.equal(log.length,2,'a new seed is a new run, not a cached reply');assert.equal(log[1].body.seed,'RUN-7');
+ await m.summary();assert.equal(log.length,2);await m.queue({queue:'FIELD'});assert.equal(log[2].body.seed,'RUN-7');
+ assert.equal(m.context().seed,'RUN-7');assert.equal(m.export().seed,'RUN-7');
+ assert.equal(new EngineM2C({townRef:'ayr',townId:'town-1',storage:store}).seed,'RUN-7');
+ m.setSeed('x'.repeat(80));assert.equal(m.seed.length,64);
+ m.setSeed('');assert.equal(m.seed,null);assert.equal('seed' in m.body(),false);const n=log.length;await m.summary();assert.equal(log.length,n,'back on the town seed: the first run is still cached');
+ await m.schema().catch(()=>{});assert.equal(log.at(-1).url,'/api/m2c/settings?town=ayr');
+});
+
+test('background interruptions are recorded too; a worked day keeps its outages until worked again or reset',()=>{
+ const store=memory(),m=new EngineM2C({townRef:'ayr',townId:'town-1',storage:store});
+ const storm={utility:'electric',start:100,end:900,premiseIds:['P1']},cut={utility:'gas',start:2000,end:null,premiseIds:['P2']};
+ assert.equal(m.recordDay('2026-05-01',[storm]),true,'no commands, but the day had an outage');assert.equal(m.outageSources['2026-05-01'],'background');
+ assert.equal(m.recordDay('2026-05-02',[storm,cut],{commands:true}),true);
+ // Replayed without its commands (after a reload) the day keeps what you caused.
+ assert.equal(m.recordDay('2026-05-02',[storm]),false);assert.equal(m.outages['2026-05-02'].length,2);
+ assert.equal(new EngineM2C({townRef:'ayr',townId:'town-1',storage:store}).outageSources['2026-05-02'],'commands');
+ // Reset keeps the day's background outage and drops yours.
+ assert.equal(m.recordDay('2026-05-02',[storm],{reset:true}),true);assert.deepEqual(m.outages['2026-05-02'].map(o=>o.utility),['electric']);assert.equal(m.outageSources['2026-05-02'],'background');
+ assert.equal(m.recordDay('2026-05-02',[],{reset:true}),true);assert.equal(m.outages['2026-05-02'],undefined);assert.equal(m.outageSources['2026-05-02'],undefined);
+ assert.equal(m.recordDay('2026-05-03',[]),false);assert.equal(m.outageList().length,1);
+});
