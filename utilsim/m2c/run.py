@@ -1175,7 +1175,8 @@ class M2CRun:
             return f"{case.id} was already completed by {self.actor_label(case.by)} at {self.clock(case.resolved)}"
         return None
 
-    def decision_refusal(self, case: Case, typ: str, t: float, hold: list | None) -> str | None:
+    def decision_refusal(self, case: Case, typ: str, t: float, hold: list | None,
+                         order_id: str | None = None) -> str | None:
         """Why the decision ``typ`` does not apply to the open ``case`` at ``t`` (``hold``: the account's invoice
         hold in force), or None. Case views offer only the decisions this lets through."""
         if case.work is not None:
@@ -1199,7 +1200,7 @@ class M2CRun:
                         f"{self.floor_text(r, m, j, t)}), so accepting it would bill the difference as a credit: "
                         "estimate it, correct the value (override) or send a field order")
         if typ == "check_read":
-            hit = self.check_value(case, t)
+            hit = self.check_value(case, t, order_id)
             if hit is None:
                 return (f"no completed field order on {case.id} took a read of its register (a read taken, or a read "
                         "confirmed on a read that came in)")
@@ -1209,12 +1210,12 @@ class M2CRun:
                         ": register the device replacement first (Replace device on the installation), or estimate it")
         return None
 
-    def check_value(self, case: Case, t: float) -> tuple[float, ords.Order] | None:
+    def check_value(self, case: Case, t: float, order_id: str | None = None) -> tuple[float, ords.Order] | None:
         """The check read a completed field order supplies for ``case``'s read as of ``t``: a read taken on its
         register (brought back to the read date by the normal use since), or a read confirmed (the read as
         observed). The newest completed order wins."""
         r, m = case.r, case.month
-        for oid in reversed(case.orders):
+        for oid in reversed(case.orders if order_id is None else [x for x in case.orders if x == order_id]):
             o = self.orders[oid]
             # Yours counts at once; the crew's once its day is over (until then your outcome may replace it).
             final = o.outcome is not None and o.outcome["at"] <= t and (o.outcome["by"] == "you"
@@ -1270,7 +1271,7 @@ class M2CRun:
         why = self.not_open(case, a.get("caseId"), t)
         if why is None:
             hold = self.hold_in_force(self.account_of(case), t) if case.doc >= 0 else None
-            why = self.decision_refusal(case, a["type"], t, hold)
+            why = self.decision_refusal(case, a["type"], t, hold, a.get("orderId"))
         cover: list[Case] = []
         for cid in a.get("coverCaseIds", []) if why is None else []:  # field_order: one visit for the premise
             c = self.case_index.get(cid)
@@ -1284,7 +1285,7 @@ class M2CRun:
             self._refuse(k, a, case, t, why)
             return
         typ = a["type"]
-        value = self.check_value(case, t)[0] if typ == "check_read" else a.get("value")
+        value = self.check_value(case, t, a.get("orderId"))[0] if typ == "check_read" else a.get("value")
         case.assignee = "you"
         if typ in ("escalate", "field_order"):
             case.owner = None  # handed to supervisors or the field crews: they work it even if you owned it
@@ -1755,8 +1756,11 @@ class M2CRun:
     def _estimate(self, r: int, m: int) -> float:
         """The last released register (on the device in place at read ``m``) plus the expected use since."""
         prev, prev_n, prev_t = self.prev_val[r], self.prev_normal[r], self.prev_t[r]
+        floor = -INF
         if r in self.installs_of:  # a device change: measure from the register in place at this read
             prev, prev_n, prev_t = self.prev_for(r, m)
+            x = self.change_between(r, prev_t, float(self.read_t[r, m]))
+            floor = x.initial[r] if x is not None else floor  # never below the new register's initial read
         use = max(0.0, (self.normal_at[r, m] - prev_n) * float(self._hist(np.array([r]), m)[0]))
         if self.cfg.vee.estimation == "recent_average":
             k = [j for j in range(m - 1, 0, -1) if self.status[r, j] == 1][:3]
@@ -1764,7 +1768,7 @@ class M2CRun:
                 days = sum(self.read_t[r, j] - self.prev_t_at_read[r, j] for j in k)
                 rate = sum(float(np.nan_to_num(self.cons[r, j])) for j in k) / max(days, 1e-6)
                 use = max(0.0, rate * (self.read_t[r, m] - prev_t))
-        return float(regs.observe(np.array([prev + use]), np.array([self.town.digits[r]]))[0])
+        return float(regs.observe(np.array([max(prev + use, floor)]), np.array([self.town.digits[r]]))[0])
 
     def _release(self, r: int, m: int, value: float, kind: int, t: float, method: int) -> None:
         self.status[r, m] = kind

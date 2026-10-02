@@ -234,6 +234,26 @@ def test_installing_from_the_real_swap_date_makes_the_backwards_read_billable(to
     assert not views.register_check(run, r, m, 400.0)["registerWentBackwards"]
 
 
+def test_replacing_a_working_meter_swaps_it_and_bills_both_registers(town, slow, missing):
+    r, m = missing.r, missing.month
+    mi = int(town.meter_of[r])
+    d = add_bdays(int(missing.created), 1)
+    acts = [{"day": iso(d), "type": "device_replace", "meterId": town.meter_ids[mi], "deviceId": "SN-NEW-0",
+             "installDate": iso(d), "initialRead": 0, "caseId": missing.id},
+            {"day": iso(d), "type": "estimate", "caseId": missing.id}]
+    run = M2CRun(town, SLOW, acts)
+    x = next(x for x in run.installs if x.device == "SN-NEW-0")
+    assert x.physical and x.previous == town.meter_ids[mi] and x.period[r] == m + 1
+    assert run.display(r, d + 10 / 24) < 50  # the new dial starts near its initial read
+    j = next(j for j in range(m + 1, 13) if not np.isnan(run.obs[r, j]))
+    rec = views.read_record(run, r, j, 400.0)
+    assert rec["deviceId"] == "SN-NEW-0" and not rec["registerRegression"]
+    if j == m + 1:  # the period with the change bills the old register's last stretch and the new register's use
+        assert rec["deviceChange"]["initialRead"] == 0 and rec["previousRegisterValue"] == 0
+        assert rec["consumption"] == pytest.approx(run.truth[r, j] - run.truth[r, j - 1], rel=0.25, abs=2.0)
+    assert not [c for c in run.cases if c.r == r and c.month > m and c.type == "REGISTER_REGRESSION"]
+
+
 def test_device_replacements_are_refused_when_they_would_rewrite_billed_reads(town, swapped):
     r, m = swapped.r, swapped.month
     mi = int(town.meter_of[r])
