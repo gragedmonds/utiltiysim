@@ -36,3 +36,11 @@ Road data: © OpenStreetMap contributors, ODbL. Utilities, buildings and all fix
 ## Performance and house detail
 
 Open the map's FPS panel to run a 30-second camera benchmark and download its report. Automatic detail adds facades only to the nearest visible houses (cap 192); Simple disables those details for comparison. The panel measures the running browser, not a simulated FPS value. Keep viewport, seed, town size and layers fixed between runs. Browser results have not been collected in the authoring environment.
+
+## Focus workspace and low-poly scenery (0.4)
+
+The map fills the screen. Open utility layers using the left Layers icon, customer search/town files using the top-right icons, and town/seed/scenario controls in the separate Settings page. Engine snapshots remain read-only; incident frequency controls await the engine config API. Settings suspends WebGL rendering and pauses playback.
+
+Four roof models and bounded facade detail are complemented by sparse low-poly trees, traffic lights, stop signs, apartments, a school and a church. Civic demo landmarks are visual placeholders, explicitly separated from authoritative customer/meter records. The Layers drawer lets you locate landmarks or hide scenery. `dist/lowpoly.js` contains shared geometry, `town-dressing.js` handles deterministic placement/instancing, and `focus-ui.js` owns drawers/settings navigation.
+
+At seed WHITBY-042 and 10,000 homes, properties + scenery + maximum nearby detail total 586,738 triangles; roads, terrain and networks are additional. This is a geometry count, not measured browser FPS. See [the corridor handoff](../../docs/CORRIDOR_ROUTING_REQUIREMENTS.md) for the engine's continuous-backbone routing requirements. Road width now reflects hierarchy; actual utility routing has not been rewritten in the viewer.

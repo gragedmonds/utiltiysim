@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import * as THREE from '../dist/vendor/three.module.js';
 import {TownScene} from '../dist/scene.js';
 import {bindPropertyPicking} from '../dist/picking.js';
-const home=(id,x,solar=false)=>({id,x,z:0,width:10,depth:12,height:6,angle:0,side:1,roofTone:.5,solar});
+const home=(id,x,solar=false)=>({id,x,z:0,width:10,depth:12,height:6,angle:0,side:1,roofTone:.5,roof:'gable',solar});
 function scene(){const town={premises:[home('P1',0),home('P2',40,true)]};const s=Object.create(TownScene.prototype);Object.assign(s,{town,root:new THREE.Group(),heightAt:()=>0,ray:new THREE.Raycaster(),camera:new THREE.PerspectiveCamera(36,1,.5,1000)});s.drawHouses(town);return s;}
 function aim(s,x,z=0){s.camera.position.set(x,100,z);s.camera.lookAt(x,0,z);s.root.updateMatrixWorld(true);s.camera.updateMatrixWorld(true);s.ray.setFromCamera(new THREE.Vector2(0,0),s.camera);}
 test('actual instanced roof, wall, plot and solar hit areas select the correct customer',()=>{const s=scene();aim(s,5.3);assert.equal(s.ray.intersectObject(s.houses).length,0,'eave is outside the wall hit area');assert.ok(s.ray.intersectObject(s.roofs).length,'roof faces must point outward');assert.equal(s.houseAt(new THREE.Vector2(0,0)).id,'P1');aim(s,8);assert.equal(s.houseAt(new THREE.Vector2(0,0)).id,'P1');aim(s,40);assert.equal(s.houseAt(new THREE.Vector2(0,0)).id,'P2','solar instance 0 belongs to premise 1');aim(s,200);assert.equal(s.houseAt(new THREE.Vector2(0,0)),null);const stats=s.geometryStats();assert.equal(stats.shellTriangles,40);assert.equal(stats.propertyTriangles,100);assert.equal(stats.instancedBatches,5);});
