@@ -35,7 +35,7 @@ export function installFocusUI({getContext,onSettings,onScenario,onWorklists=()=
   document.querySelectorAll('[data-scenario-preset]').forEach(el=>el.disabled=imported);
   $('preset-availability').textContent=engine?'Presets preview the browser demo. On the engine, break a pole or main from the map (right-click) and dispatch crews.':imported?'This snapshot is read-only. Scenario commands need the engine connection.':'Preview one event at a time in the browser demo.';
   // The engine's incident settings come from its operations schema (above); these demo sliders are not used there.
-  $('frequency-card').hidden=!!engine;
+  $('frequency-card').hidden=!!engine;const pc=document.getElementById('presets-card');if(pc)pc.hidden=!!engine;
   $('generator-context').hidden=!imported;
   const config=town.config||town.configuration;
   $('engine-config-preview').textContent=JSON.stringify(config||{mode,seed:town.seed,homes:town.count,source:town.source?.name||'Frozen Whitby street extract'},null,2);

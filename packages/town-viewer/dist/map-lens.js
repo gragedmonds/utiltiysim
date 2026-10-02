@@ -3,7 +3,7 @@
 // with a legend that counts each class, and redraws on every new frame, time scrub, layer and lens change (the scene
 // reports frames and layers through onViewChange). Lenses that need the engine are disabled without one. Overloaded
 // lines and the switching of a repair in progress (switching-marks.js) add their rows to the same legend.
-import {LENSES,buildLens,legendRows,lensIndex,lensThresholds,onLensThresholds} from './lens-marks.js';
+import {LENSES,buildLens,legendRows,lensIndex,lensThresholds,onLensThresholds,setLensThresholds} from './lens-marks.js';
 import {switchingIntervals,switchingAt,switchingRows} from './switching-marks.js';
 const KEY='utility-town-lens';
 const NEEDS={voltage:'Needs the live engine: service voltage and loading come from its power flow.',pressure:'Needs the live engine: service pressure comes from its hydraulics.',cases:'Needs the live engine: premise status comes from its meter-to-cash run.'};
@@ -28,7 +28,9 @@ export function installMapLens({scene,getContext,panel=globalThis.document?.getE
   if(lens==='pressure')return built.available?`${built.utility==='gas'?'Gas':'Water'} service pressure, kPa gauge${frame}`:'Waiting for the engine\'s next frame…';
   if(lens==='cases'){const key=m2cRunKey(c.m2c);if(failed===key)return 'Meter-to-cash: '+failure;if(!built.available)return 'Loading the meter-to-cash run…';return `Meter-to-cash status · as of ${summary?.asOf||c.m2c?.asOf||'the run\'s last day'}${pending?' · updating…':''}`;}
   return '';}
- function refresh(force=false){queued=false;const c=getContext?.();if(!c?.town)return;const lens=available(chosen,c)?chosen:'network';if(lens==='cases')ensureSummary(c);
+ // The town's service-voltage limits come with every engine frame (electric.voltage_min_pu/max_pu × 120 V).
+ function syncVoltageLimits(frame){const v=frame?.premises?.voltageLimits,t=lensThresholds();if(!v||!Number.isFinite(v.min)||!Number.isFinite(v.max)||(t.vLow===v.min&&t.vHigh===v.max))return;setLensThresholds({...t,vLow:v.min,vHigh:v.max,vWarnLow:v.min+3,vWarnHigh:v.max-2});}
+ function refresh(force=false){queued=false;const c=getContext?.();if(!c?.town)return;syncVoltageLimits(c.frame);const lens=available(chosen,c)?chosen:'network';if(lens==='cases')ensureSummary(c);
   const sw=switching(c),t=lensThresholds(),key=[c.town.id,lens,c.utility,summaryKey,pending,failed,sw?.key||''].join('|');if(!force&&last&&last.key===key&&last.flow===c.flow&&last.frame===c.frame)return;last={key,flow:c.flow,frame:c.frame};
   const own=summaryKey&&summaryKey.startsWith(c.town.id+'|')?summary:null;built=buildLens(lens,{flow:c.flow,utility:c.utility,summary:lens==='cases'?own:null,index:lensIndex(c.town),t});scene.setLens(built);
   for(const b of buttons){const id=b.dataset.lens,ok=available(id,c);b.disabled=!ok;b.title=!ok?NEEDS[id]:id===lens&&id!=='network'?'Click again to hide or show the legend':'';b.setAttribute('aria-pressed',String(id===lens));}
