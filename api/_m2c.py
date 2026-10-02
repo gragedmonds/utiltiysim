@@ -18,9 +18,20 @@ from pydantic import BaseModel, Field, ValidationError
 from api._ops import J, load_snapshot, town_key
 from utilsim.config.model import SimConfig
 from utilsim.m2c import catalog as cat
-from utilsim.m2c import views
+from utilsim.m2c import lookups, views
+from utilsim.m2c import orders as ords
 from utilsim.m2c.base import M2CTown, cached_m2c_town, m2c_town
-from utilsim.m2c.run import M2C_GROUPS, YEAR_DAYS, M2CRun, parse_day, settings_schema
+from utilsim.m2c.run import (
+    ACTION_TYPES,
+    CASE_WORK,
+    DECISIONS,
+    M2C_GROUPS,
+    ORDER_ACTIONS,
+    YEAR_DAYS,
+    M2CRun,
+    parse_day,
+    settings_schema,
+)
 
 router = APIRouter()
 _RUNS: OrderedDict[bytes, M2CRun] = OrderedDict()
@@ -30,11 +41,29 @@ RUN_CACHE = 4
 class Action(BaseModel):
     id: str | None = None
     day: str = Field(..., description="Local date of the decision (YYYY-MM-DD), in 2026, never before the previous action.")
-    type: Literal["accept", "override", "estimate", "field_order", "escalate", "field_read"]
-    caseId: str | None = Field(None, description="The case acted on (all types except field_read).")
+    type: Literal["accept", "override", "estimate", "field_order", "escalate", "field_read", "order_save",
+                  "order_release", "order_dispatch", "order_complete", "note", "assign", "invoice_hold",
+                  "invoice_unhold"]
+    caseId: str | None = Field(None, description="The case acted on (decisions, note, assign; invoice_hold and "
+                                                 "invoice_unhold take a caseId or an accountId).")
     premiseId: str | None = Field(None, description="field_read: the premise a field visit read on the map.")
     at: float | None = Field(None, ge=0, lt=86400, description="field_read: seconds since local midnight.")
     value: float | None = Field(None, ge=0, description="Register value for an override.")
+    note: str | None = Field(None, max_length=2000, description="A reason (decisions, invoice_hold, invoice_unhold; "
+                                                                "required for holds) or the field outcome "
+                                                                "(order_complete, required).")
+    text: str | None = Field(None, max_length=2000, description="note: the note text (required).")
+    assignee: str | None = Field(None, max_length=200, description="assign: who works the case (required).")
+    accountId: str | None = Field(None, description="invoice_hold / invoice_unhold: the account (or give a caseId).")
+    orderId: str | None = Field(None, description="Order actions: the field service order (order_save without it "
+                                                  "creates a draft from a source).")
+    sourceCaseId: str | None = Field(None, description="order_save (new order): the case the order is raised from.")
+    readId: str | None = Field(None, description="order_save (new order): the read the order is raised from.")
+    fields: dict[str, Any] | None = Field(None, description="order_save: order form fields to set (merged into the "
+                                                            "draft); see GET /api/m2c/vocabulary.")
+    components: list[dict[str, Any]] | None = Field(
+        None, max_length=ords.MAX_COMPONENTS, description="order_save: the component rows {description, quantity, "
+                                                          "unit} (replaces the draft's list).")
 
 
 class Outage(BaseModel):
@@ -69,7 +98,10 @@ class CaseRequest(RunRequest):
 
 
 class QueueRequest(RunRequest):
-    queue: Literal["VEE_REVIEW", "ESTIMATION", "SUPERVISOR", "FIELD"] | None = None
+    queue: Literal["VEE_REVIEW", "ESTIMATION", "SUPERVISOR", "FIELD", "BILLING"] | None = None
+    category: str | None = Field(None, max_length=60, description="A clarification category (see GET "
+                                                                  "/api/m2c/vocabulary), or 'My Assigned Cases'.")
+    assignee: str | None = Field(None, max_length=200, description="Only the cases this person works now.")
     status: Literal["open", "resolved", "all"] = "open"
     sort: Literal["age", "impact", "confidence", "created"] = "age"
     page: int = Field(1, ge=1)
@@ -88,26 +120,52 @@ class DecisionRequest(RunRequest):
     readId: str
 
 
+class ReadDocumentRequest(RunRequest):
+    readId: str = Field(..., description="Meter-reading document id: READ-{townId}-{registerId}-{YYYY-MM-DD}.")
+    truth: bool = False
+
+
+class InstallationRequest(RunRequest):
+    installationId: str
+    truth: bool = False
+
+
+class OrderRequest(RunRequest):
+    orderId: str | None = None
+    sourceCaseId: str | None = Field(None, description="The order raised from this case (or a Field Work case's "
+                                                        "own order).")
+    readId: str | None = Field(None, description="The order raised on this read (from the read or its case).")
+
+
+class EntriesRequest(RunRequest):
+    kind: Literal["installation", "read", "account", "premise"]
+    query: str = Field("", max_length=80, description="Case-insensitive text in the id or its short text.")
+    page: int = Field(1, ge=1)
+    pageSize: int = Field(20, ge=1, le=lookups.PAGE_MAX)
+
+
 def _town(ref: str) -> M2CTown:
     hit = cached_m2c_town(town_key(ref))
     return hit if hit is not None else m2c_town(load_snapshot(ref))
 
 
-def run_for(req: RunRequest) -> M2CRun:
+def run_for(req: RunRequest, *, strict: bool = True) -> M2CRun:
+    """The run for a request (cached). A refused action is HTTP 422: its ``detail`` is a message, or for an order
+    form ``{message, actionIndex, actionId, orderId, fieldErrors: {field: message}}``."""
     town = _town(req.town)
     actions = [a.model_dump(exclude_none=True) for a in req.actions]
     outages = [o.model_dump(exclude_none=True) for o in req.outages]
-    key = orjson.dumps([town.id, req.settings, actions, outages], option=orjson.OPT_SORT_KEYS)
+    key = orjson.dumps([town.id, req.settings, actions, outages, strict], option=orjson.OPT_SORT_KEYS)
     hit = _RUNS.get(key)
     if hit is not None:
         _RUNS.move_to_end(key)
         return hit
     try:
-        run = M2CRun(town, req.settings, actions, outages)
+        run = M2CRun(town, req.settings, actions, outages, strict=strict)
     except ValidationError as exc:
         raise HTTPException(422, orjson.loads(exc.json(include_url=False))) from exc
     except ValueError as exc:
-        raise HTTPException(422, str(exc)) from exc
+        raise HTTPException(422, getattr(exc, "detail", None) or str(exc)) from exc
     _RUNS[key] = run
     while len(_RUNS) > RUN_CACHE:
         _RUNS.popitem(last=False)
@@ -130,7 +188,20 @@ def get_settings():
     return J({"schema": settings_schema(), "defaults": {g: defaults[g] for g in M2C_GROUPS},
               "queues": cat.QUEUES, "exceptions": {k: {"label": cat.EVENTS[k][0], "icon": cat.EVENTS[k][1]}
                                                     for k in cat.EXCEPTIONS},
-              "actions": ["accept", "override", "estimate", "field_order", "escalate"]})
+              "actions": list(DECISIONS), "actionTypes": list(ACTION_TYPES), "categories": cat.CATEGORIES})
+
+
+@router.get("/api/m2c/vocabulary")
+def get_vocabulary(town: str | None = None):
+    """``m2c-vocabulary/1.0``: what the Studio's forms and lists may send. The field service order form (fields with
+    label, tab, required flag, kind, bounds and choices; component units; stages and SAP system status), the action
+    types, queues and clarification categories. ``?town=`` adds the town's planning plant to the plant choices."""
+    plants = [ords.plant(_town(town).name)] if town else []
+    return J({"schemaVersion": "m2c-vocabulary/1.0", "town": town, "order": ords.vocabulary(plants),
+              "actions": {"decisions": list(DECISIONS), "field": ["field_read"], "orders": list(ORDER_ACTIONS),
+                          "caseWork": list(CASE_WORK)},
+              "queues": cat.QUEUES, "categories": cat.CATEGORIES,
+              "emptyCategories": list(cat.NO_ENGINE_CATEGORIES), "myCases": cat.MY_CASES})
 
 
 @router.post("/api/m2c/summary")
@@ -157,7 +228,39 @@ def post_case(req: CaseRequest):
 def post_queue(req: QueueRequest):
     """A worklist page: cases in a queue (or all queues) as of a date, filtered, sorted and paged."""
     return _view(views.worklist, run_for(req), req.queue, as_of=req.asOf, status=req.status, sort=req.sort,
-                 page=req.page, page_size=req.pageSize, type=req.type, commodity=req.commodity, search=req.search)
+                 page=req.page, page_size=req.pageSize, type=req.type, commodity=req.commodity, search=req.search,
+                 category=req.category, assignee=req.assignee)
+
+
+@router.post("/api/m2c/order")
+def post_order(req: OrderRequest):
+    """``m2c-order/1.0``: a field service order (``field-order/1.0``) by ``orderId``, or the order of a source
+    (``sourceCaseId`` or ``readId``). A source without one returns ``order: null`` and a ``proposal`` for the form, so
+    reopening never creates a second order."""
+    return _view(views.order_view, run_for(req), order_id=req.orderId, case_id=req.sourceCaseId, read_id=req.readId,
+                 as_of=req.asOf)
+
+
+@router.post("/api/m2c/installation")
+def post_installation(req: InstallationRequest):
+    """``m2c-installation/1.0`` (Display Billing): the installation (premise, commodity, rate category, meters and
+    registers), its contracts with account and business partner, billing documents with lines, invoices, the
+    accounts' ledgers, its read results and its cases, as of ``asOf``."""
+    return _view(lookups.installation, run_for(req), req.installationId, as_of=req.asOf, truth=req.truth)
+
+
+@router.post("/api/m2c/read-document")
+def post_read_document(req: ReadDocumentRequest):
+    """``m2c-read-document/1.0`` (Display Meter Reading Results): the read (``meter-read/1.1``), its VEE decision,
+    the installation, contract, account and partner it bills to, its case and order, and the register's reads."""
+    return _view(lookups.read_document, run_for(req), req.readId, as_of=req.asOf, truth=req.truth)
+
+
+@router.post("/api/m2c/possible-entries")
+def post_possible_entries(req: EntriesRequest):
+    """``m2c-possible-entries/1.0`` (F4): installation, read, account or premise ids matching ``query``, paged."""
+    return _view(lookups.possible_entries, run_for(req), req.kind, req.query, as_of=req.asOf, page=req.page,
+                 page_size=req.pageSize)
 
 
 @router.post("/api/process/graph")
@@ -213,7 +316,7 @@ def m2c_day(town: str, day: str, m2c: dict) -> tuple[list[dict], dict[str, dict]
         raise HTTPException(422, orjson.loads(exc.json(include_url=False))) from exc
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
-    run = run_for(req)
+    run = run_for(req, strict=False)  # a stored action list always replays here; refusals belong to /api/m2c/*
     return _field_orders(run, d), read_outcomes(run, d), views.day_cycle(run, d)
 
 
@@ -249,15 +352,25 @@ def field_orders_for(town: str, day: str, m2c: dict) -> list[dict]:
 
 
 def _field_orders(run: M2CRun, d: int) -> list[dict]:
+    """Truck rolls on day ``d``: the simulated field workforce's (a ``field_order`` decision, or a case the analysts
+    sent to the field) and the crews for your dispatched field service orders (activity, duration and label from
+    the order form; ``orderId`` and the Field Work ``caseId``)."""
     tw, out = run.town, []
     for case in run.cases:
         for k, (t, kind, _, _) in enumerate(case.events):
             if kind != "TRUCK_ROLL" or int(t) != d:
                 continue
-            nxt = next((e[1] for e in case.events[k + 1:] if e[1] in ("METER_EXCHANGE", "SPECIAL_READ")), "SPECIAL_READ")
             p = int(tw.prem[case.r])
-            out.append({"caseId": case.id, "premiseId": tw.premise_ids[p], "at": round((t - d) * 86400.0, 1),
-                        "activity": "meter_exchange" if nxt == "METER_EXCHANGE" else "special_read",
+            job = {"caseId": case.id, "premiseId": tw.premise_ids[p], "at": round((t - d) * 86400.0, 1)}
+            if case.work == "order":
+                o = run.orders[case.ref]
+                f = o.fields
+                out.append({**job, "orderId": o.id, "sourceCaseId": case.source,
+                            "activity": ords.ACTIVITY.get(f.get("activityType"), "special_read"),
+                            "minutes": o.minutes, "label": f"{f.get('shortText') or o.id} · {tw.address[p]}"})
+                continue
+            nxt = next((e[1] for e in case.events[k + 1:] if e[1] in ("METER_EXCHANGE", "SPECIAL_READ")), "SPECIAL_READ")
+            out.append({**job, "activity": "meter_exchange" if nxt == "METER_EXCHANGE" else "special_read",
                         "minutes": 45 if nxt == "METER_EXCHANGE" else 20,
                         "label": f"{cat.EVENTS[case.type][0]} · {tw.address[p]}"})
     return out

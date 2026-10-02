@@ -3,6 +3,31 @@
     "schemas": {
       "Action": {
         "properties": {
+          "accountId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "invoice_hold / invoice_unhold: the account (or give a caseId).",
+            "title": "Accountid"
+          },
+          "assignee": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "assign: who works the case (required).",
+            "title": "Assignee"
+          },
           "at": {
             "anyOf": [
               {
@@ -26,13 +51,43 @@
                 "type": "null"
               }
             ],
-            "description": "The case acted on (all types except field_read).",
+            "description": "The case acted on (decisions, note, assign; invoice_hold and invoice_unhold take a caseId or an accountId).",
             "title": "Caseid"
+          },
+          "components": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "maxItems": 50,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "order_save: the component rows {description, quantity, unit} (replaces the draft's list).",
+            "title": "Components"
           },
           "day": {
             "description": "Local date of the decision (YYYY-MM-DD), in 2026, never before the previous action.",
             "title": "Day",
             "type": "string"
+          },
+          "fields": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "order_save: order form fields to set (merged into the draft); see GET /api/m2c/vocabulary.",
+            "title": "Fields"
           },
           "id": {
             "anyOf": [
@@ -44,6 +99,31 @@
               }
             ],
             "title": "Id"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A reason (decisions, invoice_hold, invoice_unhold; required for holds) or the field outcome (order_complete, required).",
+            "title": "Note"
+          },
+          "orderId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Order actions: the field service order (order_save without it creates a draft from a source).",
+            "title": "Orderid"
           },
           "premiseId": {
             "anyOf": [
@@ -57,6 +137,43 @@
             "description": "field_read: the premise a field visit read on the map.",
             "title": "Premiseid"
           },
+          "readId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "order_save (new order): the read the order is raised from.",
+            "title": "Readid"
+          },
+          "sourceCaseId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "order_save (new order): the case the order is raised from.",
+            "title": "Sourcecaseid"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "note: the note text (required).",
+            "title": "Text"
+          },
           "type": {
             "enum": [
               "accept",
@@ -64,7 +181,15 @@
               "estimate",
               "field_order",
               "escalate",
-              "field_read"
+              "field_read",
+              "order_save",
+              "order_release",
+              "order_dispatch",
+              "order_complete",
+              "note",
+              "assign",
+              "invoice_hold",
+              "invoice_unhold"
             ],
             "title": "Type",
             "type": "string"
@@ -389,6 +514,96 @@
         "title": "DispositionRequest",
         "type": "object"
       },
+      "EntriesRequest": {
+        "properties": {
+          "actions": {
+            "items": {
+              "$ref": "#/components/schemas/Action"
+            },
+            "maxItems": 2000,
+            "title": "Actions",
+            "type": "array"
+          },
+          "asOf": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "View date (YYYY-MM-DD); default: the town's scenario date.",
+            "title": "Asof"
+          },
+          "kind": {
+            "enum": [
+              "installation",
+              "read",
+              "account",
+              "premise"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "outages": {
+            "description": "Service interruptions from the operations simulator (a timeline's ``interruptions``): consumption stops, AMI meters without power miss their reads, and VEE sees the outage.",
+            "items": {
+              "$ref": "#/components/schemas/Outage"
+            },
+            "maxItems": 500,
+            "title": "Outages",
+            "type": "array"
+          },
+          "page": {
+            "default": 1,
+            "minimum": 1.0,
+            "title": "Page",
+            "type": "integer"
+          },
+          "pageSize": {
+            "default": 20,
+            "maximum": 50.0,
+            "minimum": 1.0,
+            "title": "Pagesize",
+            "type": "integer"
+          },
+          "query": {
+            "default": "",
+            "description": "Case-insensitive text in the id or its short text.",
+            "maxLength": 80,
+            "title": "Query",
+            "type": "string"
+          },
+          "settings": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing); see GET /api/m2c/settings.",
+            "title": "Settings"
+          },
+          "town": {
+            "description": "Pack preset (e.g. 'ayr') or town id.",
+            "title": "Town",
+            "type": "string"
+          }
+        },
+        "required": [
+          "town",
+          "kind"
+        ],
+        "title": "EntriesRequest",
+        "type": "object"
+      },
       "FrameRequest": {
         "properties": {
           "at": {
@@ -474,6 +689,75 @@
         "title": "HTTPValidationError",
         "type": "object"
       },
+      "InstallationRequest": {
+        "properties": {
+          "actions": {
+            "items": {
+              "$ref": "#/components/schemas/Action"
+            },
+            "maxItems": 2000,
+            "title": "Actions",
+            "type": "array"
+          },
+          "asOf": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "View date (YYYY-MM-DD); default: the town's scenario date.",
+            "title": "Asof"
+          },
+          "installationId": {
+            "title": "Installationid",
+            "type": "string"
+          },
+          "outages": {
+            "description": "Service interruptions from the operations simulator (a timeline's ``interruptions``): consumption stops, AMI meters without power miss their reads, and VEE sees the outage.",
+            "items": {
+              "$ref": "#/components/schemas/Outage"
+            },
+            "maxItems": 500,
+            "title": "Outages",
+            "type": "array"
+          },
+          "settings": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing); see GET /api/m2c/settings.",
+            "title": "Settings"
+          },
+          "town": {
+            "description": "Pack preset (e.g. 'ayr') or town id.",
+            "title": "Town",
+            "type": "string"
+          },
+          "truth": {
+            "default": false,
+            "title": "Truth",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "town",
+          "installationId"
+        ],
+        "title": "InstallationRequest",
+        "type": "object"
+      },
       "MonthRequest": {
         "properties": {
           "actions": {
@@ -552,6 +836,100 @@
           "month"
         ],
         "title": "MonthRequest",
+        "type": "object"
+      },
+      "OrderRequest": {
+        "properties": {
+          "actions": {
+            "items": {
+              "$ref": "#/components/schemas/Action"
+            },
+            "maxItems": 2000,
+            "title": "Actions",
+            "type": "array"
+          },
+          "asOf": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "View date (YYYY-MM-DD); default: the town's scenario date.",
+            "title": "Asof"
+          },
+          "orderId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Orderid"
+          },
+          "outages": {
+            "description": "Service interruptions from the operations simulator (a timeline's ``interruptions``): consumption stops, AMI meters without power miss their reads, and VEE sees the outage.",
+            "items": {
+              "$ref": "#/components/schemas/Outage"
+            },
+            "maxItems": 500,
+            "title": "Outages",
+            "type": "array"
+          },
+          "readId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The order raised on this read (from the read or its case).",
+            "title": "Readid"
+          },
+          "settings": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing); see GET /api/m2c/settings.",
+            "title": "Settings"
+          },
+          "sourceCaseId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The order raised from this case (or a Field Work case's own order).",
+            "title": "Sourcecaseid"
+          },
+          "town": {
+            "description": "Pack preset (e.g. 'ayr') or town id.",
+            "title": "Town",
+            "type": "string"
+          }
+        },
+        "required": [
+          "town"
+        ],
+        "title": "OrderRequest",
         "type": "object"
       },
       "Outage": {
@@ -706,6 +1084,32 @@
             "description": "View date (YYYY-MM-DD); default: the town's scenario date.",
             "title": "Asof"
           },
+          "assignee": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Only the cases this person works now.",
+            "title": "Assignee"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "maxLength": 60,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A clarification category (see GET /api/m2c/vocabulary), or 'My Assigned Cases'.",
+            "title": "Category"
+          },
           "commodity": {
             "anyOf": [
               {
@@ -751,7 +1155,8 @@
                   "VEE_REVIEW",
                   "ESTIMATION",
                   "SUPERVISOR",
-                  "FIELD"
+                  "FIELD",
+                  "BILLING"
                 ],
                 "type": "string"
               },
@@ -831,6 +1236,76 @@
           "town"
         ],
         "title": "QueueRequest",
+        "type": "object"
+      },
+      "ReadDocumentRequest": {
+        "properties": {
+          "actions": {
+            "items": {
+              "$ref": "#/components/schemas/Action"
+            },
+            "maxItems": 2000,
+            "title": "Actions",
+            "type": "array"
+          },
+          "asOf": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "View date (YYYY-MM-DD); default: the town's scenario date.",
+            "title": "Asof"
+          },
+          "outages": {
+            "description": "Service interruptions from the operations simulator (a timeline's ``interruptions``): consumption stops, AMI meters without power miss their reads, and VEE sees the outage.",
+            "items": {
+              "$ref": "#/components/schemas/Outage"
+            },
+            "maxItems": 500,
+            "title": "Outages",
+            "type": "array"
+          },
+          "readId": {
+            "description": "Meter-reading document id: READ-{townId}-{registerId}-{YYYY-MM-DD}.",
+            "title": "Readid",
+            "type": "string"
+          },
+          "settings": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing); see GET /api/m2c/settings.",
+            "title": "Settings"
+          },
+          "town": {
+            "description": "Pack preset (e.g. 'ayr') or town id.",
+            "title": "Town",
+            "type": "string"
+          },
+          "truth": {
+            "default": false,
+            "title": "Truth",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "town",
+          "readId"
+        ],
+        "title": "ReadDocumentRequest",
         "type": "object"
       },
       "RunRequest": {
@@ -1197,6 +1672,117 @@
         "summary": "Post Case"
       }
     },
+    "/api/m2c/installation": {
+      "post": {
+        "description": "``m2c-installation/1.0`` (Display Billing): the installation (premise, commodity, rate category, meters and\nregisters), its contracts with account and business partner, billing documents with lines, invoices, the\naccounts' ledgers, its read results and its cases, as of ``asOf``.",
+        "operationId": "post_installation_api_m2c_installation_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InstallationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Installation"
+      }
+    },
+    "/api/m2c/order": {
+      "post": {
+        "description": "``m2c-order/1.0``: a field service order (``field-order/1.0``) by ``orderId``, or the order of a source\n(``sourceCaseId`` or ``readId``). A source without one returns ``order: null`` and a ``proposal`` for the form, so\nreopening never creates a second order.",
+        "operationId": "post_order_api_m2c_order_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrderRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Order"
+      }
+    },
+    "/api/m2c/possible-entries": {
+      "post": {
+        "description": "``m2c-possible-entries/1.0`` (F4): installation, read, account or premise ids matching ``query``, paged.",
+        "operationId": "post_possible_entries_api_m2c_possible_entries_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EntriesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Possible Entries"
+      }
+    },
     "/api/m2c/premise": {
       "post": {
         "description": "One premise: registers, every read to date with VEE status and revisions, and its cases.",
@@ -1232,6 +1818,43 @@
           }
         },
         "summary": "Post Premise"
+      }
+    },
+    "/api/m2c/read-document": {
+      "post": {
+        "description": "``m2c-read-document/1.0`` (Display Meter Reading Results): the read (``meter-read/1.1``), its VEE decision,\nthe installation, contract, account and partner it bills to, its case and order, and the register's reads.",
+        "operationId": "post_read_document_api_m2c_read_document_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReadDocumentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Read Document"
       }
     },
     "/api/m2c/settings": {
@@ -1286,6 +1909,51 @@
           }
         },
         "summary": "Post Summary"
+      }
+    },
+    "/api/m2c/vocabulary": {
+      "get": {
+        "description": "``m2c-vocabulary/1.0``: what the Studio's forms and lists may send. The field service order form (fields with\nlabel, tab, required flag, kind, bounds and choices; component units; stages and SAP system status), the action\ntypes, queues and clarification categories. ``?town=`` adds the town's planning plant to the plant choices.",
+        "operationId": "get_vocabulary_api_m2c_vocabulary_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "town",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Town"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Vocabulary"
       }
     },
     "/api/packs": {

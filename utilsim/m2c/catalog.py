@@ -58,6 +58,18 @@ EVENTS: dict[str, tuple[str, str, str, float, float, float]] = {
     "DISCONNECT_NOTICE": ("Disconnection notice", "🔌", "collections", 0, 2.0, 15),
     "MORATORIUM_HOLD": ("Winter moratorium hold", "❄️", "collections", 0, 0, 0),
     "READ_RELEASED": ("Released to billing", "📤", "billing", 0, 0.05, 0),
+    # Studio work: your field service orders, invoice holds, notes and ownership.
+    "FIELD_SERVICE": ("Field service order", "🛠️", "field", 6, 0.5, 0),
+    "ORDER_SAVED": ("Order draft saved", "💾", "field", 0, 0, 0),
+    "ORDER_LINKED": ("Field service order linked", "🔗", "field", 0, 0, 0),
+    "ORDER_RELEASED": ("Order released", "📋", "field", 2, 0.1, 0),
+    "ORDER_DISPATCHED": ("Order dispatched", "📟", "field", 1, 0.1, 0),
+    "ORDER_COMPLETED": ("Order completed", "🏁", "field", 0, 0.1, 0),
+    "INVOICE_HOLD": ("Invoice hold", "🧊", "invoice", 4, 0, 0),
+    "INVOICE_DEFERRED": ("Invoice held back", "⏸️", "invoice", 0, 0.1, 0),
+    "INVOICE_UNHOLD": ("Invoice hold removed", "▶️", "invoice", 2, 0, 0),
+    "CASE_NOTE": ("Case note", "🗒️", "wm", 1, 0, 0),
+    "CASE_ASSIGNED": ("Case assigned", "👤", "wm", 0, 0, 0),
 }
 EDGE_TYPES = ("caused_by", "triggered", "resulted_in", "blocked_by", "resolved_by", "escalated_to", "required_for",
               "compensated_by")
@@ -68,6 +80,7 @@ EXCEPTIONS = ("COMM_FAIL", "NO_ACCESS", "NO_READ", "ZERO_USAGE", "BILL_CREDIT", 
               "CONSECUTIVE_ESTIMATES", "RATE_CLASS", "HIGH_BILL")
 BILL_TYPES = ("HIGH_BILL", "BILL_CREDIT", "RATE_CLASS")
 MISSING_TYPES = ("COMM_FAIL", "NO_ACCESS", "NO_READ", "CONSECUTIVE_ESTIMATES")
+WORK_TYPES = ("FIELD_SERVICE", "INVOICE_HOLD")  # cases you open in the Studio (an order, an invoice hold)
 
 QUEUES = {
     "VEE_REVIEW": "VEE review",
@@ -76,6 +89,36 @@ QUEUES = {
     "FIELD": "Field orders",
     "BILLING": "Billing blocks",
 }
+
+# Clarification categories (Utility Studio). Each case gets one from its type and queue (``category()``); the rest of
+# the Studio's list has no engine meaning yet, so filtering by it returns an empty list.
+CATEGORIES = {
+    "MR Implausibles": "Value exceptions from VEE (VEE_REVIEW, SUPERVISOR)",
+    "Meter Read Follow-Up": "Missing reads: comm fail, no access, no read document, consecutive estimates",
+    "Billing Outsorts": "Billing blocks for a high bill or a large credit (HIGH_BILL, BILL_CREDIT)",
+    "Billing Errors": "Billing blocks for a wrong rate class in master data (RATE_CLASS)",
+    "Invoice Outsorts": "Invoice holds you placed on an account (INVOICE_HOLD)",
+    "Field Work": "Cases in the FIELD queue and your field service orders (FIELD_SERVICE)",
+}
+NO_ENGINE_CATEGORIES = ("AMP", "Bill Correction", "Bill Print Errors", "Billing- see IT Supp", "Budget Bill Cases",
+                        "Invoice Errors", "Low Income Process")
+MY_CASES = "My Assigned Cases"  # not a category: the cases assigned to you
+
+
+def category(kind: str, queue: str | None, work: str | None = None) -> str:
+    """The clarification category of a case of type ``kind`` in ``queue`` (its last queue once resolved)."""
+    if work == "order" or queue == "FIELD":
+        return "Field Work"
+    if work == "hold":
+        return "Invoice Outsorts"
+    if kind == "RATE_CLASS":
+        return "Billing Errors"
+    if kind in BILL_TYPES:
+        return "Billing Outsorts"
+    if kind in MISSING_TYPES:
+        return "Meter Read Follow-Up"
+    return "MR Implausibles"
+
 
 # Simulated SAP MR validation codes → VEE v5 severity categories. Real MRIndependantValidation semantics plug in here.
 CODES = {

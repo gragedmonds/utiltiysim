@@ -63,6 +63,7 @@ class Books:
         self.pending = np.repeat(np.array([len(r) for r in tw.inst_rows], dtype=np.int64)[:, None], 13, axis=1)
         self.ready: list[tuple[int, int]] = []
         self.to_invoice: dict[int, list[int]] = {}
+        self.held: dict[str, list[int]] = {}  # account -> released documents held back by an invoice hold
         self.invoices: list[dict] = []
         self.ledger: dict[str, list[tuple]] = {}
 
@@ -184,6 +185,14 @@ class Books:
         inv = day if (t - day) < 20.0 / 24 and day in self.run.bday_set else self.run.next_bday(day)
         self.to_invoice.setdefault(inv, []).append(doc["k"])
 
+    def unhold(self, acct: str, t: float) -> None:
+        """An invoice hold is removed at ``t``: the documents it held go to the next invoice run (20:00)."""
+        docs = self.held.pop(acct, [])
+        if docs:
+            day = int(t)
+            inv = day if (t - day) < 20.0 / 24 and day in self.run.bday_set else self.run.next_bday(day)
+            self.to_invoice.setdefault(inv, []).extend(docs)
+
     def redo(self, doc: dict, t: float, *, rate: str | None = None, estimate: bool = False) -> dict:
         """Reverse ``doc`` and issue version 2 (estimated quantities or a corrected rate), released at ``t``."""
         run = self.run
@@ -250,6 +259,12 @@ class Books:
         b, due_days = run.cfg.billing, run.cfg.customers_billing.due_days
         issued = run.next_bday(day, b.print_lag_days) if b.print_lag_days else day
         for acct, docs in sorted(by_acct.items()):
+            hold = run.hold_on(acct, day + 20.0 / 24)
+            if hold is not None:  # an invoice hold on the account: its documents wait for invoice_unhold
+                self.held.setdefault(acct, []).extend(docs)
+                hold[2].ev(day + 20.0 / 24, "INVOICE_DEFERRED",
+                           {"billingDocumentIds": [self.doc_id(self.docs[k]) for k in docs]})
+                continue
             n = len(self.invoices)
             inv = {"n": n, "id": f"INV-{acct}-{run.date_of(day).strftime('%Y%m%d')}", "account": acct, "docs": docs,
                    "created": day + 20.0 / 24, "issued": issued, "due": issued + due_days,
