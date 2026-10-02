@@ -17,3 +17,6 @@ node_modules/
 viewer*.png
 # static site build (scripts/build_site.mjs)
 /public/
+
+# Claude Code agent worktrees
+.claude/worktrees/
