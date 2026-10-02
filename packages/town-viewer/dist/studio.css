@@ -528,7 +528,7 @@ details.schema-group>.schema-field:last-child{margin-bottom:10px}
 #settings-page .schema-field input:not([type=checkbox]),#settings-page .schema-field select{min-height:30px;font-size:12.5px;padding:2px 7px;flex:1 1 56px;width:auto;min-width:0}
 #settings-page .schema-field input[type=checkbox]{margin:0;width:16px;height:16px}
 #settings-page .schema-wide .schema-control{width:100%}
-#settings-page .schema-unit{font-size:11px;color:#8a849c;white-space:nowrap}
+#settings-page .schema-unit{flex:0 0 auto;font-size:11px;color:#8a849c;white-space:nowrap;padding-right:3px}
 #settings-page .schema-status{flex:0 0 auto;font-size:10px;color:#7a4c0e;background:#fff5e4;border-radius:4px;padding:2px 4px;white-space:nowrap;grid-column:auto;max-width:72px;overflow:hidden;text-overflow:ellipsis}
 #settings-page .schema-was{grid-column:1/-1;font-size:11px;margin:-2px 0 2px}
 #settings-page .schema-error{grid-column:1/-1;font-size:11px}
