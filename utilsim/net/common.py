@@ -182,10 +182,10 @@ def piece_points(sg: SplitGraph, piece: int, offset: float, from_node: int, dens
     pts = sg.centreline(piece)
     if offset:
         pts = offset_polyline(pts, offset)
+    if densify and len(pts) >= 2:  # in the piece's own direction, so lines on one piece share pole positions
+        pts = densify_polyline(pts, densify)
     if int(sg.piece_a[piece]) != from_node:
         pts = pts[::-1]
-    if densify and len(pts) >= 2:
-        pts = densify_polyline(pts, densify)
     return pts
 
 

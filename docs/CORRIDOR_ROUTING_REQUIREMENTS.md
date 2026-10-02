@@ -2,6 +2,8 @@
 
 Status: user direction accepted 2026-10-01; engine implementation handoff. This document specifies intended generation behaviour. It does not claim that the existing browser fixture already follows this policy.
 
+Engine status (generator 0.6.0): the electric network follows this policy (see [NETWORK_RULES.md](NETWORK_RULES.md#electric-defaults-115-kv-in-138-kv-primary-120240-v)): corridor extraction, turn-aware trunk routing with configurable `electric.route_*` costs, feeder territories with express sections, normally-open ties, `corridorId`/`feederId`/`designRole` exports, `networks.electric.corridors`, and `stats.electricRouting` metrics. Water and gas still use the class-weighted shortest-path forest.
+
 ## The town has two related graphs
 
 Keep the road graph separate from each utility graph. Road classes establish suitable corridors; utilities select and size routes using load, connectivity and equipment constraints. A pipe does not become larger merely because its rendered road is wider.

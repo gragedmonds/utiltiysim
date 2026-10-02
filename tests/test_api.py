@@ -31,7 +31,10 @@ def test_town_lifecycle_and_endpoints():
     lon, lat = gj["features"][0]["geometry"]["coordinates"][0][0]
     assert 43.8 < lat < 43.95 and -79.0 < lon < -78.85
     net = client.get(f"/api/towns/{tid}/network/electric").json()
-    assert len(net["nodes"]["id"]) == len(net["edges"]["id"]) + 1
+    # One source: a construction forest of nodes - 1 parent edges; every other edge is a normally-open feeder tie.
+    parents = [p for p in net["nodes"]["parentEdge"] if p >= 0]
+    assert len(set(parents)) == len(parents) == len(net["nodes"]["id"]) - 1
+    assert len(net["edges"]["id"]) - len(parents) == net["meta"]["ties"]
     pid = body["premises"][0]["id"]
     tr = client.get(f"/api/towns/{tid}/network/electric/trace/electric-N-{pid}").json()
     assert tr["upstreamEdgeIds"][0] == "electric-E0"

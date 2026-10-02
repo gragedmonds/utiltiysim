@@ -56,6 +56,7 @@ class Network:
     station_id: str = ""
     equipment: list[dict[str, Any]] = field(default_factory=list)
     meta: dict[str, Any] = field(default_factory=dict)
+    corridors: list[dict[str, Any]] = field(default_factory=list)  # electric: road corridors the routing used
     _index: dict[str, int] = field(default_factory=dict)
 
     def add_node(self, id: str, kind: str, xy, **attrs) -> int:

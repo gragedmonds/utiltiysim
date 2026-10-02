@@ -125,6 +125,13 @@ class TownConfig(BaseModel):
     industrial_lots: int = F(2, "Number of large industrial customers.", ge=0, le=10)
     houses_per_school: int = F(2500, "One school per this many houses.", ge=500, le=20_000, advanced=True)
     margin_m: float = F(120.0, "Empty margin around the developed area.", unit="m", ge=0, le=1000, advanced=True)
+    corridor_max_deflection_deg: float = F(35.0, "Arterial/collector road edges continue one corridor through a "
+                                           "junction when the heading changes by at most this much.", unit="deg",
+                                           ge=5, le=90, advanced=True,
+                                           effects=["corridors", "trunk routes", "corridor changes"])
+    corridor_name_bonus_deg: float = F(20.0, "Extra deflection allowed when both edges carry the same street name "
+                                       "(a name is weak evidence of continuity).", unit="deg", ge=0, le=60,
+                                       advanced=True, effects=["corridors"])
 
 
 class HousingConfig(BaseModel):
@@ -189,8 +196,43 @@ class ElectricConfig(BaseModel):
     max_houses_per_transformer_underground: int = F(10, "Max houses on a pad-mount transformer.", ge=1, le=25)
     feeder_design_mva: float = F(6.0, "Design peak per feeder.", unit="MVA", ge=1, le=20,
                                  effects=["feeder count", "tie switches"])
+    feeder_max_customers: int = F(1200, "Most customers planned on one feeder (limits how many lose supply when a "
+                                  "feeder breaker trips).", ge=100, le=10_000,
+                                  effects=["feeder count", "feeder territories", "tie switches"])
+    min_feeders_per_substation: int = F(2, "Feeders leaving each substation at least (fewer only when it serves "
+                                        "fewer transformer groups), so normally-open ties can back-feed.", ge=1,
+                                        le=12, effects=["feeder count", "tie switches", "outage size"])
     substation_mva: float = F(25.0, "Firm capacity per substation.", unit="MVA", ge=5, le=100,
                               effects=["substation count"])
+    route_weight_arterial: float = F(1.0, "Feeder routing cost per metre along an arterial (trunks follow the "
+                                     "cheapest corridors).", ge=0.1, le=10, advanced=True,
+                                     effects=["trunk routes", "feeder territories"])
+    route_weight_collector: float = F(1.4, "Feeder routing cost per metre along a collector.", ge=0.1, le=10,
+                                      advanced=True, effects=["trunk routes"])
+    route_weight_local: float = F(2.0, "Feeder routing cost per metre along a local street.", ge=0.1, le=10,
+                                  advanced=True, effects=["trunk routes", "lateral routes"])
+    route_turn_penalty_m: float = F(60.0, "Routing cost of a 90° turn, in weighted metres; it grows with the "
+                                    "square of the angle (a U-turn costs 4×). Bends under 10° are free.", unit="m",
+                                    ge=0, le=2000, advanced=True, effects=["trunk continuity", "severe turns"])
+    route_corridor_change_penalty_m: float = F(80.0, "Routing cost of switching from one arterial/collector "
+                                               "corridor to another.", unit="m", ge=0, le=2000, advanced=True,
+                                               effects=["trunk continuity", "corridor changes"])
+    route_hierarchy_penalty_m: float = F(60.0, "Routing cost per step up or down the road hierarchy "
+                                         "(arterial ↔ collector ↔ local).", unit="m", ge=0, le=2000, advanced=True,
+                                         effects=["trunks staying on main roads"])
+    trunk_min_load_share: float = F(0.04, "A feeder trunk extends along a corridor while at least this share of "
+                                    "the feeder's connected load lies at or beyond that point; smaller tails are "
+                                    "served by laterals.", ge=0, le=0.5, advanced=True,
+                                    effects=["trunk length", "three-phase backbone"])
+    route_shared_trunk_factor: float = F(1.2, "Cost multiplier for running a feeder express through another "
+                                         "feeder's territory or alongside its trunk.", ge=1.0, le=5.0,
+                                         advanced=True, effects=["express sections", "feeder separation"])
+    severe_turn_deg: float = F(60.0, "A trunk turn at least this sharp counts as severe in the routing metrics.",
+                               unit="deg", ge=20, le=170, advanced=True)
+    ties_per_feeder_pair: int = F(1, "Normally-open tie switches between each pair of neighbouring feeders.",
+                                  ge=0, le=4, effects=["tie switches", "back-feed options"])
+    tie_max_length_m: float = F(800.0, "Longest new line built to tie a feeder that touches no other feeder.",
+                                unit="m", ge=0, le=5000, advanced=True, effects=["tie switches"])
     overhead_before_year: int = F(1978, "Districts built before this year are overhead (poles); later underground.",
                                   ge=1850, le=2030, effects=["poles", "lightning exposure", "storm outages"])
     pole_spacing_m: float = F(42.0, "Pole span on overhead lines.", unit="m", ge=20, le=90, advanced=True)

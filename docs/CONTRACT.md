@@ -68,14 +68,14 @@ Premises also carry a content `uid`.
 
 | Collection | Fields the 3D view uses |
 |---|---|
-| `roads[]` | `points[{x,z}]`, `class` (`primary`/`tertiary`/`residential`), `roadClass` (`arterial`/`collector`/`local`), `pavementWidthM`, `rowWidthM`, `name` |
+| `roads[]` | `points[{x,z}]`, `class` (`primary`/`tertiary`/`residential`), `roadClass` (`arterial`/`collector`/`local`), `pavementWidthM`, `rowWidthM`, `name`, `corridorId` (arterial/collector corridor, when on one) |
 | `premises[]` | `x`, `z`, `width` (along street), `depth`, `height`, `angle` (road direction `atan2(dz,dx)`; mesh `rotation.y = -angle`), `side` (±1), `front {x,z}`, `roofTone`, `roof` (`gable`/`hip`/`flat`), `stories`, `premiseType`, `buildingType`, `solar`, `solarKW`, `occupied`, `services {electric,water,gas}`, `uid` |
 | `buildings[]` | exact `footprint.polygon[{x,z}]`, `heightM`, `roof` |
 | `facilities[]` | `kind` (`substation`, `pump_station`, `elevated_tank`, `city_gate`, `depot`, `industrial`, `school`), `polygon`, `label` |
-| `networks.{u}` | `sourceIds` (every `external_supply` node), `sourceId` (the first), `unit`, `nodes`, `edges`, `equipment` |
+| `networks.{u}` | `sourceIds` (every `external_supply` node), `sourceId` (the first), `unit`, `nodes`, `edges`, `equipment`; electric also `corridors[{id, name, hierarchy, roadIds (ordered), lengthM, entranceNodeId, exitNodeId, ring, feederIds, trunkLengthM}]` |
 | `networks.{u}.nodes[]` | `kind` (`external_supply`, `substation`, `pump_station`, `city_gate_regulator`, `elevated_tank`, `district_regulator`, `junction`, `transformer`, `meter`), `subkind` render hint (`tank`, `regulator`), `x`, `z`, `elevationM`, `label`, `premiseId`, `servicePointId`, `parentEdgeId` |
-| `networks.{u}.edges[]` | `from`, `to`, `kind` (`supply`, `trunk`, `distribution`, `transformer`, `tank_riser`, `service`), `enabled`, `loop`, `normallyOpen` and `boundaryValve` (present when set), `tier`, `placement` (`overhead`/`underground`), `points`, `lengthM`, `sizeMm`, `nominalLabel`, `diameterIn`, `voltageKV`, `phase`, `ratingKVA`, `feeder`, `pressureTier`, `zone` |
-| `networks.{u}.equipment[]` | `kind` (`pole`, `recloser`, `fuse`, `tie_switch`, `hydrant`, `valve`, `district_regulator`, `prv`, `booster_station`), `x`, `z` (markers, not graph nodes) |
+| `networks.{u}.edges[]` | `from`, `to`, `kind` (`supply`, `trunk`, `distribution`, `transformer`, `tank_riser`, `service`), `enabled`, `loop`, `normallyOpen` and `boundaryValve` (present when set), `tier`, `placement` (`overhead`/`underground`), `points`, `lengthM`, `sizeMm`, `nominalLabel`, `diameterIn`, `voltageKV`, `phase`, `ratingKVA`, `feeder`, `pressureTier`, `zone`; electric also `feederId`, `designRole` (`supply`, `getaway`, `trunk`, `express`, `lateral`, `tie`, `transformer`, `service`), `corridorId`, and on ties `feeders`, `switchId` |
+| `networks.{u}.equipment[]` | `kind` (`pole`, `recloser`, `fuse`, `tie_switch`, `riser`, `hydrant`, `valve`, `district_regulator`, `prv`, `booster_station`), `x`, `z` (markers, not graph nodes) |
 | `amiNetwork` | `headend`, `collectors[{id,x,z,mountedOn,coverageRadiusM}]` |
 | `mrus[]` | `technology` (`AMI`/`AMR`/`MANUAL`), `readerId`, `path[{x,z}]` (route order), `portionId` |
 

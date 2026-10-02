@@ -105,6 +105,38 @@ def test_broken_pole_trips_a_fuse_then_crew_isolates_and_restores(ayr, ayr_snaps
     assert all(during["premises"]["electric"][ids.index(p)] == 0 for p in list(dead)[:50])
 
 
+def test_trunk_fault_is_backfed_through_a_normally_open_tie(ayr, ayr_snapshot):
+    """Corridor routing gives the real-town packs separate feeders joined by normally-open ties: after a trunk fault
+    is isolated, the crew closes a tie and the customers downstream of the fault are fed from the next feeder."""
+    net = ayr.nets["electric"]
+    edges = ayr_snapshot["networks"]["electric"]["edges"]
+    assert net.tie_edges and all(edges[k].get("normallyOpen") and not edges[k]["enabled"] for k in net.tie_edges)
+    run = tl = None
+    for q in net.equipment:  # the first trunk pole (id order) whose fault leaves customers cut off after isolation
+        if q["kind"] != "pole" or edges[net.edge_index[q["edgeId"]]].get("designRole") != "trunk":
+            continue
+        run = Run(ayr, [break_pole(q, 8 * 3600)])
+        tl = run.timeline()
+        if tl["incidents"][0]["unsupplied"]["afterIsolation"] > 0:
+            break
+    inc = tl["incidents"][0]
+    out = inc["unsupplied"]
+    assert inc["device"]["kind"] == "recloser" and out["afterBackfeed"] < out["afterIsolation"] <= out["atFault"]
+    tie = inc["tie"]
+    assert net.edge_index[tie["edgeId"]] in net.tie_edges
+    assert inc["isolatedAt"] < tie["closedAt"] < tie["openedAt"] <= inc["restoredAt"]
+    kinds = [e["eventType"] for e in tl["events"]]
+    assert kinds.index("fault.isolated") < kinds.index("tie.closed") < kinds.index("tie.opened")
+    k = net.edge_index[tie["edgeId"]]
+    during = run.frame(tie["closedAt"] + 60)
+    validate_frame(ayr_snapshot, during)
+    el = during["networks"]["electric"]
+    assert el["enabled"][k] and el["flows"][k] != 0
+    assert len(during["premises"].get("unsupplied", {}).get("electric", [])) == out["afterBackfeed"]
+    after = run.frame(inc["restoredAt"] + 60)
+    assert not after["networks"]["electric"]["enabled"][k] and "unsupplied" not in after["premises"]
+
+
 def test_water_main_break_leaks_until_valves_isolate_it(ayr, ayr_snapshot):
     net = ayr.nets["water"]
     k = next(k for k in sorted(net.valve_edges) if net.kind[k] == "distribution")

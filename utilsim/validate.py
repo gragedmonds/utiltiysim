@@ -9,8 +9,12 @@ CHECKS = [
     "Loop edges join existing nodes and are never parent edges", "Every node reachable from a source",
     "Every active service reachable through enabled edges", "Meters resolve by premiseId or servicePointId",
     "Sizes non-increasing away from source", "Capacity covers design load", "Electric voltage stages",
+    "Electric radial: no cycles through energized edges; feeder ties explicit and normally open",
     "No gas service without gas mains in the district", "Referential integrity",
 ]
+# Electric equipment stages along the construction forest: supply* → trunk/distribution+ → transformer → service.
+_STAGE = {"supply": ((0,), 0), "trunk": ((0, 1), 1), "distribution": ((0, 1), 1), "transformer": ((1,), 2),
+          "service": ((2,), 3)}
 
 
 def _reach(n: int, adj: dict[int, list[int]], sources: list[int]) -> np.ndarray:
@@ -24,6 +28,45 @@ def _reach(n: int, adj: dict[int, list[int]], sources: list[int]) -> np.ndarray:
                 seen[w] = True
                 stack.append(w)
     return seen
+
+
+def _electric_topology(net, sources: list[int]) -> list[str]:
+    """Radial operation (enabled edges form a forest; every loop is a normally-open, disabled tie) and valid
+    equipment stages from the source to every meter."""
+    errors = []
+    n = len(net.nodes)
+    root = list(range(n))
+
+    def find(x: int) -> int:
+        while root[x] != x:
+            root[x] = root[root[x]]
+            x = root[x]
+        return x
+
+    for e in net.edges:
+        if e.loop and (e.enabled or not e.normally_open):
+            errors.append(f"electric: loop {e.id} is not a normally-open tie")
+        if not e.enabled:
+            continue
+        ra, rb = find(e.a), find(e.b)
+        if ra == rb:
+            errors.append(f"electric: energized cycle through {e.id}")
+        else:
+            root[ra] = rb
+    stage = np.full(n, -1, dtype=np.int64)
+    stage[sources] = 0
+    tree = net.tree()
+    for lvl in tree.levels[1:]:
+        for v in lvl:
+            e = net.edges[int(tree.parent_edge[v])]
+            ok, nxt = _STAGE.get(e.kind, ((), -1))
+            stage[v] = nxt if stage[e.a] in ok else -2
+            if stage[e.a] >= 0 and stage[v] == -2:
+                errors.append(f"electric: {e.id} ({e.kind}) out of equipment order")
+    for k, nd in enumerate(net.nodes):
+        if nd.kind == "meter" and stage[k] != 3:
+            errors.append(f"electric: meter {nd.id} not fed through supply → primary → transformer → service")
+    return errors
 
 
 def validate_town(town) -> dict:
@@ -103,6 +146,7 @@ def validate_town(town) -> dict:
                 if nd.kind == "transformer" and nd.attrs["phases"] == 1 and \
                         nd.attrs["ratingKVA"] * town.cfg.electric.transformer_max_loading < nd.attrs["designKVA"] - 1e-6:
                     errors.append(f"electric: {nd.id} overloaded at design")
+            errors.extend(_electric_topology(net, sources))
     ae = ~prem.attrs["gas_available"] & prem.attrs["has_gas"]
     if ae.any():
         errors.append(f"{int(ae.sum())} premises have gas in all-electric districts")

@@ -67,8 +67,9 @@ Viewer (Astra's package):
 
 Next:
 - road hierarchy and utility corridors ([CORRIDOR_ROUTING_REQUIREMENTS.md](CORRIDOR_ROUTING_REQUIREMENTS.md)):
-  continuous electric corridors, feeder territories, normally-open ties (which enable back-feed during repairs),
-  and corridor exports;
+  electric is done in generator 0.6.0 (corridors, turn-aware trunks, feeder territories, express sections,
+  normally-open ties, corridor exports and routing metrics); still open: water/gas backbone-first routing, road
+  `hierarchy` overrides and classification provenance, construction-transition rationale beyond `riser` assets;
 - main roads leaning commercial;
 - a visual Activity Sequence builder;
 - real-place import from the UI;
