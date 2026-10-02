@@ -3,9 +3,9 @@
 import {escapeText as e} from './customer-view.js';
 const QUEUE_ORDER=['VEE_REVIEW','ESTIMATION','SUPERVISOR','FIELD','BILLING'];
 const ACTIONS={accept:'Accept as read',estimate:'Estimate',override:'Override value',field_order:'Field order',escalate:'Escalate'};
-const money=n=>Number.isFinite(n)?n.toLocaleString('en-CA',{style:'currency',currency:'CAD',maximumFractionDigits:n>=1000?0:2}):'—';
+export const money=n=>Number.isFinite(n)?n.toLocaleString('en-CA',{style:'currency',currency:'CAD',maximumFractionDigits:n>=1000?0:2}):'—';
 const pct=n=>Number.isFinite(n)?Math.round(n*100)+'%':'—';
-const num=n=>Number.isFinite(n)?n.toLocaleString('en-CA'):'—';
+export const num=n=>Number.isFinite(n)?n.toLocaleString('en-CA'):'—';
 const words=s=>String(s??'').replaceAll('_',' ');
 export function parseRoute(hash){const m=String(hash||'').match(/^#\/worklists(?:\/([A-Z_]+))?(?:\/case\/([\w.:-]+))?$/);return m?{queue:m[1]&&m[1]!=='ALL'?m[1]:null,caseId:m[2]||null}:null;}
 export function routeHash({queue=null,caseId=null}={}){return '#/worklists'+(queue||caseId?'/'+(queue||'ALL'):'')+(caseId?'/case/'+caseId:'');}
@@ -54,7 +54,7 @@ export function installWorklists({getClient,onShowPremise=()=>{},onSettings=()=>
    <section class="detail-section"><h3>VEE decision · ${d.confidence==null?'no read':pct(d.confidence)+' confidence'} · ${e(d.disposition)}</h3><ol class="wl-tests">${tests}</ol></section>
    <section class="detail-section"><h3>Read history</h3>${historyChart(c.history)}<p class="small-note">Bars: consumption per period (estimated, adjusted and flagged marked); lines: expected.</p><label class="wl-truth"><input type="checkbox" id="wl-truth" ${truth?'checked':''}> Show simulation truth</label>${truth&&c.truth?`<p class="small-note">Truth: ${e(words(c.truth.class))}${c.read.truth?` · true register ${num(c.read.truth.registerValue)}`:''}.</p>`:''}</section>
    <section class="detail-section"><h3>Actions</h3>${actions}</section>
-   <section class="detail-section"><h3>Activity sequence</h3><ol class="wl-events">${events}</ol></section>`;
+   <section class="detail-section"><h3>Activity sequence</h3><ol class="wl-events">${events}</ol><a class="small-link wl-trace" href="#/process/${Number((c.readDate||c.createdAt).slice(5,7))}/${e(c.events[0]?.eventId||c.caseId+':0')}">Trace this Activity Sequence</a></section>`;
   $('wl-show-premise').onclick=()=>onShowPremise(c.premiseId);$('wl-truth').onchange=ev=>{truth=ev.target.checked;loadCase(id);};
   document.querySelectorAll('[data-wl-act]').forEach(b=>b.onclick=async()=>{const type=b.dataset.wlAct,value=type==='override'?$('wl-override-value').value:null;if(type==='override'&&(value===''||Number(value)<0)){toast('Enter the register value to bill.');return;}
    b.disabled=true;try{await m2c.act(type,c.caseId,value);toast(`${ACTIONS[type]} recorded for ${m2c.asOf}.`);await load();}catch(err){if(!err.superseded)toast(err.message);b.disabled=false;}});}
