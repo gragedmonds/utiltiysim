@@ -18,13 +18,16 @@ from pydantic import BaseModel, Field, ValidationError
 from api._ops import J, load_snapshot, town_key
 from utilsim.config.model import SimConfig
 from utilsim.m2c import catalog as cat
-from utilsim.m2c import lookups, views
+from utilsim.m2c import collections as colls
+from utilsim.m2c import followup, lookups, views
 from utilsim.m2c import orders as ords
 from utilsim.m2c.base import M2CTown, cached_m2c_town, m2c_town
 from utilsim.m2c.run import (
     ACTION_TYPES,
     CASE_WORK,
+    COLLECTION_ACTIONS,
     DECISIONS,
+    DEVICE_ACTIONS,
     M2C_GROUPS,
     MAX_SEED,
     ORDER_ACTIONS,
@@ -44,20 +47,34 @@ RUN_CACHE = 4
 class Action(BaseModel):
     id: str | None = None
     day: str = Field(..., description="Local date of the decision (YYYY-MM-DD), in 2026, never before the previous action.")
-    type: Literal["accept", "override", "estimate", "field_order", "escalate", "field_read", "order_save",
-                  "order_release", "order_dispatch", "order_complete", "note", "assign", "invoice_hold",
-                  "invoice_unhold"]
+    type: Literal["accept", "override", "estimate", "field_order", "escalate", "check_read", "field_read",
+                  "order_save", "order_release", "order_dispatch", "order_complete", "note", "assign", "invoice_hold",
+                  "invoice_unhold", "device_replace", "payment_arrangement", "extend_due", "dunning_hold",
+                  "low_income_referral", "budget_billing", "waive_fee", "disconnect_approve", "disconnect_cancel"]
     caseId: str | None = Field(None, description="The case acted on (decisions, note, assign; invoice_hold and "
                                                  "invoice_unhold take a caseId or an accountId).")
     premiseId: str | None = Field(None, description="field_read: the premise a field visit read on the map.")
     at: float | None = Field(None, ge=0, lt=86400, description="field_read: seconds since local midnight.")
     value: float | None = Field(None, ge=0, description="Register value for an override.")
-    note: str | None = Field(None, max_length=2000, description="A reason (decisions, invoice_hold, invoice_unhold; "
-                                                                "required for holds) or the field outcome "
-                                                                "(order_complete, required).")
+    note: str | None = Field(None, max_length=2000, description="A reason (decisions, invoice_hold, invoice_unhold, "
+                                                                "device_replace; required for holds), or a comment "
+                                                                "with an order_complete outcome (an older action list's "
+                                                                "order_complete may carry a note alone).")
     text: str | None = Field(None, max_length=2000, description="note: the note text (required).")
     assignee: str | None = Field(None, max_length=200, description="assign: who works the case (required).")
-    accountId: str | None = Field(None, description="invoice_hold / invoice_unhold: the account (or give a caseId).")
+    accountId: str | None = Field(None, description="invoice_hold / invoice_unhold: the account (or give a caseId); "
+                                                    "payment_arrangement, dunning_hold, low_income_referral, "
+                                                    "budget_billing: the account (required).")
+    invoiceId: str | None = Field(None, description="extend_due, waive_fee, disconnect_approve, disconnect_cancel: the "
+                                                    "invoice (INV-{account}-{YYYYMMDD}, required).")
+    instalments: int | None = Field(None, ge=colls.INSTALMENTS[0], le=colls.INSTALMENTS[1],
+                                    description="payment_arrangement: monthly instalments (default 3); the first is due "
+                                                "a week after the arrangement.")
+    days: int | None = Field(None, ge=1, le=colls.HOLD_DAYS[1], description="extend_due: days added to the due date "
+                                                                            "(1-60, default 14); dunning_hold: days "
+                                                                            "dunning waits (1-90, default 30).")
+    fee: Literal["late_fee", "nsf_fee"] | None = Field(None, description="waive_fee: the fee to waive (default "
+                                                                          "late_fee).")
     orderId: str | None = Field(None, description="Order actions: the field service order (order_save without it "
                                                   "creates a draft from a source).")
     sourceCaseId: str | None = Field(None, description="order_save (new order): the case the order is raised from.")
@@ -67,6 +84,20 @@ class Action(BaseModel):
     components: list[dict[str, Any]] | None = Field(
         None, max_length=ords.MAX_COMPONENTS, description="order_save: the component rows {description, quantity, "
                                                           "unit} (replaces the draft's list).")
+    coverCaseIds: list[str] | None = Field(
+        None, max_length=ords.MAX_COVER, description="order_save (new order) or field_order: other open read cases at "
+                                                     "the same premise the visit also covers (one visit per premise).")
+    outcome: dict[str, Any] | None = Field(
+        None, description="order_complete: the structured field outcome {kind: read_taken | read_confirmed | "
+                          "meter_exchanged | no_access | defect_found, ...}; see GET /api/m2c/vocabulary "
+                          "order.outcomes.")
+    meterId: str | None = Field(None, description="device_replace: the meter (device slot) on the installation.")
+    deviceId: str | None = Field(None, max_length=ords.DEVICE_ID, description="device_replace: the new device's id.")
+    installDate: str | None = Field(None, description="device_replace: when the new device went in (YYYY-MM-DD, on "
+                                                      "or before the action day, after the last released read).")
+    initialRead: float | None = Field(None, ge=0, description="device_replace: the new register's first value.")
+    removalRead: float | None = Field(None, ge=0, description="device_replace: the old register's last value "
+                                                              "(optional; else the normal use is assumed).")
 
 
 class Outage(BaseModel):
@@ -107,7 +138,7 @@ class CaseRequest(RunRequest):
 
 
 class QueueRequest(RunRequest):
-    queue: Literal["VEE_REVIEW", "ESTIMATION", "SUPERVISOR", "FIELD", "BILLING"] | None = None
+    queue: Literal["VEE_REVIEW", "ESTIMATION", "SUPERVISOR", "FIELD", "BILLING", "COLLECTIONS"] | None = None
     category: str | None = Field(None, max_length=60, description="A clarification category (see GET "
                                                                   "/api/m2c/vocabulary), or 'My Assigned Cases'.")
     assignee: str | None = Field(None, max_length=200, description="Only the cases this person works now.")
@@ -118,6 +149,51 @@ class QueueRequest(RunRequest):
     type: str | None = None
     commodity: Literal["electric", "water", "gas"] | None = None
     search: str | None = Field(None, max_length=80)
+    collector: str | None = Field(None, max_length=40, description="Only cases on meters reporting through this AMI "
+                                                                   "collector (e.g. COL-04).")
+    createdOn: str | None = Field(None, description="Only cases raised that day (YYYY-MM-DD): with collector, one "
+                                                    "collector group (POST /api/m2c/collector-groups).")
+
+
+class SummaryRequest(RunRequest):
+    since: str | None = Field(None, description="Start of a period (YYYY-MM-DD): adds ``window``, the figures between "
+                                                "that day and asOf (this month, the last 30 days, since your first "
+                                                "action, ...).")
+
+
+class CollectionsRequest(RunRequest):
+    list: Literal["disconnect", "moratorium", "rejected", "overdue"] = Field(
+        ..., description="disconnect: disconnection notices; moratorium: notices held for the winter; rejected: "
+                         "returned debits; overdue: accounts with overdue bills.")
+    status: Literal["open", "closed", "all"] = "open"
+    sort: Literal["age", "amount", "created"] = Field("age", description="age: oldest first; amount: largest first; "
+                                                                         "created: newest first.")
+    page: int = Field(1, ge=1)
+    pageSize: int = Field(50, ge=1, le=200)
+    search: str | None = Field(None, max_length=80, description="Invoice, account, name, premise or address.")
+    commodity: Literal["electric", "water", "gas"] | None = None
+
+
+class CollectionsAccountRequest(RunRequest):
+    accountId: str
+
+
+class OutageFollowupRequest(RunRequest):
+    utility: Literal["electric", "water", "gas", "ami"] | None = None
+    kind: Literal["last_gasp", "lost_use", "missed_read"] | None = None
+    status: Literal["open", "all"] = Field("all", description="open: rows whose missed-read case is still open.")
+    outageId: str | None = Field(None, max_length=80)
+    search: str | None = Field(None, max_length=80)
+    page: int = Field(1, ge=1)
+    pageSize: int = Field(50, ge=1, le=200)
+
+
+class CollectorGroupsRequest(RunRequest):
+    status: Literal["open", "all"] = "open"
+    collector: str | None = Field(None, max_length=40)
+    minCases: int = Field(2, ge=1, le=1000, description="Smallest group listed.")
+    page: int = Field(1, ge=1)
+    pageSize: int = Field(50, ge=1, le=200)
 
 
 class MonthRequest(RunRequest):
@@ -218,16 +294,56 @@ def get_vocabulary(town: str | None = None):
     plants = [ords.plant(_town(town).name)] if town else []
     return J({"schemaVersion": "m2c-vocabulary/1.0", "town": town, "order": ords.vocabulary(plants),
               "actions": {"decisions": list(DECISIONS), "field": ["field_read"], "orders": list(ORDER_ACTIONS),
-                          "caseWork": list(CASE_WORK)},
+                          "caseWork": list(CASE_WORK), "collections": list(COLLECTION_ACTIONS),
+                          "devices": list(DEVICE_ACTIONS)},
+              "collections": {"lists": list(colls.LISTS), "accountActions": list(colls.ACCOUNT_ACTIONS),
+                              "invoiceActions": list(colls.INVOICE_ACTIONS), "fees": colls.FEES,
+                              "instalments": {"min": colls.INSTALMENTS[0], "max": colls.INSTALMENTS[1], "default": 3},
+                              "extendDays": {"min": colls.EXTEND_DAYS[0], "max": colls.EXTEND_DAYS[1], "default": 14},
+                              "holdDays": {"min": colls.HOLD_DAYS[0], "max": colls.HOLD_DAYS[1], "default": 30}},
               "queues": cat.QUEUES, "categories": cat.CATEGORIES,
               "emptyCategories": list(cat.NO_ENGINE_CATEGORIES), "myCases": cat.MY_CASES})
 
 
 @router.post("/api/m2c/summary")
-def post_summary(req: RunRequest):
+def post_summary(req: SummaryRequest):
     """``m2c-summary/1.0``: KPIs, queues with aging and daily series, exception mix, cost, carry, VEE precision and
-    recall against truth, and one status per premise (for the map)."""
-    return _view(views.summary, run_for(req), req.asOf)
+    recall against truth, and one status per premise (for the map). Year to date; ``since`` adds ``window``, the same
+    figures for the period from that day to ``asOf``."""
+    return _view(views.summary, run_for(req), req.asOf, req.since)
+
+
+@router.post("/api/m2c/collections")
+def post_collections(req: CollectionsRequest):
+    """``m2c-collections/1.0``: a Collections worklist (disconnection notices, winter moratorium holds, rejected
+    payments or overdue accounts) as of ``asOf``, filtered, sorted and paged. Rows carry the collections ``actions``
+    the engine takes today and the account's ``flags``; ``counts`` gives each list's open items."""
+    return _view(colls.collections_list, run_for(req), req.list, as_of=req.asOf, status=req.status, sort=req.sort,
+                 page=req.page, page_size=req.pageSize, search=req.search, commodity=req.commodity)
+
+
+@router.post("/api/m2c/collections/account")
+def post_collections_account(req: CollectionsAccountRequest):
+    """``m2c-collections-account/1.0``: one account's collections as of ``asOf``: invoices with what is owed, dunning,
+    payments and disconnection; arrangements, holds, referrals, budget plan, ledger, its collections cases and the
+    actions it takes today."""
+    return _view(colls.account_view, run_for(req), req.accountId, as_of=req.asOf)
+
+
+@router.post("/api/m2c/outage-followup")
+def post_outage_followup(req: OutageFollowupRequest):
+    """``m2c-outage-followup/1.0``: per premise per interruption from the map, the AMI last gasp, the use lost and
+    the reads it cost (with their missing-read cases); ``outages`` sums up each interruption."""
+    return _view(followup.outage_followup, run_for(req), as_of=req.asOf, utility=req.utility, kind=req.kind,
+                 status=req.status, search=req.search, outage=req.outageId, page=req.page, page_size=req.pageSize)
+
+
+@router.post("/api/m2c/collector-groups")
+def post_collector_groups(req: CollectorGroupsRequest):
+    """``m2c-collector-groups/1.0``: AMI missed-read cases grouped by collector and day raised (a collector outage as
+    one problem), with cause, streets and case ids, plus the town's collectors."""
+    return _view(followup.collector_groups, run_for(req), as_of=req.asOf, status=req.status,
+                 collector=req.collector, min_cases=req.minCases, page=req.page, page_size=req.pageSize)
 
 
 @router.post("/api/m2c/premise")
@@ -248,7 +364,7 @@ def post_queue(req: QueueRequest):
     """A worklist page: cases in a queue (or all queues) as of a date, filtered, sorted and paged."""
     return _view(views.worklist, run_for(req), req.queue, as_of=req.asOf, status=req.status, sort=req.sort,
                  page=req.page, page_size=req.pageSize, type=req.type, commodity=req.commodity, search=req.search,
-                 category=req.category, assignee=req.assignee)
+                 category=req.category, assignee=req.assignee, collector=req.collector, created_on=req.createdOn)
 
 
 @router.post("/api/m2c/order")
@@ -390,14 +506,19 @@ def _field_orders(run: M2CRun, d: int) -> list[dict]:
             if case.work == "order":
                 o = run.orders[case.ref]
                 f = o.fields
+                more = f" · +{len(o.covered)} more case{'s' if len(o.covered) > 1 else ''}" if o.covered else ""
                 out.append({**job, "orderId": o.id, "sourceCaseId": case.source,
                             "activity": ords.ACTIVITY.get(f.get("activityType"), "special_read"),
-                            "minutes": o.minutes, "label": f"{f.get('shortText') or o.id} · {tw.address[p]}"})
+                            "minutes": o.minutes, "label": f"{f.get('shortText') or o.id} · {tw.address[p]}{more}",
+                            **({"coveredCaseIds": [c.id for c in o.covered]} if o.covered else {})})
                 continue
             nxt = next((e[1] for e in case.events[k + 1:] if e[1] in ("METER_EXCHANGE", "SPECIAL_READ")), "SPECIAL_READ")
+            shared = case.events[k][2].get("caseIds") or []  # one visit for the premise's cases
             out.append({**job, "activity": "meter_exchange" if nxt == "METER_EXCHANGE" else "special_read",
-                        "minutes": 45 if nxt == "METER_EXCHANGE" else 20,
-                        "label": f"{cat.EVENTS[case.type][0]} · {tw.address[p]}"})
+                        "minutes": (45 if nxt == "METER_EXCHANGE" else 20) + 10 * max(0, len(shared) - 1),
+                        "label": f"{cat.EVENTS[case.type][0]} · {tw.address[p]}"
+                                 + (f" · {len(shared)} cases" if len(shared) > 1 else ""),
+                        **({"caseIds": shared} if shared else {})})
     return out
 
 

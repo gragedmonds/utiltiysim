@@ -72,10 +72,10 @@ Premises also carry a content `uid`.
 | `premises[]` | `x`, `z`, `width` (along street), `depth`, `height`, `angle` (road direction `atan2(dz,dx)`; mesh `rotation.y = -angle`), `side` (±1), `front {x,z}`, `roofTone`, `roof` (`gable`/`hip`/`flat`), `stories`, `premiseType`, `buildingType`, `solar`, `solarKW`, `occupied`, `services {electric,water,gas}`, `uid` |
 | `buildings[]` | exact `footprint.polygon[{x,z}]`, `heightM`, `roof` |
 | `facilities[]` | `kind` (`substation`, `pump_station`, `elevated_tank`, `city_gate`, `depot`, `industrial`, `school`), `polygon`, `label` |
-| `networks.{u}` | `sourceIds` (every `external_supply` node), `sourceId` (the first), `unit`, `nodes`, `edges`, `equipment`; electric also `corridors[{id, name, hierarchy, roadIds (ordered), lengthM, entranceNodeId, exitNodeId, ring, feederIds, trunkLengthM}]` |
+| `networks.{u}` | `sourceIds` (every `external_supply` node), `sourceId` (the first), `unit`, `nodes`, `edges`, `equipment`; electric also `corridors[{id, name, hierarchy, roadIds (ordered), lengthM, entranceNodeId, exitNodeId, ring, feederIds, trunkLengthM}]` and `meta` with `feeders[{id, substationId, headNodeId, customers, designKVA, trunkKm, expressKm, corridorIds, tieIds, switchIds, sections}]`, `ties`, `switches` |
 | `networks.{u}.nodes[]` | `kind` (`external_supply`, `substation`, `pump_station`, `city_gate_regulator`, `elevated_tank`, `district_regulator`, `junction`, `transformer`, `meter`), `subkind` render hint (`tank`, `regulator`), `x`, `z`, `elevationM`, `label`, `premiseId`, `servicePointId`, `parentEdgeId` |
-| `networks.{u}.edges[]` | `from`, `to`, `kind` (`supply`, `trunk`, `distribution`, `transformer`, `tank_riser`, `service`), `enabled`, `loop`, `normallyOpen` and `boundaryValve` (present when set), `tier`, `placement` (`overhead`/`underground`), `points`, `lengthM`, `sizeMm`, `nominalLabel`, `diameterIn`, `voltageKV`, `phase`, `ratingKVA`, `feeder`, `pressureTier`, `zone`; electric also `feederId`, `designRole` (`supply`, `getaway`, `trunk`, `express`, `lateral`, `tie`, `transformer`, `service`), `corridorId`, and on ties `feeders`, `switchId` |
-| `networks.{u}.equipment[]` | `kind` (`pole`, `recloser`, `fuse`, `tie_switch`, `riser`, `hydrant`, `valve`, `district_regulator`, `prv`, `booster_station`), `x`, `z` (markers, not graph nodes) |
+| `networks.{u}.edges[]` | `from`, `to`, `kind` (`supply`, `trunk`, `distribution`, `transformer`, `tank_riser`, `service`), `enabled`, `loop`, `normallyOpen` and `boundaryValve` (present when set), `tier`, `placement` (`overhead`/`underground`), `points`, `lengthM`, `sizeMm`, `nominalLabel`, `diameterIn`, `voltageKV`, `phase`, `ratingKVA`, `feeder`, `pressureTier`, `zone`; electric also `feederId`, `designRole` (`supply`, `getaway`, `trunk`, `express`, `lateral`, `tie`, `transformer`, `service`), `corridorId`, on ties `switch: "tie"`, `switchId` and `feeders` (the feeders at its two ends: equal for a loop between two sections of one feeder, `TIE-<feeder>-LOOP…`), and on a sectionalised piece `switch: "sectionalising"` and `switchId` (the switch at its supply end) |
+| `networks.{u}.equipment[]` | `kind` (`pole`, `recloser`, `fuse`, `sectionalising_switch`, `tie_switch`, `riser`, `hydrant`, `valve`, `district_regulator`, `prv`, `booster_station`), `x`, `z` (markers, not graph nodes); a `sectionalising_switch` has `edgeId`, `feeder`, `normally: "closed"` and `mount` (`pole` or `pad`), a `tie_switch` `edgeId`, `feeders` and `normally: "open"` |
 | `amiNetwork` | `headend`, `collectors[{id,x,z,mountedOn,coverageRadiusM}]` |
 | `mrus[]` | `technology` (`AMI`/`AMR`/`MANUAL`), `readerId`, `path[{x,z}]` (route order), `portionId` |
 
@@ -204,9 +204,13 @@ Commands: `{id, at, type, payload}`.
   explicit repair dispatch is only needed when that is off.
 
 What the engine does:
-* **Electric:** the nearest upstream fuse (lateral) or recloser (feeder head) trips; AMI last-gasp detects the outage;
-  the crew isolates the faulted span and re-closes the device (customers upstream of the fault come back), repairs,
-  and restores the rest.
+* **Electric:** the nearest upstream fuse (lateral) or recloser (feeder head) trips; AMI last-gasp detects the outage.
+  The crew isolates the faulted **section**: it opens the nearest switching device above the fault (a sectionalising
+  switch, or the fuse or recloser that tripped, which then stays open) and the nearest sectionalising switches
+  below it, and re-closes the tripped device when the section has its own upstream switch (customers upstream come
+  back). It then closes normally-open ties one at a time to back-feed the healthy sections beyond, repairs, and
+  restores the rest (ties open, switches close). A failed transformer, a service drop, a supply line or a tie is
+  cut clear on its own.
 * **Water / gas:** the break leaks (flow injected at the nearer node) until the crew closes the valves bounding the
   damaged section; customers inside it lose supply; repair (and flush for water), then restore.
 * **Field visit:** a meter technician drives out, takes interim reads of the premise's meters (`meter-read/1.1`,
@@ -274,12 +278,25 @@ and above them. A voltage lens should colour against these, not fixed numbers.
 They also carry `premises.pressure.water` and `premises.pressure.gas`: service pressure in kPa gauge from the
 hydraulics, loops included. It is null when the premise is unsupplied or not served.
 
-Back-feed closes a tie only if the feeder picking up the load stays within `tieMaxLoading` (1.3, the emergency
-rating) and every customer keeps at least `tieMinVoltage`, checked hourly across the repair. Its default is the
-town's lower service limit less 4 V (`electric.voltage_min_pu` × 120 V − 4 V: 110 V, ANSI C84.1 Range B, at the
-default 0.95 pu). Otherwise the
-incident lists `tiesDeclined` and a `backfeed.declined` event explains why. An accepted tie reports its `maxLoading`
-and `minVoltage`.
+Back-feed closes ties one at a time, every `tieSwitchMinutes` after isolation, each time the tie that restores the
+most customers still out, and never one that would re-energise the isolated section. A tie closes only if every
+line it loads more stays within `tieMaxLoading` (1.3, the emergency rating) and every customer it supplies or
+lowers keeps at least `tieMinVoltage`, checked hourly across the repair against the switching before it (a line
+already over its rating elsewhere does not decline it). The voltage floor's default is the town's lower service
+limit less 4 V (`electric.voltage_min_pu` × 120 V − 4 V: 110 V, ANSI C84.1 Range B, at the default 0.95 pu). When
+no tie can carry all it would pick up, the crew first opens one more sectionalising switch in that island and the
+tie picks up only its own side (`ties[].openedSwitch`). Ties it could not use are listed in `tiesDeclined` and a
+`backfeed.declined` event explains why.
+
+An electric incident reports `unsupplied {atFault, afterIsolation, afterBackfeed}` (the last once a tie closes),
+`isolation {method: "switches" | "span", upstream {id, edgeId, kind}, downstream [{id, edgeId, kind}],
+deviceReclosed, sectionUnsupplied}`, and `ties [{id, edgeId, closedAt, openedAt, restored, maxLoading, minVoltage,
+openedSwitch?}]` in the order they closed; `tie` repeats the first (`edgeId, closedAt, openedAt, maxLoading,
+minVoltage`). Its events: `fault.isolated` (`openedEdgeId` the faulted span, `switchIds` and `openedEdgeIds` the
+switches opened, `reclosedDeviceEdgeId` or null when the tripped device bounds the section and stays open,
+`stillUnsupplied`, `sectionUnsupplied`), `switch.opened` / `switch.closed` (entity the switch, payload `{incidentId,
+id, edgeId, kind}`), `tie.closed` (`tieEdgeId`, `tieId`, `restored`, `stillUnsupplied`) and `tie.opened`. Frames
+show the opened switches as disabled edges and the closed ties as enabled ones.
 
 **Determinism:** the same town, day, settings and commands give byte-identical timelines and frames. Commands run in
 time order and nothing decides using a later command, so **appending a command never changes events, jobs or routes

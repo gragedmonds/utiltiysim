@@ -58,3 +58,30 @@ test('switching marks redraw the switched edges and ring the devices, with their
  ops.time=50000;marks.update(ops);assert.equal(marks.ringCount,1);assert.deepEqual([marks.spots[0][0].x,marks.spots[0][0].z],[30,15],'no equipment entry: the middle of the edge');ops.time=28000;marks.update(ops);assert.equal(marks.overlay.count,0);assert.equal(marks.ringCount,0);
  marks.zoom(3000);assert.equal(marks.scale,6);
 });
+
+// Generator 0.9.0: the crew opens real sectionalising switches and may close several ties (Ayr's F1-02 trunk pole).
+test('sectionalised isolation: opened switches until they close, every tie, and a recloser the engine left open',()=>{
+ const tl={incidents:[
+  {id:'INC-1',utility:'electric',edgeId:'electric-E289',createdAt:28800,isolatedAt:30075,restoredAt:37275,device:{edgeId:'electric-E2',kind:'recloser'},isolation:{method:'switches',upstream:{id:'SW-1',edgeId:'electric-E287',kind:'sectionalising_switch'},downstream:[{id:'SW-2',edgeId:'electric-E304',kind:'sectionalising_switch'}],deviceReclosed:true},
+   tie:{edgeId:'electric-E3108',closedAt:30435,openedAt:37275},ties:[{edgeId:'electric-E3108',closedAt:30435,openedAt:37275},{edgeId:'electric-E3106',closedAt:30795,openedAt:37275}]},
+  {id:'INC-2',utility:'electric',edgeId:'electric-E10',createdAt:40000,isolatedAt:41000,restoredAt:45000,device:{edgeId:'electric-E1',kind:'recloser'},isolation:{method:'switches',upstream:{id:'SW-9',edgeId:'electric-E1',kind:'recloser'},downstream:[{id:'SW-3',edgeId:'electric-E12',kind:'sectionalising_switch'}],deviceReclosed:false}}],
+ events:[
+  ev(28800,'protection.operated','INC-1',{incidentId:'INC-1',edgeId:'electric-E2',kind:'recloser'}),
+  ev(30075,'fault.isolated','INC-1',{reclosedDeviceEdgeId:'electric-E2'}),
+  ev(30075,'switch.opened','INC-1',{incidentId:'INC-1',id:'SW-1',edgeId:'electric-E287',kind:'sectionalising_switch'}),
+  ev(30075,'switch.opened','INC-1',{incidentId:'INC-1',id:'SW-2',edgeId:'electric-E304',kind:'sectionalising_switch'}),
+  ev(37275,'switch.closed','INC-1',{incidentId:'INC-1',id:'SW-1',edgeId:'electric-E287',kind:'sectionalising_switch'}),
+  ev(37275,'switch.closed','INC-1',{incidentId:'INC-1',id:'SW-2',edgeId:'electric-E304',kind:'sectionalising_switch'}),
+  ev(40000,'protection.operated','INC-2',{incidentId:'INC-2',edgeId:'electric-E1',kind:'recloser'}),
+  ev(41000,'fault.isolated','INC-2',{reclosedDeviceEdgeId:null})]};
+ const iv=switchingIntervals(tl),at=t=>switchingAt(iv,t);
+ assert.deepEqual(iv.filter(i=>i.type==='tie').map(i=>[i.edgeId,i.from,i.to]),[['electric-E3108',30435,37275],['electric-E3106',30795,37275]],'every tie, not just the first');
+ assert.deepEqual(iv.filter(i=>i.type==='switch'&&i.incidentId==='INC-1').map(i=>[i.id,i.from,i.to]),[['SW-1',30075,37275],['SW-2',30075,37275]]);
+ assert.deepEqual(at(31000).switches.map(x=>x.id),['SW-1','SW-2']);assert.equal(at(31000).ties.length,2);assert.equal(at(31000).devices.length,0,'re-closed at isolation');
+ assert.deepEqual(at(37300).switches,[]);
+ // No switch events: the incident's isolation block stands in, from isolation to restoration.
+ assert.deepEqual(iv.filter(i=>i.incidentId==='INC-2'&&i.type==='switch').map(i=>[i.id,i.from,i.to]),[['SW-9',41000,45000],['SW-3',41000,45000]]);
+ const dev=iv.find(i=>i.incidentId==='INC-2'&&i.type==='device');assert.equal(dev.to,45000,'a recloser the engine did not re-close stays open until restoration');
+ assert.ok(at(31000).key.includes('w:electric-E287'));
+ assert.deepEqual(switchingRows(at(31000)).map(r=>r.label),['tie closed · back-feed','switch open · section isolated']);
+});

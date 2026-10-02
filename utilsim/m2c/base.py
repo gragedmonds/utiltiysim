@@ -86,6 +86,13 @@ class M2CTown:
     accounts: dict[str, dict] = field(default_factory=dict)
     partners: dict[str, dict] = field(default_factory=dict)
     account_insts: dict[str, list[int]] = field(default_factory=dict)  # account -> installation rows
+    # AMI network: the collector each AMI meter reports through (None for AMR and walked meters), and the collectors.
+    meter_collector: list[str | None] = field(default_factory=list)
+    collectors: dict[str, dict] = field(default_factory=dict)  # id -> {mountedOn, mountId, x, z}
+
+    def collector_of(self, r: int) -> str | None:
+        """The AMI collector register row ``r``'s meter reports through, if any."""
+        return self.meter_collector[int(self.meter_of[r])] if self.meter_collector else None
 
     @property
     def n_registers(self) -> int:
@@ -214,7 +221,11 @@ class M2CTown:
             inst_contracts=inst_contracts,
             accounts={a["id"]: {x: a.get(x) for x in ACCOUNT_FIELDS} for a in snap.get("accounts", [])},
             partners={b["id"]: {x: b.get(x) for x in PARTNER_FIELDS} for b in snap.get("businessPartners", [])},
-            account_insts={a: sorted(set(v)) for a, v in account_insts.items()})
+            account_insts={a: sorted(set(v)) for a, v in account_insts.items()},
+            meter_collector=[((m.get("ami") or {}).get("collectorId") if m["technology"] == "AMI" else None)
+                             for m in meters],
+            collectors={c["id"]: {x: c.get(x) for x in ("mountedOn", "mountId", "x", "z")}
+                        for c in (snap.get("amiNetwork") or {}).get("collectors") or []})
 
 
 INST_FIELDS = ("premiseId", "servicePointId", "division", "mruId", "readCycle", "rateCategory", "billingClass",

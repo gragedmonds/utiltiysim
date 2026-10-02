@@ -13,6 +13,9 @@ export async function fetchGzipJSON(url){
  const stream=new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
  return JSON.parse(await new Response(stream).text());
 }
+// The engine town a bare address opens (Ayr, the town the Studio is tested on), else the index's first.
+export const DEFAULT_TOWN='ayr';
+export function defaultPack(packs){const list=packs?.towns||[];return list.find(t=>t.preset===DEFAULT_TOWN)||list[0]||null;}
 export function packLabel(t){return t.place?.name||(t.source?.label||'').replace(/ street snapshot$/i,'')||t.preset.replaceAll('_',' ');}
 // ?town=<ref>: a prebuilt pack (by preset or its town id), else a town the engine generated (its town id; the
 // snapshot then comes from the engine, which is also its live connection).

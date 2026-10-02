@@ -223,6 +223,18 @@
       "additionalProperties": false,
       "description": "Bill checks, tariff versions, invoicing, payments and dunning.",
       "properties": {
+        "arrangement_break_rate": {
+          "default": 0.3,
+          "description": "At-risk payers who break a payment arrangement after a few instalments (dunning resumes); other payers pay every instalment.",
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Arrangement Break Rate",
+          "type": "number",
+          "x-advanced": true,
+          "x-effects": [
+            "collections"
+          ]
+        },
         "billing_queue_worked_by": {
           "default": "analysts",
           "description": "Who works the BILLING queue (high bills, large credits, true-ups, rate-class errors): the simulated analysts and RPA, or only you. With 'you', no analyst or RPA touches a billing block, so every outsort waits in the Studio for your release, rebill or escalation.",
@@ -236,6 +248,18 @@
             "billing blocks",
             "days to invoice",
             "billing carry"
+          ]
+        },
+        "budget_billing_offer_rate": {
+          "default": 0.08,
+          "description": "Overdue notices after which the call centre enrols the customer in budget billing (once a year per account); the plan levels later invoices.",
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Budget Billing Offer Rate",
+          "type": "number",
+          "x-effects": [
+            "Budget Bill Cases",
+            "collections"
           ]
         },
         "credit_review": {
@@ -270,6 +294,31 @@
             "disconnection notices"
           ],
           "x-unit": "d"
+        },
+        "disconnect_notice_days": {
+          "default": 10,
+          "description": "Days from a disconnection notice to the earliest disconnection. A disconnection also needs a person's approval (the Collections worklist).",
+          "maximum": 60,
+          "minimum": 1,
+          "title": "Disconnect Notice Days",
+          "type": "integer",
+          "x-effects": [
+            "disconnections"
+          ],
+          "x-unit": "d"
+        },
+        "disconnect_payment_rate": {
+          "default": 0.6,
+          "description": "Disconnected customers who pay within a week of the disconnection (and are reconnected the next business day); the rest stay off until they pay.",
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Disconnect Payment Rate",
+          "type": "number",
+          "x-advanced": true,
+          "x-effects": [
+            "collections",
+            "reconnections"
+          ]
         },
         "first_bill_limit": {
           "default": 600.0,
@@ -310,6 +359,50 @@
           "title": "Late Fee Pct",
           "type": "number",
           "x-unit": "%"
+        },
+        "low_income_approval_rate": {
+          "default": 0.7,
+          "description": "Referrals the agency approves with a grant.",
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Low Income Approval Rate",
+          "type": "number",
+          "x-effects": [
+            "collections",
+            "receivable"
+          ]
+        },
+        "low_income_grant_max": {
+          "default": 500.0,
+          "description": "Largest low-income grant credited to an account's arrears.",
+          "maximum": 5000,
+          "minimum": 0,
+          "title": "Low Income Grant Max",
+          "type": "number",
+          "x-advanced": true,
+          "x-unit": "$"
+        },
+        "low_income_referral_rate": {
+          "default": 0.15,
+          "description": "Disconnection notices and winter moratorium holds after which the call centre refers the customer to a low-income programme (once a year per account).",
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Low Income Referral Rate",
+          "type": "number",
+          "x-effects": [
+            "Low Income Process cases",
+            "disconnections"
+          ]
+        },
+        "low_income_review_days": {
+          "default": 10,
+          "description": "Business days the low-income agency takes to decide a referral; dunning waits meanwhile.",
+          "maximum": 60,
+          "minimum": 1,
+          "title": "Low Income Review Days",
+          "type": "integer",
+          "x-advanced": true,
+          "x-unit": "d"
         },
         "notice_days": {
           "default": 21,
@@ -409,7 +502,7 @@
         },
         "winter_moratorium": {
           "default": true,
-          "description": "No disconnection notices for electricity and water from Nov 15 to Apr 30 (Ontario).",
+          "description": "No disconnection notices for electricity and water from Nov 15 to Apr 30 (Ontario); a notice held for the winter is issued on May 1 if the bill is still unpaid.",
           "title": "Winter Moratorium",
           "type": "boolean"
         }
@@ -876,6 +969,32 @@
           "x-advanced": true,
           "x-unit": "V"
         },
+        "section_max_share": {
+          "default": 0.15,
+          "description": "Sectionalising switches cut each feeder's three-phase backbone into sections of at most this share of the feeder's customers (at least section_min_customers), so a crew isolates a fault within a bounded section and ties back-feed the healthy sections beyond it.",
+          "maximum": 1.0,
+          "minimum": 0.05,
+          "title": "Section Max Share",
+          "type": "number",
+          "x-effects": [
+            "sectionalising switches",
+            "tie switches",
+            "outage size after isolation"
+          ]
+        },
+        "section_min_customers": {
+          "default": 100,
+          "description": "Smallest section limit: a feeder is not cut into sections smaller than this many customers.",
+          "maximum": 5000,
+          "minimum": 10,
+          "title": "Section Min Customers",
+          "type": "integer",
+          "x-advanced": true,
+          "x-effects": [
+            "sectionalising switches",
+            "outage size after isolation"
+          ]
+        },
         "severe_turn_deg": {
           "default": 60.0,
           "description": "A trunk turn at least this sharp counts as severe in the routing metrics.",
@@ -899,21 +1018,22 @@
           "x-unit": "MVA"
         },
         "tie_max_length_m": {
-          "default": 800.0,
-          "description": "Longest new line built to tie a feeder that touches no other feeder.",
+          "default": 1200.0,
+          "description": "Longest new line built for a tie: to a feeder that touches no other feeder, or from a switched section to another feeder's three-phase line (or round to its own feeder's). Along a street a line already uses, a metre counts 1.25 (single-phase) or 2 (three-phase).",
           "maximum": 5000,
           "minimum": 0,
           "title": "Tie Max Length M",
           "type": "number",
           "x-advanced": true,
           "x-effects": [
-            "tie switches"
+            "tie switches",
+            "back-feed options"
           ],
           "x-unit": "m"
         },
         "ties_per_feeder_pair": {
           "default": 1,
-          "description": "Normally-open tie switches between each pair of neighbouring feeders.",
+          "description": "Normally-open tie switches between each pair of neighbouring feeders (0: no ties at all, section ties included).",
           "maximum": 4,
           "minimum": 0,
           "title": "Ties Per Feeder Pair",
@@ -1805,6 +1925,32 @@
           "type": "number",
           "x-advanced": true,
           "x-unit": "min"
+        },
+        "supervisor_queue_days_max": {
+          "default": 3,
+          "description": "Maximum wait before a supervisor picks up an escalation from an analyst or you. An escalation you take yourself (assign) waits for you.",
+          "maximum": 30,
+          "minimum": 1,
+          "title": "Supervisor Queue Days Max",
+          "type": "integer",
+          "x-effects": [
+            "escalation backlog",
+            "days to bill"
+          ],
+          "x-unit": "d"
+        },
+        "supervisor_queue_days_min": {
+          "default": 1,
+          "description": "Minimum wait before a supervisor picks up an escalation (VEE's own escalations wait this long).",
+          "maximum": 20,
+          "minimum": 1,
+          "title": "Supervisor Queue Days Min",
+          "type": "integer",
+          "x-effects": [
+            "escalation backlog",
+            "days to bill"
+          ],
+          "x-unit": "d"
         },
         "supervisors": {
           "default": 1,
@@ -2965,5 +3111,5 @@
   },
   "title": "SimConfig",
   "type": "object",
-  "x-generator-version": "0.8.0"
+  "x-generator-version": "0.9.0"
 }

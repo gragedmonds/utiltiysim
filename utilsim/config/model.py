@@ -243,10 +243,22 @@ class ElectricConfig(BaseModel):
                                          advanced=True, effects=["express sections", "feeder separation"])
     severe_turn_deg: float = F(60.0, "A trunk turn at least this sharp counts as severe in the routing metrics.",
                                unit="deg", ge=20, le=170, advanced=True)
-    ties_per_feeder_pair: int = F(1, "Normally-open tie switches between each pair of neighbouring feeders.",
-                                  ge=0, le=4, effects=["tie switches", "back-feed options"])
-    tie_max_length_m: float = F(800.0, "Longest new line built to tie a feeder that touches no other feeder.",
-                                unit="m", ge=0, le=5000, advanced=True, effects=["tie switches"])
+    ties_per_feeder_pair: int = F(1, "Normally-open tie switches between each pair of neighbouring feeders (0: no "
+                                  "ties at all, section ties included).", ge=0, le=4,
+                                  effects=["tie switches", "back-feed options"])
+    tie_max_length_m: float = F(1200.0, "Longest new line built for a tie: to a feeder that touches no other "
+                                "feeder, or from a switched section to another feeder's three-phase line (or round "
+                                "to its own feeder's). Along a street a line already uses, a metre counts 1.25 "
+                                "(single-phase) or 2 (three-phase).", unit="m", ge=0, le=5000, advanced=True,
+                                effects=["tie switches", "back-feed options"])
+    section_max_share: float = F(0.15, "Sectionalising switches cut each feeder's three-phase backbone into "
+                                 "sections of at most this share of the feeder's customers (at least "
+                                 "section_min_customers), so a crew isolates a fault within a bounded section and "
+                                 "ties back-feed the healthy sections beyond it.", ge=0.05, le=1.0,
+                                 effects=["sectionalising switches", "tie switches", "outage size after isolation"])
+    section_min_customers: int = F(100, "Smallest section limit: a feeder is not cut into sections smaller than "
+                                   "this many customers.", ge=10, le=5000, advanced=True,
+                                   effects=["sectionalising switches", "outage size after isolation"])
     overhead_before_year: int = F(1978, "Districts built before this year are overhead (poles); later underground.",
                                   ge=1850, le=2030, effects=["poles", "lightning exposure", "storm outages"])
     pole_spacing_m: float = F(42.0, "Pole span on overhead lines.", unit="m", ge=20, le=90, advanced=True)
@@ -477,6 +489,12 @@ class ProcessConfig(BaseModel):
                                         le=10, advanced=True)
     supervisor_minutes: float = F(40.0, "Supervisor review time per escalation.", unit="min", ge=5, le=240,
                                   advanced=True)
+    supervisor_queue_days_min: int = F(1, "Minimum wait before a supervisor picks up an escalation (VEE's own "
+                                       "escalations wait this long).", unit="d", ge=1, le=20,
+                                       effects=["escalation backlog", "days to bill"])
+    supervisor_queue_days_max: int = F(3, "Maximum wait before a supervisor picks up an escalation from an analyst "
+                                       "or you. An escalation you take yourself (assign) waits for you.", unit="d",
+                                       ge=1, le=30, effects=["escalation backlog", "days to bill"])
     field_orders_per_day: int = F(6, "Meter investigations, re-reads and exchanges completed per business day.",
                                   ge=0, le=500, effects=["field order backlog", "estimates"])
     field_days_min: int = F(1, "Earliest a field order is worked after it is raised.", unit="d", ge=0, le=20,
@@ -581,7 +599,30 @@ class BillingConfig(BaseModel):
     disconnect_days: int = F(45, "Days after the due date for a disconnection notice.", unit="d", ge=5, le=180,
                              effects=["disconnection notices"])
     winter_moratorium: bool = F(True, "No disconnection notices for electricity and water from Nov 15 to Apr 30 "
-                                "(Ontario).")
+                                "(Ontario); a notice held for the winter is issued on May 1 if the bill is still "
+                                "unpaid.")
+    disconnect_notice_days: int = F(10, "Days from a disconnection notice to the earliest disconnection. A "
+                                    "disconnection also needs a person's approval (the Collections worklist).",
+                                    unit="d", ge=1, le=60, effects=["disconnections"])
+    disconnect_payment_rate: float = F(0.6, "Disconnected customers who pay within a week of the disconnection (and "
+                                       "are reconnected the next business day); the rest stay off until they pay.",
+                                       ge=0, le=1, advanced=True, effects=["collections", "reconnections"])
+    arrangement_break_rate: float = F(0.3, "At-risk payers who break a payment arrangement after a few instalments "
+                                      "(dunning resumes); other payers pay every instalment.", ge=0, le=1,
+                                      advanced=True, effects=["collections"])
+    low_income_referral_rate: float = F(0.15, "Disconnection notices and winter moratorium holds after which the call "
+                                        "centre refers the customer to a low-income programme (once a year per "
+                                        "account).", ge=0, le=1,
+                                        effects=["Low Income Process cases", "disconnections"])
+    low_income_review_days: int = F(10, "Business days the low-income agency takes to decide a referral; dunning "
+                                    "waits meanwhile.", unit="d", ge=1, le=60, advanced=True)
+    low_income_approval_rate: float = F(0.7, "Referrals the agency approves with a grant.", ge=0, le=1,
+                                        effects=["collections", "receivable"])
+    low_income_grant_max: float = F(500.0, "Largest low-income grant credited to an account's arrears.", unit="$",
+                                    ge=0, le=5000, advanced=True)
+    budget_billing_offer_rate: float = F(0.08, "Overdue notices after which the call centre enrols the customer in "
+                                         "budget billing (once a year per account); the plan levels later "
+                                         "invoices.", ge=0, le=1, effects=["Budget Bill Cases", "collections"])
 
 
 class ScenarioConfig(BaseModel):
@@ -634,6 +675,8 @@ class SimConfig(BaseModel):
             raise ValueError("process.analyst_queue_days_max must be >= min")
         if self.process.review_minutes_max < self.process.review_minutes_min:
             raise ValueError("process.review_minutes_max must be >= min")
+        if self.process.supervisor_queue_days_max < self.process.supervisor_queue_days_min:
+            raise ValueError("process.supervisor_queue_days_max must be >= min")
         if self.vee.reject_confidence > self.vee.accept_confidence:
             raise ValueError("vee.reject_confidence must not exceed vee.accept_confidence")
         if self.vee.max_period_days < self.vee.min_period_days:

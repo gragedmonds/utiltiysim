@@ -13,12 +13,14 @@ Bill checks block a document into the ``BILLING`` queue:
 RPA may release a high bill or a large credit only up to ``outsort_auto_release_max``; a larger outsort and every
 true-up block wait for a person. A document says whether it was built on an estimated read (``estimated``).
 
-Analysts work the queue: they release the bill, rebill it on an estimate, or fix the rate class. Payments and dunning
-run after the year, because nothing upstream depends on them:
+Analysts work the queue: they release the bill, rebill it on an estimate, or fix the rate class. Payments, dunning and
+collections run after the year, because nothing upstream depends on them (``collections.py``):
 - payment timing comes from the account's payment method and its partner's payer profile;
 - pre-authorized debits can be returned;
 - unpaid invoices get reminders, overdue notices with late fees, and disconnection notices (held by the winter
-  moratorium for electricity and water).
+  moratorium for electricity and water);
+- your collections actions (arrangements, holds, referrals, budget billing, waivers, disconnections) and the call
+  centre's referrals change them from their day on.
 """
 
 from __future__ import annotations
@@ -77,15 +79,24 @@ class Books:
         rate = self.run.town.inst_rate[i]
         return _swap(rate) if self.rate_err_t[i] <= t < self.rate_fix_t[i] else rate
 
-    def quantities(self, i: np.ndarray, m: np.ndarray, src: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-        """Import and export quantities per installation period from register values ``src`` (released or truth)."""
-        digits = self.run.town.digits
+    def quantities(self, i: np.ndarray, m: np.ndarray, src: np.ndarray,
+                   device: bool = False) -> tuple[np.ndarray, np.ndarray]:
+        """Import and export quantities per installation period from register values ``src`` (released or truth).
+        ``device``: a period with a device change bills the new register from its initial read, plus the old
+        register's last stretch (``Install.carry``)."""
+        run = self.run
+        digits = run.town.digits
         out = []
         for rows in (self.main[i], self.export_row[i]):
             ok = rows >= 0
             rr = np.where(ok, rows, 0)
             mod = 10.0 ** digits[rr]
-            d = src[rr, m] - src[rr, m - 1]
+            prev = src[rr, m - 1].astype(float)
+            if device:
+                for k in np.flatnonzero(ok & (run.dev_change[rr, m] != None)):  # noqa: E711 (object array)
+                    r, mm = int(rr[k]), int(m[k])
+                    prev[k] = run.dev_change[r, mm].carry(r, float(src[r, mm - 1]), float(run.normal_at[r, mm - 1]))
+            d = src[rr, m] - prev
             out.append(np.where(ok, np.where(d < -0.5 * mod, d + mod, d), 0.0))
         return out[0], out[1]
 
@@ -141,7 +152,7 @@ class Books:
         m = np.array([x[1] for x in ready])
         rates = [self.rate_at(a, t) for a in i.tolist()]
         right = [run.town.inst_rate[a] for a in i.tolist()]
-        qi, qe = self.quantities(i, m, run.released)
+        qi, qe = self.quantities(i, m, run.released, device=True)
         ti, te = self.quantities(i, m, run.truth)
         ei, ee = self.expected(i, m)
         totals = self.compute(list(zip(i.tolist(), m.tolist(), rates, qi.tolist(), qe.tolist(), strict=True)))
@@ -302,53 +313,11 @@ class Books:
 
     # ---- payments and collections (after the year) -------------------------------------------------------------
     def collect(self) -> None:
-        run, b = self.run, self.run.cfg.billing
-        tw = run.town
-        keys = np.array([str_key(inv["id"]) for inv in self.invoices], dtype=np.int64)
-        draws = hash_u01(run.seed, P_BILL, keys[:, None], np.arange(2, 6)[None, :]) if len(keys) else np.zeros((0, 4))
-        for inv, u in zip(self.invoices, draws, strict=True):
-            acct = inv["account"]
-            led = self.ledger.setdefault(acct, [])
-            led.append((float(inv["issued"]), "invoice", inv["total"], inv["id"]))
-            if inv["total"] <= 0:
-                inv["paid"] = float(inv["issued"])
-                continue
-            method = tw.account_method.get(acct, "online")
-            profile = tw.account_profile.get(acct, "on_time")
-            due = float(inv["due"])
-            paid: float | None
-            if method == "pre_authorized_debit":
-                paid = due + 0.3
-                if u[0] < b.pad_reject_rate:
-                    inv["payments"].append({"at": paid, "amount": inv["total"], "status": "rejected"})
-                    led.append((paid + 2, "nsf_fee", b.nsf_fee, inv["id"]))
-                    inv["dunning"].append((paid + 2, "PAYMENT_REJECTED"))
-                    paid = due + 10 + float(u[1]) * 10
-            elif profile == "on_time":
-                paid = float(inv["issued"]) + 2 + float(u[1]) * max(1.0, due - inv["issued"] - 2) + \
-                    (3 if method == "cheque" else 0)
-            elif profile == "late":
-                paid = due + 3 + float(u[1]) * 37
-            else:
-                paid = due + 20 + float(u[2]) * 60 if u[3] < 0.5 else None
-            inv["paid"] = paid
-            if paid is not None:
-                inv["payments"].append({"at": paid, "amount": inv["total"], "status": "received"})
-                led.append((paid, "payment", -inv["total"], inv["id"]))
-            for days, kind in ((b.reminder_days, "DUNNING_REMINDER"), (b.notice_days, "DUNNING_NOTICE"),
-                               (b.disconnect_days, "DISCONNECT_NOTICE")):
-                at = due + days
-                if (paid is not None and paid <= at) or at >= 365:
-                    break
-                if kind == "DUNNING_NOTICE":
-                    led.append((at, "late_fee", round(inv["total"] * b.late_fee_pct / 100.0, 2), inv["id"]))
-                if kind == "DISCONNECT_NOTICE" and b.winter_moratorium and _winter(run.date_of(int(at))) and any(
-                        str(tw.commodity[self.main[self.docs[k]["inst"]]]) in ("electric", "water")
-                        for k in inv["docs"]):
-                    kind = "MORATORIUM_HOLD"
-                inv["dunning"].append((at, kind))
-        for led in self.ledger.values():
-            led.sort(key=lambda e: e[0])
+        """Payments, dunning and collections work per account (utilsim/m2c/collections.py)."""
+        from utilsim.m2c.collections import Collections
+
+        self.collections = Collections(self.run)
+        self.collections.replay()
 
     def balance(self, acct: str, T: float) -> float:
         return round(sum(a for t, _, a, _ in self.ledger.get(acct, []) if t <= T), 2)

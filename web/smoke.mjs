@@ -6,7 +6,7 @@ import fs from 'node:fs'; import os from 'node:os'; import path from 'node:path'
 import {createRequire} from 'node:module';
 const require = createRequire(import.meta.url);
 const {chromium} = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
-const [url = 'http://127.0.0.1:5175/', dir = '../examples/whitby-480-seed42', out = 'viewer.png', pick = 'P-00042'] =
+const [url = 'http://127.0.0.1:5175/?town=demo', dir = '../examples/whitby-480-seed42', out = 'viewer.png', pick = 'P-00042'] =
   process.argv.slice(2);
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'utilsim-smoke-'));
 const gz = path.join(dir, 'snapshot.json.gz');

@@ -66,7 +66,7 @@ These are headless Chromium figures and don't include the browser's own rasteris
 | Premise without supply (`frame.premises.unsupplied`) | A ring in the utility's colour at its street frontage; at night its windows stay dark. |
 | Service voltage outside ANSI A | A small violet ring. |
 | De-energised or isolated edge | Grey dashes over the line. |
-| Closed valves, closed ties, open devices | Switching colours over the edges and rings at the equipment, as in 3D. |
+| Closed valves, closed ties, open devices, sectionalising switches the crew opened | Switching colours over the edges and rings at the equipment, as in 3D: valve red, tie blue, tripped device orange, opened switch magenta. Every tie in `incident.ties[]` is drawn. |
 | Broken pole | The pole sprite tilted. |
 | Water main break | A ring, a puddle and a jet. |
 | Night (`clock.sunElevationDeg`) | The bake darkens, supplied houses glow warm, and streetlights glow at poles. |

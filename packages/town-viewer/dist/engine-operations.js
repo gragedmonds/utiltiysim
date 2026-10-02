@@ -61,7 +61,7 @@ export class EngineOperations{
 // reporting, not service.
 export function incidentImpact(i,time=0){const u=i?.unsupplied||{},n=x=>Number(x||0).toLocaleString('en-CA'),who=x=>`${n(x)} customer${x===1?'':'s'}`;
  if(i?.utility==='ami'||i?.kind==='collector_outage')return `${i.premiseIds?.length?who(i.premiseIds.length)+': ':''}AMI meters cannot report; service continues`;
- if(i?.utility==='electric'||u.atFault)return `${n(u.atFault)} out at the fault · ${n(u.afterIsolation)} after isolation${i.tie&&u.afterBackfeed!=null?` · ${n(u.afterBackfeed)} once the tie closed`:''}`;
+ if(i?.utility==='electric'||u.atFault)return `${n(u.atFault)} out at the fault · ${n(u.afterIsolation)} after isolation${(i.ties?.length||i.tie)&&u.afterBackfeed!=null?` · ${n(u.afterBackfeed)} once the ${i.ties?.length>1?i.ties.length+' ties':'tie'} closed`:''}`;
  const what=i?.utility||'supply',restored=Number.isFinite(i?.restoredAt)&&i.restoredAt<=time,isolated=i?.isolatedAt!=null&&i.isolatedAt<=time;
  if(restored)return u.afterIsolation?`${who(u.afterIsolation)} ${u.afterIsolation===1?'was':'were'} without ${what} while it was isolated`:'Repaired without cutting anyone off';
  if(isolated)return u.afterIsolation?`Isolated · ${who(u.afterIsolation)} without ${what} until the repair`:'Isolated without cutting anyone off';

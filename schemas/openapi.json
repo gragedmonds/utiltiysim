@@ -12,7 +12,7 @@
                 "type": "null"
               }
             ],
-            "description": "invoice_hold / invoice_unhold: the account (or give a caseId).",
+            "description": "invoice_hold / invoice_unhold: the account (or give a caseId); payment_arrangement, dunning_hold, low_income_referral, budget_billing: the account (required).",
             "title": "Accountid"
           },
           "assignee": {
@@ -71,10 +71,69 @@
             "description": "order_save: the component rows {description, quantity, unit} (replaces the draft's list).",
             "title": "Components"
           },
+          "coverCaseIds": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 20,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "order_save (new order) or field_order: other open read cases at the same premise the visit also covers (one visit per premise).",
+            "title": "Covercaseids"
+          },
           "day": {
             "description": "Local date of the decision (YYYY-MM-DD), in 2026, never before the previous action.",
             "title": "Day",
             "type": "string"
+          },
+          "days": {
+            "anyOf": [
+              {
+                "maximum": 90.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "extend_due: days added to the due date (1-60, default 14); dunning_hold: days dunning waits (1-90, default 30).",
+            "title": "Days"
+          },
+          "deviceId": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "device_replace: the new device's id.",
+            "title": "Deviceid"
+          },
+          "fee": {
+            "anyOf": [
+              {
+                "enum": [
+                  "late_fee",
+                  "nsf_fee"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "waive_fee: the fee to waive (default late_fee).",
+            "title": "Fee"
           },
           "fields": {
             "anyOf": [
@@ -100,6 +159,69 @@
             ],
             "title": "Id"
           },
+          "initialRead": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "device_replace: the new register's first value.",
+            "title": "Initialread"
+          },
+          "installDate": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "device_replace: when the new device went in (YYYY-MM-DD, on or before the action day, after the last released read).",
+            "title": "Installdate"
+          },
+          "instalments": {
+            "anyOf": [
+              {
+                "maximum": 12.0,
+                "minimum": 2.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "payment_arrangement: monthly instalments (default 3); the first is due a week after the arrangement.",
+            "title": "Instalments"
+          },
+          "invoiceId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "extend_due, waive_fee, disconnect_approve, disconnect_cancel: the invoice (INV-{account}-{YYYYMMDD}, required).",
+            "title": "Invoiceid"
+          },
+          "meterId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "device_replace: the meter (device slot) on the installation.",
+            "title": "Meterid"
+          },
           "note": {
             "anyOf": [
               {
@@ -110,7 +232,7 @@
                 "type": "null"
               }
             ],
-            "description": "A reason (decisions, invoice_hold, invoice_unhold; required for holds) or the field outcome (order_complete, required).",
+            "description": "A reason (decisions, invoice_hold, invoice_unhold, device_replace; required for holds), or a comment with an order_complete outcome (an older action list's order_complete may carry a note alone).",
             "title": "Note"
           },
           "orderId": {
@@ -124,6 +246,19 @@
             ],
             "description": "Order actions: the field service order (order_save without it creates a draft from a source).",
             "title": "Orderid"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "order_complete: the structured field outcome {kind: read_taken | read_confirmed | meter_exchanged | no_access | defect_found, ...}; see GET /api/m2c/vocabulary order.outcomes.",
+            "title": "Outcome"
           },
           "premiseId": {
             "anyOf": [
@@ -148,6 +283,19 @@
             ],
             "description": "order_save (new order): the read the order is raised from.",
             "title": "Readid"
+          },
+          "removalRead": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "device_replace: the old register's last value (optional; else the normal use is assumed).",
+            "title": "Removalread"
           },
           "sourceCaseId": {
             "anyOf": [
@@ -181,6 +329,7 @@
               "estimate",
               "field_order",
               "escalate",
+              "check_read",
               "field_read",
               "order_save",
               "order_release",
@@ -189,7 +338,16 @@
               "note",
               "assign",
               "invoice_hold",
-              "invoice_unhold"
+              "invoice_unhold",
+              "device_replace",
+              "payment_arrangement",
+              "extend_due",
+              "dunning_hold",
+              "low_income_referral",
+              "budget_billing",
+              "waive_fee",
+              "disconnect_approve",
+              "disconnect_cancel"
             ],
             "title": "Type",
             "type": "string"
@@ -295,6 +453,344 @@
           "caseId"
         ],
         "title": "CaseRequest",
+        "type": "object"
+      },
+      "CollectionsAccountRequest": {
+        "properties": {
+          "accountId": {
+            "title": "Accountid",
+            "type": "string"
+          },
+          "actions": {
+            "items": {
+              "$ref": "#/components/schemas/Action"
+            },
+            "maxItems": 2000,
+            "title": "Actions",
+            "type": "array"
+          },
+          "asOf": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "View date (YYYY-MM-DD); default: the town's scenario date.",
+            "title": "Asof"
+          },
+          "outages": {
+            "description": "Service interruptions from the operations simulator (a timeline's ``interruptions``): consumption stops, AMI meters without power miss their reads, and VEE sees the outage.",
+            "items": {
+              "$ref": "#/components/schemas/Outage"
+            },
+            "maxItems": 500,
+            "title": "Outages",
+            "type": "array"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Run seed: re-rolls the run's random draws (missed reads, anomalies, analyst work, bill checks) on the same town. Blank or null: the town's seed (GET /api/m2c/settings?town= shows it).",
+            "title": "Seed"
+          },
+          "settings": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing); see GET /api/m2c/settings.",
+            "title": "Settings"
+          },
+          "town": {
+            "description": "Pack preset (e.g. 'ayr') or town id.",
+            "title": "Town",
+            "type": "string"
+          }
+        },
+        "required": [
+          "town",
+          "accountId"
+        ],
+        "title": "CollectionsAccountRequest",
+        "type": "object"
+      },
+      "CollectionsRequest": {
+        "properties": {
+          "actions": {
+            "items": {
+              "$ref": "#/components/schemas/Action"
+            },
+            "maxItems": 2000,
+            "title": "Actions",
+            "type": "array"
+          },
+          "asOf": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "View date (YYYY-MM-DD); default: the town's scenario date.",
+            "title": "Asof"
+          },
+          "commodity": {
+            "anyOf": [
+              {
+                "enum": [
+                  "electric",
+                  "water",
+                  "gas"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commodity"
+          },
+          "list": {
+            "description": "disconnect: disconnection notices; moratorium: notices held for the winter; rejected: returned debits; overdue: accounts with overdue bills.",
+            "enum": [
+              "disconnect",
+              "moratorium",
+              "rejected",
+              "overdue"
+            ],
+            "title": "List",
+            "type": "string"
+          },
+          "outages": {
+            "description": "Service interruptions from the operations simulator (a timeline's ``interruptions``): consumption stops, AMI meters without power miss their reads, and VEE sees the outage.",
+            "items": {
+              "$ref": "#/components/schemas/Outage"
+            },
+            "maxItems": 500,
+            "title": "Outages",
+            "type": "array"
+          },
+          "page": {
+            "default": 1,
+            "minimum": 1.0,
+            "title": "Page",
+            "type": "integer"
+          },
+          "pageSize": {
+            "default": 50,
+            "maximum": 200.0,
+            "minimum": 1.0,
+            "title": "Pagesize",
+            "type": "integer"
+          },
+          "search": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Invoice, account, name, premise or address.",
+            "title": "Search"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Run seed: re-rolls the run's random draws (missed reads, anomalies, analyst work, bill checks) on the same town. Blank or null: the town's seed (GET /api/m2c/settings?town= shows it).",
+            "title": "Seed"
+          },
+          "settings": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing); see GET /api/m2c/settings.",
+            "title": "Settings"
+          },
+          "sort": {
+            "default": "age",
+            "description": "age: oldest first; amount: largest first; created: newest first.",
+            "enum": [
+              "age",
+              "amount",
+              "created"
+            ],
+            "title": "Sort",
+            "type": "string"
+          },
+          "status": {
+            "default": "open",
+            "enum": [
+              "open",
+              "closed",
+              "all"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "town": {
+            "description": "Pack preset (e.g. 'ayr') or town id.",
+            "title": "Town",
+            "type": "string"
+          }
+        },
+        "required": [
+          "town",
+          "list"
+        ],
+        "title": "CollectionsRequest",
+        "type": "object"
+      },
+      "CollectorGroupsRequest": {
+        "properties": {
+          "actions": {
+            "items": {
+              "$ref": "#/components/schemas/Action"
+            },
+            "maxItems": 2000,
+            "title": "Actions",
+            "type": "array"
+          },
+          "asOf": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "View date (YYYY-MM-DD); default: the town's scenario date.",
+            "title": "Asof"
+          },
+          "collector": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collector"
+          },
+          "minCases": {
+            "default": 2,
+            "description": "Smallest group listed.",
+            "maximum": 1000.0,
+            "minimum": 1.0,
+            "title": "Mincases",
+            "type": "integer"
+          },
+          "outages": {
+            "description": "Service interruptions from the operations simulator (a timeline's ``interruptions``): consumption stops, AMI meters without power miss their reads, and VEE sees the outage.",
+            "items": {
+              "$ref": "#/components/schemas/Outage"
+            },
+            "maxItems": 500,
+            "title": "Outages",
+            "type": "array"
+          },
+          "page": {
+            "default": 1,
+            "minimum": 1.0,
+            "title": "Page",
+            "type": "integer"
+          },
+          "pageSize": {
+            "default": 50,
+            "maximum": 200.0,
+            "minimum": 1.0,
+            "title": "Pagesize",
+            "type": "integer"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Run seed: re-rolls the run's random draws (missed reads, anomalies, analyst work, bill checks) on the same town. Blank or null: the town's seed (GET /api/m2c/settings?town= shows it).",
+            "title": "Seed"
+          },
+          "settings": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing); see GET /api/m2c/settings.",
+            "title": "Settings"
+          },
+          "status": {
+            "default": "open",
+            "enum": [
+              "open",
+              "all"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "town": {
+            "description": "Pack preset (e.g. 'ayr') or town id.",
+            "title": "Town",
+            "type": "string"
+          }
+        },
+        "required": [
+          "town"
+        ],
+        "title": "CollectorGroupsRequest",
         "type": "object"
       },
       "Command": {
@@ -1098,6 +1594,158 @@
         "title": "Outage",
         "type": "object"
       },
+      "OutageFollowupRequest": {
+        "properties": {
+          "actions": {
+            "items": {
+              "$ref": "#/components/schemas/Action"
+            },
+            "maxItems": 2000,
+            "title": "Actions",
+            "type": "array"
+          },
+          "asOf": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "View date (YYYY-MM-DD); default: the town's scenario date.",
+            "title": "Asof"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "enum": [
+                  "last_gasp",
+                  "lost_use",
+                  "missed_read"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind"
+          },
+          "outageId": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outageid"
+          },
+          "outages": {
+            "description": "Service interruptions from the operations simulator (a timeline's ``interruptions``): consumption stops, AMI meters without power miss their reads, and VEE sees the outage.",
+            "items": {
+              "$ref": "#/components/schemas/Outage"
+            },
+            "maxItems": 500,
+            "title": "Outages",
+            "type": "array"
+          },
+          "page": {
+            "default": 1,
+            "minimum": 1.0,
+            "title": "Page",
+            "type": "integer"
+          },
+          "pageSize": {
+            "default": 50,
+            "maximum": 200.0,
+            "minimum": 1.0,
+            "title": "Pagesize",
+            "type": "integer"
+          },
+          "search": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Search"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Run seed: re-rolls the run's random draws (missed reads, anomalies, analyst work, bill checks) on the same town. Blank or null: the town's seed (GET /api/m2c/settings?town= shows it).",
+            "title": "Seed"
+          },
+          "settings": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing); see GET /api/m2c/settings.",
+            "title": "Settings"
+          },
+          "status": {
+            "default": "all",
+            "description": "open: rows whose missed-read case is still open.",
+            "enum": [
+              "open",
+              "all"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "town": {
+            "description": "Pack preset (e.g. 'ayr') or town id.",
+            "title": "Town",
+            "type": "string"
+          },
+          "utility": {
+            "anyOf": [
+              {
+                "enum": [
+                  "electric",
+                  "water",
+                  "gas",
+                  "ami"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Utility"
+          }
+        },
+        "required": [
+          "town"
+        ],
+        "title": "OutageFollowupRequest",
+        "type": "object"
+      },
       "PremiseRequest": {
         "properties": {
           "actions": {
@@ -1229,6 +1877,19 @@
             "description": "A clarification category (see GET /api/m2c/vocabulary), or 'My Assigned Cases'.",
             "title": "Category"
           },
+          "collector": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Only cases on meters reporting through this AMI collector (e.g. COL-04).",
+            "title": "Collector"
+          },
           "commodity": {
             "anyOf": [
               {
@@ -1244,6 +1905,18 @@
               }
             ],
             "title": "Commodity"
+          },
+          "createdOn": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Only cases raised that day (YYYY-MM-DD): with collector, one collector group (POST /api/m2c/collector-groups).",
+            "title": "Createdon"
           },
           "outages": {
             "description": "Service interruptions from the operations simulator (a timeline's ``interruptions``): consumption stops, AMI meters without power miss their reads, and VEE sees the outage.",
@@ -1275,7 +1948,8 @@
                   "ESTIMATION",
                   "SUPERVISOR",
                   "FIELD",
-                  "BILLING"
+                  "BILLING",
+                  "COLLECTIONS"
                 ],
                 "type": "string"
               },
@@ -1525,6 +2199,90 @@
         "title": "RunRequest",
         "type": "object"
       },
+      "SummaryRequest": {
+        "properties": {
+          "actions": {
+            "items": {
+              "$ref": "#/components/schemas/Action"
+            },
+            "maxItems": 2000,
+            "title": "Actions",
+            "type": "array"
+          },
+          "asOf": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "View date (YYYY-MM-DD); default: the town's scenario date.",
+            "title": "Asof"
+          },
+          "outages": {
+            "description": "Service interruptions from the operations simulator (a timeline's ``interruptions``): consumption stops, AMI meters without power miss their reads, and VEE sees the outage.",
+            "items": {
+              "$ref": "#/components/schemas/Outage"
+            },
+            "maxItems": 500,
+            "title": "Outages",
+            "type": "array"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Run seed: re-rolls the run's random draws (missed reads, anomalies, analyst work, bill checks) on the same town. Blank or null: the town's seed (GET /api/m2c/settings?town= shows it).",
+            "title": "Seed"
+          },
+          "settings": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing); see GET /api/m2c/settings.",
+            "title": "Settings"
+          },
+          "since": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Start of a period (YYYY-MM-DD): adds ``window``, the figures between that day and asOf (this month, the last 30 days, since your first action, ...).",
+            "title": "Since"
+          },
+          "town": {
+            "description": "Pack preset (e.g. 'ayr') or town id.",
+            "title": "Town",
+            "type": "string"
+          }
+        },
+        "required": [
+          "town"
+        ],
+        "title": "SummaryRequest",
+        "type": "object"
+      },
       "TimelineRequest": {
         "properties": {
           "commands": {
@@ -1717,7 +2475,7 @@
   "info": {
     "description": "Seeded utility-town engine: geography, networks, customers, simulation, meter-to-cash.",
     "title": "utilsim",
-    "version": "0.8.0"
+    "version": "0.9.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -1845,6 +2603,117 @@
         "summary": "Post Case"
       }
     },
+    "/api/m2c/collections": {
+      "post": {
+        "description": "``m2c-collections/1.0``: a Collections worklist (disconnection notices, winter moratorium holds, rejected\npayments or overdue accounts) as of ``asOf``, filtered, sorted and paged. Rows carry the collections ``actions``\nthe engine takes today and the account's ``flags``; ``counts`` gives each list's open items.",
+        "operationId": "post_collections_api_m2c_collections_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CollectionsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Collections"
+      }
+    },
+    "/api/m2c/collections/account": {
+      "post": {
+        "description": "``m2c-collections-account/1.0``: one account's collections as of ``asOf``: invoices with what is owed, dunning,\npayments and disconnection; arrangements, holds, referrals, budget plan, ledger, its collections cases and the\nactions it takes today.",
+        "operationId": "post_collections_account_api_m2c_collections_account_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CollectionsAccountRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Collections Account"
+      }
+    },
+    "/api/m2c/collector-groups": {
+      "post": {
+        "description": "``m2c-collector-groups/1.0``: AMI missed-read cases grouped by collector and day raised (a collector outage as\none problem), with cause, streets and case ids, plus the town's collectors.",
+        "operationId": "post_collector_groups_api_m2c_collector_groups_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CollectorGroupsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Collector Groups"
+      }
+    },
     "/api/m2c/installation": {
       "post": {
         "description": "``m2c-installation/1.0`` (Display Billing): the installation (premise, commodity, rate category, meters and\nregisters), its contracts with account and business partner, billing documents with lines, invoices, the\naccounts' ledgers, its read results and its cases, as of ``asOf``.",
@@ -1917,6 +2786,43 @@
           }
         },
         "summary": "Post Order"
+      }
+    },
+    "/api/m2c/outage-followup": {
+      "post": {
+        "description": "``m2c-outage-followup/1.0``: per premise per interruption from the map, the AMI last gasp, the use lost and\nthe reads it cost (with their missing-read cases); ``outages`` sums up each interruption.",
+        "operationId": "post_outage_followup_api_m2c_outage_followup_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OutageFollowupRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Outage Followup"
       }
     },
     "/api/m2c/possible-entries": {
@@ -2077,13 +2983,13 @@
     },
     "/api/m2c/summary": {
       "post": {
-        "description": "``m2c-summary/1.0``: KPIs, queues with aging and daily series, exception mix, cost, carry, VEE precision and\nrecall against truth, and one status per premise (for the map).",
+        "description": "``m2c-summary/1.0``: KPIs, queues with aging and daily series, exception mix, cost, carry, VEE precision and\nrecall against truth, and one status per premise (for the map). Year to date; ``since`` adds ``window``, the same\nfigures for the period from that day to ``asOf``.",
         "operationId": "post_summary_api_m2c_summary_post",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/RunRequest"
+                "$ref": "#/components/schemas/SummaryRequest"
               }
             }
           },

@@ -212,7 +212,9 @@ def test_hosted_m2c_api():
     assert s.status_code == 200 and s.json()["schemaVersion"] == "m2c-summary/1.0"
     q = client.post("/api/process/queue", json={**body, "status": "all", "pageSize": 5}).json()
     assert q["total"] > 0 and len(q["rows"]) == 5
-    row = q["rows"][0]
+    # A read case (collections cases are about an account and carry no read decision).
+    row = client.post("/api/process/queue", json={**body, "status": "all", "queue": "VEE_REVIEW",
+                                                  "pageSize": 1}).json()["rows"][0]
     case = client.post("/api/m2c/case", json={**body, "caseId": row["caseId"]}).json()
     assert case["caseId"] == row["caseId"] and case["decision"]["readId"] == row["readId"]
     assert client.post("/api/m2c/premise", json={**body, "premiseId": row["premiseId"]}).json()["reads"]
@@ -488,7 +490,8 @@ def test_missing_read_cases_name_their_cause_and_who_raised_them(ayr, slow, outa
     run, c = first["collector_outage"]
     assert views.missing_cause(run, c.r, c.month)["outageSince"] == run.iso(outage[0])
     kinds = {c.created_by for c in ayr.cases}
-    assert kinds == {"ami_head_end", "meter_reading_route", "vee_batch", "billing_run"}
+    assert kinds == {"ami_head_end", "meter_reading_route", "vee_batch", "billing_run", "collections"}
+    assert all(c.type in cat.COLLECTION_TYPES for c in ayr.cases if c.created_by == "collections")
     assert all(c.created_by == "billing_run" for c in ayr.cases if c.doc >= 0)
     # A missing read has no value to accept or override: estimate, a field order or an escalation.
     c = next(c for c in slow.cases if c.type == "COMM_FAIL" and c.resolved is None and 100 < c.created < 200)

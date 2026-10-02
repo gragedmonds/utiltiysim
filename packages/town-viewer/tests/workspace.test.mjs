@@ -33,3 +33,13 @@ test('engine cases map onto clarification categories, statuses and substatuses',
  assert.ok(matchesCategory({owner:'you',assignee:'you',queue:'BILLING'},'My Assigned Cases')); // a case you own
  assert.ok(!matchesCategory({owner:null,assignee:'SUP-01',queue:'SUPERVISOR'},'My Assigned Cases'));
 });
+
+test('without an engine the Workspace says why and offers the way to one',async()=>{
+ const {engineNotice}=await import('../dist/workspace.js');
+ const where={href:'https://utiltiysim.vercel.app/#/workspace'},towns=[{preset:'ayr',label:'Ayr'},{preset:'elora',label:'Elora'}];
+ const demo=engineNotice({state:'demo',towns},where);
+ assert.match(demo,/demo town drawn in your browser/);assert.match(demo,/href="\/\?town=ayr#\/workspace">Open Ayr</);assert.match(demo,/Open Elora/);
+ assert.match(engineNotice({state:'probing',towns},where),/Connecting to the engine/);
+ const down=engineNotice({state:'down',towns},where);assert.match(down,/isn't answering/);assert.match(down,/data-ws="retry"/);assert.doesNotMatch(down,/Open Ayr/);
+ assert.match(engineNotice({state:'idle',towns:[]},where),/No engine town is open/);
+});

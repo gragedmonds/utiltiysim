@@ -33,6 +33,7 @@ from utilsim.core.ids import str_key
 from utilsim.core.rng import Purpose, hash_normal, hash_u01
 from utilsim.customers.calendar import business_days, to_utc_iso
 from utilsim.m2c import catalog as cat
+from utilsim.m2c import collections as colls
 from utilsim.m2c import orders as ords
 from utilsim.m2c import registers as regs
 from utilsim.m2c import vee as vee_mod
@@ -46,10 +47,13 @@ DECISION_VERSION = "vee-decision/1.0"
 P_READ, P_ANOM, P_WORK = Purpose.M2C_READ, Purpose.M2C_ANOMALY, Purpose.M2C_WORK
 INF = float("inf")
 YEAR_DAYS = 365
-DECISIONS = ("accept", "override", "estimate", "field_order", "escalate")  # an analyst's decision on a case
+# An analyst's decision on a case. ``check_read`` releases the read with the check read a completed field order took.
+DECISIONS = ("accept", "override", "estimate", "field_order", "escalate", "check_read")
 ORDER_ACTIONS = ("order_save", "order_release", "order_dispatch", "order_complete")
 CASE_WORK = ("note", "assign", "invoice_hold", "invoice_unhold")
-ACTION_TYPES = (*DECISIONS, "field_read", *ORDER_ACTIONS, *CASE_WORK)
+COLLECTION_ACTIONS = colls.ACTIONS  # collections work on an account or an invoice (utilsim/m2c/collections.py)
+DEVICE_ACTIONS = ("device_replace",)  # a new device (meter) and register on an installation
+ACTION_TYPES = (*DECISIONS, "field_read", *ORDER_ACTIONS, *CASE_WORK, *COLLECTION_ACTIONS, *DEVICE_ACTIONS)
 ActionError = ords.ActionError
 STATUS = ("pending", "released", "estimated", "adjusted", "held", "missing")
 # How a released register value was obtained (``released.method`` in case views, ``method`` in read histories).
@@ -63,6 +67,11 @@ COLLECTOR_REASON = "SIM_COLLECTOR_OUTAGE"
 MAX_OUTAGE_DAYS = 7
 MAX_SEED = 64
 FAULTS = ("stuck_meter", "slow_meter", "tamper", "exchange_registration_failure")
+DEFECTS = ("Register not advancing (stuck meter)", "Meter under-registering (slow meter)",
+           "Seal broken, bypass suspected (tamper)", "Meter serial does not match the installation (exchange not "
+                                                     "registered)")
+BELOW_DEVICE = 13  # ``backwards``: below the initial read of a device installed since the last actual read
+TRAVEL_MIN = 20.0  # minutes from the truck roll to on site, for your orders
 
 
 # ---- settings ---------------------------------------------------------------------------------------------------
@@ -193,6 +202,33 @@ class Case:
         return q, s
 
 
+@dataclass(eq=False)
+class Install:
+    """A device replacement: a new device (meter) and register on a meter slot from ``t`` (the install date),
+    registered at ``t_reg``. Later reads are diffed against the new register."""
+
+    meter: int
+    t: float
+    t_reg: float
+    device: str
+    previous: str
+    initial: dict[int, float]  # per register row: the new register's first value
+    removal: dict[int, float]  # per register row: the old register's last value, when known
+    normal: dict[int, float]  # per register row: normal advance at ``t`` (estimates the old register's last stretch)
+    period: dict[int, int]  # per register row: the read period (month) the change falls in
+    by: str
+    physical: bool  # the meter was swapped now (else: registering a swap made earlier, e.g. a failed registration)
+    order: str | None = None
+    case: str | None = None
+    note: str | None = None
+
+    def carry(self, r: int, value: float, normal: float) -> float:
+        """A register value read before the change, on the new register's scale: the initial read less the old
+        register's last stretch (removal read − value, else the normal use up to the change)."""
+        tail = self.removal[r] - value if r in self.removal else self.normal[r] - normal
+        return self.initial[r] - max(0.0, tail)
+
+
 # ---- the run ----------------------------------------------------------------------------------------------------
 def town_seed(cfg: SimConfig) -> str:
     """The seed a run uses when the request names none: the town's ``seeds.anomalies`` (else the master seed)."""
@@ -218,6 +254,7 @@ class M2CRun:
         groups = {g: self.cfg.model_dump(mode="json")[g] for g in M2C_GROUPS}
         self.settings_hash = _hash(groups if self.run_seed is None else {**groups, "seed": self.run_seed})
         self.warnings: list[str] = []
+        self.meter_index = {mid: i for i, mid in enumerate(town.meter_ids)}
         self.actions = self._check_actions(actions or [])
         self.outages = self._check_outages(outages or [])
         inputs = _hash([self.actions, self.outages]) if self.outages else (_hash(self.actions) if self.actions else "0")
@@ -253,6 +290,13 @@ class M2CRun:
                 extra = {"premiseId": a["premiseId"], "at": float(at)}
             elif a["type"] in ORDER_ACTIONS:
                 extra = self.ledger.apply(k, a, day)
+            elif a["type"] in COLLECTION_ACTIONS:
+                try:
+                    extra = colls.check(self.town, a)
+                except ValueError as exc:
+                    raise ActionError(f"action {k} ({a['type']}): {exc}") from None
+            elif a["type"] in DEVICE_ACTIONS:
+                extra = self._check_device(k, a, day)
             else:
                 extra = self._check_case_work(k, a)
             last = day
@@ -265,7 +309,19 @@ class M2CRun:
         typ = a["type"]
         try:
             if typ in DECISIONS:
-                return {"note": ords.text(a["note"], "note")} if a.get("note") is not None else {}
+                out = {"note": ords.text(a["note"], "note")} if a.get("note") is not None else {}
+                cover = a.get("coverCaseIds")
+                if cover is not None:
+                    if typ != "field_order" or not isinstance(cover, list) or len(cover) > ords.MAX_COVER or not all(
+                            isinstance(x, str) and x for x in cover):
+                        raise ValueError(f"coverCaseIds (field_order only) lists up to {ords.MAX_COVER} other case "
+                                         "ids at the same premise")
+                    out["coverCaseIds"] = list(dict.fromkeys(x for x in cover if x != a.get("caseId")))
+                if a.get("orderId") is not None:
+                    if typ != "check_read" or not isinstance(a["orderId"], str):
+                        raise ValueError("orderId (check_read only) names the completed order whose read to use")
+                    out["orderId"] = a["orderId"]
+                return out
             if typ in ("note", "assign") and not isinstance(a.get("caseId"), str):
                 raise ValueError("caseId is required")
             if typ == "note":
@@ -281,6 +337,25 @@ class M2CRun:
             return {"note": note, **({"accountId": acct} if acct else {})}
         except ValueError as exc:
             raise ActionError(f"action {k} ({typ}): {exc}") from None
+
+    def _check_device(self, k: int, a: dict, day: int) -> dict:
+        """Shape checks for a device replacement: the meter slot, the new device id, its install date (this year, on
+        or before the action day), its initial read and, optionally, the old register's removal read."""
+        try:
+            mid = a.get("meterId")
+            if not isinstance(mid, str) or mid not in self.meter_index:
+                raise ValueError(f"unknown meterId {mid!r} (a meter on the installation)")
+            out = {"meterId": mid, "deviceId": ords.device_id(a.get("deviceId")),
+                   "installDate": date_of(ords.day_in(a.get("installDate"), "installDate", 0, day)).isoformat(),
+                   "initialRead": ords.register_value(a.get("initialRead"), "initialRead (the new register)")}
+            removal = ords.register_value(a.get("removalRead"), "removalRead (the old register)", False)
+            if removal is not None:
+                out["removalRead"] = removal
+            if a.get("note") is not None:
+                out["note"] = ords.text(a["note"], "note")
+            return out
+        except ValueError as exc:
+            raise ActionError(f"action {k} (device_replace): {exc}") from None
 
     def _check_outages(self, outages: list[dict]) -> list[dict]:
         """Interruptions from the operations simulator: ``{day, utility, start, end, premiseIds}``, where start and
@@ -435,6 +510,15 @@ class M2CRun:
         self.order_rolls: dict[int, list[ords.Order]] = {}  # day -> dispatched orders whose crew rolls that day
         self.rolls_now: dict[int, int] = {}  # day -> crews rolled the same day they were dispatched
         self.holds: dict[str, list[list]] = {}  # account -> [[t on, t off | None, hold case], ...]
+        self.crew_due: dict[int, list[ords.Order]] = {}  # day -> your orders whose crew visit ends that day
+        self.by_prem: dict[int, list[Case]] = {}  # premise row -> its cases (one visit per premise)
+        # Devices: replacements per meter and per register, physical swaps (t, display offset) and, per read period
+        # with a device change, the new register's base for billing.
+        self.installs: list[Install] = []
+        self.installs_of: dict[int, list[Install]] = {}  # register row -> its device changes, in time order
+        self.swaps: dict[int, list[tuple[float, float]]] = {}
+        self.has_swap = np.zeros(R, dtype=bool)
+        self.dev_change = np.full(shape, None, dtype=object)  # (r, m) -> the Install inside read period m
 
     def _setup_outages(self) -> None:
         """Per register, the merged spans (start, end as day + fraction) during which it had no service, and those
@@ -526,9 +610,12 @@ class M2CRun:
         return tw.base[rows] + tw.true_advance(rows, day, (t - day) * 24.0) + self._extras(rows, t)
 
     def _meter(self, rows: np.ndarray, t: np.ndarray, true_now: np.ndarray) -> np.ndarray:
-        """What the meter's register shows (meter faults applied)."""
+        """What the meter's register shows: meter faults applied, and after a meter swap the new meter (its initial
+        read plus what flowed since). An exchange whose registration failed is the new meter for good, registered
+        or not."""
         m = self.town.meter_of[rows]
-        active = (self.fault_t[m] <= t) & (t < self.fix_t[m])
+        t = np.broadcast_to(t, len(rows))
+        active = (self.fault_t[m] <= t) & ((t < self.fix_t[m]) | (self.fault_type[m] == 3))
         out = true_now.copy()
         if active.any():
             k = np.flatnonzero(active)
@@ -539,7 +626,16 @@ class M2CRun:
                             [at, at + kk * (true_now[k] - at), at + kk * (true_now[k] - at), true_now[k] - at + kk],
                             true_now[k])
             out[k] = val
+        for k in np.flatnonzero(self.has_swap[rows]):  # a meter swapped by a crew: the new meter
+            off = next((o for ts, o in reversed(self.swaps[int(rows[k])]) if ts <= t[k]), None)
+            if off is not None:
+                out[k] = true_now[k] + off
         return out
+
+    def display(self, r: int, t: float) -> float:
+        """What register ``r``'s dial shows at ``t`` (three decimals, within its digits)."""
+        rows, tt = np.array([r]), np.array([t])
+        return float(regs.observe(self._meter(rows, tt, self._true(rows, tt)), self.town.digits[rows])[0])
 
     def _hist(self, rows: np.ndarray, m: int) -> np.ndarray:
         return self.hist[rows, m]
@@ -552,17 +648,20 @@ class M2CRun:
         self.case_index: dict[str, Case] = {}
         self.open: list[Case] = []
         self._unseen: list[tuple[int, dict, float]] = []  # actions on a case id the run has not raised (yet)
+        self._handled: set[int] = set()  # of those, the ones a collections case opened after the year took
         for day in range(YEAR_DAYS):
             acts = by_day.get(day, [])
             self._roll_orders(day)  # crews for your dispatched orders that start today (07:00-09:00)
             if day not in _BSET:  # your decisions and field visits count on any day
                 for k, a in acts:
                     self._act(day, k, a)
+                self._crew_complete(day)
                 self.open = [c for c in self.open if c.resolved is None]
             if day in _BSET:
                 for k, a in acts:
                     if a["type"] != "field_read":
                         self._act(day, k, a)
+                self._crew_complete(day)  # your orders' crews finish (unless you completed them today)
                 for case in self.rpa_due.pop(day, []):
                     self._rpa(case, day + 7.0 / 24)
                 self._analysts(day)
@@ -578,10 +677,14 @@ class M2CRun:
                 self._same_day_rpa()
                 self.books.invoice(day)
                 self.open = [c for c in self.open if c.resolved is None]
+        self.books.collect()  # payments, dunning and collections; opens the collections cases (notes on them too)
         for k, a, t in self._unseen:  # raised later (that evening, or a later day), or never: say which
-            self._reject(k, a, self.not_open(self.case_index.get(a.get("caseId") or ""), a.get("caseId"), t)
-                         or f"case {a.get('caseId')} is opened by a later action")
-        self.books.collect()
+            if k in self._handled:
+                continue
+            case = self.case_index.get(a.get("caseId") or "")
+            self._reject(k, a, self.not_open(case, a.get("caseId"), t) or (
+                self.decision_refusal(case, a["type"], t, None) if case is not None and case.work else None)
+                or f"case {a.get('caseId')} is opened by a later action")
         diff = {q: np.zeros(YEAR_DAYS + 2, dtype=np.int64) for q in cat.QUEUES}
         for case in self.cases:  # backlog at the end of each day, from each case's queue moves
             for (t0, q, _), nxt in zip(case.moves, [*case.moves[1:], None], strict=True):
@@ -758,6 +861,7 @@ class M2CRun:
         self.cases.append(case)
         self.open.append(case)
         self.case_index[case.id] = case
+        self.by_prem.setdefault(int(self.town.prem[r]), []).append(case)
         pre = None
         if precursor is not None:
             pre = case.ev(precursor[0], precursor[1], {"meterId": self.town.meter_ids[self.town.meter_of[r]],
@@ -768,7 +872,7 @@ class M2CRun:
         key = self.reg_keys[r] + (7 if queue == "BILLING" else 0)
         u = self._u(P_WORK, key, m, 1)
         lag = p.analyst_queue_days_min + int(u * (p.analyst_queue_days_max - p.analyst_queue_days_min + 1))
-        case.eligible = add_bdays(day, lag if queue != "SUPERVISOR" else 1)
+        case.eligible = add_bdays(day, lag if queue != "SUPERVISOR" else p.supervisor_queue_days_min)
         self.series[queue][day, 0] += 1
         if kind in self.rpa_types and disposition != 2 and rpa:
             if float(self._u(P_WORK, key, m, 2)) < 0.5:
@@ -833,19 +937,45 @@ class M2CRun:
         case.assignee = "RPA"
         self._resolve(case, t, action, actor="RPA")
 
-    def _to_field(self, case: Case, t: float) -> None:
+    def _to_field(self, case: Case, t: float, *, bundle: bool = True, cover: list[Case] | None = None) -> None:
+        """Send ``case`` to the field crews. One access visit per premise: the simulated workforce (``bundle``)
+        sends the premise's other open read cases nobody owns along with it; your ``field_order`` sends the cases
+        you chose to cover (``cover``)."""
         self.series[case.queue][int(t), 1] += 1
         case.ev(t, "FIELD_ORDER", {"reason": case.type})
         case.move(t, "FIELD", "field_pending")
         case.eligible = add_bdays(int(t), self.cfg.process.field_days_min)
         self.series["FIELD"][int(t), 0] += 1
+        others = cover if cover is not None else (self.related(case, t, lambda c: self.unclaimed(c) and c.queue in (
+            "VEE_REVIEW", "ESTIMATION")) if bundle else [])
+        for c in others:
+            self.series[c.queue][int(t), 1] += 1
+            c.ev(max(t, c.events[-1][0]), "FIELD_ORDER", {"reason": c.type, "with": case.id})
+            c.move(max(t, c.events[-1][0]), "FIELD", "field_pending")
+            c.eligible = case.eligible
+            c.rpa_at = INF if c.rpa_at is not None else None
+            self.series["FIELD"][int(t), 0] += 1
+
+    @staticmethod
+    def unclaimed(c: Case) -> bool:
+        """Nobody owns ``c`` and no RPA run is due on it: a field visit at its premise may settle it too."""
+        return c.owner is None and c.rpa_at in (None, INF)
+
+    def related(self, case: Case, t: float, keep=lambda c: True) -> list[Case]:
+        """The other read cases at ``case``'s premise open at ``t`` (raised by then, not resolved), that ``keep``."""
+        return [c for c in self.by_prem.get(int(self.town.prem[case.r]), []) if c is not case and c.doc < 0
+                and c.work is None and c.created <= t and (c.resolved is None or c.resolved > t) and keep(c)]
 
     def _escalate(self, case: Case, t: float, kind: str = "ANALYST_ESCALATE") -> None:
+        """Hand ``case`` to the supervisors: one picks it up after ``supervisor_queue_days_min``–``max`` business
+        days (oldest first, within their daily capacity), unless someone takes it explicitly (assign)."""
+        p = self.cfg.process
         self.series[case.queue][int(t), 1] += 1
         case.ev(t, kind, {"impact": case.impact})
         case.move(t, "SUPERVISOR", "escalated")
         u = float(self._u(P_WORK, self.reg_keys[case.r], case.month, 4))
-        case.eligible = add_bdays(int(t), 1 + int(u * 3))
+        lo, hi = p.supervisor_queue_days_min, p.supervisor_queue_days_max
+        case.eligible = add_bdays(int(t), lo + int(u * (hi - lo + 1)))
         self.series["SUPERVISOR"][int(t), 0] += 1
 
     def _analysts(self, day: int) -> None:
@@ -899,24 +1029,112 @@ class M2CRun:
                 self._resolve(case, t1, proposal, actor=sup)
 
     def _field(self, day: int) -> None:
+        """The field crews' day: up to ``field_orders_per_day`` premises, oldest work first. One truck roll per
+        premise settles every open read case there that nobody owns (one access visit per premise)."""
         p = self.cfg.process
         todo = [c for c in self.open if c.resolved is None and c.queue == "FIELD" and c.eligible <= day
                 and c.owner is None]  # your own orders are dispatched by you (order_dispatch), not by this pool
-        for k, case in enumerate(todo[: max(0, p.field_orders_per_day)]):
-            t0 = day + (8.0 + 7.0 * k / max(1, p.field_orders_per_day)) / 24
+        visits: dict[int, list[Case]] = {}
+        for c in todo:
+            visits.setdefault(int(self.town.prem[c.r]), []).append(c)
+        n = max(0, p.field_orders_per_day)
+        for k, cases in enumerate(list(visits.values())[:n]):
+            t0 = day + (8.0 + 7.0 * k / max(1, n)) / 24
             crew = f"FIELD-{(k % 2) + 1}"
-            case.ev(t0, "TRUCK_ROLL", {"crew": crew})
-            self._visit_case(case, t0 + 1.0 / 24, actor=crew)
+            lead, ids = cases[0], {c.id for c in cases}
+            cases += self.related(lead, t0, lambda c, ids=ids: c.id not in ids and self.unclaimed(c) and c.queue in (
+                "VEE_REVIEW", "ESTIMATION", "FIELD"))
+            lead.ev(t0, "TRUCK_ROLL", {"crew": crew, **({"caseIds": [c.id for c in cases]} if len(cases) > 1 else {})})
+            for c in cases[1:]:
+                c.ev(max(t0, c.events[-1][0]), "VISIT_SHARED", {"crew": crew, "caseId": lead.id})
+                c.rpa_at = INF if c.rpa_at is not None else None
+            for c in cases:
+                self._visit_case(c, max(t0 + 1.0 / 24, c.events[-1][0]), actor=crew)
+
+    def new_device_id(self, meter: int) -> str:
+        return f"{self.town.meter_ids[meter]}-X{sum(1 for x in self.installs if x.meter == meter) + 1}"
+
+    def device_at(self, meter: int, t: float, T: float = INF) -> str:
+        """The device on meter slot ``meter`` at ``t``, as registered by ``T``."""
+        return next((x.device for x in reversed(self.installs) if x.meter == meter and x.t <= t and x.t_reg <= T),
+                    self.town.meter_ids[meter])
+
+    def install_check(self, meter: int, t_inst: float, t_reg: float, device: str) -> str | None:
+        """Why a device replacement on ``meter`` from ``t_inst`` (registered at ``t_reg``) does not apply, or None:
+        the device id is taken, or a read on or after the install date was already released on the old register."""
+        tw = self.town
+        if device in self.meter_index or any(x.device == device for x in self.installs):
+            return f"device {device} is already in use; give the new device's own serial"
+        for r in np.flatnonzero(tw.meter_of == meter).tolist():
+            late = [m for m in range(13) if self.read_t[r, m] >= t_inst and self.release_t[r, m] <= t_reg]
+            if late:
+                d = date_of(int(tw.read_day[r, late[-1]])).isoformat()
+                return (f"the read of {d} on {tw.reg_ids[r]} was already released on device "
+                        f"{self.device_at(meter, self.read_t[r, late[-1]])}; install the new device on or after {d}")
+        return None
+
+    def _install(self, meter: int, t_inst: float, t_reg: float, device: str, initial: dict[int, float], *, by: str,
+                 removal: dict[int, float] | None = None, order: str | None = None, case: str | None = None,
+                 note: str | None = None) -> Install:
+        """Register a new device on ``meter`` from ``t_inst`` with its registers' ``initial`` reads (0 for a register
+        not named; a swap made earlier keeps its dial). A meter that shows a failed registration's swap is registered
+        as found (no swap now); otherwise the meter is swapped at ``t_reg``, and its new dial reads the initial read
+        plus what flowed since ``t_inst``. Reads after ``t_inst`` are diffed against the new register."""
+        tw = self.town
+        rows = np.flatnonzero(tw.meter_of == meter)
+        found = self.fault_type[meter] == 3 and self.fault_t[meter] <= t_reg < self.fix_t[meter]
+        physical = not found
+        init = {int(r): float(initial[r]) if r in initial else (self.display(int(r), t_reg) if found else 0.0)
+                for r in rows}
+        rem = {int(r): float(v) for r, v in (removal or {}).items()}
+        day = np.floor(t_inst)
+        normal = tw.true_advance(rows, np.full(len(rows), int(day)), np.full(len(rows), (t_inst - day) * 24.0))
+        x = Install(meter, t_inst, t_reg, device, self.device_at(meter, t_inst), init, rem,
+                    dict(zip(rows.tolist(), normal.tolist(), strict=True)), {}, by, physical, order, case, note)
+        if self.fault_t[meter] <= t_reg < self.fix_t[meter]:
+            self.fix_t[meter] = t_reg  # the fault (or the unregistered swap) ends with the new device
+        if physical:  # from t_reg the dial is the new meter's: initial + what flowed since t_inst
+            base = self._true(rows, np.full(len(rows), t_inst))
+            for r, b in zip(rows.tolist(), base.tolist(), strict=True):
+                self.swaps.setdefault(r, []).append((t_reg, init[r] - b))
+                self.has_swap[r] = True
+        for r in rows.tolist():
+            m = next((j for j in range(13) if self.read_t[r, j] >= t_inst), 13)
+            x.period[r] = m
+            if m < 13:
+                self.dev_change[r, m] = x
+            self.installs_of.setdefault(r, []).append(x)
+            self.prev_val[r] = x.carry(r, float(self.prev_val[r]), float(self.prev_normal[r]))
+        self.installs.append(x)
+        return x
+
+    def change_between(self, r: int, t0: float, t1: float, T: float = INF) -> Install | None:
+        """The latest device change on register ``r`` installed in (t0, t1] and registered by ``T``."""
+        return next((x for x in reversed(self.installs_of.get(r, ())) if t0 < x.t <= t1 and x.t_reg <= T), None)
+
+    def prev_for(self, r: int, m: int, T: float = INF) -> tuple[float, float, float]:
+        """(register value, normal advance, time) read ``m`` is measured from: the last read released before it,
+        carried onto the device in place at read ``m`` (as registered by ``T``)."""
+        j = next((k for k in range(m - 1, 0, -1) if 1 <= self.status[r, k] <= 3 and self.release_t[r, k] <= T), 0)
+        v, n, t = float(self.released[r, j]), float(self.normal_at[r, j]), float(self.read_t[r, j])
+        x = self.change_between(r, t, float(self.read_t[r, m]), T)
+        return (x.carry(r, v, n) if x is not None else v), n, t
 
     def _visit_case(self, case: Case, t: float, *, actor: str) -> None:
-        """A meter tech at the meter: a faulty meter is exchanged (and the read estimated); otherwise a special read
-        settles the case (a missing read gets the real register value)."""
+        """A meter tech at the meter: a faulty meter is exchanged for a new device (and the read estimated; later
+        reads are diffed against the new register); otherwise a special read settles the case (a missing read gets
+        the real register value). A swap whose registration failed is registered as found."""
         meter = int(self.town.meter_of[case.r])
         if case.truth == "meter_fault" and self.fault_t[meter] <= t < self.fix_t[meter]:
-            self.fix_t[meter] = t
-            case.ev(t, "METER_EXCHANGE", {"meterId": self.town.meter_ids[meter],
-                                          "fault": FAULTS[int(self.fault_type[meter])]})
+            ft = int(self.fault_type[meter])
+            shown = self.display(case.r, t)
+            new = self.new_device_id(meter)
+            case.ev(t, "METER_EXCHANGE", {"meterId": self.town.meter_ids[meter], "fault": FAULTS[ft],
+                                          "previousDeviceId": self.device_at(meter, t), "deviceId": new,
+                                          "initialRead": shown if ft == 3 else 0.0})
             self._resolve(case, t, "estimate", actor=actor)
+            self._install(meter, t, t, new, {case.r: shown if ft == 3 else 0.0}, by=actor, case=case.id,
+                          removal=None if ft == 3 else {case.r: shown})
         else:
             case.ev(t, "SPECIAL_READ", {"by": actor})
             action = {"read_error": "correct", "physics": "accept_callback"}.get(case.truth, "special_read")
@@ -954,7 +1172,10 @@ class M2CRun:
     def actor_label(actor: str | None) -> str:
         if actor is None or actor in ("RPA", "you"):
             return actor or "the engine"
-        kind = {"AN": "analyst", "SUP": "supervisor", "FIELD": "field crew"}.get(actor.split("-")[0])
+        if actor == "AGENCY":
+            return "the low-income agency"
+        kind = {"AN": "analyst", "SUP": "supervisor", "FIELD": "field crew", "CC": "collections agent"}.get(
+            actor.split("-")[0])
         return f"{kind} {actor}" if kind else actor
 
     def not_open(self, case: Case | None, case_id: str | None, t: float) -> str | None:
@@ -969,13 +1190,16 @@ class M2CRun:
             return f"{case.id} was already completed by {self.actor_label(case.by)} at {self.clock(case.resolved)}"
         return None
 
-    def decision_refusal(self, case: Case, typ: str, t: float, hold: list | None) -> str | None:
+    def decision_refusal(self, case: Case, typ: str, t: float, hold: list | None,
+                         order_id: str | None = None) -> str | None:
         """Why the decision ``typ`` does not apply to the open ``case`` at ``t`` (``hold``: the account's invoice
         hold in force), or None. Case views offer only the decisions this lets through."""
         if case.work is not None:
             return f"{typ} does not apply to {case.id}, " + (
                 f"the Field Work case of order {case.ref} (use order_complete)" if case.work == "order" else
-                f"the invoice hold on account {case.ref} (use invoice_unhold)")
+                f"the invoice hold on account {case.ref} (use invoice_unhold)" if case.work == "hold" else
+                f"the low-income referral of account {case.ref} (the agency decides it)" if case.work == "low_income"
+                else f"the budget billing enrolment of account {case.ref} (billing sets the plan up)")
         if case.doc >= 0:
             if typ in ("override", "field_order"):
                 return f"{typ} does not apply to {case.id}, a billing block (use accept, estimate or escalate)"
@@ -989,10 +1213,43 @@ class M2CRun:
             obs = float(self.obs[r, m])
             j = -1 if np.isnan(obs) else self.backwards(r, m, obs, t)
             if j >= 0:
-                return (f"the register of {case.id} went backwards ({obs:,.3f} against the last actual read "
-                        f"{self.released[r, j]:,.3f} on {date_of(int(self.town.read_day[r, j])).isoformat()}), so "
-                        "accepting it would bill the difference as a credit: estimate it, correct the value "
-                        "(override) or send a field order")
+                return (f"the register of {case.id} went backwards ({obs:,.3f} against "
+                        f"{self.floor_text(r, m, j, t)}), so accepting it would bill the difference as a credit: "
+                        "estimate it, correct the value (override) or send a field order")
+        if typ == "check_read":
+            hit = self.check_value(case, t, order_id)
+            if hit is None:
+                return (f"no completed field order on {case.id} took a read of its register (a read taken, or a read "
+                        "confirmed on a read that came in)")
+            j = self.backwards(case.r, case.month, hit[0], t)
+            if j >= 0:
+                return (f"the check read of {case.id} ({hit[0]:,.3f}) is below {self.floor_text(case.r, case.month, j, t)}"
+                        ": register the device replacement first (Replace device on the installation), or estimate it")
+        return None
+
+    def check_value(self, case: Case, t: float, order_id: str | None = None) -> tuple[float, ords.Order] | None:
+        """The check read a completed field order supplies for ``case``'s read as of ``t``: a read taken on its
+        register (brought back to the read date by the normal use since), or a read confirmed (the read as
+        observed). The newest completed order wins."""
+        r, m = case.r, case.month
+        for oid in reversed(case.orders if order_id is None else [x for x in case.orders if x == order_id]):
+            o = self.orders[oid]
+            # Yours counts at once; the crew's once its day is over (until then your outcome may replace it).
+            final = o.outcome is not None and o.outcome["at"] <= t and (o.outcome["by"] == "you"
+                                                                         or int(o.outcome["at"]) < int(t))
+            got = o.case_outcomes.get(case.id) if final else None
+            if got is None or got[1] != r:
+                continue
+            out, at = got[0], o.outcome["at"]
+            if out["kind"] == "read_taken":
+                tc = at if out["date"] == date_of(int(at)).isoformat() else ords.day_of(
+                    date.fromisoformat(out["date"])) + 0.5
+                d = int(np.floor(tc))
+                since = float(self.town.true_advance(np.array([r]), np.array([d]), np.array([(tc - d) * 24.0]))[0]) \
+                    - float(self.normal_at[r, m])
+                return round(max(0.0, out["value"] - max(0.0, since)), 3), o
+            if out["kind"] == "read_confirmed" and not np.isnan(self.obs[r, m]):
+                return float(self.obs[r, m]), o
         return None
 
     def last_actual(self, r: int, m: int, t: float) -> int:
@@ -1006,12 +1263,24 @@ class M2CRun:
     def backwards(self, r: int, m: int, value: float, t: float) -> int:
         """The month of the last actual read that ``value`` (month ``m``'s register) is below, when it is not a
         plausible rollover; -1 when the register did not go backwards. A value below an earlier *estimate* only is a
-        true-up, not a backwards register."""
+        true-up, not a backwards register. After a device change (registered by ``t``) since that read, the floor is
+        the new register's initial read instead (``BELOW_DEVICE``)."""
         j = self.last_actual(r, m, t)
-        if j < 0 or not value < self.released[r, j] - 5e-4:
+        x = self.change_between(r, float(self.read_t[r, j]) if j >= 0 else -INF, float(self.read_t[r, m]), t)
+        floor = x.initial[r] if x is not None else float(self.released[r, j]) if j >= 0 else None
+        if floor is None or not value < floor - 5e-4:
             return -1
         mod = 10.0 ** int(self.town.digits[r])
-        return -1 if self.released[r, j] > 0.8 * mod and value < 0.2 * mod else j
+        return -1 if floor > 0.8 * mod and value < 0.2 * mod else BELOW_DEVICE if x is not None else j
+
+    def floor_text(self, r: int, m: int, j: int, t: float = INF) -> str:
+        """What a backwards read (``backwards`` gave ``j``) is below, in words."""
+        if j == BELOW_DEVICE:
+            jj = self.last_actual(r, m, t)
+            x = self.change_between(r, float(self.read_t[r, jj]) if jj >= 0 else -INF, float(self.read_t[r, m]), t)
+            return f"the initial read {x.initial[r]:,.3f} of device {x.device} (installed {date_of(int(x.t))})"
+        return (f"the last actual read {self.released[r, j]:,.3f} on "
+                f"{date_of(int(self.town.read_day[r, j])).isoformat()}")
 
     def _apply_action(self, day: int, a: dict, k: int = -1) -> None:
         case = self.case_index.get(a.get("caseId") or "")
@@ -1019,27 +1288,47 @@ class M2CRun:
         why = self.not_open(case, a.get("caseId"), t)
         if why is None:
             hold = self.hold_in_force(self.account_of(case), t) if case.doc >= 0 else None
-            why = self.decision_refusal(case, a["type"], t, hold)
+            why = self.decision_refusal(case, a["type"], t, hold, a.get("orderId"))
+        cover: list[Case] = []
+        for cid in a.get("coverCaseIds", []) if why is None else []:  # field_order: one visit for the premise
+            c = self.case_index.get(cid)
+            why = self.not_open(c, cid, t) or self.cover_refusal(c, case.r, case, t) or (
+                f"{cid} is already with the field crews" if c.queue == "FIELD" else None)
+            if why is not None:
+                why = f"the field order cannot cover {cid}: {why}"
+                break
+            cover.append(c)
         if why is not None:
             self._refuse(k, a, case, t, why)
             return
+        typ = a["type"]
+        value = self.check_value(case, t, a.get("orderId"))[0] if typ == "check_read" else a.get("value")
         case.assignee = "you"
-        if a["type"] in ("escalate", "field_order"):
+        if typ in ("escalate", "field_order"):
             case.owner = None  # handed to supervisors or the field crews: they work it even if you owned it
-        case.ev(t, "USER_ACTION", {"actionId": a["id"], "action": a["type"], **({"value": a["value"]}
-                                                                                if "value" in a else {}),
+        case.ev(t, "USER_ACTION", {"actionId": a["id"], "action": typ, **({"value": value} if value is not None
+                                                                          else {}),
                                    **({"note": a["note"]} if "note" in a else {})})
         case.rpa_at = INF if case.rpa_at is not None else None  # your decision replaces a pending RPA run
-        if case.doc >= 0 and a["type"] in ("accept", "estimate"):
-            self._resolve(case, t, "release" if a["type"] == "accept" else "rebill", actor="you")
-        elif a["type"] == "field_order":
-            self._to_field(case, t)
-        elif a["type"] == "escalate":
+        if typ in ("accept", "estimate", "override", "check_read"):  # completing a case its order still works
+            for oid in case.orders:
+                stage = self.orders[oid].stage_at(t)
+                if stage != "Completed":
+                    self.warnings.append(f"{a['id']} (notice): {case.id} was completed while field service order "
+                                         f"{oid} is still {stage}; the order goes on")
+        if case.doc >= 0 and typ in ("accept", "estimate"):
+            self._resolve(case, t, "release" if typ == "accept" else "rebill", actor="you")
+        elif typ == "field_order":
+            for c in cover:
+                c.assignee, c.owner = "you", None
+                c.ev(max(t, c.events[-1][0]), "USER_ACTION", {"actionId": a["id"], "action": typ, "with": case.id})
+            self._to_field(case, t, cover=cover)
+        elif typ == "escalate":
             case.proposal = case.proposal or self._proposal(case)
             self._escalate(case, t, "ANALYST_ESCALATE")
         else:
-            self._resolve(case, t, {"accept": "accept", "estimate": "estimate", "override": "override"}[a["type"]],
-                          actor="you", value=a.get("value"))
+            self._resolve(case, t, {"accept": "accept", "estimate": "estimate", "override": "override",
+                                    "check_read": "check_read"}[typ], actor="you", value=value)
 
     # ---- Studio work: field service orders, notes, ownership, invoice holds -------------------------------------
     def _act(self, day: int, k: int, a: dict) -> None:
@@ -1050,8 +1339,12 @@ class M2CRun:
             self._apply_action(day, a, k)
         elif typ in ORDER_ACTIONS:
             self._order_action(day, k, a)
+        elif typ in DEVICE_ACTIONS:
+            self._device_replace(day, k, a)
         elif typ in ("note", "assign"):
             self._note_or_assign(day, k, a)
+        elif typ in COLLECTION_ACTIONS:
+            return  # replayed with the account's payments and dunning after the year (books.collect)
         else:
             self._hold(day, k, a)
 
@@ -1086,8 +1379,9 @@ class M2CRun:
         return max(day + 9.0 / 24, case.events[-1][0] if case.events else 0.0)
 
     def _own(self, case: Case, t: float, who: str = "you") -> None:
-        """Your Studio action makes you the case's owner (unless it has one): automation leaves it to you."""
-        if case.owner is None:
+        """Your Studio action makes you the case's owner (unless it has one): automation leaves it to you. An
+        escalation stays with the supervisors (a note or an order does not take it from them; assign does)."""
+        if case.owner is None and case.queue != "SUPERVISOR":
             case.owner = case.assignee = who
             case.ev(t, "CASE_ASSIGNED", {"assignee": who, "implicit": True})
             if case.rpa_at is not None:
@@ -1101,17 +1395,18 @@ class M2CRun:
         self.cases.append(case)
         self.open.append(case)
         self.case_index[case.id] = case
+        self.by_prem.setdefault(int(self.town.prem[r]), []).append(case)
         first = case.ev(t, kind, payload, None)
         case.ev(t + 0.0005, "EXCEPTION_QUEUED", {"queue": queue}, first)
         case.move(t + 0.0005, queue, status)
         self.series[queue][int(t), 0] += 1
         return case
 
-    def _close_work(self, case: Case, t: float, outcome: str) -> None:
+    def _close_work(self, case: Case, t: float, outcome: str, by: str = "you") -> None:
         self.series[case.queue][int(t), 1] += 1
         case.resolved = t
         case.outcome = outcome
-        case.by = "you"
+        case.by = by
         case.move(t, None, "resolved")
 
     def _order_action(self, day: int, k: int, a: dict) -> None:
@@ -1138,20 +1433,123 @@ class M2CRun:
                 self._roll(o, tt + (30 + 10 * n) / 1440.0, n)
             else:
                 self.order_rolls.setdefault(o.start_day, []).append(o)
-        else:  # complete: after the crew's visit when it rolled today
+        else:  # complete: your outcome, recorded when the crew's visit ends (it replaces the crew's that day)
+            if o.outcome is not None:
+                self._reject(k, a, f"order {o.id} was already completed by {self.actor_label(o.outcome['by'])} at "
+                                   f"{self.clock(o.outcome['at'])} ({ords.outcome_text(o.outcome)})")
+                return
             done = tt
-            if o.roll_t is not None and int(o.roll_t) == day:
-                done = min(max(tt, o.roll_t + o.minutes / 1440.0), day + 0.999)
-            note = a["note"]
-            meter = int(self.town.meter_of[o.r])
-            if ords.ACTIVITY.get(o.fields.get("activityType")) == "meter_exchange" and \
-                    self.fault_t[meter] <= done < self.fix_t[meter]:  # the crew swapped a faulty meter: reads recover
-                self.fix_t[meter] = done
-                fw.ev(done, "METER_EXCHANGE", {"meterId": self.town.meter_ids[meter], "orderId": o.id,
-                                               "fault": FAULTS[int(self.fault_type[meter])]})
-            fw.ev(done, "ORDER_COMPLETED", {"orderId": o.id, "actionId": a["id"], "note": note})
-            o.stages[-1] = (done, "Completed", a["id"], note)
-            self._close_work(fw, done, "completed")
+            if o.roll_t is not None and int(o.roll_t) == day and o.done_t is not None:
+                done = min(max(tt, o.done_t), day + 0.999)
+            _, _, _, outcome, note = o.completion
+            why = self._complete(o, done, outcome, by="you", aid=a["id"], note=note)
+            if why is not None:
+                self._reject(k, a, why)
+
+    def _complete(self, o: ords.Order, t: float, outcome: dict, *, by: str, aid: str | None = None,
+                  note: str | None = None) -> str | None:
+        """Complete order ``o`` at ``t`` with ``outcome`` (yours, or the crew's), and write it back: a field order
+        completed step on the Field Work case and on each case the order serves, a new device for a meter exchanged
+        (later reads are diffed against it), and a check read for a read taken or confirmed. Returns why it does not
+        apply (a meter exchange the installation refuses), or None."""
+        fw = o.case
+        r, mi = o.r, int(self.town.meter_of[o.r])
+        act = ords.ACTIVITY.get(o.fields.get("activityType"))
+        fault = self.fault_t[mi] <= t < self.fix_t[mi]
+        if outcome["kind"] == ords.REMARK and act == "meter_exchange" and fault:  # an older list: the crew swapped it
+            outcome = {**outcome, "deviceId": self.new_device_id(mi), "initialRead": 0.0}
+        dev = outcome.get("deviceId")
+        if dev is not None:
+            day = ords.day_of(date.fromisoformat(outcome["installDate"])) if "installDate" in outcome else int(t)
+            t_inst = t if day == int(t) else day + 0.5
+            why = self.install_check(mi, t_inst, t, dev)
+            if why is not None:
+                return f"order {o.id}: {why}"
+            shown = self.display(r, t)
+            fw.ev(t, "METER_EXCHANGE", {"meterId": self.town.meter_ids[mi], "orderId": o.id, "deviceId": dev,
+                                        "previousDeviceId": self.device_at(mi, t), "initialRead": outcome["initialRead"],
+                                        **({"fault": FAULTS[int(self.fault_type[mi])]} if fault else {})})
+            removal = outcome.get("removalRead")
+            self._install(mi, t_inst, t, dev, {r: outcome["initialRead"]}, by=by, order=o.id,
+                          case=o.source.id if o.source is not None else None,
+                          removal={r: removal} if removal is not None else (
+                              {r: shown} if by != "you" and self.fault_type[mi] != 3 else None))
+        o.outcome = {**outcome, "by": by, "at": t}
+        text = ords.outcome_text(outcome) + (f" · {note}" if note else "")
+        o.stages.append((t, "Completed", aid or by, text))
+        payload = {"orderId": o.id, "outcome": outcome, "note": text, "by": by, **({"actionId": aid} if aid else {})}
+        fw.ev(t, "ORDER_COMPLETED", payload)
+        self._close_work(fw, t, "completed", by=by)
+        for c in [x for x in (o.source, *o.covered) if x is not None]:
+            mine = o.case_outcomes.get(c.id)
+            if mine is None:  # yours: one outcome for the visit; its read is the order's own register's
+                mine = o.case_outcomes[c.id] = (outcome, r)
+            c.ev(max(t, c.events[-1][0]), "ORDER_COMPLETED", {**payload, "outcome": mine[0],
+                                                              "note": ords.outcome_text(mine[0])})
+        return None
+
+    def _crew_complete(self, day: int) -> None:
+        """The crews on your orders finish the visits that end today, unless you recorded the outcome yourself."""
+        for o in self.crew_due.pop(day, []):
+            if o.outcome is not None or o.case is None or o.case.resolved is not None:
+                continue
+            t = max(float(o.done_t), o.case.events[-1][0])
+            for c in [x for x in (o.source, *o.covered) if x is not None]:
+                if c.r != o.r:  # another meter at the premise: read (or reported), not exchanged on this order
+                    o.case_outcomes[c.id] = (self._crew_outcome(o, c.r, c.month, t, exchange=False), c.r)
+            outcome = self._crew_outcome(o, o.r, o.m, t)
+            for c in [x for x in (o.source, *o.covered) if x is not None and x.r == o.r]:
+                o.case_outcomes[c.id] = (outcome, o.r)
+            self._complete(o, t, outcome, by=str(o.crew))
+
+    def _crew_outcome(self, o: ords.Order, r: int, m: int, t: float, exchange: bool = True) -> dict:
+        """What the crew finds at register ``r`` (read ``m``): no access (a walked meter, by the town's no-access
+        rate, unless the order is an access investigation), a faulty meter exchanged (a meter exchange or
+        investigation) or reported as a defect, a read taken (the read was missing or wrong) or the read confirmed."""
+        tw = self.town
+        mi = int(tw.meter_of[r])
+        act = ords.ACTIVITY.get(o.fields.get("activityType"), "special_read")
+        p = self.cfg.reading.manual_no_access if tw.tech[r] == "MANUAL" and act != "access_investigation" else 0.0
+        if float(self._u(P_WORK, self.reg_keys[r], o.n, 21)) < p:
+            return {"kind": "no_access"}
+        shown = self.display(r, t)
+        if self.fault_t[mi] <= t < self.fix_t[mi]:
+            ft = int(self.fault_type[mi])
+            if exchange and act in ("meter_exchange", "meter_investigation"):
+                return {"kind": "meter_exchanged", "deviceId": self.new_device_id(mi),
+                        "installDate": date_of(int(t)).isoformat(), "initialRead": shown if ft == 3 else 0.0}
+            return {"kind": "defect_found", "text": DEFECTS[ft]}
+        if m < 0 or np.isnan(self.obs[r, m]) or self.truth_cls[r, m] in (1, 2):
+            return {"kind": "read_taken", "value": shown, "date": date_of(int(t)).isoformat()}
+        return {"kind": "read_confirmed"}
+
+    def _device_replace(self, day: int, k: int, a: dict) -> None:
+        """Your device replacement on an installation: a new device and register from the install date (its
+        initial read), registered at 09:00. A case named with it records the step."""
+        t = day + 9.0 / 24
+        mi = self.meter_index[a["meterId"]]
+        d = ords.day_of(date.fromisoformat(a["installDate"]))
+        t_inst = t if d == day else d + 0.5
+        case = None
+        if a.get("caseId"):
+            case = self._open_case(k, a, t)
+            if case is None:
+                return
+        why = self.install_check(mi, t_inst, t, a["deviceId"])
+        if why is not None:
+            self._reject(k, a, why)
+            return
+        r0 = int(np.flatnonzero(self.town.meter_of == mi)[0]) if case is None or self.town.meter_of[case.r] != mi \
+            else case.r
+        x = self._install(mi, t_inst, t, a["deviceId"], {r0: a["initialRead"]}, by="you",
+                          removal={r0: a["removalRead"]} if "removalRead" in a else None,
+                          case=case.id if case else None, note=a.get("note"))
+        if case is not None:
+            tt = self._user_t(case, day)
+            case.ev(tt, "DEVICE_REPLACED", {"actionId": a["id"], "meterId": a["meterId"], "deviceId": x.device,
+                                            "previousDeviceId": x.previous, "installDate": a["installDate"],
+                                            "initialRead": a["initialRead"], "by": "you",
+                                            **({"note": a["note"]} if a.get("note") else {})})
 
     def _order_create(self, k: int, a: dict, o: ords.Order, t: float) -> None:
         src: Case | None = None
@@ -1181,17 +1579,43 @@ class M2CRun:
             o.detached = True
             self._reject(k, a, f"read {self.read_id(o.r, o.m)} already has field service order {dup.id}; reopen it")
             return
+        covered = []
+        for cid in o.cover_ids:  # one visit for the premise: the other open cases there that you chose to cover
+            c = self.case_index.get(cid)
+            why = self.not_open(c, cid, t) or self.cover_refusal(c, o.r, src, t)
+            if why is not None:
+                o.detached = True
+                self._reject(k, a, f"the order cannot cover {cid}: {why}")
+                return
+            covered.append(c)
         fw = self._work_case(t, o.r, o.m, "FIELD_SERVICE", "FIELD", "order", o.id,
                              f"CASE-{date_of(int(t)).strftime('%y%m%d')}-F{o.n:04d}",
                              {"orderId": o.id, "sourceCaseId": src.id if src else None,
-                              "readId": self.read_id(o.r, o.m), "actionId": a["id"]}, "draft")
-        o.case, o.source = fw, src
-        if src is not None:
-            fw.source = src.id
-            src.orders.append(o.id)
-            tt = self._user_t(src, int(t))
-            self._own(src, tt)
-            src.ev(tt, "ORDER_LINKED", {"orderId": o.id, "caseId": fw.id})
+                              "readId": self.read_id(o.r, o.m), "actionId": a["id"],
+                              **({"coveredCaseIds": [c.id for c in covered]} if covered else {})}, "draft")
+        o.case, o.source, o.covered = fw, src, covered
+        for c in [x for x in (src, *covered) if x is not None]:
+            if c is src:
+                fw.source = src.id
+            c.orders.append(o.id)
+            tt = self._user_t(c, int(t))
+            self._own(c, tt)
+            c.ev(tt, "ORDER_LINKED", {"orderId": o.id, "caseId": fw.id, **({"covered": True} if c is not src else {})})
+
+    def cover_refusal(self, c: Case, r: int, src: Case | None, t: float) -> str | None:
+        """Why one visit for register ``r``'s premise cannot also cover the open case ``c``, or None."""
+        tw = self.town
+        if c is src:
+            return "it is the order's own case"
+        if c.doc >= 0 or c.work is not None:
+            return f"{c.id} is not a read case (a field visit cannot settle it)"
+        if int(tw.prem[c.r]) != int(tw.prem[r]):
+            return f"{c.id} is at another premise ({tw.premise_ids[tw.prem[c.r]]})"
+        if c.orders:
+            return f"{c.id} already has field service order {c.orders[0]}"
+        if c.owner not in (None, "you"):
+            return f"{c.id} is assigned to {c.owner}"
+        return None
 
     def _roll_orders(self, day: int) -> None:
         due = sorted(self.order_rolls.pop(day, []), key=lambda o: o.n)
@@ -1199,9 +1623,17 @@ class M2CRun:
             self._roll(o, day + (7.0 + 2.0 * k / len(due)) / 24, k)
 
     def _roll(self, o: ords.Order, t: float, k: int) -> None:
-        o.roll_t = t
-        o.case.ev(t, "TRUCK_ROLL", {"crew": f"FIELD-{(k % 2) + 1}", "orderId": o.id})
-        o.case.move(t, "FIELD", "on_site")
+        """The crew rolls at ``t`` (en route), is on site ``TRAVEL_MIN`` later and done after the order's duration;
+        it records its outcome then, unless you complete the order that day."""
+        o.roll_t, o.crew = t, f"FIELD-{(k % 2) + 1}"
+        arrive = t + TRAVEL_MIN / 1440.0
+        o.done_t = min(arrive + o.minutes / 1440.0, int(t) + 0.999)
+        o.case.ev(t, "TRUCK_ROLL", {"crew": o.crew, "orderId": o.id})
+        o.case.move(t, "FIELD", "en_route")
+        o.case.ev(arrive, "ON_SITE", {"crew": o.crew, "orderId": o.id})
+        o.case.move(arrive, "FIELD", "on_site")
+        o.stages += [(t, "En route", o.crew, None), (arrive, "On site", o.crew, None)]
+        self.crew_due.setdefault(int(t), []).append(o)
 
     def _note_or_assign(self, day: int, k: int, a: dict) -> None:
         case = self._open_case(k, a, day + 9.0 / 24)
@@ -1219,7 +1651,7 @@ class M2CRun:
 
     def account_of(self, case: Case) -> str:
         """The contract account a case bills to (the one an invoice hold through this case applies to)."""
-        if case.work == "hold":
+        if case.work in cat.ACCOUNT_WORK:
             return str(case.ref)
         if case.doc >= 0:
             return self.books.account(self.books.docs[case.doc])
@@ -1298,14 +1730,20 @@ class M2CRun:
             if act in ("accept", "accept_callback", "verified") and np.isnan(obs):
                 act = "estimate"
             why = {}
-            if act in ("accept", "accept_callback", "verified", "special_read", "correct"):
-                seen = float(self.meter_true[r, m] if act in ("special_read", "correct") else obs)
+            if act in ("accept", "accept_callback", "verified", "special_read", "correct", "check_read"):
+                seen = float(self.meter_true[r, m] if act in ("special_read", "correct") else
+                             value if act == "check_read" else obs)
                 j = self.backwards(r, m, seen, t)
                 if j >= 0:
                     act = "estimate"
-                    why = {"reason": f"register went backwards ({seen:,.3f} against the last actual read "
-                                     f"{self.released[r, j]:,.3f}): estimated, not released as read"}
-            if act == "estimate":
+                    why = {"reason": f"register went backwards ({seen:,.3f} against {self.floor_text(r, m, j, t)}): "
+                                     "estimated, not released as read"}
+            if act == "check_read":  # the check read a completed field order took
+                val = float(value)
+                kind, method = (1 if abs(val - float(obs)) < 5e-4 else 3) if not np.isnan(obs) else 3, 4
+                case.ev(t, "READ_ADJUSTED", {"readId": self.read_id(r, m), "value": val, "source": "check read"},
+                        cause)
+            elif act == "estimate":
                 val, kind, method = self._estimate(r, m), 2, 2
                 case.ev(t, "ESTIMATE_CREATED", {"readId": self.read_id(r, m), "value": val, **why}, cause)
             elif act == "special_read" or (act == "correct"):
@@ -1335,15 +1773,21 @@ class M2CRun:
         self.open_case[r] = -1
 
     def _estimate(self, r: int, m: int) -> float:
-        prev, prev_n = self.prev_val[r], self.prev_normal[r]
+        """The last released register (on the device in place at read ``m``) plus the expected use since."""
+        prev, prev_n, prev_t = self.prev_val[r], self.prev_normal[r], self.prev_t[r]
+        floor = -INF
+        if r in self.installs_of:  # a device change: measure from the register in place at this read
+            prev, prev_n, prev_t = self.prev_for(r, m)
+            x = self.change_between(r, prev_t, float(self.read_t[r, m]))
+            floor = x.initial[r] if x is not None else floor  # never below the new register's initial read
         use = max(0.0, (self.normal_at[r, m] - prev_n) * float(self._hist(np.array([r]), m)[0]))
         if self.cfg.vee.estimation == "recent_average":
             k = [j for j in range(m - 1, 0, -1) if self.status[r, j] == 1][:3]
             if k:
                 days = sum(self.read_t[r, j] - self.prev_t_at_read[r, j] for j in k)
                 rate = sum(float(np.nan_to_num(self.cons[r, j])) for j in k) / max(days, 1e-6)
-                use = max(0.0, rate * (self.read_t[r, m] - self.prev_t[r]))
-        return float(regs.observe(np.array([prev + use]), np.array([self.town.digits[r]]))[0])
+                use = max(0.0, rate * (self.read_t[r, m] - prev_t))
+        return float(regs.observe(np.array([max(prev + use, floor)]), np.array([self.town.digits[r]]))[0])
 
     def _release(self, r: int, m: int, value: float, kind: int, t: float, method: int) -> None:
         self.status[r, m] = kind
@@ -1351,7 +1795,8 @@ class M2CRun:
         self.released[r, m] = value
         self.release_t[r, m] = t
         if self.read_t[r, m] >= self.prev_t[r]:
-            self.prev_val[r] = value
+            x = self.change_between(r, float(self.read_t[r, m]), INF)  # a device installed after this read
+            self.prev_val[r] = x.carry(r, value, float(self.normal_at[r, m])) if x is not None else value
             self.prev_t[r] = self.read_t[r, m]
             self.prev_normal[r] = self.normal_at[r, m]
             self.consec[r] = self.consec[r] + 1 if kind == 2 else 0

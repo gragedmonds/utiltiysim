@@ -27,3 +27,11 @@ test('?town= routes to a pack by preset or town id, else to a town the engine ge
  assert.equal(townRoute('ayr~../../x',packs),null);assert.equal(townRoute('~eNqr',packs),null);
  assert.equal(engineSnapshotUrl('http://127.0.0.1:8010/api','town-d968ce9db1c457bc'),'http://127.0.0.1:8010/api/towns/town-d968ce9db1c457bc/snapshot.json?detail=viewer&profile=viewer');
 });
+
+test('a bare address opens the default engine town: Ayr when the site has it, else the first pack',async()=>{
+ const {defaultPack,DEFAULT_TOWN}=await import('../dist/packs.js');
+ assert.equal(DEFAULT_TOWN,'ayr');
+ assert.equal(defaultPack({towns:[{preset:'whitby_small'},{preset:'ayr'}]}).preset,'ayr');
+ assert.equal(defaultPack({towns:[{preset:'elora'},{preset:'cobourg'}]}).preset,'elora');
+ assert.equal(defaultPack({towns:[]}),null);assert.equal(defaultPack(null),null);
+});

@@ -205,6 +205,22 @@ phone quality profiles and WebGL recovery.
 - **Case work:** Take ownership, Add note, Do Not Invoice Account, Remove Invoice Hold, and Release billing / invoice
   outsort (which takes a reason). Each button appears only when the engine lists the action for that case on the
   run date. While an invoice hold is on, the release is not offered.
+- **Field work** (from a tester's month in the Workspace):
+  - Complete on an order opens a structured outcome form (read taken with value and date, read confirmed, meter
+    exchanged with the new device id, install date and initial read, no access, defect found) instead of one free-text
+    field. The outcome shows on the order and on each case it serves ("Field Outcome"), and a read it took is offered
+    as "Release check read" (a field read).
+  - Orders move on their own: en route, on site and completed by the crew on the start date, with its simulated
+    outcome; Complete records yours instead that day. An order dispatched for today shows on the map's Field
+    operations panel at once.
+  - The installation's Device screen has a Device History and "Replace device…" (new device id, install date,
+    initial read, optional removal read); the Installation screen lists the current device.
+  - "Escalations" in the left nav lists the supervisor queue; an escalated case says a supervisor picks it up.
+  - Cases and list rows show "2 related cases" (other open cases at the premise) with links; creating an order offers
+    to cover them with the same visit.
+  - A case completed while its order is open shows a warning on the page and in the toast; it is never blocked.
+  - Missed reads say why in Display Meter Reading Results and MR results ("Missed: power outage 00:00–04:00 (AMI last
+    gasp)").
 
 ## 10. Utility Studio seams (engine side)
 
@@ -219,12 +235,15 @@ today. Details and rules: `docs/M2C.md` "Studio work".
 | Save Draft | `act('order_save', null, null, {sourceCaseId \| readId, fields, components})` (new) or `{orderId, fields, components}` (edit); then `order(...)` gives `orderId` (`WO-yymmdd-nnnn`) and the Field Work `caseId` |
 | `validateFieldOrder` + Release & Save | `act('order_release', null, null, {orderId})`; a 422 `detail.fieldErrors` is `{field: message}` with your messages; `detail.message` for the toast. Your client check can stay for instant feedback; the engine is the authority |
 | `dispatchFieldOrder` | `act('order_dispatch', null, null, {orderId})` (refused before release) |
-| `updateCase(...,'complete')` | `act('order_complete', null, null, {orderId, note})` (after dispatch, on or after the basic start) |
+| `updateCase(...,'complete')` | `act('order_complete', null, null, {orderId, outcome: {kind, ...}, note?})` on the day the crew works the order (the order's `completable`); `outcome` kinds and fields are `GET /api/m2c/vocabulary` → `order.outcomes`. The order's `outcome` is now an object `{kind, label, text, by, at, ...}`, not a string |
+| Field outcome on a case | The case view's `fieldOutcome` and `checkRead`; `act('check_read', caseId)` releases the check read (method `field_read`) |
+| Device replacement | `act('device_replace', null, null, {meterId, deviceId, installDate, initialRead, removalRead?, note?})`; the installation's `meters[].devices` is the history, `meters[].deviceId` the current device |
+| Related cases, one visit | Rows' `relatedCaseIds`, the case view's `relatedCases` (`coverable`); `coverCaseIds` on the first `order_save` (or on a `field_order` decision) |
 | `noteDialog` note | `act('note', caseId, null, {text})`; the case view lists `notes` |
 | hold / unhold | `act('invoice_hold' \| 'invoice_unhold', caseId, null, {note})` (or `{accountId, note}`); the case view has `invoiceHold` |
 | release (outsort) | `act('accept', caseId, null, {note})` on a `BILLING` case; refused while the account is on hold |
 | assignee | `act('assign', caseId, null, {assignee})`; rows carry `assignee` and `owner` |
-| `clarificationCases`, `categories` | `queue({category, status, search, page})`; rows carry `category`, read fields and `linkedOrderIds` / `orderId`. Categories without engine meaning return empty lists |
+| `clarificationCases`, `categories` | `queue({category, status, search, page})`; rows carry `category`, read fields and `linkedOrderIds` / `orderId`. Categories without engine meaning return empty lists. **Escalations** is a category now (every SUPERVISOR case); MR Implausibles and Meter Read Follow-Up no longer include escalated cases |
 | `readRows` | `queue({category: 'MR Implausibles'})` rows (meter, previous, observed, expected, consumption, `validationText`) |
 | Display Billing / installation query | `POST /api/m2c/installation {installationId}` (404 → "not found" on the query) |
 | Display Meter Reading Results | `POST /api/m2c/read-document {readId}` |
@@ -239,6 +258,36 @@ enablement from them. Identities are the engine's everywhere (premise, installat
 order), so the map and the Workspace share them; the fixture ids (`7100000318`, `MR-2026-0276`, `100004201`) go away.
 The Studio's "Schedule visit" maps to the order's basic start (save before release); there is no separate schedule
 action. A dispatched order shows on the map on its start date as a `field_order` job with `orderId`.
+
+## 10b. Collections, outage follow-up and AMI collectors (Workspace)
+
+New engine contracts, all with the run identity body (`EngineM2C.body()`); details in `docs/M2C.md` "Collections"
+and what drives each page in `docs/STUDIO_BILLING.md`:
+
+| Page | Engine | `EngineM2C` |
+|---|---|---|
+| Collections worklists (disconnection notices, winter moratorium holds, rejected payments, overdue accounts) | `POST /api/m2c/collections {list, status, sort, page, pageSize, search, commodity}` → `m2c-collections/1.0` rows with `actions` and `flags`, plus `counts` for the nav | `collections(params)` |
+| Collections account | `POST /api/m2c/collections/account {accountId}` → `m2c-collections-account/1.0` | `collectionsAccount(id)` |
+| Outage follow-up | `POST /api/m2c/outage-followup {utility, kind, status, outageId, search, page}` → `m2c-outage-followup/1.0` | `outageFollowup(params)` |
+| Missed reads by AMI collector | `POST /api/m2c/collector-groups {status, collector, minCases, page}`; a group's cases: `queue({collector, createdOn})` | `collectorGroups(params)` |
+| Run statistics for a period | `POST /api/m2c/summary {since}` adds `window` | `summary(since)` |
+
+- **Actions** (append-only, 09:00 on the run date, through `act(type, null, null, extra)`): `payment_arrangement
+  {accountId, instalments, note?}`, `extend_due {invoiceId, days, note?}`, `dunning_hold {accountId, days, note}`,
+  `low_income_referral {accountId, note?}`, `budget_billing {accountId, note?}`, `waive_fee {invoiceId, fee,
+  note?}`, `disconnect_approve {invoiceId, note?}`, `disconnect_cancel {invoiceId, note}`. Show a button only when the
+  row's (or account's, or invoice's) `actions` lists it; `waive_fee:late_fee` / `waive_fee:nsf_fee` name the fee.
+- **Categories:** Low Income Process and Budget Bill Cases now have engine cases (`LOW_INCOME`, `BUDGET_BILL`, queue
+  `COLLECTIONS`): the call centre opens some at the run's rates and your referrals and enrolments add to them. Their
+  case view has `collections` (the account's overdue, referral outcome or plan) and `studioActions` note and assign
+  only.
+- **Rows and case views** carry `collectorId` and `collectorCases` (missed reads on the same collector that day); a
+  case view adds `network {collectorId, mountedOn, mountId, day, cases, relatedCases[]}`.
+- **Production viewer:** `workspace-collections.js` holds these pages, mounted by `workspace.js` (sidebar
+  "Collections" and "Meter Reading" sections, a "Collections" group in the transaction picker, a collector strip on
+  Meter Read Follow-Up, the AMI Network and Account Collections groups on a case, and a period selector on Run
+  statistics). Routes: `#/workspace/collections/<list>`, `#/workspace/account/<id>`, `#/workspace/outages`,
+  `#/workspace/collector/<id>/<day>`.
 
 ## 11. The isometric map (your pixel art)
 

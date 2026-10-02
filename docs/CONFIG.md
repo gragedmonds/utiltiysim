@@ -145,8 +145,10 @@ Bulk supply, substations, feeders, transformers, services.
 | `trunk_min_load_share` | `0.04` | 0–0.5 |  | (advanced) A feeder trunk extends along a corridor while at least this share of the feeder's connected load lies at or beyond that point; smaller tails are served by laterals. *Affects: trunk length, three-phase backbone.* |
 | `route_shared_trunk_factor` | `1.2` | 1.0–5.0 |  | (advanced) Cost multiplier for running a feeder express through another feeder's territory or alongside its trunk. *Affects: express sections, feeder separation.* |
 | `severe_turn_deg` | `60.0` | 20–170 | deg | (advanced) A trunk turn at least this sharp counts as severe in the routing metrics. |
-| `ties_per_feeder_pair` | `1` | 0–4 |  | Normally-open tie switches between each pair of neighbouring feeders. *Affects: tie switches, back-feed options.* |
-| `tie_max_length_m` | `800.0` | 0–5000 | m | (advanced) Longest new line built to tie a feeder that touches no other feeder. *Affects: tie switches.* |
+| `ties_per_feeder_pair` | `1` | 0–4 |  | Normally-open tie switches between each pair of neighbouring feeders (0: no ties at all, section ties included). *Affects: tie switches, back-feed options.* |
+| `tie_max_length_m` | `1200.0` | 0–5000 | m | (advanced) Longest new line built for a tie: to a feeder that touches no other feeder, or from a switched section to another feeder's three-phase line (or round to its own feeder's). Along a street a line already uses, a metre counts 1.25 (single-phase) or 2 (three-phase). *Affects: tie switches, back-feed options.* |
+| `section_max_share` | `0.15` | 0.05–1.0 |  | Sectionalising switches cut each feeder's three-phase backbone into sections of at most this share of the feeder's customers (at least section_min_customers), so a crew isolates a fault within a bounded section and ties back-feed the healthy sections beyond it. *Affects: sectionalising switches, tie switches, outage size after isolation.* |
+| `section_min_customers` | `100` | 10–5000 |  | (advanced) Smallest section limit: a feeder is not cut into sections smaller than this many customers. *Affects: sectionalising switches, outage size after isolation.* |
 | `overhead_before_year` | `1978` | 1850–2030 |  | Districts built before this year are overhead (poles); later underground. *Affects: poles, lightning exposure, storm outages.* |
 | `pole_spacing_m` | `42.0` | 20–90 | m | (advanced) Pole span on overhead lines. |
 | `voltage_min_pu` | `0.95` | 0.85–1.0 |  | (advanced) Lower service voltage limit (CSA CAN3-C235 / ANSI Range A). Frames report it on a 120 V base (premises.voltageLimits) with the premises below it; less 4 V it is the default floor for back-feeding through a tie. *Affects: low-voltage premises, voltage lens, back-feed voltage floor.* *Default of the operations run setting `tieMinVoltage`.* |
@@ -309,6 +311,8 @@ Work queues, automation, workforce, costs and carrying cost.
 | `supervisors` | `1` | 0–50 |  | Supervisors approving escalations. *Affects: escalation backlog.* |
 | `supervisor_hours_per_day` | `2.0` | 0.25–10 | h | (advanced) Supervisor hours on escalations per business day. |
 | `supervisor_minutes` | `40.0` | 5–240 | min | (advanced) Supervisor review time per escalation. |
+| `supervisor_queue_days_min` | `1` | 1–20 | d | Minimum wait before a supervisor picks up an escalation (VEE's own escalations wait this long). *Affects: escalation backlog, days to bill.* |
+| `supervisor_queue_days_max` | `3` | 1–30 | d | Maximum wait before a supervisor picks up an escalation from an analyst or you. An escalation you take yourself (assign) waits for you. *Affects: escalation backlog, days to bill.* |
 | `field_orders_per_day` | `6` | 0–500 |  | Meter investigations, re-reads and exchanges completed per business day. *Affects: field order backlog, estimates.* |
 | `field_days_min` | `1` | 0–20 | d | (advanced) Earliest a field order is worked after it is raised. |
 | `analyst_accuracy` | `0.95` | 0.5–1 |  | (advanced) Share of reviews where the analyst finds the true cause. *Affects: billing errors, wasted truck rolls.* |
@@ -402,4 +406,12 @@ Bill checks, tariff versions, invoicing, payments and dunning.
 | `reminder_days` | `7` | 1–60 | d | Days after the due date for a reminder. |
 | `notice_days` | `21` | 1–90 | d | Days after the due date for an overdue notice and late fee. |
 | `disconnect_days` | `45` | 5–180 | d | Days after the due date for a disconnection notice. *Affects: disconnection notices.* |
-| `winter_moratorium` | `True` |  |  | No disconnection notices for electricity and water from Nov 15 to Apr 30 (Ontario). |
+| `winter_moratorium` | `True` |  |  | No disconnection notices for electricity and water from Nov 15 to Apr 30 (Ontario); a notice held for the winter is issued on May 1 if the bill is still unpaid. |
+| `disconnect_notice_days` | `10` | 1–60 | d | Days from a disconnection notice to the earliest disconnection. A disconnection also needs a person's approval (the Collections worklist). *Affects: disconnections.* |
+| `disconnect_payment_rate` | `0.6` | 0–1 |  | (advanced) Disconnected customers who pay within a week of the disconnection (and are reconnected the next business day); the rest stay off until they pay. *Affects: collections, reconnections.* |
+| `arrangement_break_rate` | `0.3` | 0–1 |  | (advanced) At-risk payers who break a payment arrangement after a few instalments (dunning resumes); other payers pay every instalment. *Affects: collections.* |
+| `low_income_referral_rate` | `0.15` | 0–1 |  | Disconnection notices and winter moratorium holds after which the call centre refers the customer to a low-income programme (once a year per account). *Affects: Low Income Process cases, disconnections.* |
+| `low_income_review_days` | `10` | 1–60 | d | (advanced) Business days the low-income agency takes to decide a referral; dunning waits meanwhile. |
+| `low_income_approval_rate` | `0.7` | 0–1 |  | Referrals the agency approves with a grant. *Affects: collections, receivable.* |
+| `low_income_grant_max` | `500.0` | 0–5000 | $ | (advanced) Largest low-income grant credited to an account's arrears. |
+| `budget_billing_offer_rate` | `0.08` | 0–1 |  | Overdue notices after which the call centre enrols the customer in budget billing (once a year per account); the plan levels later invoices. *Affects: Budget Bill Cases, collections.* |

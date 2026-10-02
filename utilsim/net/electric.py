@@ -15,8 +15,12 @@ Backbone first (docs/CORRIDOR_ROUTING_REQUIREMENTS.md):
    bank), so every feeder is a separate circuit from the substation bus.
 4. Laterals attach every transformer group to the nearest trunk (one multi-source run of the same router), which
    fixes the final territories. Branch nodes are trunk nodes: laterals leave at junctions or continue past a trunk end.
-5. Normally-open tie switches join neighbouring feeders on a street piece between them (preferring three-phase ends);
-   a feeder that touches no other gets a short new tie line. Ties are disabled as built, so operation stays radial.
+5. Sectionalising switches cut each feeder's three-phase backbone into sections of bounded customers (at branch
+   points, or where a run has gathered a section's worth; and where an express run enters the territory).
+6. Normally-open tie switches join neighbouring feeders on a street piece between them (preferring three-phase ends);
+   a feeder that touches no other gets a short new tie line. Then every switched section gets a tie that can feed it
+   while the section above it is out, where geometry allows: to another feeder's three-phase line, else a loop round
+   to its own feeder. Ties are disabled as built, so operation stays radial.
 Reclosers at feeder heads, fuses at single-phase lateral taps, poles along overhead lines."""
 
 from __future__ import annotations
@@ -40,7 +44,7 @@ from utilsim.net.common import (
     piece_points,
 )
 from utilsim.net.context import NetContext
-from utilsim.net.corridors import Corridors, RouteCosts, TurnRouter
+from utilsim.net.corridors import RouteCosts, TurnRouter
 from utilsim.net.tables import SECONDARY, THREE_PHASE_KVA, coincidence, conductor_kva, pick_conductor
 from utilsim.sim.demand import design_kva
 
@@ -48,6 +52,9 @@ LARGE_SERVICE_KVA = 150.0  # three-phase services above this design load are 347
 
 EXPRESS_LANE_M = 1.5  # an express circuit runs this much further out than the line it parallels, per lane
 MAX_TRUNK_PATHS = 48  # trunk branches routed per feeder (the rest of its demand is reached by laterals)
+# A new tie line costs this much more per metre along a street a single-phase lateral or a three-phase line already uses
+# (it shares the poles or trench; planners would rather not parallel a trunk).
+TIE_ALONG_1PH, TIE_ALONG_3PH = 1.25, 2.0
 
 
 def _groups(ctx: NetContext, kva: np.ndarray, overhead: np.ndarray) -> list[dict]:
@@ -415,6 +422,69 @@ def _sums(order: list[int], parent: list[int], values: np.ndarray) -> np.ndarray
     return acc
 
 
+def _sectionalise(L: Layout, phases: dict[int, int], own_n: np.ndarray, sub_n: np.ndarray, ec
+                  ) -> tuple[list[int], list[int]]:
+    """Sectionalising switches. Each feeder's three-phase backbone (trunk, express and three-phase laterals; a fused
+    single-phase lateral counts with the backbone node it taps) is cut into sections of at most
+    max(``section_min_customers``, ``section_max_share`` × the feeder's customers). Bottom-up, a node keeps the
+    sections of its branches until together they would exceed the limit, then switches off the heaviest branch
+    first: the fewest switches for the limit (Kundu & Misra's tree partition), at the junction where a branch
+    leaves the backbone or where a run has gathered a section's worth of customers.
+
+    Returns the switched nodes in feeder order (each switch sits on the piece into the node, at its upstream end)
+    and, for every node, its section: the top node of the section (the feeder head or a switched node)."""
+    kids: dict[int, list[int]] = {}
+    for v in L.order:
+        if L.parent[v] >= 0:
+            kids.setdefault(L.parent[v], []).append(v)
+    heads = set(L.heads)
+
+    def backbone(v: int) -> bool:
+        return v in heads or phases.get(v, 1) == 3
+
+    limit = [max(float(ec.section_min_customers), ec.section_max_share * float(sub_n[h])) for h in L.heads]
+    rest = np.zeros(len(L.real))
+    cut: set[int] = set()
+    for v in reversed(L.order):
+        if not backbone(v):
+            continue
+        mine = kids.get(v, [])
+        total = float(own_n[v]) + sum(float(sub_n[c]) for c in mine if not backbone(c))
+        branches = sorted((c for c in mine if backbone(c)), key=lambda c: (-round(float(rest[c]), 6), c))
+        total += sum(float(rest[c]) for c in branches)
+        for c in branches:
+            # Where an express run enters the feeder's own territory, so a fault on the express isolates no one.
+            if L.role[v] == "express" and L.role[c] == "trunk" and rest[c] > 0:
+                cut.add(c)
+                total -= float(rest[c])
+        for c in branches:
+            if total <= limit[L.feeder[v]] + 1e-9 or rest[c] <= 0:
+                break
+            if c not in cut:
+                cut.add(c)
+                total -= float(rest[c])
+        rest[v] = total
+    top = [-1] * len(L.real)
+    for v in L.order:
+        top[v] = v if (L.parent[v] < 0 or v in cut) else top[L.parent[v]]
+    return [v for v in L.order if v in cut], top
+
+
+def _line(sg: SplitGraph, pieces: list[int], nodes: list[int], off: float, densify: float | None) -> np.ndarray:
+    """Polyline along consecutive pieces from nodes[0] (each piece leaves the node before it), ``off`` from the
+    centreline."""
+    p = [piece_points(sg, k, off, x, densify=densify) for k, x in zip(pieces, nodes[:-1])]
+    return np.vstack([p[0]] + [q[1:] for q in p[1:]])
+
+
+def _along(pts: np.ndarray, d: float) -> np.ndarray:
+    """The point ``d`` metres along a polyline (its end if shorter)."""
+    seg = np.hypot(*np.diff(pts, axis=0).T)
+    cum = np.concatenate([[0.0], np.cumsum(seg)])
+    d = min(d, float(cum[-1]))
+    return np.array([np.interp(d, cum, pts[:, 0]), np.interp(d, cum, pts[:, 1])])
+
+
 # ------------------------------------------------------------------------------------------------------- build
 def build_electric(ctx: NetContext) -> Network:
     cfg, prem, ec = ctx.cfg, ctx.prem, ctx.cfg.electric
@@ -506,6 +576,12 @@ def build_electric(ctx: NetContext) -> Network:
             phase_letter[v] = "ABC"[k]
         else:
             phase_letter[v] = phase_letter[p]
+    # Sectionalising switches, numbered along each feeder.
+    switched, section = _sectionalise(L, phases, own_n, sub_n, ec)
+    switch_id: dict[int, str] = {}
+    for v in switched:
+        fname = fname_of[L.feeder[v]]
+        switch_id[v] = f"SW-{fname}-{sum(1 for x in switch_id.values() if x.startswith(f'SW-{fname}-')) + 1:02d}"
 
     net = Network("electric", "kW")
     spacing = ec.pole_spacing_m
@@ -592,16 +668,23 @@ def build_electric(ctx: NetContext) -> Network:
         cable = {"conductor": c.label} if n_c == 1 else \
             {"conductor": f"{n_c} × {c.label} ({'multi-circuit pole line' if oh else 'shared feeder duct bank'})",
              "parallelCables": n_c}
+        sw = {"switch": "sectionalising", "switchId": switch_id[v]} if v in switch_id else {}
         net.add_edge("distribution", node_of[p], node_of[v], pts, placement=placement[v], tier=tier,
                      voltageKV=ec.primary_kv, phases=phases[v], phase=phase_letter[v], feeder=fname, feederId=fname,
                      designRole=L.role[v], **corridor_attr(e), **cable,
                      capacityKVA=round(conductor_kva(c, ec.primary_kv, phases[v]) * n_c, 1),
                      designKVA=round(float(design[v]), 1), customers=int(sub_n[v]), roadEdge=e,
                      rOhmKm=c.r_ohm_km if n_c == 1 else round(c.r_ohm_km / n_c, 4),
-                     xOhmKm=c.x_ohm_km if n_c == 1 else round(c.x_ohm_km / n_c, 4))
+                     xOhmKm=c.x_ohm_km if n_c == 1 else round(c.x_ohm_km / n_c, 4), **sw)
         edge_of[v] = len(net.edges) - 1
         if oh and L.lane[v]:
             pole_pts[edge_of[v]] = piece_points(sg, piece, off_oh, L.real[p], densify=spacing)
+        if sw:  # a gang-operated switch on the first pole, or pad-mounted switchgear just past the junction
+            on = pole_pts.get(edge_of[v], pts)
+            net.equipment.append({"id": switch_id[v], "kind": "sectionalising_switch",
+                                  "xy": on[min(1, len(on) - 1)] if oh else _along(pts, 6.0),
+                                  "edgeId": net.edges[-1].id, "feeder": fname, "normally": "closed",
+                                  "mount": "pole" if oh else "pad"})
         if phases[v] == 1 and (phases.get(p, 3) == 3):
             net.equipment.append({"id": f"FUSE-{len(net.equipment):05d}", "kind": "fuse",
                                   "xy": pts[min(1, len(pts) - 1)], "edgeId": net.edges[-1].id, "feeder": fname})
@@ -655,30 +738,37 @@ def build_electric(ctx: NetContext) -> Network:
                          phases=3 if three else 1, conductor=sec.label if sets == 1 else f"{sets} × {sec.label}",
                          feeder=fname, feederId=fname, designRole="service", designKVA=round(float(kva[i]), 2),
                          **({"circuits": sets} if sets > 1 else {}))
-    ties = _ties(sg, L, corridors, phases, phase_letter, placement, ec)
+    ties = _ties(sg, L, phases, phase_letter, ec, section)
     tie_ids: dict[int, list[str]] = {}
+    in_use = {L.piece[v] for v in order if parent[v] >= 0}
     for fa, fb, nodes, pcs, ph in ties:
         a, b = nodes[0], nodes[-1]
         oh = "overhead" in (placement.get(a), placement.get(b))
         off = off_oh if oh else off_ug
-        pts = [piece_points(sg, k, off, x, densify=spacing if oh else None) for k, x in zip(pcs, nodes[:-1])]
-        pts = np.vstack([pts[0]] + [q[1:] for q in pts[1:]])
+        # A new tie line along a street a feeder already uses runs one lane out, on that line's poles.
+        shared = len(pcs) > 1 and any(k in in_use for k in pcs)
+        dens = spacing if oh else None
+        pts = _line(sg, pcs, nodes, off + math.copysign(EXPRESS_LANE_M, off) if shared else off, dens)
         key = (fname_of[fa], fname_of[fb])
-        n_same = sum(1 for x in tie_ids.get(fa, []) if x.startswith(f"TIE-{key[0]}-{key[1]}"))
-        tid = f"TIE-{key[0]}-{key[1]}" + (f"-{n_same + 1}" if n_same else "")
+        stem = f"TIE-{key[0]}-{key[1]}" if fa != fb else f"TIE-{key[0]}-LOOP"  # a loop: two parts of one feeder
+        n_same = sum(1 for x in tie_ids.get(fa, []) if x == stem or x.startswith(stem + "-"))
+        tid = stem + (f"-{n_same + 1}" if n_same else "")
         cids = {corridors.id_of(int(sg.piece_edge[k])) for k in pcs}
         extra = {"corridorId": cids.pop()} if len(cids) == 1 and None not in cids else {}
         if len(pcs) > 1:
-            extra["newLine"] = True  # built only to tie this feeder: no other feeder touches it
+            extra["newLine"] = True  # built for the tie along the streets (sharing poles or trench where shared)
         ei = add_loop_edge(net, node_of[a], node_of[b], pts, enabled=False, normally_open=True,
                            placement="overhead" if oh else "underground",
                            tier="primary_main" if len(ph) == 3 else "primary_lateral", voltageKV=ec.primary_kv,
                            phases=len(ph), phase=ph, switch="tie", switchId=tid, feeders=list(key),
                            designRole="tie", **extra)
+        if shared and oh:
+            pole_pts[ei] = _line(sg, pcs, nodes, off_oh, dens)
         net.equipment.append({"id": tid, "kind": "tie_switch", "xy": pts[len(pts) // 2],
                               "edgeId": net.edges[ei].id, "normally": "open", "feeders": list(key)})
         tie_ids.setdefault(fa, []).append(tid)
-        tie_ids.setdefault(fb, []).append(tid)
+        if fb != fa:
+            tie_ids.setdefault(fb, []).append(tid)
     # Poles along overhead primary (deduplicated; an express circuit hangs on the structures of the line it runs with).
     seen: set[tuple[int, int]] = set()
     n_pole = 0
@@ -716,7 +806,9 @@ def build_electric(ctx: NetContext) -> Network:
                         "designKVA": round(float(design[hv]), 1), "trunkKm": round(float(trunk_km[fi]), 3),
                         "expressKm": round(float(express_km[fi]), 3),
                         "corridorIds": sorted(corridors.ids[k] for k, u in corr_use.items() if fname in u["feeders"]),
-                        "tieIds": sorted(tie_ids.get(fi, []))})
+                        "tieIds": sorted(tie_ids.get(fi, [])),
+                        "switchIds": [switch_id[v] for v in switched if L.feeder[v] == fi],
+                        "sections": 1 + sum(1 for v in switched if L.feeder[v] == fi)})
     net.corridors = []
     for k, rec in enumerate(corridors.export()):
         u = corr_use.get(k)
@@ -726,7 +818,8 @@ def build_electric(ctx: NetContext) -> Network:
     net.meta.update({"feeders": feeders, "substations": len(subs), "transformers": n_tx, "poles": n_pole,
                      "primaryKV": ec.primary_kv, "transmissionKV": ec.transmission_kv,
                      "townDesignKVA": round(float(sum(sub_designs)), 1),
-                     "ties": len(ties), "corridors": len(corridors.chains), "risers": n_riser,
+                     "ties": len(ties), "switches": len(switched), "corridors": len(corridors.chains),
+                     "risers": n_riser,
                      "routing": {"algorithm": "edge-state Dijkstra (incoming piece), backbone first",
                                  "classWeights": dict(zip(("arterial", "collector", "local"), c.weights)),
                                  "turnPenaltyM": c.turn_m, "corridorChangePenaltyM": c.corridor_change_m,
@@ -736,13 +829,24 @@ def build_electric(ctx: NetContext) -> Network:
     return net
 
 
-def _ties(sg: SplitGraph, L: Layout, corridors: Corridors, phases: dict, phase_letter: dict, placement: dict, ec
+def _ties(sg: SplitGraph, L: Layout, phases: dict, phase_letter: dict, ec, section: list[int]
           ) -> list[tuple[int, int, list[int], list[int], str]]:
-    """Normally-open ties as (feeder a, feeder b, split nodes a…b, pieces, phase letters). Candidates are street
-    pieces whose ends belong to different feeders, best first: both ends three-phase, then farthest along both
-    feeders from their substation (a tie near the feeder ends can back-feed the most after a fault upstream), then
-    shortest. A feeder that touches no other feeder gets the shortest new line (through streets no feeder serves)
-    to the nearest one."""
+    """Normally-open ties as (feeder a, feeder b, split nodes a…b, pieces, phase letters); a == b for a loop
+    between two parts of one feeder.
+
+    1. Feeder pairs: candidates are street pieces whose ends belong to different feeders, best first: both ends
+       three-phase, then farthest along both feeders from their substation, then shortest; ``ties_per_feeder_pair``
+       per pair. A feeder that touches no other feeder gets the shortest new line (through streets no feeder
+       serves) to the nearest one.
+    2. Sections: opening a sectionalising switch only helps if what lies beyond it can be fed from elsewhere while
+       the section above it is out. Deepest first, a switched section whose island (its subtree) has no such tie
+       gets the cheapest three-phase tie from one of its three-phase nodes to: another feeder's three-phase line
+       (it covers a fault anywhere upstream), else a loop to this feeder's three-phase line outside the parent
+       section's subtree; a second pass lets a section still without one loop to a sibling island that has one
+       (the crew back-feeds that island first). A tie is a street piece between the two, or a new line along the
+       streets, sharing poles or trench where a line already runs (``TIE_ALONG_1PH`` / ``TIE_ALONG_3PH`` per metre).
+
+    New lines are at most ``tie_max_length_m`` (weighted metres)."""
     n = L.n_split
     fe = np.full(n, -1, dtype=np.int64)
     for v in L.order:
@@ -792,44 +896,175 @@ def _ties(sg: SplitGraph, L: Layout, corridors: Corridors, phases: dict, phase_l
                 nodes, pcs = nodes[::-1], pcs[::-1]
             out.append((fa, fb, nodes, pcs, ph))
             tied.update((fa, fb))
+
+    # 2. Section ties.
+    three = np.zeros(n, dtype=bool)  # three-phase feeder nodes a tie can land on (not a substation exit)
+    exits = np.zeros(n, dtype=bool)
+    along = np.ones(len(length))  # cost per metre of a new tie line along each piece
+    for v in L.order:
+        if L.parent[v] >= 0:
+            k = L.piece[v]
+            along[k] = max(along[k], TIE_ALONG_3PH if phases.get(v) == 3 else TIE_ALONG_1PH)
+        if v < n and L.parent[v] < 0:
+            exits[v] = True
+        elif v < n and phases.get(v) == 3:
+            three[v] = True
+    # Subtrees as Euler-tour intervals over the feeder forest: v is below u iff tin[u] <= tin[v] < tout[u].
+    kids: dict[int, list[int]] = {}
+    for v in L.order:
+        if L.parent[v] >= 0:
+            kids.setdefault(L.parent[v], []).append(v)
+    tin, tout = np.zeros(len(L.real), dtype=np.int64), np.zeros(len(L.real), dtype=np.int64)
+    clock = 0
+    for hv in L.heads:
+        stack = [(hv, False)]
+        while stack:
+            v, done = stack.pop()
+            if done:
+                tout[v] = clock
+                continue
+            tin[v] = clock
+            clock += 1
+            stack.append((v, True))
+            stack.extend((c, False) for c in reversed(kids.get(v, [])))
+    owned = np.array([v for v in L.order if v < n], dtype=np.int64)
+
+    def below(u: int, v: int) -> bool:
+        return bool(tin[u] <= tin[v] < tout[u])
+
+    def ends():
+        for x, y in pairs:
+            yield x, y
+            yield y, x
+
+    def direct(s: int) -> bool:
+        """A tie back-feeds the island below switch s when s's parent section is faulted: it runs from below s to
+        another feeder or to this feeder outside the parent section's subtree (both stay energised)."""
+        up = section[L.parent[s]]
+        return any(below(s, x) and (fe[y] != fe[x] or not below(up, y)) for x, y in ends())
+
+    def island(up: int, y: int) -> int:
+        """The switched section just below section ``up`` that y lies under (-1 if none)."""
+        if not below(up, y) or section[y] == up:
+            return -1
+        c = section[y]
+        while section[L.parent[c]] != up:
+            c = section[L.parent[c]]
+        return c
+
+    def fed(s: int) -> bool:
+        """… or through a loop to a sibling island that is itself back-fed directly."""
+        if direct(s):
+            return True
+        up = section[L.parent[s]]
+        return any(below(s, x) and (c := island(up, y)) not in (-1, s) and direct(c) for x, y in ends())
+
+    pairs = {(t[2][0], t[2][-1]) for t in out}
+    tops = sorted((v for v in L.order if L.parent[v] >= 0 and section[v] == v), key=lambda v: (-depth[v], v))
+    # Deepest first: another feeder (covers a fault anywhere upstream), else a loop to this feeder outside the parent
+    # section's subtree; then, for what is still not fed, a loop to a sibling island that is.
+    for chain in (False, True):
+        for s in tops:
+            if fed(s):
+                continue
+            f = L.feeder[s]
+            mine = np.zeros(n, dtype=bool)
+            mine[owned[(tin[owned] >= tin[s]) & (tin[owned] < tout[s])]] = True
+            src = np.flatnonzero(mine & three)
+            if not len(src):
+                continue
+            up = section[L.parent[s]]
+            if chain:
+                targets = [three & np.isin(np.arange(n), [y for y in owned if island(up, y) not in (-1, s)
+                                                          and direct(island(up, y))])]
+            else:
+                outside = np.zeros(n, dtype=bool)
+                outside[owned[(tin[owned] < tin[up]) | (tin[owned] >= tout[up])]] = True
+                targets = [three & (fe != f), three & (fe == f) & outside]
+            hit = None
+            for target in targets:
+                if target.any():
+                    hit = _tie_path(sg, src.tolist(), target, ~exits & ~target, ec.tie_max_length_m, along, depth)
+                if hit is not None:
+                    break
+            if hit is None:
+                continue
+            nodes, pcs = hit
+            g = int(fe[nodes[-1]])
+            if g < f:
+                nodes, pcs = nodes[::-1], pcs[::-1]
+            out.append((min(f, g), max(f, g), nodes, pcs, "ABC"))
+            pairs.add((nodes[0], nodes[-1]))
     return out
 
 
-def _tie_line(sg: SplitGraph, fe: np.ndarray, f: int, max_m: float, common):
-    """Shortest new line from feeder f through unserved street pieces to another feeder's node."""
-    n = len(fe)
+def _street_graph(sg: SplitGraph, ok_from: np.ndarray, ok_to: np.ndarray, factor: np.ndarray | None = None):
+    """Directed street graph over split nodes for new lines: piece x→y where ``ok_from[x]`` and ``ok_to[y]``, the
+    cheapest piece per node pair; returns (CSR weights in metres × ``factor`` per piece, (x, y) -> piece)."""
+    n = len(ok_from)
     a, b = sg.piece_a.astype(np.int64), sg.piece_b.astype(np.int64)
-    w = sg.piece_length()
+    w = sg.piece_length() if factor is None else sg.piece_length() * factor
     rows, cols, ws, pc = [], [], [], []
     for x, y in ((a, b), (b, a)):
-        ok = ((fe[x] == f) | (fe[x] < 0)) & (fe[y] != f) & (x != y)
+        ok = ok_from[x] & ok_to[y] & (x != y)
         rows.append(x[ok])
         cols.append(y[ok])
         ws.append(w[ok])
         pc.append(np.flatnonzero(ok))
     rows, cols, ws, pc = (np.concatenate(z) for z in (rows, cols, ws, pc))
-    srcs = np.flatnonzero(fe == f)
-    if not len(srcs) or not len(rows):
-        return None
     o = np.lexsort((pc, ws, cols, rows))  # cheapest piece per (row, col)
     rows, cols, ws, pc = rows[o], cols[o], ws[o], pc[o]
     first = np.ones(len(rows), dtype=bool)
     first[1:] = (rows[1:] != rows[:-1]) | (cols[1:] != cols[:-1])
     rows, cols, ws, pc = rows[first], cols[first], ws[first], pc[first]
     piece_of = {(int(r), int(c)): int(k) for r, c, k in zip(rows, cols, pc)}
-    m = coo_matrix((ws, (rows, cols)), shape=(n, n)).tocsr()
+    return coo_matrix((ws, (rows, cols)), shape=(n, n)).tocsr(), piece_of
+
+
+def _walk_back(pred: np.ndarray, t: int) -> list[int]:
+    nodes = [t]
+    while pred[nodes[-1]] >= 0:
+        nodes.append(int(pred[nodes[-1]]))
+    return nodes[::-1]
+
+
+def _tie_line(sg: SplitGraph, fe: np.ndarray, f: int, max_m: float, common):
+    """Shortest new line from feeder f through unserved street pieces to another feeder's node."""
+    srcs = np.flatnonzero(fe == f)
+    if not len(srcs):
+        return None
+    m, piece_of = _street_graph(sg, (fe == f) | (fe < 0), fe != f)
+    if not m.nnz:
+        return None
     dist, pred, _ = dijkstra(m, directed=True, indices=srcs, return_predecessors=True, min_only=True, limit=max_m)
     targets = [int(v) for v in np.flatnonzero(np.isfinite(dist) & (fe >= 0) & (fe != f))]
     targets.sort(key=lambda v: (round(float(dist[v]), 6), v))
     for t in targets:
-        nodes = [t]
-        while pred[nodes[-1]] >= 0:
-            nodes.append(int(pred[nodes[-1]]))
-        nodes.reverse()
+        nodes = _walk_back(pred, t)
         ph = common(nodes[0], nodes[-1])
         if ph:
             return nodes, [piece_of[(x, y)] for x, y in zip(nodes[:-1], nodes[1:])], ph
     return None
+
+
+def _tie_path(sg: SplitGraph, src: list[int], target: np.ndarray, through: np.ndarray, max_m: float,
+              along: np.ndarray, rank: np.ndarray) -> tuple[list[int], list[int]] | None:
+    """Cheapest tie from any node in ``src`` to a ``target`` node: a street piece between them, or a new line through
+    ``through`` nodes, at most ``max_m`` metres weighted by ``along`` per piece (a line already in the street).
+    Equal costs (to 0.1 m) prefer the lowest ``rank``. Returns (split nodes, pieces) or None."""
+    start = np.zeros(len(target), dtype=bool)
+    start[src] = True
+    m, piece_of = _street_graph(sg, start | through, through | target, along)
+    if not m.nnz:
+        return None
+    dist, pred, _ = dijkstra(m, directed=True, indices=np.array(src, dtype=np.int64), return_predecessors=True,
+                             min_only=True, limit=max_m)
+    hits = np.flatnonzero(np.isfinite(dist) & target)
+    if not len(hits):
+        return None
+    t = int(min(hits, key=lambda v: (round(float(dist[v]), 1), round(float(rank[v]), 1), int(v))))
+    nodes = _walk_back(pred, t)
+    return nodes, [piece_of[(x, y)] for x, y in zip(nodes[:-1], nodes[1:])]
 
 
 def _exceptions(L: Layout, sg: SplitGraph, g, net: Network, edge_of: dict[int, int], fname_of: list[str]
