@@ -1,14 +1,14 @@
 {
   "schemaVersion": "utility-town/2.0",
-  "generatorVersion": "0.4.0",
-  "id": "town-c83a39cdf7a2b45b",
+  "generatorVersion": "0.5.0",
+  "id": "town-c9ef67ecd21956d1",
   "seed": "WHITBY-042",
-  "count": 552,
-  "premiseCount": 552,
+  "count": 609,
+  "premiseCount": 609,
   "bounds": {
     "minX": -825.18,
-    "maxX": 1065.46,
-    "minZ": -181.99,
+    "maxX": 1053.42,
+    "minZ": -163.8,
     "maxZ": 1009.88
   },
   "source": {
@@ -41,44 +41,44 @@
   },
   "stats": {
     "houses": 480,
-    "premises": 552,
-    "commercial": 68,
-    "solarHomes": 80,
-    "evHomes": 44,
-    "gasServices": 479,
+    "premises": 609,
+    "commercial": 125,
+    "solarHomes": 82,
+    "evHomes": 45,
+    "gasServices": 532,
     "vacant": 23,
-    "roadKm": 16.01,
+    "roadKm": 15.933,
     "mainsKm": {
-      "electric": 10.48,
-      "water": 11.977,
-      "gas": 11.46
+      "electric": 10.818,
+      "water": 12.847,
+      "gas": 12.521
     },
-    "transformers": 138,
+    "transformers": 162,
     "feeders": 1,
     "substations": 1,
-    "hydrants": 52,
-    "poles": 157,
+    "hydrants": 60,
+    "poles": 158,
     "districtRegulators": 2,
     "waterZones": 1,
     "mrus": 21,
     "amiCollectors": 2,
     "timingsS": {
-      "roads": 0.032,
-      "land_use": 1.406,
-      "buildings": 0.243,
-      "electric": 0.079,
-      "water": 0.156,
-      "gas": 0.088,
-      "customers": 0.205,
-      "total": 2.209
+      "roads": 0.033,
+      "land_use": 1.307,
+      "buildings": 0.245,
+      "electric": 0.108,
+      "water": 0.214,
+      "gas": 0.12,
+      "customers": 0.264,
+      "total": 2.291
     }
   },
   "validation": {
     "valid": true,
     "errors": [],
     "errorCount": 0,
-    "connectedServices": 1583,
-    "networkEdges": 3121,
+    "connectedServices": 1750,
+    "networkEdges": 3461,
     "checks": [
       "Unique identifiers",
       "Valid edge endpoints",
@@ -94,5 +94,5 @@
       "Referential integrity"
     ]
   },
-  "configHash": "9aa50e96a75a8e2c61d1de68fd731a9639f779751451b0c5c1318e7450dbebb5"
+  "configHash": "f55c93d46f9032a6762ed792bd1b521d0f855f38299262e13a12ace4291d7fb2"
 }

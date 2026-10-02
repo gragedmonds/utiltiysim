@@ -27,7 +27,7 @@ import orjson
 
 from utilsim.config.model import SimConfig
 from utilsim.core.ids import str_key
-from utilsim.core.rng import hash_normal, hash_u01
+from utilsim.core.rng import Purpose, hash_normal, hash_u01
 from utilsim.customers.calendar import business_days, to_utc_iso
 from utilsim.m2c import catalog as cat
 from utilsim.m2c import registers as regs
@@ -39,7 +39,7 @@ M2C_GROUPS = ("process", "anomalies", "reading", "vee", "billing")
 SUMMARY_VERSION = "m2c-summary/1.0"
 CASE_VERSION = "work-case/1.0"
 DECISION_VERSION = "vee-decision/1.0"
-P_READ, P_ANOM, P_WORK = 33, 34, 35  # rng purposes (appended after core Purpose.CUSTOMER = 32)
+P_READ, P_ANOM, P_WORK = Purpose.M2C_READ, Purpose.M2C_ANOMALY, Purpose.M2C_WORK
 INF = float("inf")
 YEAR_DAYS = 365
 ACTION_TYPES = ("accept", "override", "estimate", "field_order", "escalate", "field_read")

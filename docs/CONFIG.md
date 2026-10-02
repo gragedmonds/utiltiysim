@@ -30,6 +30,7 @@ uses them (their groups will then say `x-applies: run`).
 | `ami.ami_route_share` ↓ | More AMR van and manual walker routes; more estimated reads (M3) |
 | `customers_billing.mru_target_meters` ↓ | More, smaller meter reading routes |
 | `town.houses` ↑ beyond the OSM extract | Synthetic districts grown around the Whitby core; second substation; more feeders |
+| `town.commercial_share_arterial` / `_collector` / `_local` ↑ | More storefronts on that class of street, clustered at main-road intersections and towards downtown; homes pushed outward (still exactly `houses`); more 3φ pads, commercial accounts and closer hydrant spacing |
 | A real-place preset (`ayr`, `elora`, `cobourg`, `whitby_wide`) | The place's own streets at their natural size; set `expansion: grow` and more `houses` to add synthetic districts around it |
 
 
@@ -70,7 +71,11 @@ Size, road skeleton source, terrain and land use.
 | `era_span_years` | `85` | 0–150 |  | Years added from centre to edge (era = core + span·(d/R)^1.2 + noise). |
 | `era_noise_years` | `8.0` | 0–30 | yr | (advanced) Std-dev of era noise per district. |
 | `park_share` | `0.04` | 0–0.2 |  | (advanced) Share of blocks kept as parks. |
-| `commercial_strip_m` | `700.0` | 0–3000 | m | Length of the commercial strip along the main arterial. |
+| `commercial_strip_m` | `700.0` | 0–3000 | m | Length of the downtown main street: arterial frontage within half this distance of the centre is all commercial (up to 80 lots). The frontage shares below apply beyond it. *Affects: downtown storefronts, homes pushed outward.* |
+| `commercial_share_arterial` | `0.45` | 0–1 |  | Share of developed lots fronting an arterial (beyond the downtown main street) that become commercial or mixed-use premises. The rest are homes, or rear yards where modern subdivisions back onto the arterial. *Affects: commercial premises, plazas at major intersections, commercial hydrant spacing, transformer pads, commercial accounts.* |
+| `commercial_share_collector` | `0.15` | 0–1 |  | Share of developed lots fronting a collector that become commercial or mixed-use premises. *Affects: commercial premises, corner shops on collectors, commercial accounts.* |
+| `commercial_share_local` | `0.02` | 0–1 |  | Share of developed lots on local streets that become commercial (corner stores near downtown and where local streets meet main roads). *Affects: commercial premises, homes pushed outward.* |
+| `commercial_cluster_m` | `120.0` | 20–1000 | m | (advanced) Distance over which commercial frontage clusters around main-road intersections and downtown. Smaller gives tight corner clusters, larger gives long strips. *Affects: where storefronts sit along main roads.* |
 | `industrial_lots` | `2` | 0–10 |  | Number of large industrial customers. |
 | `houses_per_school` | `2500` | 500–20000 |  | (advanced) One school per this many houses. |
 | `margin_m` | `120.0` | 0–1000 | m | (advanced) Empty margin around the developed area. |

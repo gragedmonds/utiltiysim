@@ -948,7 +948,7 @@
   "info": {
     "description": "Seeded utility-town engine: geography, networks, customers, simulation, meter-to-cash.",
     "title": "utilsim",
-    "version": "0.4.0"
+    "version": "0.5.0"
   },
   "openapi": "3.1.0",
   "paths": {

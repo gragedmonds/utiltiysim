@@ -29,6 +29,10 @@
     "era_noise_years": 8.0,
     "park_share": 0.04,
     "commercial_strip_m": 700.0,
+    "commercial_share_arterial": 0.45,
+    "commercial_share_collector": 0.15,
+    "commercial_share_local": 0.02,
+    "commercial_cluster_m": 120.0,
     "industrial_lots": 2,
     "houses_per_school": 2500,
     "margin_m": 120.0
@@ -309,6 +313,8 @@
     "accept_confidence": 0.75,
     "reject_confidence": 0.35,
     "escalate_impact": 150.0,
+    "trend_ratio": 0.8,
+    "trend_periods": 3,
     "estimation": "prior_year",
     "history_noise": 0.1
   },

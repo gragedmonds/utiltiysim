@@ -1,35 +1,35 @@
 {
-  "generatorVersion": "0.4.0",
+  "generatorVersion": "0.5.0",
   "cases": {
     "whitby-120-T120": {
-      "roads": "350fd790f7b9a4a6",
-      "premises": "c9e1aae7436c6d73",
-      "buildings": "536e20cc732ff9b0",
-      "parcels": "a47f40ebb5af6b1e",
-      "facilities": "2c14ce11c246f1ff",
-      "networks": "4afdc8a706a683d5",
-      "accounts": "df378d6850faab23",
-      "contracts": "c5e30fde26f65d00",
-      "meters": "279102952ebc4a83",
-      "registers": "ace94ea090b792a9",
-      "mrus": "699dc9d52d654f53",
-      "sampleReads": "37963cc32594c437",
-      "townId": "town-e9d2ad3413e120be"
+      "roads": "21afefabd2d2d0a3",
+      "premises": "c82bb0b4d5c11b50",
+      "buildings": "fb6eb6d80587092b",
+      "parcels": "02a817b24ce123e7",
+      "facilities": "fb90133ef3c989b3",
+      "networks": "048bdacc49fd9cae",
+      "accounts": "3569ec2a09e9f7eb",
+      "contracts": "e015f9207090bf53",
+      "meters": "f6dcc33af9b43b5c",
+      "registers": "5edb02810243b807",
+      "mrus": "c43347f7a65dad0b",
+      "sampleReads": "2c682a07c19add29",
+      "townId": "town-1870c1d82a483f6b"
     },
     "synthetic-600-42": {
-      "roads": "1652ee8787b24e9d",
-      "premises": "3fbc324b037f9a72",
-      "buildings": "6aa427a03b747002",
-      "parcels": "5833c6f8603fa4c6",
-      "facilities": "b39f20cc131a7f5d",
-      "networks": "1d48f120fe0c6fc6",
-      "accounts": "6057776e4402fb6e",
-      "contracts": "3ab12418c76a0e7a",
-      "meters": "6c339c8241b55484",
-      "registers": "a7baceaf2e002e32",
-      "mrus": "06761a57828f9cca",
-      "sampleReads": "e67c77e35092a61e",
-      "townId": "town-d79217e7f55e5e85"
+      "roads": "1459eadecbf01ab1",
+      "premises": "ec0894c6cbc2296c",
+      "buildings": "78e0849708c55d48",
+      "parcels": "c4f070b79a120bd2",
+      "facilities": "090a18168a9fbcfb",
+      "networks": "09afdf266772208b",
+      "accounts": "7bfe6786b1336b9b",
+      "contracts": "a6797e0e8fc51ac5",
+      "meters": "8a39145ab8c27622",
+      "registers": "9420f5f72061fa52",
+      "mrus": "5ebe0c8b46482ec7",
+      "sampleReads": "cf8d9f426bf0af52",
+      "townId": "town-37914c2572fb3145"
     }
   }
 }

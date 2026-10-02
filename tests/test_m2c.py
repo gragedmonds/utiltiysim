@@ -80,6 +80,8 @@ def test_vee_catches_injected_faults(ayr):
             kind = cat.TRUTH[ayr.truth_cls[r, m]]
             if kind == "meter_fault":
                 kind = FAULTS[ayr.fault_type[meter]]
+                if kind == "exchange_registration_failure" and ayr.prev_t_at_read[r, m] > ayr.fault_t[meter]:
+                    continue  # the first read after the swap is the one VEE must catch
                 if kind == "stuck_meter" and not (ayr.cons[r, m] == 0 and tw.occupied[tw.prem[r]]
                                                   and ayr.expected[r, m] >= {"kWh": 30, "m3": 1}[tw.unit[r]]):
                     continue  # only full-period zero reads at occupied premises are detectable by tolerance
@@ -106,7 +108,7 @@ def test_queues_follow_the_workforce(ayr_town):
 
 def test_actions_are_append_only_and_take_effect(ayr_town):
     base = M2CRun(ayr_town, {"process": {"analysts": 0, "rpa_coverage": 0}})
-    case = next(c for c in base.cases if c.type not in cat.MISSING_TYPES and c.created < 150)
+    case = next(c for c in base.cases if c.type not in cat.MISSING_TYPES and c.doc < 0 and c.created < 150)
     day = add_bdays(int(case.created), 3)
     when = date_of(day).isoformat()
     act = [{"id": "A1", "day": when, "type": "override", "caseId": case.id, "value": 1234.5}]

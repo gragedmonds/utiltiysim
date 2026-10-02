@@ -24,12 +24,12 @@ from datetime import date
 import numpy as np
 
 from utilsim.core.ids import str_key
-from utilsim.core.rng import hash_u01
+from utilsim.core.rng import Purpose, hash_u01
 from utilsim.m2c import billing as bl
 from utilsim.m2c import catalog as cat
 from utilsim.m2c import registers as regs
 
-P_BILL = 36
+P_BILL = Purpose.M2C_BILL
 INF = float("inf")
 STATUS = ("created", "blocked", "released", "reversed")
 
