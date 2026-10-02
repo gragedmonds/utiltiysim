@@ -42,6 +42,12 @@ node scripts/viewer_conformance.mjs examples/whitby-480-seed42   # engine export
 | `docs/OPERATIONS.md` | Clock, fleet, incidents and meter-to-cash process design (M2/M3) |
 | `docs/ARCHITECTURE.md` · `docs/ROADMAP.md` | Layers, determinism rules, performance · milestones |
 
+**Hosting (Vercel).** `vercel.json` builds a static site: `npm ci --prefix packages/town-viewer` (vendors
+Three.js), then `node scripts/build_site.mjs` copies the viewer and the prebuilt town packs (`packs/`) into
+`public/`. Open `/?town=ayr` (or pick from the Town files pop-out). After changing the generator or a preset, rebuild
+the packs with `uv run utilsim pack` (a test fails while they are stale). The live engine for operations
+(`api/index.py`, a slim Python function) arrives with the operations work.
+
 `examples/whitby-480-seed42/` is a committed bundle (snapshot, replay, scenario frames, GeoJSON, parquet tables,
 PNG, VEE fixture) so frontend work never waits on the engine. `packages/town-viewer/` is Astra's viewer and
 receiver; `web/` is a thin dev host for it (owned by Astra from `7dd7cc8`). `prototypes/town-lab` (branch
