@@ -80,6 +80,21 @@ class ConfigurationChange(StrictModel):
     path: str
     before: Any
     after: Any
+    scope: str = "run"
+    episodeIndex: int | None = None
+    input: Any = None
+    title: str = ""
+    impact: str = ""
+    reach: str = ""
+    unit: str = ""
+    percentage: bool = False
+    valueType: str = ""
+    minimum: float | None = None
+    maximum: float | None = None
+    choices: list[Any] = Field(default_factory=list)
+    beforeRange: list[Any] = Field(default_factory=list)
+    afterRange: list[Any] = Field(default_factory=list)
+    period: str = ""
 
 
 class ValidatedProposal(Proposal):
@@ -133,6 +148,7 @@ class InflictProposal(StrictModel):
 
 class ValidatedInflictProposal(InflictProposal):
     runTo: str
+    changes: list[ConfigurationChange] = Field(default_factory=list)
 
 
 class InflictReply(StrictModel):
@@ -173,6 +189,7 @@ def validate_infliction(proposal: InflictProposal, context: RunContext) -> dict:
         supported_fields(ep["settings"], settings_schema())
     # Validate the combined timeline, including interactions with the current base and earlier episodes.
     resolve_episode_days(cfg, parse_episodes(cfg, existing + additions))
+    summary = episode_changes(cfg, existing, additions)
     limits = list(proposal.limitations)[:17]
     for note in ("These tweaks add dated Year episodes; your town and base configuration stay the same.",
                  "The engine models calendar year 2026 only; direct map commands use the map controls.",
@@ -180,7 +197,7 @@ def validate_infliction(proposal: InflictProposal, context: RunContext) -> dict:
         if note not in limits:
             limits.append(note)
     return {**proposal.model_dump(by_alias=True), "limitations": limits,
-            "runTo": max(context.asOf, *(ep.to or "2026-12-31" for ep in proposal.episodes))}
+            "runTo": max(context.asOf, *(ep.to or "2026-12-31" for ep in proposal.episodes)), "changes": summary}
 
 
 def presets() -> list[dict]:
@@ -248,16 +265,69 @@ def validate_operations(values: dict, cfg: SimConfig) -> dict:
     return actual
 
 
-def changes(before: dict, after: dict, prefix: str = "") -> list[dict]:
-    out = []
-    for key, value in after.items():
+def leaf_values(values: dict, prefix: str = ""):
+    for key, value in values.items():
         path = f"{prefix}.{key}" if prefix else key
-        old = before.get(key)
-        if isinstance(value, dict) and isinstance(old, dict):
-            out.extend(changes(old, value, path))
-        elif old != value:
-            out.append({"path": path, "before": old, "after": value})
+        if isinstance(value, dict):
+            yield from leaf_values(value, path)
+        else:
+            yield path, value
+
+
+def at_path(values: dict, path: str):
+    for key in path.split("."):
+        values = values[key]
+    return values
+
+
+def input_changes(values: dict, before: dict, after: dict, schema: dict, scope: str, index=None) -> list[dict]:
+    out = []
+    for path, value in leaf_values(values):
+        field = schema
+        for key in path.split("."):
+            field = expand(field, schema)["properties"][key]
+        field = expand(field, schema)
+        unit = field.get("x-unit", "")
+        percentage = (field.get("type") == "number" and not unit
+                      and field.get("minimum", -1) >= 0 and field.get("maximum", 2) <= 1)
+        out.append({"path": path, "scope": scope, "episodeIndex": index, "input": value,
+                    "before": at_path(before, path), "after": at_path(after, path),
+                    "title": " · ".join([k.replace("_", " ").capitalize() for k in path.split(".")[:-1]]
+                                         + [field.get("title", path.split(".")[-1].replace("_", " ").capitalize())]),
+                    "impact": field.get("x-impact") or field.get("description") or "See the configuration definition.",
+                    "reach": field.get("x-reach", "operations" if scope == "operations" else "year"),
+                    "unit": unit, "percentage": percentage, "valueType": field.get("type", ""),
+                    "minimum": field.get("minimum"), "maximum": field.get("maximum"), "choices": field.get("enum", [])})
     return out
+
+
+def episode_changes(cfg: SimConfig, existing: list[dict], additions: list[dict]) -> list[dict]:
+    out = []
+    prior = list(existing)
+    before_days = resolve_episode_days(cfg, parse_episodes(cfg, prior))
+    for index, ep in enumerate(additions):
+        after_days = resolve_episode_days(cfg, parse_episodes(cfg, prior + [ep]))
+        start = (date.fromisoformat(ep["from"]) - date(2026, 1, 1)).days
+        end = (date.fromisoformat(ep.get("to") or "2026-12-31") - date(2026, 1, 1)).days
+        rows = input_changes(ep["settings"], before_days[start].model_dump(mode="json"),
+                             after_days[end].model_dump(mode="json"), settings_schema(), "episode", index)
+        for row in rows:
+            row["period"] = f"{ep['title']} · {ep['from']} → {ep.get('to') or '2026-12-31'}"
+            for key, days in (("beforeRange", before_days), ("afterRange", after_days)):
+                values = [at_path(days[d].model_dump(mode="json"), row["path"]) for d in range(start, end + 1)]
+                if all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in values):
+                    row[key] = [min(values), max(values)]
+        out.extend(rows)
+        prior.append(ep)
+        before_days = after_days
+    return out
+
+
+def grouped_ops_defaults(cfg: SimConfig) -> dict:
+    root = ops_schema(run_defaults(cfg))
+    full = run_defaults(cfg)
+    return {g: {k: full[k] for k in field["properties"]} if field.get("x-flat") else full.get(g)
+            for g, field in root["properties"].items()}
 
 
 def validate_proposal(proposal: Proposal) -> dict:
@@ -306,5 +376,8 @@ def validate_proposal(proposal: Proposal) -> dict:
             "townRef": ref, "townId": pack["townId"] if ref == proposal.preset else cfg.town_id(),
             "townName": pack["name"] + (" · customised" if ref != proposal.preset else ""),
             "homes": cfg.town.houses, "limitations": limits,
-            "changes": changes(base.model_dump(mode="json"), run_cfg.model_dump(mode="json"))
-                       + changes(run_defaults(cfg), {**run_defaults(cfg), **ops}, "operations")}
+            "changes": input_changes(town, base.model_dump(mode="json"), cfg.model_dump(mode="json"), config_schema(), "town")
+                       + input_changes(proposal.settings, cfg.model_dump(mode="json"), run_cfg.model_dump(mode="json"), settings_schema(), "run")
+                       + input_changes(proposal.operations, grouped_ops_defaults(cfg),
+                                       deep_merge(grouped_ops_defaults(cfg), proposal.operations), ops_schema(run_defaults(cfg)), "operations")
+                       + episode_changes(run_cfg, [], episodes)}

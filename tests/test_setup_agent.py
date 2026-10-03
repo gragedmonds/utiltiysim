@@ -312,3 +312,34 @@ def test_voice_tweaks_inspect_and_validate_live_contact_and_annual_outage_settin
     assert r.status_code == 200, r.text
     assert r.json()['proposal']['runTo'] == '2026-08-31'
     assert any('do not automatically change meter reads' in note for note in r.json()['proposal']['limitations'])
+
+
+def test_summary_explains_every_explicit_input_and_revalidation_rebuilds_town_identity():
+    p = validate_proposal(Proposal(**proposal(townOverrides={'housing': {'pool_rate': .069}})))
+    pool = next(c for c in p['changes'] if c['path'] == 'housing.pool_rate')
+    assert pool['scope'] == 'town' and pool['percentage']
+    assert pool['before'] == .06 and pool['after'] == .069
+    assert 'electricity' in pool['impact'] and 'water' in pool['impact']
+    assert any(c['scope'] == 'operations' for c in p['changes'])
+    assert any(c['scope'] == 'episode' for c in p['changes'])
+    revised = validate_proposal(Proposal(**proposal(townOverrides={'housing': {'pool_rate': .09}})))
+    assert revised['townRef'] != p['townRef']
+    assert config_from_ref(revised['townRef']).housing.pool_rate == .09
+
+
+def test_episode_summary_resolves_relative_values_overlapping_periods_and_ramps():
+    from api._agent_config import InflictProposal, RunContext, validate_infliction
+
+    existing = [{'id': 'EP-1', 'title': 'Earlier', 'from': '2026-01-01', 'to': None,
+                 'settings': {'process': {'analysts': '*0.5'}}}]
+    p = validate_infliction(InflictProposal(**tweak()), RunContext(**run_context(episodes=existing)))
+    row = p['changes'][0]
+    assert row['before'] == 2 and row['after'] == 1
+    assert row['input'] == '*0.5' and row['episodeIndex'] == 0
+    ramp = tweak(episodes=[{'title': 'Ramp', 'from': '2026-04-01', 'to': '2026-04-03', 'ramp': 3,
+                          'settings': {'reading': {'ami_missed_read': .3}}}])
+    p = validate_infliction(InflictProposal(**ramp), RunContext(**run_context()))
+    row = p['changes'][0]
+    assert row['after'] == pytest.approx(.3)
+    assert row['afterRange'][0] < row['afterRange'][1]
+    assert row['percentage'] and row['period'].endswith('2026-04-03')

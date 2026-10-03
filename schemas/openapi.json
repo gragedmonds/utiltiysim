@@ -1057,11 +1057,102 @@
           "after": {
             "title": "After"
           },
+          "afterRange": {
+            "items": {},
+            "title": "Afterrange",
+            "type": "array"
+          },
           "before": {
             "title": "Before"
           },
+          "beforeRange": {
+            "items": {},
+            "title": "Beforerange",
+            "type": "array"
+          },
+          "choices": {
+            "items": {},
+            "title": "Choices",
+            "type": "array"
+          },
+          "episodeIndex": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Episodeindex"
+          },
+          "impact": {
+            "default": "",
+            "title": "Impact",
+            "type": "string"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "maximum": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maximum"
+          },
+          "minimum": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minimum"
+          },
           "path": {
             "title": "Path",
+            "type": "string"
+          },
+          "percentage": {
+            "default": false,
+            "title": "Percentage",
+            "type": "boolean"
+          },
+          "period": {
+            "default": "",
+            "title": "Period",
+            "type": "string"
+          },
+          "reach": {
+            "default": "",
+            "title": "Reach",
+            "type": "string"
+          },
+          "scope": {
+            "default": "run",
+            "title": "Scope",
+            "type": "string"
+          },
+          "title": {
+            "default": "",
+            "title": "Title",
+            "type": "string"
+          },
+          "unit": {
+            "default": "",
+            "title": "Unit",
+            "type": "string"
+          },
+          "valueType": {
+            "default": "",
+            "title": "Valuetype",
             "type": "string"
           }
         },
@@ -3645,6 +3736,13 @@
             },
             "maxItems": 12,
             "title": "Assumptions",
+            "type": "array"
+          },
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/ConfigurationChange"
+            },
+            "title": "Changes",
             "type": "array"
           },
           "episodes": {

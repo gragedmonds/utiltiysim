@@ -6,6 +6,20 @@ starting pressures before shaping the experiment. It inspects the engine's curre
 shows its summary, dated episodes, assumptions, model limits and exact setting changes. **Use this setup** validates
 it again and fills in the draft; **Open simulation** opens Year with those settings. Manual starters remain available.
 
+## Editable input summary
+
+Both the proposal and final wizard review show **What your inputs change**. Each explicit town, baseline,
+operations or dated-episode input has a name, engine-derived before/after values, numeric difference and
+model effects from the live schema. A pool share changing from 6% to 6.9% is labelled **+15% relative** and
+**+0.9 percentage points**; it describes the configured share of qualifying homes, not a measured increase
+in pool count or a forecast KPI delta. Effects explain the model relationship rather than inventing results.
+
+Edit values directly on these cards, then choose **Recheck summary**. Percent inputs use percent units; episode
+inputs also accept the existing relative operators. Revalidation refreshes the effective values, town reference,
+operations settings and overlapping/ramped-period ranges. Applying/opening stays blocked while edits need
+checking. Original conversation assumptions are retained as context; the edited input values take precedence.
+Old saved proposals can refresh their summary without a Claude call. Invalid edits preserve the draft/run.
+
 ## Voice tweaks in Year
 
 Choose **Talk through a tweak** in the Year header, or choose a calendar day and **Describe a tweak by voice or text**.

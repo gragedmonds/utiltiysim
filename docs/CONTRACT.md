@@ -36,7 +36,10 @@ context freshness before appending episodes and restores episodes/date on analys
 A proposal has name, purpose, region context, preset, seed, asOf, townOverrides, base M2C settings, grouped
 operations settings, dated episodes, summary, assumptions and limitations. The validated result additionally
 contains the portable townRef, townId, townName, homes, flattened opsSettings, assigned episode IDs, and changes
-`[{path, before, after}]`. These derived fields are stripped before revalidation. Proposals are applied only to
+`[{path, before, after, scope, episodeIndex, input, title, impact, reach, unit, percentage, valueType,
+minimum, maximum, choices, beforeRange?, afterRange?, period?}]`. Each explicit input is included, even when
+unchanged. `input` preserves episode operators; effective values and ranges come from the engine resolver.
+`ValidatedInflictProposal.changes` carries the same summary for newly proposed periods. These derived fields are stripped before revalidation. Proposals are applied only to
 draft simulations; opening the simulation is a separate user action. Errors use FastAPI's `detail` envelope.
 
 See [SETUP_AGENT.md](SETUP_AGENT.md) for environment variables, voice behavior, validation and request limits.
