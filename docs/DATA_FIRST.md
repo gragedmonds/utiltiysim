@@ -98,7 +98,7 @@ every array one year wide and every id as it is.
 | A | `utility-spec/1.0`, structure synthesis, layout from structure, a first spec (one region, three towns, mixed blends), the Studio loading a spec-built town | about 2 weeks |
 | B | Utility object, sharded runs in a process pool, roll-up trend, tables, summary and worklists, a utility picker in the Studio, episode scopes | about 1.5 weeks |
 | C | Blends per district and street from the spec, rollout episodes | 3 to 5 days |
-| D | The always-on container (needed for B at scale), the no-map boot mode | 2 to 3 days |
+| D | The run bundle, the worker and the portal's command-centre mode ([PORTAL_ARCHITECTURE.md](PORTAL_ARCHITECTURE.md)); the always-on container becomes optional | see that document |
 | E | Year chaining | about 1 week |
 
 Step A is where the pivot pays or fails: a 10,000-home town specified in a dozen lines, generated in under a minute,
