@@ -6,7 +6,7 @@ client = TestClient(app)
 
 
 def _town():
-    r = client.post("/api/towns", json={"preset": "whitby_small", "seed": "API", "houses": 120})
+    r = client.post("/api/towns", json={"preset": "village", "seed": "API", "houses": 120})
     assert r.status_code in (200, 201), r.text
     return r.json()["townId"]
 
@@ -16,7 +16,7 @@ def test_health_schema_presets():
     s = client.get("/api/config/schema").json()
     assert "TownConfig" in s["$defs"]
     p = client.get("/api/config/presets").json()
-    assert "whitby_small" in {x["name"] for x in p["towns"]} and "leak" in p["scenarios"]
+    assert "village" in {x["name"] for x in p["towns"]} and "leak" in p["scenarios"]
 
 
 def test_town_lifecycle_and_endpoints():
@@ -29,7 +29,7 @@ def test_town_lifecycle_and_endpoints():
     gj = client.get(f"/api/towns/{tid}/layers/buildings.geojson").json()
     assert gj["type"] == "FeatureCollection" and len(gj["features"]) >= 120
     lon, lat = gj["features"][0]["geometry"]["coordinates"][0][0]
-    assert 43.8 < lat < 43.95 and -79.0 < lon < -78.85
+    assert abs(lat - 43.30) < 0.05 and abs(lon + 80.60) < 0.05  # around the town's configured anchor
     net = client.get(f"/api/towns/{tid}/network/electric").json()
     # One source: a construction forest of nodes - 1 parent edges; every other edge is a normally-open feeder tie.
     parents = [p for p in net["nodes"]["parentEdge"] if p >= 0]
@@ -53,7 +53,7 @@ def test_town_lifecycle_and_endpoints():
 
 
 def test_a_generated_town_runs_operations_and_meter_to_cash():
-    """The Studio's Configuration flow: send a full edited config (Ayr with another seed and an override), then use
+    """The Studio's Configuration flow: send a full edited config (the small town with another seed and an override), then use
     the new town id everywhere a pack preset works."""
     import time
 
@@ -61,8 +61,8 @@ def test_a_generated_town_runs_operations_and_meter_to_cash():
 
     from utilsim.config import load_preset
 
-    cfg = load_preset("ayr").model_dump(mode="json")
-    cfg["seeds"]["master"] = "AYR-STUDIO-7"
+    cfg = load_preset("small_town").model_dump(mode="json")
+    cfg["seeds"]["master"] = "SMALL-STUDIO-7"
     cfg["operations"]["electric_crews"] = 5
     t0 = time.perf_counter()
     r = client.post("/api/towns", json={"config": cfg})
@@ -71,13 +71,13 @@ def test_a_generated_town_runs_operations_and_meter_to_cash():
     tid = r.json()["townId"]
     again = client.post("/api/towns", json={"config": cfg}).json()
     assert again == {"townId": tid, "ref": r.json()["ref"], "status": "ready"}  # same id and the same name
-    assert again["ref"].startswith("ayr~")
+    assert again["ref"].startswith("small_town~")
     health = client.get("/api/health").json()
-    assert health["capabilities"]["generate"] is True and tid in health["towns"] and "ayr" in health["towns"]
-    assert next(t for t in health["generated"] if t["townId"] == tid)["seed"] == "AYR-STUDIO-7"
+    assert health["capabilities"]["generate"] is True and tid in health["towns"] and "small_town" in health["towns"]
+    assert next(t for t in health["generated"] if t["townId"] == tid)["seed"] == "SMALL-STUDIO-7"
     view = client.get(f"/api/towns/{tid}/snapshot.json", params={"detail": "viewer"}).json()
     assert view["id"] == tid and view["detail"] == "viewer" and view["sampleReads"] == []
-    assert view["config"]["seeds"]["master"] == "AYR-STUDIO-7"
+    assert view["config"]["seeds"]["master"] == "SMALL-STUDIO-7"
     settings = client.get("/api/sim/settings", params={"town": tid}).json()
     assert settings["electricCrews"] == 5  # the town's config is the run's default
     tl = client.post("/api/sim/timeline", json={"town": tid, "m2c": {}})

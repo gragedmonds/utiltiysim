@@ -7,7 +7,9 @@ import {renderSchemaForm,prettyKey} from './schema-form.js';
 // Only for a snapshot whose engine does not publish the schema: the SimConfig groups that belong to a run.
 const RUN_FALLBACK=['process','anomalies','scenario','reading','vee','billing'];
 export const isTownGroup=(key,g)=>g['x-applies']!=='run';
-export const townLabel=t=>t?.name||String(t?.source?.label||'').replace(/ street snapshot$/i,'')||'Engine town';
+// A town's name for people: its own name, else its preset (small_town → Small town), else the source label.
+const presetName=n=>n&&n!=='custom'?(s=>s.charAt(0).toUpperCase()+s.slice(1))(String(n).replaceAll('_',' ')):'';
+export const townLabel=t=>t?.name||presetName(t?.config?.name)||t?.source?.label||'Engine town';
 // A minimal schema read off a town's config (types and nesting only, no bounds or descriptions).
 export function inferSchema(config){
  const infer=x=>x===null?{anyOf:[{type:'string'},{type:'null'}]}:typeof x==='boolean'?{type:'boolean'}:typeof x==='number'?{type:'number'}:typeof x==='string'?{type:'string'}:Array.isArray(x)?{type:'array'}:{type:'object',properties:Object.fromEntries(Object.entries(x).map(([k,v])=>[k,infer(v)]))};
@@ -18,7 +20,7 @@ export function inferSchema(config){
 export function townValues(config,schema){const out={};for(const [g,gs] of Object.entries(schema?.properties||{})){const d=gs?.$ref?schema.$defs?.[gs.$ref.split('/').pop()]:gs;if(d?.properties&&isTownGroup(g,d)&&config?.[g])out[g]=structuredClone(config[g]);}return out;}
 // The complete SimConfig to generate from: the town's config with the edited groups.
 export function fullConfig(config,values){return {...structuredClone(config||{}),...structuredClone(values||{})};}
-// A new master seed that keeps the current one's prefix (WHITBY-042 → WHITBY-K7Q2PX); shown, so it is repeatable.
+// A new master seed that keeps the current one's prefix (TOWN-042 → TOWN-K7Q2PX); shown, so it is repeatable.
 export function newSeed(current,random=Math.random){const abc='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',prefix=(String(current||'').split('-')[0].replace(/[^A-Za-z0-9]/g,'').toUpperCase().slice(0,20))||'TOWN';
  for(;;){let s='';for(let i=0;i<6;i++)s+=abc[Math.floor(random()*abc.length)%abc.length];const seed=prefix+'-'+s;if(seed!==current)return seed;}}
 export const HOSTED_NOTE='This engine cannot build towns (its generation libraries are not installed); it serves the prebuilt towns.';

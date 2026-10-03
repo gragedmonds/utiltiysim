@@ -22,10 +22,10 @@ test('run-day arithmetic: days, calendar months clamped to the month, the year e
 
 test('tomorrow is prefetched with the day\'s own request, kept while nothing changes, and applied at midnight without a request',async()=>{
  const log=[];globalThis.fetch=engine(log);const ctx={actions:[],outages:[{day:'2026-07-12',utility:'electric',start:1,end:2,premiseIds:['P-1']}]};let changes=0;
- const ops=new EngineOperations(town,{api:'/api',townRef:'ayr',date:'2026-07-12',storage:null,m2c:()=>ctx,onChange:()=>changes++});ops.settings={fieldCrews:3};
+ const ops=new EngineOperations(town,{api:'/api',townRef:'small_town',date:'2026-07-12',storage:null,m2c:()=>ctx,onChange:()=>changes++});ops.settings={fieldCrews:3};
  ops.time=3600;await ops.command('dispatch',{targetId:'P-1'});assert.equal(log.length,1);
  const p=ops.ensureAhead('2026-07-13',1000);assert.equal(log.length,2);
- assert.deepEqual(log[1].body,{town:'ayr',date:'2026-07-13',commands:[],settings:{fieldCrews:3},m2c:ctx},'the same request, for tomorrow, with no commands');
+ assert.deepEqual(log[1].body,{town:'small_town',date:'2026-07-13',commands:[],settings:{fieldCrews:3},m2c:ctx},'the same request, for tomorrow, with no commands');
  ops.ensureAhead('2026-07-13',1500);ops.ensureAhead('2026-07-13',4000);assert.equal(log.length,2,'one request while nothing changed');
  assert.equal(ops.prefetched('2026-07-13'),null,'not landed yet');await p;assert.ok(ops.prefetched('2026-07-13'));assert.equal(ops.prefetched('2026-07-14'),null);
  const before=log.length,c=changes;assert.equal(ops.rollTo('2026-07-13'),true);
@@ -37,7 +37,7 @@ test('tomorrow is prefetched with the day\'s own request, kept while nothing cha
 
 test('a changed meter-to-cash run, changed settings or a command drop the prefetch; a stale one is never applied',async()=>{
  const log=[];globalThis.fetch=engine(log);let ctx={actions:[]};
- const ops=new EngineOperations(town,{api:'/api',townRef:'ayr',date:'2026-07-12',storage:null,m2c:()=>ctx});
+ const ops=new EngineOperations(town,{api:'/api',townRef:'small_town',date:'2026-07-12',storage:null,m2c:()=>ctx});
  await ops.ensureAhead('2026-07-13',0);assert.ok(ops.prefetched('2026-07-13'));
  ctx={actions:[{id:'ACT-1'}]};assert.equal(ops.prefetched('2026-07-13'),null,'the run changed under it');assert.equal(ops.rollTo('2026-07-13'),false);
  await ops.ensureAhead('2026-07-13',5000);assert.equal(log.at(-1).body.m2c.actions.length,1);assert.ok(ops.prefetched('2026-07-13'));
@@ -49,7 +49,7 @@ test('a changed meter-to-cash run, changed settings or a command drop the prefet
 
 test('without a prefetch, midnight falls back to the request; one still in flight is awaited, not repeated',async()=>{
  let release;const gate=new Promise(r=>release=r);const log=[];globalThis.fetch=engine(log,{hold:async b=>{if(b.date==='2026-07-13')await gate;}});
- const ops=new EngineOperations(town,{api:'/api',townRef:'ayr',date:'2026-07-12',storage:null});
+ const ops=new EngineOperations(town,{api:'/api',townRef:'small_town',date:'2026-07-12',storage:null});
  ops.ensureAhead('2026-07-13',0);assert.equal(log.length,1);assert.equal(ops.rollTo('2026-07-13'),false,'not here yet');
  const set=ops.setDate('2026-07-13');assert.equal(ops.date,'2026-07-13');assert.equal(log.length,1,'the in-flight prefetch is adopted');
  release();assert.equal(await set,false);assert.equal(ops.timeline.date,'2026-07-13');assert.equal(ops.ahead,null);
@@ -58,7 +58,7 @@ test('without a prefetch, midnight falls back to the request; one still in fligh
 
 test('a failed prefetch backs off for ten seconds, then is asked for again',async()=>{
  let fail=true;const log=[];globalThis.fetch=async(url,opts)=>{log.push(JSON.parse(opts.body));if(fail)return {ok:false,status:503,json:async()=>({detail:'cold start'})};return {ok:true,json:async()=>timelineFor('2026-07-13')};};
- const ops=new EngineOperations(town,{api:'/api',townRef:'ayr',date:'2026-07-12',storage:null});
+ const ops=new EngineOperations(town,{api:'/api',townRef:'small_town',date:'2026-07-12',storage:null});
  await assert.rejects(ops.ensureAhead('2026-07-13',1000),/503/);assert.equal(ops.prefetched('2026-07-13'),null);assert.equal(ops.rollTo('2026-07-13'),false);
  ops.ensureAhead('2026-07-13',5000);assert.equal(log.length,1,'no retry within ten seconds');fail=false;
  await ops.ensureAhead('2026-07-13',12000);assert.equal(log.length,2);assert.ok(ops.prefetched('2026-07-13'));
@@ -67,10 +67,10 @@ test('a failed prefetch backs off for ten seconds, then is asked for again',asyn
 test('the skipped days of a week or a month come from one /sim/days request and are recorded as background outages',async()=>{
  const log=[];const days=[{date:'2026-07-13',interruptions:[],incidents:0,jobs:2},{date:'2026-07-14',interruptions:[{utility:'water',start:100,end:5000,premiseIds:['P-2','P-3']},{utility:'ami',start:200,end:null,premiseIds:['P-4']}],incidents:2,jobs:4}];
  globalThis.fetch=async(url,opts)=>{const body=JSON.parse(opts.body);log.push({url,body});return {ok:true,json:async()=>url.endsWith('/sim/days')?{schemaVersion:'utility-days/1.0',from:body.from,to:body.to,days}:timelineFor(body.date)};};
- const m=new EngineM2C({townRef:'ayr',townId:'town-x',storage:memory()});m.setSeed('storm');
- const ops=new EngineOperations(town,{api:'/api',townRef:'ayr',date:'2026-07-12',storage:null,m2c:()=>m.context()});ops.settings={fieldCrews:3};ops.time=100;await ops.command('dispatch',{targetId:'P-1'});
+ const m=new EngineM2C({townRef:'small_town',townId:'town-x',storage:memory()});m.setSeed('storm');
+ const ops=new EngineOperations(town,{api:'/api',townRef:'small_town',date:'2026-07-12',storage:null,m2c:()=>m.context()});ops.settings={fieldCrews:3};ops.time=100;await ops.command('dispatch',{targetId:'P-1'});
  const res=await ops.days('2026-07-13','2026-07-14');assert.equal(log.at(-1).url,'/api/sim/days');
- assert.deepEqual(log.at(-1).body,{town:'ayr',settings:{fieldCrews:3},m2c:{seed:'storm',actions:[]},from:'2026-07-13',to:'2026-07-14'},'the timeline request\'s shape plus the range, without the day or its commands');
+ assert.deepEqual(log.at(-1).body,{town:'small_town',settings:{fieldCrews:3},m2c:{seed:'storm',actions:[]},from:'2026-07-13',to:'2026-07-14'},'the timeline request\'s shape plus the range, without the day or its commands');
  assert.equal(m.recordDays(res.days),1,'one day changed the run');assert.equal(m.outageCount('2026-07-13','2026-07-14'),2);assert.equal(m.outageCount('2026-07-13','2026-07-13'),0);
  assert.equal(m.outageSources['2026-07-14'],'background');assert.equal(m.outages['2026-07-13'],undefined);assert.equal(m.recordDays(res.days),0,'already recorded');
  assert.deepEqual(m.outageList().map(o=>[o.day,o.utility,o.end]),[['2026-07-14','water',5000],['2026-07-14','ami',86600]]);

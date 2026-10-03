@@ -38,12 +38,14 @@ continuity (corridors, then local streets) and offsets are taken relative to the
 **Sectionalising and back-feed.** The switches and ties are placed so that one broken trunk pole costs a bounded
 section rather than a feeder: the crew opens the nearest switches around the fault (`docs/OPERATIONS.md`), the
 recloser re-closes onto the sections above, ties pick up the sections beyond, and the faulted section itself waits
-for the repair. On the packs at 08:00 on the scenario day, a break anywhere on a trunk leaves at most 15 % of its
-feeder out after isolation and back-feed on Ayr (2 feeders, 15 switches, 8 ties of which 5 loops) and Cobourg
-(6 feeders, 50 switches, 19 ties of which 2 loops), down from 100 % and 43 % with one tie per feeder pair. At an
+for the repair. On the packs at 08:00 on the scenario day, a break anywhere on a trunk left at most 15 % of its
+feeder out after isolation and back-feed on the 1,861-home town (2 feeders, 15 switches, 8 ties of which 5 loops) and
+the 5,500-home town (6 feeders, 50 switches, 19 ties of which 2 loops), down from 100 % and 43 % with one tie per
+feeder pair. (Measured in October 2026 on the street-extract towns that preceded the generic presets; the generic
+`small_town` has 16 switches and 5 ties, `large_town` 40 and 12.) At an
 evening peak a tie can still be declined: the feeder taking the load reaches its emergency rating or the voltage
 floor (trunks are sized for their own feeder, not for carrying a neighbour's whole load), so part of an island may
-wait for the repair. Small feeders (Whitby's 240-customer feeders) are not cut below `section_min_customers`.
+wait for the repair. Small feeders (a village's 240-customer feeders) are not cut below `section_min_customers`.
 
 **Power flow** (`utilsim/sim/voltage.py`, every frame): linearised DistFlow on the energized radial forest.
 - Each edge drops `factor · (P·R + Q·X) / (1000 · V²)` per unit, with R and X from the tables, divided by parallel
@@ -56,7 +58,7 @@ wait for the repair. Small feeders (Whitby's 240-customer feeders) are not cut b
   with the town's limits in `premises.voltageLimits` (`electric.voltage_min_pu` / `voltage_max_pu` × 120 V, and the
   premises below and above them). Back-feeding through a tie keeps every customer at or above the lower limit less
   4 V (ANSI Range B, 110 V by default).
-- On Ayr, a typical July evening stays within ANSI Range A (114–126 V) with losses near 3 %. A January evening
+- On a 1,900-home town, a typical July evening stays within ANSI Range A (114–126 V) with losses near 3 %. A January evening
   pushes transformers serving electric-heat streets past nameplate; the primary stays within rating.
 
 Routing metrics (`stats.electricRouting`, `utilsim.net.corridors.routing_metrics`): trunk km by road class and the
@@ -72,7 +74,8 @@ Water:
   `water.hw_c_old` (100) for unlined cast iron; 140 for copper services and 120 for the concrete trunk.
 - The grade starts at the zone tank's overflow, held there by the pump station. It resets to another zone's tank
   where a pipe enters that zone.
-- Service pressure is grade minus elevation. On Ayr it is about 410–570 kPa (59–83 psi) and follows the ground.
+- Service pressure is grade minus elevation. On a 1,900-home town it is about 410–570 kPa (59–83 psi) and follows the
+  ground.
 
 Gas:
 - Medium-pressure pipes use Weymouth P², starting from the city gate outlet, at the base conditions
@@ -92,15 +95,16 @@ Loops (water and gas):
   how the tank and the pump station share the load after a trunk cut.
 - Damped Newton runs from zero chord flow in every frame, with a dense chords × chords Jacobian built from the
   forest's paths. It stops at 1e-4 m of head (water), 1e-3 psia² (MP gas) or 1e-5 kPa (LP gas) around every loop.
-  That takes 2–6 iterations on Ayr (44 water and 43 gas loops) and Cobourg (170 and 153). The cost is about 3 ms per
-  frame on Ayr and 20 ms on Cobourg.
+  That took 2–6 iterations on the October 2026 1,861-home town (44 water and 43 gas loops) and 5,500-home town (170
+  and 153), at about 3 ms and 20 ms per frame. The generic `small_town` has 38 water and 30 gas loops, `large_town`
+  126 and 91.
 - If the solve does not converge, the frame keeps the radial flows and pressures, its loops stay `null`, and a
   warning is raised.
 - A gas loop is solved within one tier. A cycle that crosses a regulator stays `null` (none in the packs today).
-- Loops lift the worst-served premises. At the 07:30 peak, Cobourg's lowest water pressure rises from 372 to
-  391 kPa, and the demand-weighted pressure rises in every town (the network dissipates less energy). A premise on
-  the high side of a loop can drop a little, by up to 6 kPa on Cobourg, because it now feeds the loop. Ayr's
-  loops sit in well-fed areas, so its minimum (409 kPa) and median (486 kPa) are unchanged.
+- Loops lift the worst-served premises. At the 07:30 peak on the October 2026 5,500-home town, the lowest water
+  pressure rose from 372 to 391 kPa, and the demand-weighted pressure rises in every town (the network dissipates
+  less energy). A premise on the high side of a loop can drop a little (up to 6 kPa there) because it now feeds the
+  loop. Where loops sit in well-fed areas (the 1,861-home town), the minimum and median are unchanged.
 
 Elevated tanks are standby sources. The supply's built forest wins wherever it still connects, so in normal
 operation a tank neither fills nor drains. When the path from the pump station is cut, the tank feeds what it can

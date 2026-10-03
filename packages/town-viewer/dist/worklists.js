@@ -20,7 +20,7 @@ export function installWorklists({getClient,onShowPremise=()=>{},onSettings=()=>
  const client=()=>getClient();
  function setStatus(text){$('wl-status').textContent=text||'';}
  async function load(){const m2c=client();
-  if(!m2c){$('wl-kpis').innerHTML='';$('wl-queues').innerHTML='';$('wl-table').innerHTML=`<div class="wl-empty"><h2>Worklists need the engine</h2><p>Open an engine town (for example <code>?town=ayr</code> on the hosted site), or run <code>uv run utilsim serve</code> locally and add <code>?engine=http://127.0.0.1:8010</code>. The engine replays a year of reads, VEE and work queues for the town.</p></div>`;$('wl-case').innerHTML='';$('wl-pager').innerHTML='';setStatus('');return;}
+  if(!m2c){$('wl-kpis').innerHTML='';$('wl-queues').innerHTML='';$('wl-table').innerHTML=`<div class="wl-empty"><h2>Worklists need the engine</h2><p>Open an engine town (for example <code>?town=small_town</code> on the hosted site), or run <code>uv run utilsim serve</code> locally and add <code>?engine=http://127.0.0.1:8010</code>. The engine replays a year of reads, VEE and work queues for the town.</p></div>`;$('wl-case').innerHTML='';$('wl-pager').innerHTML='';setStatus('');return;}
   const ticket=++busy;setStatus('Running the engine…');
   try{summary=await m2c.summary();}catch(err){quiet(err);return;}if(ticket!==busy)return;if(!m2c.asOf)m2c.setAsOf(summary.asOf);$('wl-asof').value=m2c.asOf;renderSummary();
   // The table and the case load independently: a superseded table request never blocks the case panel.

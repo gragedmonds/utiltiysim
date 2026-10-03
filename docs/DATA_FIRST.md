@@ -5,7 +5,7 @@ the geography to it".*
 
 ## Why
 
-The engine scales linearly and is fast per account (Cobourg: 6,993 accounts, 26 s to generate, 15 s to replay the
+The engine scales linearly and is fast per account (a 5,500-home town: 6,993 accounts, 26 s to generate, 15 s to replay the
 year). What stops it at 100,000 accounts is shape, not speed: one town per run, one process, one year, geometry first.
 Today a town starts from a street extract, lots and premises emerge from the roads, districts are Voronoi cells, the
 AMI/AMR/manual mix is a town-wide route share, and there is no object above the town. A multi-region utility with a
@@ -56,7 +56,7 @@ roads never intersect except at junctions. Premises take coordinates along their
 the operations day and the map then run unchanged. Distances exist at three levels: along roads inside a town, between
 districts, and between towns (a coarse regional plane with road kilometres, for crews and readers later).
 
-The OSM path remains for demos of real places; it stops being the base.
+The OSM path was removed in October 2026: every town is generic, built from its settings and seed.
 
 ### 3. The utility layer and sharding
 

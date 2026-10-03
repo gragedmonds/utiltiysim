@@ -25,7 +25,7 @@ def iso(day: int) -> str:
 
 
 def form(start: str, activity: str = "Special meter read", **kw) -> dict:
-    return {"orderType": "FS01 · Field service", "shortText": "Check the meter", "plant": "AY01 · Ayr",
+    return {"orderType": "FS01 · Field service", "shortText": "Check the meter", "plant": "SM01 · Small Town",
             "plannerGroup": "MR · Meter services", "workCenter": "METER-ELECTRIC", "activityType": activity,
             "startDate": start, "finishDate": start, "priority": "2 · Normal", "longText": "Read the meter.",
             "operation": "Read the register", "duration": 30, "accessNotes": "Front door", **kw}
@@ -42,12 +42,12 @@ def order(case_id: str, day: int, start: int, n: int = 1, cover: list[str] | Non
 
 @pytest.fixture(scope="module")
 def town():
-    return _town("ayr")
+    return _town("small_town")
 
 
 @pytest.fixture(scope="module")
 def slow() -> M2CRun:
-    return run_for(RunRequest(town="ayr", settings=SLOW))
+    return run_for(RunRequest(town="small_town", settings=SLOW))
 
 
 @pytest.fixture(scope="module")
@@ -64,7 +64,7 @@ def crew(slow, missing):
     start = add_bdays(d0, 2)
     oid, actions = order(missing.id, d0, start)
     return {"d0": d0, "start": start, "oid": oid, "actions": actions,
-            "run": run_for(RunRequest(town="ayr", settings=SLOW, actions=actions))}
+            "run": run_for(RunRequest(town="small_town", settings=SLOW, actions=actions))}
 
 
 # ---- orders progress on their own --------------------------------------------------------------------------------
@@ -160,14 +160,14 @@ def test_an_order_dispatched_today_is_a_crew_job_on_the_map_today(missing):
     d0 = add_bdays(int(missing.created), 1)
     oid, actions = order(missing.id, d0, d0)
     client = TestClient(app)
-    tl = client.post("/api/sim/timeline", json={"town": "ayr", "date": iso(d0),
+    tl = client.post("/api/sim/timeline", json={"town": "small_town", "date": iso(d0),
                                                 "m2c": {"settings": SLOW, "actions": actions}}).json()
     job = next(j for j in tl["jobs"] if j.get("orderId") == oid)
     assert job["kind"] == "field_order" and job["requestedAt"] >= 9.5 * 3600  # 30 min after the 09:00 dispatch
     later = add_bdays(d0, 3)
     oid2, actions2 = order(missing.id, d0, later)
     for day, seen in ((d0, False), (later, True)):  # dispatched today for a later start: on the map that day only
-        tl = client.post("/api/sim/timeline", json={"town": "ayr", "date": iso(day),
+        tl = client.post("/api/sim/timeline", json={"town": "small_town", "date": iso(day),
                                                     "m2c": {"settings": SLOW, "actions": actions2}}).json()
         assert any(j.get("orderId") == oid2 for j in tl["jobs"]) == seen
 
@@ -221,7 +221,7 @@ def test_installing_from_the_real_swap_date_makes_the_backwards_read_billable(to
     d = add_bdays(int(swapped.created), 1)
     with pytest.raises(ActionError, match="went backwards"):
         M2CRun(town, SLOW, [{"day": iso(d), "type": "accept", "caseId": swapped.id}])
-    base = run_for(RunRequest(town="ayr", settings=SLOW))
+    base = run_for(RunRequest(town="small_town", settings=SLOW))
     swap_day = int(base.fault_t[mi])
     acts = [{"day": iso(d), "type": "device_replace", "meterId": town.meter_ids[mi], "deviceId": "SN-TEST-2",
              "installDate": iso(swap_day), "initialRead": round(float(base.fault_k[mi]), 3)},
@@ -298,7 +298,7 @@ def test_a_meter_exchanged_outcome_installs_the_new_device(town, swapped):
 
 
 def test_the_simulated_crews_register_the_meters_they_exchange():
-    run = run_for(RunRequest(town="ayr"))
+    run = run_for(RunRequest(town="small_town"))
     exchanged = [(c, e) for c in run.cases for e in c.events if e[1] == "METER_EXCHANGE"]
     assert exchanged and len(run.installs) == len(exchanged)
     for _, e in exchanged:
@@ -397,7 +397,7 @@ def test_your_field_order_can_cover_them_and_the_crews_roll_once_per_premise(tow
 
 
 def test_the_simulated_workforce_rolls_one_truck_per_premise_a_day():
-    run = run_for(RunRequest(town="ayr"))
+    run = run_for(RunRequest(town="small_town"))
     tw = run.town
     rolls: dict[tuple[int, int], int] = {}
     for c in run.cases:
@@ -413,11 +413,11 @@ def test_the_simulated_workforce_rolls_one_truck_per_premise_a_day():
 
 # ---- missed reads name their outage --------------------------------------------------------------------------------
 def test_mr_results_name_the_outage_that_missed_a_read(town):
-    base = run_for(RunRequest(town="ayr"))
+    base = run_for(RunRequest(town="small_town"))
     d, (_, rows) = next((d, b) for d, b in sorted(base.batches.items()) if 60 < d < 80)
     pid = next(town.premise_ids[town.prem[r]] for r in rows if town.tech[r] == "AMI" and town.commodity[r] == "electric")
     outages = [{"day": iso(d), "utility": "electric", "start": 0, "end": 4 * 3600, "premiseIds": [pid]}]
-    run = run_for(RunRequest(town="ayr", outages=outages))
+    run = run_for(RunRequest(town="small_town", outages=outages))
     r = next(int(r) for r in rows if town.premise_ids[town.prem[r]] == pid and town.commodity[r] == "electric"
              and town.direction[r] == "import")
     inst = lookups.installation(run, town.installation[r], as_of="2026-12-31")

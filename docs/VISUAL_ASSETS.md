@@ -6,7 +6,9 @@ today's 3D. Each item comes from something the engine models, so a drawing can b
 How to read the tables:
 - **Data** is where the item lives in the town snapshot (`utility-town/2.0`), a state frame (`utility-state/1.0`),
   the operations timeline or the meter-to-cash (M2C) run.
-- **Ayr / Cobourg** are counts in the smallest and largest real-town packs, to size sprite budgets.
+- **Small / large town** are counts in a town of about 1,900 homes and one of 5,500, to size sprite budgets. They
+  were measured in October 2026 on the street-extract packs that preceded the generic presets; `small_town` and
+  `large_town` are of the same order (for example 1,272 transformers and 330 hydrants on `large_town`).
 - **States** are the looks one item needs beyond normal (out, damaged, closed, selected…).
 - **Today** is what the current 3D viewer does: **drawn**, **placeholder** (a generic shape stands in), or **not
   drawn**.
@@ -21,7 +23,7 @@ Every item also needs a **selected** and a **hover** look; the tables don't repe
 
 ## 1. Ground and land
 
-| Asset | Data | Ayr / Cobourg | Variants and states | Today | Priority |
+| Asset | Data | Small / large town | Variants and states | Today | Priority |
 |---|---|---|---|---|---|
 | Ground and terrain | `terrain` (height grid, `reliefM`) | 1 grid | grass; elevation shading or contour steps (pressure follows elevation) | drawn | P1 |
 | Lot / parcel | `parcels[].polygon` | 2,110 / 6,276 | lawn; property line; vacant lot | not drawn | P2 |
@@ -31,7 +33,7 @@ Every item also needs a **selected** and a **hover** look; the tables don't repe
 
 ## 2. Roads and streetscape
 
-| Asset | Data | Ayr / Cobourg | Variants and states | Today | Priority |
+| Asset | Data | Small / large town | Variants and states | Today | Priority |
 |---|---|---|---|---|---|
 | Road segment | `roads[]` (`roadClass`, `pavementWidthM`, `rowWidthM`, `points`) | 191 / 652 segments, 32 / 97 km | arterial, collector, local (three widths and markings); straight, curve, end | drawn | P1 |
 | Intersection | road ends (`a`, `b`) | — | T, cross, multi-leg; signalised or stop | drawn | P1 |
@@ -48,7 +50,7 @@ Utilities run under or beside the road. The generator keeps each network to its 
 
 ## 3. Buildings
 
-| Asset | Data | Ayr / Cobourg | Variants and states | Today | Priority |
+| Asset | Data | Small / large town | Variants and states | Today | Priority |
 |---|---|---|---|---|---|
 | Detached house | `buildings[]` + premise (`era`, `roof`, `roofTone`, `stories`, footprint) | 1,861 / 5,500 | era: `pre_1945`, `postwar`, `modern`; roof: `gable`, `hip`, `flat`; 1 or 2 storeys; vacant (`occupied` false); lights on at night | drawn | P1 |
 | Storefront / commercial | `buildingType: storefront` | 244 / 770 | flat roof, signage band; large 600 V services | drawn | P1 |
@@ -59,7 +61,7 @@ Utilities run under or beside the road. The generator keeps each network to its 
 
 **House add-ons, each driven by a premise or meter field.** They matter because they explain the load:
 
-| Add-on | Data | Ayr / Cobourg | Today | Priority |
+| Add-on | Data | Small / large town | Today | Priority |
 |---|---|---|---|---|
 | Rooftop solar | meter `bidirectional` (net metering) | 318 / 871 | drawn | P1 |
 | EV and charger in the driveway | `hasEV` | 230 / 579 | not drawn | P2 |
@@ -73,7 +75,7 @@ Utilities run under or beside the road. The generator keeps each network to its 
 This is "the meter attached to the house". Every premise has up to three services: `premises[].services`, one
 service point each, and one meter per service point (`meters[]`, `registers[]`).
 
-| Asset | Data | Ayr / Cobourg | Variants and states | Today | Priority |
+| Asset | Data | Small / large town | Variants and states | Today | Priority |
 |---|---|---|---|---|---|
 | Electric meter on the wall | `meters[]` electric + premise `meterTechnology` | 2,110 / 6,276 | **AMI** smart meter, **AMR** (drive-by radio), **MANUAL** dial; **net meter** with solar (two registers); commercial CT cabinet for large services | not drawn | P1 |
 | Overhead service drop (pole → house) | electric `service` edge, `placement: overhead` | 180 / 922 | live, dead (outage) | drawn as a line | P1 |
@@ -87,7 +89,7 @@ service point each, and one meter per service point (`meters[]`, `registers[]`).
 
 ## 5. Electric network
 
-| Asset | Data | Ayr / Cobourg | Variants and states | Today | Priority |
+| Asset | Data | Small / large town | Variants and states | Today | Priority |
 |---|---|---|---|---|---|
 | Transmission line into town | electric `supply` edge, `external_supply` node | 1 / 1 | — | drawn as a line | P3 |
 | Substation | `substation` node + facility | 1 / 1 | fenced yard, power transformers, feeder breakers; feeder out | placeholder | P1 |
@@ -105,20 +107,20 @@ service point each, and one meter per service point (`meters[]`, `registers[]`).
 
 ## 6. Water network
 
-| Asset | Data | Ayr / Cobourg | Variants and states | Today | Priority |
+| Asset | Data | Small / large town | Variants and states | Today | Priority |
 |---|---|---|---|---|---|
 | Source (well field or intake) | water `external_supply` node | 1 / 1 | — | placeholder | P2 |
 | Pump station | `pump_station` node + facility (`pumps`) | 1 / 1 | running; **out** (the tank carries the town) | placeholder | P1 |
 | Elevated tank (water tower) | `elevated_tank` node (`capacityM3`, `overflowElevationM`) | 1 / 1 | level (when tank levels arrive), feeding or standby | placeholder (marker) | P1 |
 | Trunk main / tank riser | `trunk`, `tank_riser` edges | 1–2 | — | drawn as a line | P1 |
 | Distribution main | `distribution` edges (`material`: `PVC C900`, `ductile iron`; `diameterIn`) | 2,268 / 6,812 edges | width by diameter; flow direction; **isolated (no water)**; **break with a leak** | drawn as a line | P1 |
-| Loop main | edges with `loop` | 44 loops in Ayr | flow shown once looped hydraulics land | drawn as a line | P2 |
+| Loop main | edges with `loop` | about 40 loops in a small town | flow shown once looped hydraulics land | drawn as a line | P2 |
 | Valve (in a road box) | `equipment kind: valve` (`normally`) | 227 / 808 | open; **closed to isolate a break** | not drawn | P2 |
 | Fire hydrant | `equipment kind: hydrant` | 160 / 455 | normal; **flushing** after a repair | not drawn | P2 |
 
 ## 7. Gas network
 
-| Asset | Data | Ayr / Cobourg | Variants and states | Today | Priority |
+| Asset | Data | Small / large town | Variants and states | Today | Priority |
 |---|---|---|---|---|---|
 | Transmission tap | gas `external_supply` node | 1 / 1 | — | placeholder | P3 |
 | City gate station | `city_gate_regulator` node + facility (`inletKPa`, `outletKPa`) | 1 / 1 | — | placeholder | P1 |
@@ -129,7 +131,7 @@ service point each, and one meter per service point (`meters[]`, `registers[]`).
 
 ## 8. AMI (smart-meter radio network)
 
-| Asset | Data | Ayr / Cobourg | Variants and states | Today | Priority |
+| Asset | Data | Small / large town | Variants and states | Today | Priority |
 |---|---|---|---|---|---|
 | Headend (at the depot) | `amiNetwork.headend` | 1 / 1 | — | not drawn | P2 |
 | Collector / access point | `amiNetwork.collectors[]` (`mountedOn`: `pole`, `transformer_pad`, `streetlight`) | 8 / 14 | online; **down** (meters in range go missing) | not drawn | P2 |
@@ -213,7 +215,8 @@ isometric style needs a way to show them: tinted tiles, outlines or badges.
    (Water lens shows water mains only).
 3. **Where the water meter sits.** A basement meter with a remote reader, or a meter pit at the curb. The data allows
    either.
-4. **Zoom tiers.** Cobourg has about 6,300 houses, 1,300 transformers, 800 poles, 800 valves and 450 hydrants. Far
+4. **Zoom tiers.** `large_town` has about 5,900 premises, 1,300 transformers, 2,800 poles, 1,100 valves and 330
+   hydrants. Far
    zoom likely needs simplified symbols (dots, icons), with detailed sprites only up close.
 5. **Equipment states as separate art or overlays.** Open, closed, broken and overloaded could be separate sprites
    or one sprite plus a coloured badge. Badges keep the art count down.

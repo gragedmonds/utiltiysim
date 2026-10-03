@@ -65,7 +65,9 @@ def test_configs_written_before_a_removal_still_load_and_keep_their_town():
              "electric": {"transmission_kv": 69.0, "severe_turn_deg": 45.0},
              "ami": {"battery_life_years": 15.0, "comm_fail_rate": 0.004},
              "operations": {"drive_by_radius_m": 120.0, "walker_meters_per_hour": 45.0},
-             "process": {"sequences": "builtin"}, "scenario": {"tick_minutes": 5}}
+             "process": {"sequences": "builtin"}, "scenario": {"tick_minutes": 5},
+             "town": {"skeleton": "osm", "osm_source": "data/osm/whitby-roads.json", "osm_sha256": "0" * 64,
+                      "expansion": "grow"}}
     assert {g: tuple(v) for g, v in stale.items()} == REMOVED
     for g, extra in stale.items():
         old[g].update(extra)
@@ -84,5 +86,5 @@ def test_an_unknown_setting_is_still_refused():
         SimConfig.model_validate(data)
 
 
-def test_us_midwest_preset_still_loads():
-    assert load_preset("us_midwest").electric.primary_kv == pytest.approx(12.47)
+def test_us_town_preset_loads():
+    assert load_preset("us_town").electric.primary_kv == pytest.approx(12.47)

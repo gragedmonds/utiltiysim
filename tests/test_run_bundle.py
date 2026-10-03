@@ -124,7 +124,7 @@ def test_cli_uses_studio_inputs_and_saved_snapshot(archive, tmp_path):
     snapshot = tmp_path / "snapshot.json.gz"
     snapshot.write_bytes(gzip.compress(orjson.dumps(snap)))
     input_file = tmp_path / "viewer-run.json"
-    input_file.write_bytes(orjson.dumps({"schemaVersion": "viewer-m2c-run/1.0", "town": "whitby_small",
+    input_file.write_bytes(orjson.dumps({"schemaVersion": "viewer-m2c-run/1.0", "town": "village",
                                        "townId": snap["id"], **REQUEST}))
     cli = CliRunner()
     result = cli.invoke(app, ["export-run", "--input", str(input_file), "--snapshot", str(snapshot),

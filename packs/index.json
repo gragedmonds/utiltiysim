@@ -1,129 +1,104 @@
 {
   "schemaVersion": "town-pack/1.0",
-  "generatorVersion": "0.9.1",
+  "generatorVersion": "0.10.0",
   "towns": [
     {
-      "preset": "whitby_small",
-      "description": "Whitby street extract (OSM), 480 homes. Matches the prototype's default town size.",
-      "townId": "town-de50a305bb03b053",
-      "topologyRevision": "topo-34a89aee58923611b8f9",
-      "indexRevision": "idx-8d3a3fa9b735c681e203",
+      "preset": "village",
+      "description": "Generic village, 480 homes on a synthetic street grid. The default town.",
+      "townId": "town-ab2b8b3609f83517",
+      "topologyRevision": "topo-c93bb5c16d5642a31979",
+      "indexRevision": "idx-caefbe292ca37422091f",
       "homes": 480,
-      "premises": 609,
-      "place": null,
+      "premises": 570,
       "source": {
-        "type": "osm",
-        "label": "Whitby street snapshot",
-        "snapshotDate": "2026-10-02",
-        "attribution": "© OpenStreetMap contributors",
-        "license": "https://opendatacommons.org/licenses/odbl/1-0/"
+        "type": "synthetic",
+        "label": "Synthetic town"
       },
       "scenarioDate": "2026-07-15",
       "timezone": "America/Toronto",
       "files": {
         "snapshot": {
-          "path": "whitby_small/town-de50a305bb03b053.ecacc431d6.snapshot.json.gz",
-          "bytes": 708208
+          "path": "village/town-ab2b8b3609f83517.d8b4324940.snapshot.json.gz",
+          "bytes": 669630
         },
         "replay": {
-          "path": "whitby_small/town-de50a305bb03b053.2ac1782328.replay-day.json.gz",
-          "bytes": 711446
+          "path": "village/town-ab2b8b3609f83517.a54ad1782a.replay-day.json.gz",
+          "bytes": 643329
         }
       }
     },
     {
-      "preset": "ayr",
-      "description": "Ayr, Ontario: real OSM streets (snapshot 2026-10-01, 1,500 m radius), 1,861 homes at natural size.",
-      "townId": "town-76aa8b741a7d42e4",
-      "topologyRevision": "topo-a55fd5a90d50100a5d0e",
-      "indexRevision": "idx-3c351683c3ed55a8fde1",
-      "homes": 1861,
-      "premises": 2110,
-      "place": {
-        "name": "Ayr",
-        "query": "Ayr, Ontario"
-      },
+      "preset": "small_town",
+      "description": "Generic small town, 1,900 homes on a synthetic street grid.",
+      "townId": "town-6390907f6f4fa169",
+      "topologyRevision": "topo-911bdec8a15e2e8bfa3f",
+      "indexRevision": "idx-ecd9d9ea506d73151a8e",
+      "homes": 1900,
+      "premises": 2103,
       "source": {
-        "type": "osm",
-        "label": "Ayr street snapshot",
-        "snapshotDate": "2026-10-01",
-        "attribution": "© OpenStreetMap contributors",
-        "license": "https://opendatacommons.org/licenses/odbl/1-0/"
+        "type": "synthetic",
+        "label": "Synthetic town"
       },
       "scenarioDate": "2026-07-15",
       "timezone": "America/Toronto",
       "files": {
         "snapshot": {
-          "path": "ayr/town-76aa8b741a7d42e4.371b33c281.snapshot.json.gz",
-          "bytes": 2245332
+          "path": "small_town/town-6390907f6f4fa169.7e052375da.snapshot.json.gz",
+          "bytes": 2329488
         },
         "replay": {
-          "path": "ayr/town-76aa8b741a7d42e4.779c7fa896.replay-day.json.gz",
-          "bytes": 2246365
+          "path": "small_town/town-6390907f6f4fa169.9559c1dab5.replay-day.json.gz",
+          "bytes": 2252849
         }
       }
     },
     {
-      "preset": "elora",
-      "description": "Elora, Ontario: real OSM streets (snapshot 2026-10-01, 1,800 m radius), 3,271 homes at natural size.",
-      "townId": "town-0adcd5c90bfc0b68",
-      "topologyRevision": "topo-fe20793441401bbf1e3a",
-      "indexRevision": "idx-f3a091342b89ac1bf6d1",
-      "homes": 3271,
-      "premises": 3858,
-      "place": {
-        "name": "Elora",
-        "query": "Elora, Ontario"
-      },
+      "preset": "town",
+      "description": "Generic town, 3,300 homes on a synthetic street grid.",
+      "townId": "town-7182208691286eb1",
+      "topologyRevision": "topo-a20394a882ee4d6c1946",
+      "indexRevision": "idx-59bffa0f94f71471983e",
+      "homes": 3300,
+      "premises": 3570,
       "source": {
-        "type": "osm",
-        "label": "Elora street snapshot",
-        "snapshotDate": "2026-10-01",
-        "attribution": "© OpenStreetMap contributors",
-        "license": "https://opendatacommons.org/licenses/odbl/1-0/"
+        "type": "synthetic",
+        "label": "Synthetic town"
       },
       "scenarioDate": "2026-07-15",
       "timezone": "America/Toronto",
       "files": {
         "snapshot": {
-          "path": "elora/town-0adcd5c90bfc0b68.cba66d9c41.snapshot.json.gz",
-          "bytes": 3960830
+          "path": "town/town-7182208691286eb1.589345bbca.snapshot.json.gz",
+          "bytes": 3643219
         },
         "replay": {
-          "path": "elora/town-0adcd5c90bfc0b68.81ef4247fd.replay-day.json.gz",
-          "bytes": 3891864
+          "path": "town/town-7182208691286eb1.3fa5ef1c3b.replay-day.json.gz",
+          "bytes": 3449347
         }
       }
     },
     {
-      "preset": "cobourg",
-      "description": "Cobourg, Ontario: real OSM streets (snapshot 2026-10-01, 2,500 m radius), 5,500 homes at natural size.",
-      "townId": "town-129112c041a48122",
-      "topologyRevision": "topo-db777478b5256bbf765e",
-      "indexRevision": "idx-3a15ba7bbe03563c7b8a",
+      "preset": "large_town",
+      "description": "Generic large town, 5,500 homes on a synthetic street grid.",
+      "townId": "town-46386c609a2c665d",
+      "topologyRevision": "topo-ec6160e217009d3a7d78",
+      "indexRevision": "idx-db4ce3921f7cf6a32935",
       "homes": 5500,
-      "premises": 6276,
-      "place": {
-        "name": "Cobourg",
-        "query": "Cobourg, Ontario"
-      },
+      "premises": 5864,
       "source": {
-        "type": "osm",
-        "label": "Cobourg street snapshot",
-        "snapshotDate": "2026-10-01",
-        "attribution": "© OpenStreetMap contributors",
-        "license": "https://opendatacommons.org/licenses/odbl/1-0/"
+        "type": "synthetic",
+        "label": "Synthetic town"
       },
       "scenarioDate": "2026-07-15",
       "timezone": "America/Toronto",
       "files": {
         "snapshot": {
-          "path": "cobourg/town-129112c041a48122.ccd262e799.snapshot.json.gz",
-          "bytes": 6383409
+          "path": "large_town/town-46386c609a2c665d.a8c990b5e4.snapshot.json.gz",
+          "bytes": 5904671
         },
         "replay": {
-          "path": "cobourg/town-129112c041a48122.af082389a1.replay-day.json.gz",
-          "bytes": 6097842
+          "path": "large_town/town-46386c609a2c665d.2e24a90b84.replay-day.json.gz",
+          "bytes": 5438534
         }
       }
     }

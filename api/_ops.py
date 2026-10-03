@@ -87,7 +87,7 @@ class Command(BaseModel):
 
 
 class TimelineRequest(BaseModel):
-    town: str = Field(..., description="Pack preset (e.g. 'ayr') or town id.")
+    town: str = Field(..., description="Pack preset (e.g. 'small_town') or town id.")
     date: str | None = Field(None, description="Run day (local); default: the town's scenario date.")
     commands: list[Command] = Field(default_factory=list, max_length=500)
     settings: dict | None = Field(None, description="Overrides for the run settings: timings, crews, incident rates "
@@ -107,7 +107,7 @@ class DaysRequest(BaseModel):
     """A range of run days, each replayed without commands (the viewer's +1 week / +1 month)."""
 
     model_config = ConfigDict(populate_by_name=True)
-    town: str = Field(..., description="Pack preset (e.g. 'ayr') or town id.")
+    town: str = Field(..., description="Pack preset (e.g. 'small_town') or town id.")
     from_: str = Field(..., alias="from", description="First run day (YYYY-MM-DD, local).")
     to: str = Field(..., description=f"Last run day, inclusive; at most {MAX_DAYS} days from the first.")
     settings: dict | None = Field(None, description="Overrides for the run settings, as for /api/sim/timeline.")

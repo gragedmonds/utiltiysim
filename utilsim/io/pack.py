@@ -18,7 +18,7 @@ from utilsim.config import load_preset
 from utilsim.version import GENERATOR_VERSION
 
 PACK_VERSION = "town-pack/1.0"
-DEFAULT_PRESETS = ("whitby_small", "ayr", "elora", "cobourg")
+DEFAULT_PRESETS = ("village", "small_town", "town", "large_town")
 
 
 def _gz(data: bytes) -> bytes:
@@ -56,23 +56,11 @@ def write_pack(preset: str, out: Path) -> dict:
         "indexRevision": snap["indexRevision"],
         "homes": snap["homes"],
         "premises": snap["count"],
-        "place": _place(cfg),
-        "source": {k: src.get(k) for k in ("type", "label", "snapshotDate", "attribution", "license")},
+        "source": {k: src.get(k) for k in ("type", "label")},
         "scenarioDate": cfg.scenario.date,
         "timezone": cfg.town.timezone,
         "files": files,
     }
-
-
-def _place(cfg) -> dict | None:
-    """Real place behind an OSM preset (from the frozen extract's header), if any."""
-    if cfg.town.skeleton != "osm":
-        return None
-    from utilsim.gen.roads.build import REPO_ROOT
-    from utilsim.gen.sources import extract_header
-
-    place = extract_header(REPO_ROOT / cfg.town.osm_source).get("place") or {}
-    return {"name": place.get("name"), "query": place.get("query")} if place else None
 
 
 def write_packs(presets: list[str] | tuple[str, ...], out: str | Path) -> dict:

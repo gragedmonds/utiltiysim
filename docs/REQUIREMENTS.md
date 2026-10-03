@@ -8,8 +8,8 @@ Status: **Done** (M1, tested), **Next** (designed, M2/M3), **Later** (M4).
 |---|---|---|
 | G1 | Same seed + config + generator version reproduce the town byte for byte | Done (`test_byte_identical_regeneration_and_seed_sensitivity`) |
 | G2 | Towns of 20–10,000 homes; 10,000 generate in < 60 s (target 30 s) | Done (~27 s on the reference container) |
-| G3 | OSM-inspired streets: a frozen extract (default Whitby, SHA-verified) or fully synthetic; buildings, customers and assets never claim to be real | Done |
-| G3a | Real places as seeds: `utilsim osm fetch --place …` freezes a place's streets; its preset is sized by the homes those streets hold (Ayr, Elora, Cobourg, wider Whitby) | Done (`test_real_towns.py`) |
+| G3 | Generic streets: every town is synthetic, built from its settings and seed; streets, buildings, customers and assets never claim to be real (until October 2026 a frozen OpenStreetMap extract was the default) | Done (generator 0.10) |
+| G3a | Real places as seeds (OpenStreetMap extracts sized by their streets) | Withdrawn (October 2026): towns are generic presets (`village`, `small_town`, `town`, `large_town`, `city`, `us_town`); old configs naming an extract still load |
 | G4 | Towns larger than the extract grow era-appropriate synthetic districts around it | Done (`expansion: grow`) |
 | G5 | Coherent eras: pre-war grid core, post-war loops, modern cul-de-sac courts, with matching lot sizes | Done |
 | G6 | Houses sit on parcels; buildings carry footprint, height, storeys, roof, rotation for 3D | Done |

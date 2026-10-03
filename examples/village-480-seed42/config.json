@@ -1,0 +1,494 @@
+{
+  "name": "village",
+  "description": "Generic village, 480 homes on a synthetic street grid. The default town.",
+  "seeds": {
+    "master": "TOWN-042",
+    "town": null,
+    "households": null,
+    "weather": null,
+    "incidents": null,
+    "anomalies": null
+  },
+  "town": {
+    "houses": 480,
+    "units": "ontario",
+    "anchor_lat": 43.3,
+    "anchor_lon": -80.6,
+    "timezone": "America/Toronto",
+    "terrain_relief_m": 15.0,
+    "terrain_wavelength_m": 900.0,
+    "arterial_spacing_m": 1400.0,
+    "arterial_warp_m": 130.0,
+    "collector_block_m": 650.0,
+    "era_core_year": 1925,
+    "era_span_years": 85,
+    "era_noise_years": 8.0,
+    "park_share": 0.04,
+    "commercial_strip_m": 700.0,
+    "commercial_share_arterial": 0.45,
+    "commercial_share_collector": 0.15,
+    "commercial_share_local": 0.02,
+    "commercial_cluster_m": 120.0,
+    "industrial_lots": 2,
+    "houses_per_school": 2500,
+    "margin_m": 120.0,
+    "corridor_max_deflection_deg": 35.0,
+    "corridor_name_bonus_deg": 20.0
+  },
+  "housing": {
+    "lot_frontage_m": {
+      "pre_1945": 15.0,
+      "postwar": 18.5,
+      "modern": 16.5
+    },
+    "lot_depth_m": {
+      "pre_1945": 36.0,
+      "postwar": 35.0,
+      "modern": 33.0
+    },
+    "setback_m": {
+      "pre_1945": 6.0,
+      "postwar": 7.5,
+      "modern": 6.5
+    },
+    "two_storey_share": {
+      "pre_1945": 0.7,
+      "postwar": 0.25,
+      "modern": 0.75
+    },
+    "occupancy_rate": 0.955,
+    "rental_share": 0.28,
+    "household_size_weights": [
+      0.28,
+      0.34,
+      0.15,
+      0.15,
+      0.06,
+      0.02
+    ],
+    "solar_rate": {
+      "pre_1945": 0.06,
+      "postwar": 0.1,
+      "modern": 0.18
+    },
+    "pv_kw_min": 4.0,
+    "pv_kw_max": 9.5,
+    "ev_rate": {
+      "pre_1945": 0.05,
+      "postwar": 0.07,
+      "modern": 0.12
+    },
+    "electric_heat_rate": {
+      "pre_1945": 0.1,
+      "postwar": 0.14,
+      "modern": 0.18
+    },
+    "heat_pump_share_of_electric": 0.55,
+    "ac_rate": 0.85,
+    "pool_rate": 0.06,
+    "irrigation_rate": 0.3
+  },
+  "electric": {
+    "primary_kv": 13.8,
+    "secondary_v": 240.0,
+    "kva_per_100m2": 1.0,
+    "kva_ac": 3.5,
+    "kva_electric_heat": 6.0,
+    "kva_heat_pump": 4.0,
+    "kva_ev": 7.2,
+    "kva_pool": 1.5,
+    "coincidence_floor": 0.33,
+    "transformer_kva_steps": [
+      25.0,
+      50.0,
+      75.0,
+      100.0,
+      167.0
+    ],
+    "transformer_max_loading": 1.3,
+    "conductor_planning_margin": 1.25,
+    "max_houses_per_transformer_overhead": 6,
+    "max_houses_per_transformer_underground": 10,
+    "feeder_design_mva": 6.0,
+    "feeder_max_customers": 1200,
+    "min_feeders_per_substation": 2,
+    "substation_mva": 25.0,
+    "route_weight_arterial": 1.0,
+    "route_weight_collector": 1.4,
+    "route_weight_local": 2.0,
+    "route_turn_penalty_m": 60.0,
+    "route_corridor_change_penalty_m": 80.0,
+    "route_hierarchy_penalty_m": 60.0,
+    "trunk_min_load_share": 0.04,
+    "route_shared_trunk_factor": 1.2,
+    "ties_per_feeder_pair": 1,
+    "tie_max_length_m": 1200.0,
+    "section_max_share": 0.15,
+    "section_min_customers": 100,
+    "overhead_before_year": 1978,
+    "pole_spacing_m": 42.0,
+    "voltage_min_pu": 0.95,
+    "voltage_max_pu": 1.05
+  },
+  "gas": {
+    "all_electric_district_share": 0.15,
+    "scheme": "mp_with_lp_core",
+    "transmission_kpa": 3800.0,
+    "mp_kpa": 414.0,
+    "lp_kpa": 1.74,
+    "lp_core_before_year": 1945,
+    "design_m3h_base": 1.15,
+    "design_m3h_per_m2": 0.017,
+    "coincidence_floor": 0.5,
+    "min_main_mm": 50,
+    "valve_spacing_m": 800.0,
+    "calorific_mj_per_m3": 37.5,
+    "base_pressure_kpa": 101.559771,
+    "base_temperature_c": 15.738889
+  },
+  "water": {
+    "lpcd": 220.0,
+    "irrigation_m3_per_day": 0.6,
+    "max_day_factor": 2.0,
+    "peak_hour_factor": 3.0,
+    "fire_flow_residential_lps": 63.0,
+    "fire_flow_commercial_lps": 95.0,
+    "fire_flow_industrial_lps": 190.0,
+    "min_main_mm": 150,
+    "collector_main_mm": 300,
+    "arterial_main_mm": 400,
+    "hw_c_new": 130.0,
+    "hw_c_old": 100.0,
+    "cast_iron_before_year": 1960,
+    "tank_overflow_above_ground_m": 42.0,
+    "zone_band_m": 28.0,
+    "hydrant_spacing_m": 150.0,
+    "hydrant_spacing_commercial_m": 90.0,
+    "valve_spacing_m": 240.0,
+    "pump_units": 3
+  },
+  "ami": {
+    "ami_route_share": 0.6,
+    "amr_route_share": 0.25,
+    "collector_radius_m": 900.0,
+    "poll_start_hour": 1.0,
+    "poll_end_hour": 4.0,
+    "meter_digits_electric": 6,
+    "meter_digits_water": 6,
+    "meter_digits_gas": 5
+  },
+  "weather": {
+    "winter": {
+      "mean_c": -4.5,
+      "sd_c": 6.5,
+      "min_c": -28.0,
+      "max_c": 12.0
+    },
+    "spring": {
+      "mean_c": 9.0,
+      "sd_c": 6.0,
+      "min_c": -8.0,
+      "max_c": 30.0
+    },
+    "summer": {
+      "mean_c": 21.5,
+      "sd_c": 4.0,
+      "min_c": 10.0,
+      "max_c": 37.0
+    },
+    "fall": {
+      "mean_c": 9.5,
+      "sd_c": 6.5,
+      "min_c": -10.0,
+      "max_c": 28.0
+    },
+    "persistence": 0.7,
+    "storm_days_per_year": 28.0,
+    "heating_base_c": 15.0,
+    "cooling_base_c": 22.0
+  },
+  "incidents": {
+    "gas_service_leaks_per_1000": 1.2,
+    "gas_main_leaks_per_100km": 8.0,
+    "water_main_breaks_per_100km": 14.0,
+    "overhead_faults_per_km_storm_day": 0.015,
+    "transformer_failures_per_1000": 3.0,
+    "collector_outages_per_year": 2.0,
+    "manual_only": false
+  },
+  "operations": {
+    "gas_crews": 2,
+    "electric_crews": 3,
+    "water_crews": 2,
+    "meter_techs": 2,
+    "meter_vans": 2,
+    "meter_walkers": 3,
+    "shift_start_hour": 7.0,
+    "shift_end_hour": 15.5,
+    "gas_response_target_min": 60.0,
+    "speed_kmh_arterial": 50.0,
+    "speed_kmh_collector": 40.0,
+    "speed_kmh_local": 30.0
+  },
+  "customers_billing": {
+    "mru_target_meters": 450,
+    "bill_cycles": 21,
+    "currency": "CAD",
+    "tax_rate": 0.13,
+    "electric_fixed_monthly": 36.5,
+    "electric_blocks": [
+      {
+        "up_to": 600.0,
+        "price": 0.098
+      },
+      {
+        "up_to": null,
+        "price": 0.116
+      }
+    ],
+    "electric_variable_delivery": 0.042,
+    "net_metering_credit": 0.098,
+    "gas_fixed_monthly": 26.5,
+    "gas_price_m3": 0.36,
+    "water_fixed_monthly": 18.0,
+    "water_price_m3": 2.15,
+    "wastewater_ratio": 1.05,
+    "on_time_payer_share": 0.82,
+    "late_payer_share": 0.14,
+    "pre_authorized_share": 0.45,
+    "due_days": 20
+  },
+  "process": {
+    "rpa_coverage": 0.35,
+    "analyst_queue_days_min": 1,
+    "analyst_queue_days_max": 3,
+    "carry_rate_per_day": 1.25,
+    "receivable_carry_ratio": 0.4,
+    "analysts": 2,
+    "analyst_hours_per_day": 6.0,
+    "review_minutes_min": 15.0,
+    "review_minutes_max": 30.0,
+    "supervisors": 1,
+    "supervisor_hours_per_day": 2.0,
+    "supervisor_minutes": 40.0,
+    "supervisor_queue_days_min": 1,
+    "supervisor_queue_days_max": 3,
+    "field_orders_per_day": 6,
+    "field_days_min": 1,
+    "analyst_accuracy": 0.95
+  },
+  "anomalies": {
+    "enabled": true,
+    "leak": 8.0,
+    "stuck_meter": 5.0,
+    "slow_meter": 4.0,
+    "transposed_digits": 6.0,
+    "misread": 6.0,
+    "consecutive_estimates": 15.0,
+    "missing_read": 5.0,
+    "exchange_registration_failure": 2.0,
+    "vacant_consuming": 3.0,
+    "tamper": 1.0,
+    "amr_factor": 1.0,
+    "manual_factor": 1.0
+  },
+  "scenario": {
+    "name": "normal",
+    "date": "2026-07-15",
+    "hour": 8.0,
+    "target_premise": null,
+    "leak_m3h": 0.65
+  },
+  "reading": {
+    "ami_missed_read": 0.012,
+    "amr_missed_read": 0.03,
+    "manual_no_access": 0.06,
+    "no_access_repeat": 0.4,
+    "read_cost_ami": 0.1,
+    "read_cost_amr": 0.35,
+    "read_cost_manual": 1.2
+  },
+  "vee": {
+    "high_ratio": 2.0,
+    "low_ratio": 0.35,
+    "zero_at_occupied": true,
+    "max_consecutive_estimates": 2,
+    "min_period_days": 25,
+    "max_period_days": 38,
+    "accept_confidence": 0.75,
+    "reject_confidence": 0.35,
+    "escalate_impact": 150.0,
+    "trend_ratio": 0.8,
+    "trend_periods": 3,
+    "oms_events": true,
+    "estimation": "prior_year",
+    "history_noise": 0.1
+  },
+  "billing": {
+    "rate_change_date": "2026-11-01",
+    "rate_change_pct": 3.5,
+    "high_bill_ratio": 2.5,
+    "high_bill_min": 150.0,
+    "first_bill_limit": 600.0,
+    "credit_review": 75.0,
+    "outsort_auto_release_max": 500.0,
+    "billing_queue_worked_by": "analysts",
+    "trueup_max_ratio": 3.0,
+    "data_error_rate": 3.0,
+    "print_lag_days": 1,
+    "pad_reject_rate": 0.015,
+    "nsf_fee": 20.0,
+    "late_fee_pct": 1.5,
+    "reminder_days": 7,
+    "notice_days": 21,
+    "disconnect_days": 45,
+    "winter_moratorium": true,
+    "moratorium_start": "11-15",
+    "moratorium_end": "04-30",
+    "disconnect_notice_days": 10,
+    "disconnect_payment_rate": 0.6,
+    "arrangement_break_rate": 0.3,
+    "low_income_referral_rate": 0.15,
+    "low_income_review_days": 10,
+    "low_income_approval_rate": 0.7,
+    "low_income_grant_max": 500.0,
+    "budget_billing_offer_rate": 0.08
+  },
+  "contact": {
+    "agents": 1,
+    "open_hour": 8.0,
+    "close_hour": 17.0,
+    "patience_s": 240.0,
+    "retry_share": 0.6,
+    "repeat_share": 0.5,
+    "callback": true,
+    "callback_after_s": 300.0,
+    "callback_take_share": 0.5,
+    "service_target_s": 30.0,
+    "volume_factor": 1.0,
+    "handle_factor": 1.0,
+    "self_serve_factor": 1.0,
+    "agent_cost_per_hour": 38.0,
+    "self_serve_cost": 0.4,
+    "abandon_cx_cost": 6.0,
+    "emergency_answer_s": 15.0,
+    "high_bill": {
+      "per_event": 0.25,
+      "per_1000": 2.0,
+      "self_serve": 0.1,
+      "handle_min": 7.5,
+      "resolved": 0.85
+    },
+    "bill_question": {
+      "per_event": 0.008,
+      "per_1000": 1.5,
+      "self_serve": 0.2,
+      "handle_min": 6.0,
+      "resolved": 0.9
+    },
+    "bill_wrong": {
+      "per_event": 0.35,
+      "per_1000": 0.3,
+      "self_serve": 0.0,
+      "handle_min": 11.0,
+      "resolved": 0.6
+    },
+    "back_bill": {
+      "per_event": 0.45,
+      "per_1000": 0.0,
+      "self_serve": 0.0,
+      "handle_min": 12.0,
+      "resolved": 0.7
+    },
+    "balance": {
+      "per_event": 0.03,
+      "per_1000": 4.0,
+      "self_serve": 0.75,
+      "handle_min": 3.0,
+      "resolved": 0.98
+    },
+    "payment_arrangement": {
+      "per_event": 0.12,
+      "per_1000": 0.5,
+      "self_serve": 0.1,
+      "handle_min": 9.0,
+      "resolved": 0.8
+    },
+    "payment_problem": {
+      "per_event": 0.4,
+      "per_1000": 0.4,
+      "self_serve": 0.3,
+      "handle_min": 6.0,
+      "resolved": 0.85
+    },
+    "password": {
+      "per_event": 0.01,
+      "per_1000": 3.0,
+      "self_serve": 0.6,
+      "handle_min": 4.0,
+      "resolved": 0.95
+    },
+    "move_in": {
+      "per_event": 0.85,
+      "per_1000": 0.0,
+      "self_serve": 0.3,
+      "handle_min": 10.0,
+      "resolved": 0.95
+    },
+    "move_out": {
+      "per_event": 0.85,
+      "per_1000": 0.0,
+      "self_serve": 0.3,
+      "handle_min": 8.0,
+      "resolved": 0.95
+    },
+    "new_connection": {
+      "per_event": 0.0,
+      "per_1000": 0.4,
+      "self_serve": 0.1,
+      "handle_min": 14.0,
+      "resolved": 0.7
+    },
+    "outage": {
+      "per_event": 0.18,
+      "per_1000": 0.2,
+      "self_serve": 0.65,
+      "handle_min": 3.5,
+      "resolved": 0.9
+    },
+    "gas_odour": {
+      "per_event": 0.06,
+      "per_1000": 0.15,
+      "self_serve": 0.0,
+      "handle_min": 4.0,
+      "resolved": 1.0
+    },
+    "meter_access": {
+      "per_event": 0.08,
+      "per_1000": 0.3,
+      "self_serve": 0.2,
+      "handle_min": 6.0,
+      "resolved": 0.85
+    },
+    "disconnection": {
+      "per_event": 0.8,
+      "per_1000": 0.0,
+      "self_serve": 0.0,
+      "handle_min": 9.0,
+      "resolved": 0.85
+    },
+    "complaint": {
+      "per_event": 0.5,
+      "per_1000": 0.2,
+      "self_serve": 0.0,
+      "handle_min": 14.0,
+      "resolved": 0.6
+    }
+  },
+  "outages": {
+    "enabled": true,
+    "storm_factor": 1.0,
+    "incident_factor": 1.0,
+    "restore_factor": 1.0
+  }
+}

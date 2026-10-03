@@ -693,8 +693,8 @@ class Run:
                         if after is not None:
                             tries.append((len(after), k, sw, d, c, after))
             for _, k, sw, d, c, after in sorted(tries, key=lambda o: (o[0], o[1], -1 if o[2] is None else o[2])):
-                loading, low = self._backfeed_check(d, c, at, repaired, (dis, cl))
-                if loading <= limit and low >= floor:
+                loading, low, judged = self._backfeed_check(d, c, at, repaired, (dis, cl))
+                if loading <= limit and judged >= floor:
                     return k, sw, after, loading, low
                 if sw is None:
                     declined.setdefault(k, {"tieEdgeId": net.edge_ids[k], "maxLoading": round(loading, 3),
@@ -746,26 +746,36 @@ class Run:
         return round(q, 1)
 
     def _backfeed_check(self, dis: np.ndarray, cl: np.ndarray, start: float, end: float,
-                        base: tuple[np.ndarray, np.ndarray] | None = None) -> tuple[float, float]:
-        """Worst primary loading and lowest service voltage with a tie closed, hourly across the back-feed window.
-        Against ``base`` (the switching before the tie), only what the tie changes counts: edges it loads more and
-        premises it supplies or lowers, so a line already over its rating or a street already low elsewhere does
-        not decline it."""
+                        base: tuple[np.ndarray, np.ndarray] | None = None) -> tuple[float, float, float]:
+        """Worst primary loading, lowest service voltage and the voltage the floor judges, with a tie closed, hourly
+        across the back-feed window. Against ``base`` (the switching before the tie), only what the tie changes
+        counts: edges it loads more and premises it supplies or lowers, so a line already over its rating or a
+        street already low elsewhere does not decline it.
+
+        A premise already below Range A in normal operation (its own transformer or service is long or loaded) is
+        judged by what the back-feed takes from it: its voltage is raised by its normal shortfall before the floor
+        applies, so one weak service does not keep hundreds of neighbours dark. Everyone else must reach the floor."""
         net = self.ops.nets["electric"]
         primary = np.array([kd not in ("service", "transformer", "supply") for kd in net.kind])
-        worst, low = 0.0, math.inf
+        range_a = float(self.settings["tieMinVoltage"]) + EMERGENCY_MARGIN_V
+        normal = (np.zeros(len(net.a), dtype=bool), np.zeros(len(net.a), dtype=bool))
+        worst, low, judged = 0.0, math.inf, math.inf
         for t in np.arange(start, end, 3600.0).tolist() + [end]:
             v = self._voltage(t, dis, cl)
             if v is None:
-                return 0.0, math.inf
+                return 0.0, math.inf, math.inf
             more, lower = primary, np.ones(len(v.premise_v), dtype=bool)
             v0 = self._voltage(t, *base) if base is not None else None
             if v0 is not None:
                 more = primary & (np.nan_to_num(v.loading) > np.nan_to_num(v0.loading) + 1e-3)
                 lower = (np.isnan(v0.premise_v) & ~np.isnan(v.premise_v)) | (v.premise_v < v0.premise_v - 0.05)
+            vn = self._voltage(t, *normal)
+            short = np.zeros(len(v.premise_v)) if vn is None else np.clip(range_a - np.nan_to_num(vn.premise_v,
+                                                                                                   nan=range_a), 0, None)
             worst = max(worst, float(np.nanmax(np.where(more, v.loading, np.nan), initial=0.0)))
             low = min(low, float(np.nanmin(np.where(lower, v.premise_v, np.nan), initial=math.inf)))
-        return worst, low
+            judged = min(judged, float(np.nanmin(np.where(lower, v.premise_v + short, np.nan), initial=math.inf)))
+        return worst, low, judged
 
     def _voltage(self, t: float, dis: np.ndarray, cl: np.ndarray):
         """The electric power flow at ``t`` with this switching (cached for the run)."""

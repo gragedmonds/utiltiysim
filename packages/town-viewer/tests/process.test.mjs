@@ -93,9 +93,9 @@ test('the sequence mix gives share, cost per case, days to release and the human
 });
 
 test('the graph request carries the month with the run body on its own channel',async()=>{
- const log=[],store=new Map(),m=new EngineM2C({api:'/api',townRef:'ayr',storage:{getItem:k=>store.get(k)??null,setItem:(k,v)=>store.set(k,v)},fetchImpl:async(url,o)=>{log.push({url,body:JSON.parse(o.body)});return {ok:true,json:async()=>({schemaVersion:'process-graph/1.0',nodes:[],edges:[]})};}});
+ const log=[],store=new Map(),m=new EngineM2C({api:'/api',townRef:'small_town',storage:{getItem:k=>store.get(k)??null,setItem:(k,v)=>store.set(k,v)},fetchImpl:async(url,o)=>{log.push({url,body:JSON.parse(o.body)});return {ok:true,json:async()=>({schemaVersion:'process-graph/1.0',nodes:[],edges:[]})};}});
  m.setAsOf('2026-04-30');await m.graph(3);await m.graph(3);await m.graph(4);
- assert.deepEqual(log.map(x=>[x.url,x.body.month,x.body.asOf,x.body.town]),[['/api/process/graph',3,'2026-04-30','ayr'],['/api/process/graph',4,'2026-04-30','ayr']]);
+ assert.deepEqual(log.map(x=>[x.url,x.body.month,x.body.asOf,x.body.town]),[['/api/process/graph',3,'2026-04-30','small_town'],['/api/process/graph',4,'2026-04-30','small_town']]);
  assert.equal(m.tickets.graph,2);
 });
 

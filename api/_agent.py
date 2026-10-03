@@ -116,8 +116,8 @@ Use inspect_configuration BEFORE changing settings; it supplies all current vari
 status and descriptions in selected groups. Use x-reach and x-impact to explain which results each setting
 actually affects; do not present map-only or display settings as direct Year levers. The index below covers every group. Preserve the current draft's
 settings unless the user asks to change them. Proposals replace the setup; they are not partial patches.
-townOverrides holds generation groups only. Never change town.osm_source or town.osm_sha256; choose a supplied
-preset or synthetic skeleton. settings holds year-round M2C overrides from the run schema, including contact and outages.
+townOverrides holds generation groups only. Choose a supplied generic preset; every town is generated from
+its settings and seed, without real-place street sources. settings holds year-round M2C overrides from the run schema, including contact and outages.
 operations holds GROUPED map-day settings exactly as inspected. Dated M2C changes belong in episodes, with
 inclusive 2026 dates and optional ramps. An episode may use *k, +k, -k operators on the preceding value.
 Respect bounds and cross-field dependencies, including combined shares <=1, ordered min/max and shift end > start.

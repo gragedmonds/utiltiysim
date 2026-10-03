@@ -16,7 +16,7 @@ from api.index import app
 
 def proposal(**changes):
     return {"name": "Billing recovery", "purpose": "Clear the backlog", "region": "Ontario",
-            "preset": "whitby_small", "asOf": "2026-05-28", "summary": "A billing disruption followed by recovery.",
+            "preset": "village", "asOf": "2026-05-28", "summary": "A billing disruption followed by recovery.",
             "settings": {"process": {"analysts": 3}}, "operations": {"crews": {"fieldCrews": 3}},
             "episodes": [{"title": "Less automation", "from": "2026-04-01", "to": "2026-04-30",
                           "settings": {"process": {"rpa_coverage": 0}}}], **changes}
@@ -44,7 +44,7 @@ def test_missing_key_is_explicit_and_manual_validation_still_works():
         assert p["opsSettings"]["fieldCrews"] == 3
         assert p["settings"]["process"]["analysts"] == 3
         assert p["episodes"][0]["id"] == "EP-1"
-        assert p["townRef"] == "whitby_small"
+        assert p["townRef"] == "village"
         assert any("Ontario" in x for x in p["limitations"])
         assert any(x["path"] == "process.analysts" for x in p["changes"])
 
@@ -73,9 +73,9 @@ def test_invalid_or_unsupported_proposals_never_apply(patch):
 
 def test_town_changes_produce_reconstructable_reference_and_known_schema():
     p = validate_proposal(Proposal(**proposal(townOverrides={"town": {"houses": 240}})))
-    assert p["townRef"].startswith("whitby_small~")
+    assert p["townRef"].startswith("village~")
     assert config_from_ref(p["townRef"]).town.houses == 240
-    info = inspect_configuration("run", ["reading", "process"], "whitby_small")
+    info = inspect_configuration("run", ["reading", "process"], "village")
     assert "description" in info["schema"]["properties"]["reading"]["properties"]["ami_missed_read"]
     assert info["defaults"]["process"]["analysts"] >= 0
 
@@ -89,13 +89,13 @@ def test_probe_then_validated_proposal_with_only_public_context(monkeypatch):
         assert key == "test-server-key"
         seen.append(json.loads(json.dumps(payload)))
         if len(seen) == 1:
-            return tool("inspect_configuration", {"scope": "run", "groups": ["process"], "preset": "whitby_small"})
+            return tool("inspect_configuration", {"scope": "run", "groups": ["process"], "preset": "village"})
         return tool("respond", {"message": "Here is a recovery setup to review.", "proposal": proposal()})
 
     monkeypatch.setattr(agent, "anthropic_message", fake)
     with TestClient(app) as c:
         r = c.post("/api/setup-agent/chat", json={"messages": [{"role": "user", "content": "Half our team is away."}],
-                                                "draft": {"preset": "whitby_small", "secret": "never-forward-me"}})
+                                                "draft": {"preset": "village", "secret": "never-forward-me"}})
     assert r.status_code == 200, r.text
     assert r.json()["proposal"]["episodes"][0]["id"] == "EP-1"
     assert len(seen) == 2 and seen[0]["model"] == "chosen-model"
@@ -171,7 +171,7 @@ def test_client_cannot_submit_system_messages_or_unbounded_conversations():
 
 
 def run_context(**changes):
-    return {"townRef": "whitby_small", "settings": {"process": {"analysts": 4}},
+    return {"townRef": "village", "settings": {"process": {"analysts": 4}},
             "episodes": [], "asOf": "2026-03-31", "startDate": "2026-04-01", **changes}
 
 
@@ -236,7 +236,7 @@ def test_voice_tweak_provider_uses_live_base_and_separate_additions_schema(monke
     async def fake(payload, key):
         seen.append(json.loads(json.dumps(payload)))
         if len(seen) == 1:
-            return tool("inspect_configuration", {"scope": "run", "groups": ["process"], "preset": "whitby_small"})
+            return tool("inspect_configuration", {"scope": "run", "groups": ["process"], "preset": "village"})
         return tool("respond", {"message": "Review these temporary changes.", "proposal": tweak()})
 
     monkeypatch.setattr(agent, "anthropic_message", fake)
@@ -302,7 +302,7 @@ def test_invalid_tweak_tool_arguments_return_repair_feedback(monkeypatch):
 
 
 def test_voice_tweaks_inspect_and_validate_live_contact_and_annual_outage_settings():
-    info = inspect_configuration('run', ['contact', 'outages'], 'whitby_small')
+    info = inspect_configuration('run', ['contact', 'outages'], 'village')
     assert 'agents' in info['schema']['properties']['contact']['properties']
     assert 'storm_factor' in info['schema']['properties']['outages']['properties']
     p = tweak(episodes=[{'title': 'Storm pressure with another agent', 'from': '2026-06-01', 'to': '2026-08-31',

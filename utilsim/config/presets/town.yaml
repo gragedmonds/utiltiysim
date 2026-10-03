@@ -1,0 +1,4 @@
+name: town
+description: Generic town, 3,300 homes on a synthetic street grid.
+town:
+  houses: 3300

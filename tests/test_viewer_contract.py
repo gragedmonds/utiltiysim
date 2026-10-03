@@ -18,10 +18,10 @@ def test_revisions_identical_across_profiles_and_regeneration(town120):
 
     a = build_snapshot(town120)
     b = build_snapshot(town120, detail="viewer")
-    c = build_snapshot(generate(load_preset("whitby_small", seed="T120", houses=120)))
+    c = build_snapshot(generate(load_preset("village", seed="T120", houses=120)))
     assert a["topologyRevision"] == b["topologyRevision"] == c["topologyRevision"]
     assert a["indexRevision"] == b["indexRevision"] == c["indexRevision"]
-    d = build_snapshot(generate(load_preset("whitby_small", seed="T121", houses=120)))
+    d = build_snapshot(generate(load_preset("village", seed="T121", houses=120)))
     assert d["topologyRevision"] != a["topologyRevision"]
 
 

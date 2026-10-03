@@ -34,7 +34,7 @@ not). The rules in §4 apply to every PR.
 
 **Engine** (`utilsim/`, Python 3.11, numpy, pydantic, FastAPI; generator `0.9.1`, snapshot `utility-town/2.0`):
 
-- Town generation from street extracts (Whitby, Ayr, Elora, Cobourg) or a synthetic skeleton: parcels, buildings,
+- Generic town generation from settings and a seed (synthetic streets, no real places): parcels, buildings,
   households, electric, gas and water networks, customers, meters, registers, installations, tariffs, reading routes.
 - The operations day (incidents, crews, outages, hydraulics, power flow) and a full meter-to-cash year: reads, VEE,
   work queues, billing documents, invoices, payments, dunning and collections, deterministic from seed and settings.
@@ -58,10 +58,10 @@ prebuilt packs and generates towns up to 6,000 houses. Limits that shape everyth
 
 | Town | Homes | Accounts | Registers | Generate | Replay the year |
 |---|---|---|---|---|---|
-| Whitby extract | 480 | 654 | 1,750 | 5 s | 2 s |
-| Ayr | 1,861 | 2,341 | 6,363 | 9 s | 6 s |
-| Elora | 3,271 | 4,252 | 10,783 | 17 s | 10 s |
-| Cobourg | 5,500 | 6,993 | 18,378 | 26 s | 15 s, about 110 MB, 210,091 documents |
+| `village` | 480 | 635 | 1,698 | 3 s | 2 s |
+| `small_town` | 1,900 | 2,368 | 6,350 | 9 s | 6 s |
+| `town` | 3,300 | 3,969 | 10,071 | 14 s | 11 s |
+| `large_town` | 5,500 | 6,598 | 16,416 | 23 s | 15 s, about 260 MB, 187,767 documents |
 
 A 100,000-account utility is planned as 10 to 40 towns replayed in a process pool. Archive sizing has been measured
 separately from these replay benchmarks: 654 accounts and 1,832 registers for a full 2026 archive occupy 3.61 MB
@@ -263,7 +263,7 @@ manifest appear in the portal; details are uploaded on request; a crashed worker
   run key and byte-identical archive files.
 - `POST /api/runs/{key}/details` with a file name makes the worker upload that one file from its archive through a
   signed URL; the portal serves it through a signed download URL; nothing is recomputed.
-- Aggregates for a Cobourg-sized town are under 200 KB; a detail upload of the largest table stays under the blob
+- Aggregates for a 5,500-home town are under 200 KB; a detail upload of the largest table stays under the blob
   provider's single-object limit (chunk if it does not).
 - The Studio's Runs page (milestone 5 widens it) lists jobs with status and progress and opens a completed run's
   aggregates in the existing Year page.
@@ -289,7 +289,7 @@ request: `{runKey, file}`; response `{url, expiresAt}`.
 
 **Tests.** `tests/test_portal_jobs.py` (claim exclusivity, lease expiry and requeue, run-key dedupe, progress,
 complete validation, scoping), `tests/test_worker_loop.py` (the loop against the in-process control plane and a local
-blob folder: a whole job for whitby_small, a kill between towns, detail upload), size assertions on aggregates.
+blob folder: a whole job for village, a kill between towns, detail upload), size assertions on aggregates.
 
 **Out of scope.** Comparisons, the Utility board, campaigns.
 
@@ -338,8 +338,8 @@ copy export/import. An interrupted download or import must not appear as a compl
 
 ### Milestone 6: data first: the utility spec, structure synthesis, layout, roll-ups
 
-**Goal.** A utility of towns is specified in a few dozen lines, generated deterministically on the worker without
-OpenStreetMap, replayed as one run with roll-ups per region and utility, and shown on the Utility board; one of its
+**Goal.** A utility of towns is specified in a few dozen lines, generated deterministically on the worker, replayed
+as one run with roll-ups per region and utility, and shown on the Utility board; one of its
 towns opens in the Studio with a planar road map.
 
 **Done when** (these are DATA_FIRST.md's guidelines as tests)
@@ -358,14 +358,11 @@ towns opens in the Studio with a planar road map.
   town; the Utility board shows them; the Year page's trend for the utility is the sum across towns.
 - Episodes carry a `scope` (`utility | region | town | district | street`); a region-scoped episode applies the
   region's rules (moratorium window, fees); technology blends come from the spec per district and street.
-- OpenStreetMap is gone: `utilsim/gen/roads/fetch.py` (geocoding and Overpass), `utilsim/gen/roads/osm.py` (the OSM
-  skeleton), the `utilsim osm fetch|add|list` commands and `data/osm/` (the committed extracts) are deleted. The seven
-  presets on the OSM skeleton (`ayr`, `cobourg`, `elora`, `whitby_small`, `whitby_town`, `whitby_large`,
-  `whitby_wide`) are each replaced by a utility spec of the same size (`specs/ayr.yaml` and so on: premises, the
-  AMI/AMR/manual mix and services within 5 percent). No module imports an OSM name (`rg -i "osm|overpass" utilsim
-  api` finds nothing), `roads.skeleton` defaults to `synthetic` and `roads.osm_source` goes; old configs that name
-  them still load (the `REMOVED` shim in `utilsim/config/impact.py`, the skeleton falling back to synthetic).
-- Town packs (`packs/`, about 26 MB committed and copied into the site by `scripts/build_site.mjs`) are rebuilt from
+- Towns are already generic (done October 3, 2026, before this milestone): the OpenStreetMap fetcher, the committed
+  street extracts and the real-place presets are gone, and every town comes from its settings and seed on the
+  synthetic skeleton. Specs build on the generic presets (`village`, `small_town`, `town`, `large_town`, `city`,
+  `us_town`); keep it that way (no module may fetch or read a real place's data).
+- Town packs (`packs/`, about 24 MB committed and copied into the site by `scripts/build_site.mjs`) are rebuilt from
   the specs, and retired once the hosted Studio no longer needs them: either the worker (milestone 4) serves
   generated towns and archives, or the site build generates the packs from the specs instead of committing them.
   Until one of those exists the packs stay: they are the cache that lets the hosted engine open a 10,000-home town
@@ -380,8 +377,7 @@ terrain and the operations day unchanged), `utilsim/utility.py` (the Utility obj
 runs, roll-ups), `utilsim/m2c/rollup.py` (trend summed, KPIs added, tables concatenated with a `town` column,
 worklists merged with top-N per town), episode scopes in `utilsim/m2c/run.py` (through the per-premise indexes the
 engine already keeps for technology), the `gen-utility` CLI, `GET /api/utility/{id}` on the local API, and the
-worker's `generate` job kind. Synthetic becomes the only base: once the spec-built towns pass the suites above,
-remove the OpenStreetMap path in the same milestone (decided October 3, 2026: the spec replaces the extracts).
+worker's `generate` job kind. The synthetic skeleton is already the only base; `layout.py` extends it from the spec.
 
 **Contracts.** `utility-spec/1.0` (DATA_FIRST.md "The shape"); `run-aggregates/1.0` gains `levels: {utility,
 regions: [...], towns: [...]}`; `episode` gains `scope`.
@@ -436,7 +432,7 @@ day) unless a utility above 50,000 accounts makes replay-from-start too slow at 
 
 **Branches and PRs.** One branch per milestone (or per coherent part of one), a PR against `main`, CI green (the
 `engine` and `viewer` jobs in `.github/workflows/ci.yml`: `uv run ruff check .`, `uv run pytest -m "not slow"`,
-`npm test` in `packages/town-viewer`, `node scripts/viewer_conformance.mjs examples/whitby-480-seed42`), a Vercel
+`npm test` in `packages/town-viewer`, `node scripts/viewer_conformance.mjs examples/village-480-seed42`), a Vercel
 preview opened on a desktop and a phone, then a merge commit. The PR body says what changed, how it was verified, and
 what is out of scope. Do not modify `prototypes/town-lab` (the original prototype, kept as a reference).
 
@@ -470,7 +466,7 @@ uv run ruff check . && uv run pytest -m "not slow"          # engine and API
 npm test --prefix packages/town-viewer                      # Studio
 uv run utilsim serve --port 8010                            # local engine and API
 node web/serve.mjs                                          # Studio at http://localhost:5175 (?engine=http://127.0.0.1:8010)
-uv run utilsim export-run --town ayr --as-of 2026-12-31 --store out/store   # a saved run for runs.html
+uv run utilsim export-run --town small_town --as-of 2026-12-31 --store out/store   # a saved run for runs.html
 ```
 
 ## 5. Decisions to make in the first week (with recommendations)
@@ -496,7 +492,7 @@ stays the single reference.
   RUN_BUNDLES.md; if it passes 300 MB, drop matplotlib and pyarrow from the worker's dependency set.
 - **Launcher trust prompts.** Unsigned binaries trigger Gatekeeper and SmartScreen; budget for signing accounts in
   milestone 3's release checklist.
-- **Memory on big utilities.** Cobourg's year is about 110 MB; forty such towns in a pool of 4 is fine, a pool of 40
+- **Memory on big utilities.** A 5,500-home town's year is about 260 MB (600 MB for the process with its town); forty such towns in a pool of 4 is fine, a pool of 40
   is not. Size the pool by memory, not only cores (`capabilities.memoryGB`).
 - **Year chaining touches the engine's arrays.** Milestone 7 generalises constants used everywhere in `utilsim/m2c/`;
   land the calendar parameter first, with the full suite green at `year=2026`, before adding the opening state.

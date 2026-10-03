@@ -1,0 +1,4 @@
+name: large_town
+description: Generic large town, 5,500 homes on a synthetic street grid.
+town:
+  houses: 5500

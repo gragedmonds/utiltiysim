@@ -22,9 +22,9 @@ ONLY = {"waterMainBreaksPer100km": 0, "gasMainLeaksPer100km": 0, "gasServiceLeak
 
 
 @pytest.fixture(scope="module")
-def ayr() -> OpsTown:
+def small_town() -> OpsTown:
     index = orjson.loads((ROOT / "packs" / "index.json").read_bytes())
-    entry = next(t for t in index["towns"] if t["preset"] == "ayr")
+    entry = next(t for t in index["towns"] if t["preset"] == "small_town")
     return OpsTown(orjson.loads(gzip.decompress((ROOT / "packs" / entry["files"]["snapshot"]["path"]).read_bytes())))
 
 
@@ -36,8 +36,8 @@ def year(ops: OpsTown, settings: dict, seed: str) -> list[tuple[date, list[dict]
     return out
 
 
-def test_run_settings_default_to_the_towns_config(ayr):
-    cfg, d = ayr.sim_config, ayr.run_defaults
+def test_run_settings_default_to_the_towns_config(small_town):
+    cfg, d = small_town.sim_config, small_town.run_defaults
     o = cfg.operations
     assert (d["electricCrews"], d["waterCrews"], d["gasCrews"], d["meterTechs"]) == \
         (o.electric_crews, o.water_crews, o.gas_crews, o.meter_techs)
@@ -53,7 +53,7 @@ def test_run_settings_default_to_the_towns_config(ayr):
     assert run_defaults(manual)["randomIncidents"] is False
     assert set(TOWN_SETTINGS) <= set(DEFAULTS)
     # Crew pools follow the run's settings; readers share the routes in turn.
-    run = Run(ayr, [], settings={"electricCrews": 5, "gasCrews": 1, "randomIncidents": False})
+    run = Run(small_town, [], settings={"electricCrews": 5, "gasCrews": 1, "randomIncidents": False})
     assert len(run.crews["electric"]) == 5 and len(run.crews["gas"]) == 1
 
 
@@ -61,7 +61,7 @@ def test_settings_schema_takes_its_defaults_from_the_town():
     from api.index import app
 
     client = TestClient(app)
-    body = client.get("/api/sim/settings/schema", params={"town": "ayr"}).json()
+    body = client.get("/api/sim/settings/schema", params={"town": "small_town"}).json()
     crews = body["schema"]["properties"]["crews"]["properties"]
     assert crews["electricCrews"]["x-town"] == "operations.electric_crews"
     assert crews["electricCrews"]["default"] == body["defaults"]["electricCrews"]
@@ -69,41 +69,41 @@ def test_settings_schema_takes_its_defaults_from_the_town():
     assert inc["randomIncidents"]["type"] == "boolean" and inc["randomIncidents"]["default"] is True
     assert inc["stormDaysPerYear"]["x-town"] == "weather.storm_days_per_year"
     assert body["schema"]["properties"]["backfeed"]["properties"]["tieMinVoltage"]["x-town"] == "electric.voltage_min_pu"
-    assert client.get("/api/sim/settings", params={"town": "ayr"}).json() == body["defaults"]
+    assert client.get("/api/sim/settings", params={"town": "small_town"}).json() == body["defaults"]
     assert client.get("/api/sim/settings/schema").json()["defaults"] == DEFAULTS  # no town: config defaults
     # The run seed (top level, or the linked meter-to-cash run's) re-rolls the day's background incidents.
-    plain = client.post("/api/sim/timeline", json={"town": "ayr"}).json()
-    seeded = client.post("/api/sim/timeline", json={"town": "ayr", "seed": "RUN-1"}).json()
-    linked = client.post("/api/sim/timeline", json={"town": "ayr", "m2c": {"seed": "RUN-1"}}).json()
+    plain = client.post("/api/sim/timeline", json={"town": "small_town"}).json()
+    seeded = client.post("/api/sim/timeline", json={"town": "small_town", "seed": "RUN-1"}).json()
+    linked = client.post("/api/sim/timeline", json={"town": "small_town", "m2c": {"seed": "RUN-1"}}).json()
     assert plain["seed"] is None and seeded["seed"] == linked["seed"] == "RUN-1"
     assert seeded["simulationId"] == linked["simulationId"] != plain["simulationId"]
     assert seeded["background"] == linked["background"] and "meterToCash" in linked
 
 
-def test_background_incidents_are_rare_seeded_and_scale_with_the_town(ayr):
-    s, seed = ayr.run_defaults, ayr.sim_config.seeds.for_("incidents")
-    days = year(ayr, s, seed)
+def test_background_incidents_are_rare_seeded_and_scale_with_the_town(small_town):
+    s, seed = small_town.run_defaults, small_town.sim_config.seeds.for_("incidents")
+    days = year(small_town, s, seed)
     n = sum(len(items) for _, items in days)
     quiet = sum(1 for _, items in days if not items)
-    assert 3 <= n <= 30 and quiet > 0.9 * len(days)  # Ayr expects about 14 a year: most days are quiet
-    assert days == year(ayr, s, seed)  # deterministic per (town seed, day)
-    other = year(ayr, s, seed + "|RUN-2")
+    assert 3 <= n <= 30 and quiet > 0.9 * len(days)  # the small town expects about 14 a year: most days are quiet
+    assert days == year(small_town, s, seed)  # deterministic per (town seed, day)
+    other = year(small_town, s, seed + "|RUN-2")
     assert [b["at"] for _, items in other for b in items] != [b["at"] for _, items in days for b in items]
-    assert sum(len(i) for _, i in year(ayr, {**s, **ONLY}, seed)) == 0
+    assert sum(len(i) for _, i in year(small_town, {**s, **ONLY}, seed)) == 0
     # Storm days follow the season; the year's expected count is the setting.
     p = [storm_probability(date(2026, 1, 1) + timedelta(days=k), 28.0) for k in range(365)]
     assert sum(p) == pytest.approx(28.0) and p[195] > 20 * p[15]
-    _, info = draw(ayr, date(2026, 7, 15), s, seed)
+    _, info = draw(small_town, date(2026, 7, 15), s, seed)
     ex = info["exposure"]
-    assert ex["transformers"] == sum(1 for k in ayr.nets["electric"].kind if k == "transformer")
+    assert ex["transformers"] == sum(1 for k in small_town.nets["electric"].kind if k == "transformer")
     assert info["expected"]["water_main_break"] == pytest.approx(
         s["waterMainBreaksPer100km"] / 100 * (ex["waterMainKm"] + ex["castIronWaterMainKm"]) / 365, rel=1e-3)
 
 
-def test_a_background_incident_is_worked_like_a_break(ayr):
-    s, seed = ayr.run_defaults, ayr.sim_config.seeds.for_("incidents")
-    day = next(d for d, items in year(ayr, s, seed) if any(b["kind"] == "water_main_break" for b in items))
-    tl = Run(ayr, [], day=day.isoformat()).timeline()
+def test_a_background_incident_is_worked_like_a_break(small_town):
+    s, seed = small_town.run_defaults, small_town.sim_config.seeds.for_("incidents")
+    day = next(d for d, items in year(small_town, s, seed) if any(b["kind"] == "water_main_break" for b in items))
+    tl = Run(small_town, [], day=day.isoformat()).timeline()
     inc = next(i for i in tl["incidents"] if i["kind"] == "water_main_break")
     assert inc["source"] == "background" and inc["id"].startswith("INC-BG-") and inc["commandId"] is None
     assert tl["background"]["enabled"] and inc["id"] in tl["background"]["incidentIds"]
@@ -112,44 +112,44 @@ def test_a_background_incident_is_worked_like_a_break(ayr):
     assert job["crewId"].startswith("WATER") and tl["commands"] == []
     kinds = [e["eventType"] for e in tl["events"] if e["correlationId"] == inc["id"]]
     assert kinds[:3] == ["asset.damaged", "leak.started", "incident.detected"] and "service.restored" in kinds
-    assert Run(ayr, [], day=day.isoformat(), settings={"randomIncidents": False}).timeline()["incidents"] == []
+    assert Run(small_town, [], day=day.isoformat(), settings={"randomIncidents": False}).timeline()["incidents"] == []
     # A user's incident keeps its own numbering next to background ones.
-    net = ayr.nets["electric"]
+    net = small_town.nets["electric"]
     pole = next(q for q in net.equipment if q["kind"] == "pole")
     cmd = {"id": "C", "at": 1.0, "type": "break_asset", "payload": {"id": pole["id"], "kind": "pole",
                                                                   "utility": "electric", "edgeId": pole["edgeId"]}}
-    mixed = Run(ayr, [cmd], day=day.isoformat()).timeline()
+    mixed = Run(small_town, [cmd], day=day.isoformat()).timeline()
     assert {i["id"] for i in mixed["incidents"]} == {"INC-1", *tl["background"]["incidentIds"]}
     assert next(i for i in mixed["incidents"] if i["id"] == "INC-1")["source"] == "user"
 
 
-def test_transformer_failures_and_service_leaks_stay_local(ayr):
+def test_transformer_failures_and_service_leaks_stay_local(small_town):
     over = {**ONLY, "transformerFailuresPer1000": 100, "gasServiceLeaksPer1000": 50}
-    days = year(ayr, {**ayr.run_defaults, **over}, ayr.sim_config.seeds.for_("incidents"))
+    days = year(small_town, {**small_town.run_defaults, **over}, small_town.sim_config.seeds.for_("incidents"))
     tx_day = next(d for d, items in days if any(b["kind"] == "transformer_failure" for b in items))
-    tl = Run(ayr, [], day=tx_day.isoformat(), settings=over).timeline()
+    tl = Run(small_town, [], day=tx_day.isoformat(), settings=over).timeline()
     inc = next(i for i in tl["incidents"] if i["kind"] == "transformer_failure")
     assert inc["device"]["kind"] == "transformer_fuse" and inc["device"]["edgeId"] == inc["edgeId"]
     assert 0 < inc["unsupplied"]["atFault"] == inc["unsupplied"]["afterIsolation"] <= 20  # only its own customers
     leak_day = next(d for d, items in days if any(b["kind"] == "gas_service_leak" for b in items))
-    tl = Run(ayr, [], day=leak_day.isoformat(), settings=over).timeline()
+    tl = Run(small_town, [], day=leak_day.isoformat(), settings=over).timeline()
     inc = next(i for i in tl["incidents"] if i["kind"] == "gas_service_leak")
     assert inc["unsupplied"]["afterIsolation"] == 1 and inc["response"]["targetMinutes"] == 60.0
     closed = next(e for e in tl["events"] if e["correlationId"] == inc["id"] and e["eventType"] == "section.isolated")
     assert closed["payload"]["closedEdgeIds"] == [inc["edgeId"]]  # its own shut-off, not a section of main
     leak = next(e for e in tl["events"] if e["correlationId"] == inc["id"] and e["eventType"] == "leak.started")
-    assert leak["payload"]["m3h"] == ayr.run_defaults["leakM3h"]["gas_service"]
+    assert leak["payload"]["m3h"] == small_town.run_defaults["leakM3h"]["gas_service"]
 
 
-def test_a_collector_outage_silences_its_meters_until_the_day_shift(ayr):
+def test_a_collector_outage_silences_its_meters_until_the_day_shift(small_town):
     from api._m2c import RunRequest, run_for
     from utilsim.m2c import views
     from utilsim.m2c.base import date_of
 
-    s, seed = {**ayr.run_defaults, **ONLY, "collectorOutagesPerYear": 50}, ayr.sim_config.seeds.for_("incidents")
-    night = next(d for d, items in year(ayr, s, seed)
+    s, seed = {**small_town.run_defaults, **ONLY, "collectorOutagesPerYear": 50}, small_town.sim_config.seeds.for_("incidents")
+    night = next(d for d, items in year(small_town, s, seed)
                  if any(b["kind"] == "collector_outage" and b["at"] > 16 * 3600 for b in items))
-    tl = Run(ayr, [], day=night.isoformat(), settings={k: s[k] for k in ONLY}).timeline()
+    tl = Run(small_town, [], day=night.isoformat(), settings={k: s[k] for k in ONLY}).timeline()
     inc = next(i for i in tl["incidents"] if i["kind"] == "collector_outage" and i["createdAt"] > 16 * 3600)
     job = next(j for j in tl["jobs"] if j["incidentId"] == inc["id"])
     assert inc["utility"] == "ami" and job["crewId"].startswith("TECH") and inc["premiseIds"]
@@ -158,7 +158,7 @@ def test_a_collector_outage_silences_its_meters_until_the_day_shift(ayr):
     assert gap["utility"] == "ami" and gap["start"] == inc["createdAt"] and gap["end"] == pytest.approx(inc["restoredAt"])
     assert not any(c["at"] for c in tl["stateChanges"] if c["unsupplied"])  # service went on
     # Meter-to-cash: an AMI read inside a collector outage is missed (use goes on); the case shows why.
-    base = run_for(RunRequest(town="ayr"))
+    base = run_for(RunRequest(town="small_town"))
     tw = base.town
     ami = np.flatnonzero((tw.tech == "AMI") & (tw.commodity == "water"))
     r = int(ami[0])
@@ -168,7 +168,7 @@ def test_a_collector_outage_silences_its_meters_until_the_day_shift(ayr):
     pid = tw.premise_ids[tw.prem[r]]
     outage = {"day": date_of(d).isoformat(), "utility": "ami", "start": (t - d) * 86400 - 1800,
               "end": (t - d) * 86400 + 1800, "premiseIds": [pid]}
-    run = run_for(RunRequest(town="ayr", outages=[outage]))
+    run = run_for(RunRequest(town="small_town", outages=[outage]))
     assert np.isnan(run.obs[r, m]) and run.reason[r, m] == "SIM_COLLECTOR_OUTAGE"
     assert np.array_equal(run.truth[r], base.truth[r])  # nothing stopped flowing
     case = run.cases[int(run.case_of[r, m])]

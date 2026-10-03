@@ -23,7 +23,7 @@ D0 = parse_day(DAY, 0)
 
 @pytest.fixture(scope="module")
 def base() -> M2CRun:
-    return run_for(RunRequest(town="ayr"))
+    return run_for(RunRequest(town="small_town"))
 
 
 def ep(settings, frm=DAY, to=None, ramp=0, eid="EP-1"):
@@ -154,7 +154,7 @@ def test_trend_reports_the_year_month_by_month(base):
     june = done[5]
     assert june["reads"]["taken"] + june["reads"]["missed"] == june["reads"]["scheduled"]
     assert sum(june["cases"]["byQueue"].values()) == june["cases"]["backlog"]
-    assert sum(june["collections"]["phases"].values()) == tables.page(base, _master("ayr"), "collectionsAccounts",
+    assert sum(june["collections"]["phases"].values()) == tables.page(base, _master("small_town"), "collectionsAccounts",
                                                                        as_of="2026-06-30", page_size=1)["total"]
     assert june["billing"]["invoices"] > 0 and june["billing"]["collected"] > 0 and june["cost"]["total"] > 0
     assert len(orjson.dumps(t)) < 200_000
@@ -170,16 +170,16 @@ def test_endpoints_take_episodes():
     client = TestClient(app)
     cat = client.get("/api/m2c/scenarios")
     assert cat.status_code == 200 and cat.json()["schemaVersion"] == sc.SCENARIOS_VERSION
-    body = {"town": "ayr", "asOf": "2026-07-15", "episodes": inflicted("no_analysts")}
+    body = {"town": "small_town", "asOf": "2026-07-15", "episodes": inflicted("no_analysts")}
     t = client.post("/api/m2c/trend", json=body)
     assert t.status_code == 200 and t.json()["episodes"][0]["id"] == "EP-1"
     s = client.post("/api/m2c/summary", json=body)
     assert s.status_code == 200
     tbl = client.post("/api/m2c/table", json={**body, "table": "cases", "pageSize": 1})
     assert tbl.status_code == 200 and tbl.json()["total"] > 0
-    bad = client.post("/api/m2c/trend", json={"town": "ayr", "episodes": [ep({"process": {"nope": 1}})]})
+    bad = client.post("/api/m2c/trend", json={"town": "small_town", "episodes": [ep({"process": {"nope": 1}})]})
     assert bad.status_code == 422 and "unknown setting" in str(bad.json()["detail"])
     # The operations day takes the run's episodes through its m2c context.
-    tl = client.post("/api/sim/timeline", json={"town": "ayr", "date": "2026-07-15",
+    tl = client.post("/api/sim/timeline", json={"town": "small_town", "date": "2026-07-15",
                                                 "m2c": {"actions": [], "episodes": inflicted("no_analysts")}})
     assert tl.status_code == 200

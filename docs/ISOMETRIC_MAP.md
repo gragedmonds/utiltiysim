@@ -54,8 +54,8 @@ sprites come from a quarter-size copy of the atlas. Houses smaller than 2 px bec
 
 | Town | Bake: overview | Bake: neighbourhood | Bake: street | Frame |
 |---|---|---|---|---|
-| Cobourg (6,276 premises), 1400×900 | 5 ms | 11 ms | 6 ms | 0.4 ms |
-| Ayr (2,110 premises), phone 390×844 | 14 ms | 9 ms | 9 ms | 1 ms |
+| 5,500-home town (6,276 premises, Oct 2026), 1400×900 | 5 ms | 11 ms | 6 ms | 0.4 ms |
+| 1,861-home town (2,110 premises, Oct 2026), phone 390×844 | 14 ms | 9 ms | 9 ms | 1 ms |
 
 These are headless Chromium figures and don't include the browser's own rasterising.
 

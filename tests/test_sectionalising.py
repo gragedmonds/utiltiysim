@@ -30,12 +30,12 @@ def pack(preset: str) -> tuple[dict, OpsTown]:
 
 @pytest.fixture(scope="module")
 def ayr_snapshot() -> dict:
-    return pack("ayr")[0]
+    return pack("small_town")[0]
 
 
 @pytest.fixture(scope="module")
-def ayr() -> OpsTown:
-    return pack("ayr")[1]
+def small_town() -> OpsTown:
+    return pack("small_town")[1]
 
 
 def limit(snap: dict, customers: int) -> float:
@@ -75,9 +75,9 @@ def trunk_sections(snap: dict, ops: OpsTown) -> dict[tuple[str, int], list[int]]
     return out
 
 
-def test_feeders_are_cut_into_bounded_sections_by_switches(ayr, ayr_snapshot):
+def test_feeders_are_cut_into_bounded_sections_by_switches(small_town, ayr_snapshot):
     el = ayr_snapshot["networks"]["electric"]
-    net = ayr.nets["electric"]
+    net = small_town.nets["electric"]
     edges = el["edges"]
     switches = [q for q in el["equipment"] if q["kind"] == "sectionalising_switch"]
     assert switches and el["meta"]["switches"] == len(switches)
@@ -120,8 +120,8 @@ def test_ties_join_feeders_or_loop_round_within_one(ayr_snapshot):
         assert f["tieIds"] and set(f["tieIds"]) <= {e["switchId"] for e in ties}
 
 
-def test_busiest_trunk_pole_isolates_a_bounded_section_and_ties_backfeed_the_rest(ayr, ayr_snapshot):
-    net = ayr.nets["electric"]
+def test_busiest_trunk_pole_isolates_a_bounded_section_and_ties_backfeed_the_rest(small_town, ayr_snapshot):
+    net = small_town.nets["electric"]
     edges = ayr_snapshot["networks"]["electric"]["edges"]
     for f in ayr_snapshot["networks"]["electric"]["meta"]["feeders"]:
         # The trunk pole with the most customers beyond it: a break there trips the whole feeder.
@@ -130,7 +130,7 @@ def test_busiest_trunk_pole_isolates_a_bounded_section_and_ties_backfeed_the_res
                  and edges[net.edge_index[q["edgeId"]]]["feederId"] == f["id"]]
         pole = max(poles, key=lambda q: (edges[net.edge_index[q["edgeId"]]]["customers"], q["id"]))
         k = net.edge_index[pole["edgeId"]]
-        run = Run(ayr, [break_edge(net, k)], settings=QUIET)
+        run = Run(small_town, [break_edge(net, k)], settings=QUIET)
         tl = run.timeline()
         inc = tl["incidents"][0]
         out, iso, n = inc["unsupplied"], inc["isolation"], f["customers"]
@@ -169,7 +169,7 @@ def test_busiest_trunk_pole_isolates_a_bounded_section_and_ties_backfeed_the_res
         assert not any(el["enabled"][net.edge_index[t["edgeId"]]] for t in inc["ties"])
 
 
-@pytest.mark.parametrize("preset", ["ayr", "cobourg"])
+@pytest.mark.parametrize("preset", ["small_town", "large_town"])
 def test_no_trunk_break_leaves_more_than_a_fifth_of_its_feeder_out(preset):
     """One break per section covers every trunk fault: what stays out depends only on the section a fault is in."""
     snap, ops = pack(preset)
@@ -183,14 +183,14 @@ def test_no_trunk_break_leaves_more_than_a_fifth_of_its_feeder_out(preset):
                                                                                        out)
 
 
-def test_a_fused_lateral_stays_open_until_the_repair(ayr):
+def test_a_fused_lateral_stays_open_until_the_repair(small_town):
     """The nearest switch above a single-phase lateral is its fuse: the crew leaves it open and nothing is
     re-closed, so the lateral's customers wait for the repair; the rest of the feeder never lost supply."""
-    net = ayr.nets["electric"]
+    net = small_town.nets["electric"]
     pole = next(q for q in net.equipment if q["kind"] == "pole" and q["edgeId"] in net.edge_index
                 and _fuse_above(net, net.edge_index[q["edgeId"]]) is not None)
     k = net.edge_index[pole["edgeId"]]
-    inc = Run(ayr, [break_edge(net, k)], settings=QUIET).timeline()["incidents"][0]
+    inc = Run(small_town, [break_edge(net, k)], settings=QUIET).timeline()["incidents"][0]
     assert inc["device"]["kind"] == "fuse"
     assert inc["isolation"]["upstream"]["kind"] == "fuse" and not inc["isolation"]["deviceReclosed"]
     assert inc["unsupplied"]["afterIsolation"] == inc["unsupplied"]["atFault"] > 0
@@ -207,18 +207,18 @@ def _fuse_above(net, e: int) -> int | None:
     return None
 
 
-def test_a_tie_that_cannot_carry_a_whole_island_carries_part_of_it(ayr, ayr_snapshot):
+def test_a_tie_that_cannot_carry_a_whole_island_carries_part_of_it(small_town, ayr_snapshot):
     """Lower the emergency rating until the tie that picked up the most is declined: the crew opens one more switch
     in the island and the tie carries what it can."""
-    net = ayr.nets["electric"]
-    for (_, _), ks in sorted(trunk_sections(ayr_snapshot, ayr).items()):
+    net = small_town.nets["electric"]
+    for (_, _), ks in sorted(trunk_sections(ayr_snapshot, small_town).items()):
         cmd = break_edge(net, ks[len(ks) // 2])
-        inc = Run(ayr, [cmd], settings=QUIET).timeline()["incidents"][0]
+        inc = Run(small_town, [cmd], settings=QUIET).timeline()["incidents"][0]
         best = max(inc.get("ties", []), key=lambda t: t["restored"], default=None)
         if best is None or best["restored"] < 200:
             continue
         tight = {**QUIET, "tieMaxLoading": best["maxLoading"] - 0.002}
-        inc2 = Run(ayr, [cmd], settings=tight).timeline()["incidents"][0]
+        inc2 = Run(small_town, [cmd], settings=tight).timeline()["incidents"][0]
         split = [t for t in inc2.get("ties", []) if "openedSwitch" in t]
         if not split:
             continue
@@ -227,4 +227,4 @@ def test_a_tie_that_cannot_carry_a_whole_island_carries_part_of_it(ayr, ayr_snap
         assert sw["kind"] == "sectionalising_switch" and net.edge_index[sw["edgeId"]] in net.switch_edges
         assert 0 < split[0]["restored"]
         return
-    pytest.fail("no tie in Ayr needed a split at a tighter rating")
+    pytest.fail("no tie in the small town needed a split at a tighter rating")

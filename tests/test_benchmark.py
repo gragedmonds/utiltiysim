@@ -10,7 +10,7 @@ from utilsim.validate import validate_town
 @pytest.mark.slow
 def test_ten_thousand_homes_within_budget():
     t = time.perf_counter()
-    town = generate(load_preset("whitby_large"))
+    town = generate(load_preset("city"))
     elapsed = time.perf_counter() - t
     assert int(town.prem.residential.sum()) == 10_000
     res = validate_town(town)

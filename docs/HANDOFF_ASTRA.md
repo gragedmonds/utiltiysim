@@ -7,8 +7,8 @@ requires, and CI proves it against your actual `dist/adapter.js`. Field names an
 
 | You asked for | Where |
 |---|---|
-| M1 engine commit and an exported `utility-town/2.0` example with heightmap + revisions | branch `claude/wizardly-bardeen-rb0v8z`; `examples/whitby-480-seed42/snapshot.json.gz` (town `town-629f54bde38fe9d7`) |
-| A matching complete state frame or replay | `examples/whitby-480-seed42/replay-day.json` (24 hourly frames), `state-{solar_noon,leak,substation_outage}.json`, and the snapshot's embedded `stateFrame`; live: `GET /api/towns/{id}/state`, `/replay` |
+| M1 engine commit and an exported `utility-town/2.0` example with heightmap + revisions | branch `claude/wizardly-bardeen-rb0v8z`; `examples/village-480-seed42/snapshot.json.gz` (town `town-ab2b8b3609f83517`) |
+| A matching complete state frame or replay | `examples/village-480-seed42/replay-day.json` (24 hourly frames), `state-{solar_noon,leak,substation_outage}.json`, and the snapshot's embedded `stateFrame`; live: `GET /api/towns/{id}/state`, `/replay` |
 | Engine JSON Schemas, OpenAPI, config UI-hint schema | `schemas/*.json` (also `GET /api/schemas/{name}.json`), `schemas/openapi.json`, `schemas/config.schema.json` |
 | A specific `web/` bridge commit for ownership transfer | **`7dd7cc8`** ("Host Astra's viewer package…"). `web/` is now only a static host of `packages/town-viewer/dist` plus `examples/` (`web/serve.mjs`) and a Playwright smoke (`web/smoke.mjs`). From that commit on, `web/` and `packages/town-viewer/` are yours. The prototype fork I had in `web/public` is deleted. |
 
@@ -46,7 +46,7 @@ files are untouched.
 
 | What | Contract |
 |---|---|
-| **Real towns.** Presets built from a real place's frozen streets, sized by how many homes those streets hold: `ayr` (1,861 homes), `elora` (3,271), `cobourg` (5,500), `whitby_wide` (10,000, the engine maximum), plus the original Whitby extract. | `GET /api/sources`; `GET /api/config/presets`. Show `source.attribution` ("© OpenStreetMap contributors", ODbL) when `source.type == "osm"`. A town picker could list sources by `place.name` with `presets[].houses`. |
+| **Generic towns** (October 3). Every town is synthetic, built from its settings and seed; the real-place presets, the street extracts and `/api/sources` are gone. Presets: `village` (480 homes), `small_town` (1,900, the Studio's default), `town` (3,300), `large_town` (5,500), `city` (10,000, hilly), `us_town` (3,500, US settings). | `GET /api/config/presets`. Packs are labelled by preset (`packLabel`: `small_town` → "Small town"); there is no attribution to show. See §18. |
 | **Frame sequence** = minutes since local midnight of the run day, so `/state` and replay frames for the same instant are identical and a dropped replay resumes at `startHour = sequence / 60`. | `docs/CONTRACT.md` § Time |
 | **`x-applies`** on every settings group: `town` (changing it generates a new town id) or `run` (applies to a run of the same town; today only `scenario`). | `schemas/config.schema.json` |
 
@@ -65,7 +65,7 @@ files are untouched.
 
 1. Who builds the production app around `packages/town-viewer` (React shell, routing, settings page)? I assume
    you do, and I keep `web/` as a dev host only if you want it.
-2. Should the town picker list real places (`/api/sources`) next to synthetic presets?
+2. ~~Should the town picker list real places (`/api/sources`) next to synthetic presets?~~ Resolved October 3: towns are generic; there are no real places to list.
 3. Any field you would like added to frames before M2 starts (pressure, voltage, loading %)? Those come with the
    M2 solvers; tell me which overlays you plan first.
 
@@ -234,7 +234,7 @@ today. Details and rules: `docs/M2C.md` "Studio work".
 
 | Prototype seam | Engine |
 |---|---|
-| `fieldChoices`, `fieldRequirements`, component units | `GET /api/m2c/vocabulary?town=…` → `order.fields[]` (label, tab, required, kind, bounds, choices), `order.choices` (the town's plant, e.g. `AY01 · Ayr`), `order.components.units` |
+| `fieldChoices`, `fieldRequirements`, component units | `GET /api/m2c/vocabulary?town=…` → `order.fields[]` (label, tab, required, kind, bounds, choices), `order.choices` (the town's plant, e.g. `SM01 · Small Town`), `order.components.units` |
 | `beginFieldOrder` / Reopen | `POST /api/m2c/order {sourceCaseId \| readId}` → the existing order, or `order: null` + `proposal` (prefill) |
 | Save Draft | `act('order_save', null, null, {sourceCaseId \| readId, fields, components})` (new) or `{orderId, fields, components}` (edit); then `order(...)` gives `orderId` (`WO-yymmdd-nnnn`) and the Field Work `caseId` |
 | `validateFieldOrder` + Release & Save | `act('order_release', null, null, {orderId})`; a 422 `detail.fieldErrors` is `{field: message}` with your messages; `detail.message` for the toast. Your client check can stay for instant feedback; the engine is the authority |
@@ -431,3 +431,24 @@ What the Studio shows:
 speed of answer, hung up, occupancy, cost), each reason's figures and settings, the last 60 days and the year's
 incidents. There is no contact centre page yet; the Year charts and the Data tables cover it. A Workspace queue of
 call backs, and contacts that open back-office cases, are the natural next steps.
+
+## 18. Generic towns (no real places)
+
+Every town is now generic: the engine builds its streets from the town settings and the seed (the synthetic skeleton:
+warped section-grid arterials, collectors, era-styled local streets) and never reads or fetches a real place's data.
+What changed for the Studio:
+
+- **Packs** are `village` (480 homes), `small_town` (1,900), `town` (3,300) and `large_town` (5,500); a bare address
+  opens `small_town` (`DEFAULT_TOWN`). `packLabel` names a pack by its preset ("Small town"); `packCaption` is the
+  home count. Old addresses such as `?town=ayr` no longer resolve.
+- **The browser demo** (`?town=demo`, and the placeholder drawn while a pack loads) lays out its town on
+  `dist/demo-streets.json`, the engine's small-town streets in the same nodes-and-ways format (`parseStreets`, formerly
+  `parseOSM`; `scripts/build_demo_streets.py` rewrites it). The OpenStreetMap import button and the ODbL attribution
+  link are gone; the demo is titled "Browser demo town" and seeds default to `TOWN-042`.
+- **The engine example** is `dist/engine/village-480.snapshot.json.gz` (the repository example
+  `examples/village-480-seed42/`).
+- **Configuration › Town & geography** no longer shows `skeleton`, `osm_source`, `osm_sha256` or `expansion`;
+  configs and town references that carry them still load (the keys are dropped).
+
+Generator 0.10.0: every town id changed, and the town contents changed with them (new streets).
+

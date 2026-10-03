@@ -548,7 +548,7 @@
             "title": "Settings"
           },
           "town": {
-            "description": "Pack preset (e.g. 'ayr') or town id.",
+            "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
             "type": "string"
           },
@@ -723,7 +723,7 @@
             "title": "Settings"
           },
           "town": {
-            "description": "Pack preset (e.g. 'ayr') or town id.",
+            "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
             "type": "string"
           }
@@ -879,7 +879,7 @@
             "type": "string"
           },
           "town": {
-            "description": "Pack preset (e.g. 'ayr') or town id.",
+            "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
             "type": "string"
           }
@@ -1003,7 +1003,7 @@
             "type": "string"
           },
           "town": {
-            "description": "Pack preset (e.g. 'ayr') or town id.",
+            "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
             "type": "string"
           }
@@ -1217,7 +1217,7 @@
             "type": "string"
           },
           "town": {
-            "description": "Pack preset (e.g. 'ayr') or town id.",
+            "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
             "type": "string"
           }
@@ -1304,7 +1304,7 @@
             "title": "Settings"
           },
           "town": {
-            "description": "Pack preset (e.g. 'ayr') or town id.",
+            "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
             "type": "string"
           }
@@ -1456,7 +1456,7 @@
             "title": "Settings"
           },
           "town": {
-            "description": "Pack preset (e.g. 'ayr') or town id.",
+            "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
             "type": "string"
           }
@@ -1567,7 +1567,7 @@
             "title": "Settings"
           },
           "town": {
-            "description": "Pack preset (e.g. 'ayr') or town id.",
+            "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
             "type": "string"
           }
@@ -1800,7 +1800,7 @@
             "title": "Settings"
           },
           "town": {
-            "description": "Pack preset (e.g. 'ayr') or town id.",
+            "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
             "type": "string"
           }
@@ -1984,7 +1984,7 @@
             "title": "Settings"
           },
           "town": {
-            "description": "Pack preset (e.g. 'ayr') or town id.",
+            "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
             "type": "string"
           },
@@ -2116,7 +2116,7 @@
             "title": "Settings"
           },
           "town": {
-            "description": "Pack preset (e.g. 'ayr') or town id.",
+            "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
             "type": "string"
           }
@@ -2233,7 +2233,7 @@
             "title": "Sourcecaseid"
           },
           "town": {
-            "description": "Pack preset (e.g. 'ayr') or town id.",
+            "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
             "type": "string"
           }
@@ -2439,7 +2439,7 @@
             "type": "string"
           },
           "town": {
-            "description": "Pack preset (e.g. 'ayr') or town id.",
+            "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
             "type": "string"
           },
@@ -2541,7 +2541,7 @@
             "title": "Settings"
           },
           "town": {
-            "description": "Pack preset (e.g. 'ayr') or town id.",
+            "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
             "type": "string"
           },
@@ -2880,7 +2880,7 @@
             "type": "string"
           },
           "town": {
-            "description": "Pack preset (e.g. 'ayr') or town id.",
+            "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
             "type": "string"
           },
@@ -2977,7 +2977,7 @@
             "title": "Settings"
           },
           "town": {
-            "description": "Pack preset (e.g. 'ayr') or town id.",
+            "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
             "type": "string"
           },
@@ -3124,7 +3124,7 @@
             "title": "Settings"
           },
           "town": {
-            "description": "Pack preset (e.g. 'ayr') or town id.",
+            "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
             "type": "string"
           }
@@ -3243,7 +3243,7 @@
             "title": "Since"
           },
           "town": {
-            "description": "Pack preset (e.g. 'ayr') or town id.",
+            "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
             "type": "string"
           }
@@ -3405,7 +3405,7 @@
             "type": "string"
           },
           "town": {
-            "description": "Pack preset (e.g. 'ayr') or town id.",
+            "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
             "type": "string"
           }
@@ -3568,7 +3568,7 @@
             "type": "string"
           },
           "town": {
-            "description": "Pack preset (e.g. 'ayr') or town id.",
+            "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
             "type": "string"
           }
@@ -3642,7 +3642,7 @@
             "title": "Settings"
           },
           "town": {
-            "description": "Pack preset (e.g. 'ayr') or town id.",
+            "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
             "type": "string"
           }
@@ -3695,7 +3695,7 @@
             "title": "Overrides"
           },
           "preset": {
-            "default": "whitby_small",
+            "default": "village",
             "description": "Base preset.",
             "title": "Preset",
             "type": "string"
@@ -3967,7 +3967,7 @@
   "info": {
     "description": "Seeded utility-town engine: geography, networks, customers, simulation, meter-to-cash.",
     "title": "utilsim",
-    "version": "0.9.1"
+    "version": "0.10.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -5253,23 +5253,6 @@
           }
         },
         "summary": "Post Timeline"
-      }
-    },
-    "/api/sources": {
-      "get": {
-        "description": "Frozen street extracts (real places) with attribution and the presets built on them.",
-        "operationId": "get_sources_api_sources_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Get Sources"
       }
     },
     "/api/towns": {

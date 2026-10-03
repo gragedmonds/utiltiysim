@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from '../dist/vendor/three.module.js';
 import {switchingIntervals,switchingAt,switchingRows,SwitchingMarks,SWITCH_COLORS} from '../dist/switching-marks.js';
-// Shapes from the engine's utility-timeline/1.0 (Ayr: a trunk pole back-fed through a tie; a water main isolated).
+// Shapes from the engine's utility-timeline/1.0 (a trunk pole back-fed through a tie; a water main isolated).
 const ev=(at,eventType,correlationId,payload,entityId=correlationId)=>({at,eventType,correlationId,entityId,payload});
 function timeline(){return {
  incidents:[
@@ -59,7 +59,7 @@ test('switching marks redraw the switched edges and ring the devices, with their
  marks.zoom(3000);assert.equal(marks.scale,6);
 });
 
-// Generator 0.9.0: the crew opens real sectionalising switches and may close several ties (Ayr's F1-02 trunk pole).
+// Generator 0.9.0: the crew opens real sectionalising switches and may close several ties (an F1-02 trunk pole).
 test('sectionalised isolation: opened switches until they close, every tie, and a recloser the engine left open',()=>{
  const tl={incidents:[
   {id:'INC-1',utility:'electric',edgeId:'electric-E289',createdAt:28800,isolatedAt:30075,restoredAt:37275,device:{edgeId:'electric-E2',kind:'recloser'},isolation:{method:'switches',upstream:{id:'SW-1',edgeId:'electric-E287',kind:'sectionalising_switch'},downstream:[{id:'SW-2',edgeId:'electric-E304',kind:'sectionalising_switch'}],deviceReclosed:true},

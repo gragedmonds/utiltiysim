@@ -14,7 +14,7 @@ import shapely
 from shapely.geometry import MultiPoint, box
 
 from utilsim.core.units import get_profile
-from utilsim.gen.roads.model import CLASS_NAMES, OSM_TAG_FOR_CLASS, PAVEMENT_WIDTH, ROW_WIDTH
+from utilsim.gen.roads.model import CLASS_NAMES, PAVEMENT_WIDTH, ROAD_TAG_FOR_CLASS, ROW_WIDTH
 from utilsim.gen.zoning import ERA_NAMES, era_bucket
 from utilsim.io.revisions import index_revision, topology_revision
 from utilsim.sim.demand import july_daily
@@ -82,7 +82,7 @@ def build_snapshot(town, *, include_reads: bool = True, units: str | None = None
         c = int(g.edge_class[e])
         rec = {"id": f"R-{e}", "a": f"RN-{int(g.uv[e, 0])}", "b": f"RN-{int(g.uv[e, 1])}",
                "points": _pts(g.geometry[e]), "name": lu.roads.names[e] or "Unnamed Road",
-               "class": OSM_TAG_FOR_CLASS[c], "roadClass": CLASS_NAMES[c], "length": _r(g.length[e]),
+               "class": ROAD_TAG_FOR_CLASS[c], "roadClass": CLASS_NAMES[c], "length": _r(g.length[e]),
                "lengthM": _r(g.length[e]), "rowWidthM": float(ROW_WIDTH[c]),
                "pavementWidthM": float(PAVEMENT_WIDTH[c]), "origin": lu.roads.origin[e]}
         if rec["id"] in corridor_of:

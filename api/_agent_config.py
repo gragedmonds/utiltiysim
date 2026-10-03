@@ -164,8 +164,6 @@ def run_config(context: RunContext) -> SimConfig:
     else:
         base = preset_config(name)
     cfg = config_from_ref(context.townRef) if "~" in context.townRef else base
-    if (cfg.town.osm_source, cfg.town.osm_sha256) != (base.town.osm_source, base.town.osm_sha256):
-        raise ValueError("Street sources must come from a prepared town.")
     supported_fields(context.settings, settings_schema())
     return resolve_settings(cfg, context.settings)
 
@@ -201,7 +199,7 @@ def validate_infliction(proposal: InflictProposal, context: RunContext) -> dict:
 
 
 def presets() -> list[dict]:
-    return [{"preset": t["preset"], "name": (t.get("place") or {}).get("name") or (t.get("source") or {}).get("label", t["preset"]).removesuffix(" street snapshot"),
+    return [{"preset": t["preset"], "name": t["preset"].replace("_", " ").capitalize(),
              "homes": t["homes"], "townId": t["townId"]} for t in pack_index()["towns"]]
 
 

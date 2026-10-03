@@ -162,7 +162,8 @@ class LoopSolution:
 
 def solve(cyc: Cycles, base: np.ndarray, r_tree: np.ndarray, r_chord: np.ndarray, n: float, dh: np.ndarray,
           tol: np.ndarray, qmin: float = 1e-3, max_iter: int = 60) -> LoopSolution:
-    """Damped Newton on the chord flows, from zero (so a frame does not depend on what was solved before it).
+    """Damped Newton on the chord flows, from zero (so a frame does not depend on what was solved before it), taking
+    at least one step whenever the residual is not exactly zero.
 
     ``base``: radial flow per touched node; ``r_tree``: loss coefficient of each touched node's parent edge;
     ``r_chord``: per chord; ``dh``: potential of the ``a`` end's fixed node minus the ``b`` end's, per chord; ``tol``:
@@ -191,7 +192,9 @@ def solve(cyc: Cycles, base: np.ndarray, r_tree: np.ndarray, r_chord: np.ndarray
     scale = 1.0 / tol
     merit = float(np.linalg.norm(f * scale))
     it = 0
-    while it < max_iter and np.max(np.abs(f) * scale, initial=0.0) > 1.0:
+    # At least one step whenever the loops are out of balance at all: at low demand (night, a small town) the zero
+    # start is already within tolerance, and stopping there would show every loop dead.
+    while it < max_iter and (np.max(np.abs(f) * scale, initial=0.0) > 1.0 or (it == 0 and bool(np.any(f != 0)))):
         it += 1
         jac = jacobian(q, flow)
         step = dense_solve(jac, -f)

@@ -18,7 +18,7 @@ INDEX = read_index(PACKS)
 
 def test_index_is_current():
     assert INDEX["schemaVersion"] == PACK_VERSION and INDEX["generatorVersion"] == GENERATOR_VERSION
-    assert {t["preset"] for t in INDEX["towns"]} >= {"whitby_small", "ayr"}
+    assert {t["preset"] for t in INDEX["towns"]} >= {"village", "small_town"}
 
 
 @pytest.mark.parametrize("town", INDEX["towns"], ids=lambda t: t["preset"])

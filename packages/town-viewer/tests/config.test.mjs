@@ -7,7 +7,7 @@ import {isTownGroup,inferSchema,townValues,fullConfig,newSeed,generateCapability
 // a rate-block list, a nullable seed, an exclusive bound, and settings the engine marks not modelled or deprecated.
 const schema={properties:{name:{type:'string',default:'custom'},billing:{$ref:'#/$defs/BillingConfig'},housing:{$ref:'#/$defs/HousingConfig'},seeds:{$ref:'#/$defs/SeedsConfig'},weather:{$ref:'#/$defs/WeatherConfig'}},
  $defs:{
-  SeedsConfig:{title:'Seeds','x-applies':'town','x-order':0,properties:{master:{type:'string',title:'Master',default:'WHITBY-042'},weather:{anyOf:[{type:'string'},{type:'null'}],default:null,title:'Weather',description:'Re-roll the weather.','x-advanced':true}}},
+  SeedsConfig:{title:'Seeds','x-applies':'town','x-order':0,properties:{master:{type:'string',title:'Master',default:'TOWN-042'},weather:{anyOf:[{type:'string'},{type:'null'}],default:null,title:'Weather',description:'Re-roll the weather.','x-advanced':true}}},
   HousingConfig:{title:'Housing & households','x-applies':'town','x-order':2,properties:{
    electric_heat_rate:{$ref:'#/$defs/EraValues',default:{pre_1945:.1,postwar:.14,modern:.18},description:'Share of houses heated electrically.','x-effects':['winter peak']},
    household_size_weights:{type:'array',items:{type:'number'},default:[.28,.34,.15,.15,.06,.02],title:'Household Size Weights'},
@@ -23,7 +23,7 @@ test('groups come in x-order; the town form leaves out run groups and top-level 
  assert.deepEqual([...new Set(schemaFields(schema).map(f=>f.group))],['seeds','housing','weather','billing']);
  const town=schemaFields(schema,{groups:isTownGroup});
  assert.deepEqual([...new Set(town.map(f=>f.group))],['seeds','housing','weather']);
- assert.equal(town.find(f=>f.path==='seeds.master').default,'WHITBY-042');
+ assert.equal(town.find(f=>f.path==='seeds.master').default,'TOWN-042');
 });
 
 test('nested objects become labelled sub-values that keep the reference sibling description and default',()=>{
@@ -71,29 +71,29 @@ test('nullable seeds, exclusive bounds and the setting search',()=>{
 });
 
 test('a snapshot without a published schema still edits: types and nesting read off its config',()=>{
- const config={name:'ayr',seeds:{master:'WHITBY-042',weather:null},housing:{electric_heat_rate:{pre_1945:.1,postwar:.14,modern:.18},household_size_weights:[.5,.5],ac:true},vee:{high_ratio:2}};
+ const config={name:'small_town',seeds:{master:'TOWN-042',weather:null},housing:{electric_heat_rate:{pre_1945:.1,postwar:.14,modern:.18},household_size_weights:[.5,.5],ac:true},vee:{high_ratio:2}};
  const s=inferSchema(config),f=schemaFields(s,{groups:isTownGroup});
  assert.deepEqual([...new Set(f.map(x=>x.group))],['seeds','housing']);
  assert.deepEqual(f.map(x=>[x.path,x.type]),[['seeds.master','text'],['seeds.weather','text'],['housing.electric_heat_rate','object'],['housing.household_size_weights','json'],['housing.ac','boolean']]);
  const values=townValues(config,s);assert.deepEqual(Object.keys(values),['seeds','housing']);values.housing.electric_heat_rate.modern=.3;
  assert.equal(config.housing.electric_heat_rate.modern,.18,'editing never touches the loaded town');
- const full=fullConfig(config,values);assert.equal(full.name,'ayr');assert.deepEqual(full.vee,{high_ratio:2});assert.equal(full.housing.electric_heat_rate.modern,.3);
- assert.equal(townLabel({source:{label:'Ayr street snapshot'}}),'Ayr');assert.equal(townLabel({name:'Elora'}),'Elora');
+ const full=fullConfig(config,values);assert.equal(full.name,'small_town');assert.deepEqual(full.vee,{high_ratio:2});assert.equal(full.housing.electric_heat_rate.modern,.3);
+ assert.equal(townLabel({source:{label:'Synthetic town'}}),'Synthetic town');assert.equal(townLabel({config:{name:'large_town'},source:{label:'Synthetic town'}}),'Large town');assert.equal(townLabel({config:{name:'custom'},source:{label:'Synthetic town'}}),'Synthetic town');assert.equal(townLabel({name:'Small town'}),'Small town');
 });
 
 test('a new seed keeps the prefix, is shown, and never repeats the current one',()=>{
- assert.equal(newSeed('WHITBY-042',()=>0),'WHITBY-AAAAAA');
+ assert.equal(newSeed('TOWN-042',()=>0),'TOWN-AAAAAA');
  let i=0;const seq=[0,0,0,0,0,0,.5,.5,.5,.5,.5,.5],rnd=()=>seq[i++%seq.length];assert.equal(newSeed('X-AAAAAA',rnd),'X-SSSSSS');
- assert.match(newSeed('WHITBY-042'),/^WHITBY-[A-Z2-9]{6}$/);assert.match(newSeed(''),/^TOWN-[A-Z2-9]{6}$/);assert.match(newSeed('ayr town'),/^AYRTOWN-/);
+ assert.match(newSeed('TOWN-042'),/^TOWN-[A-Z2-9]{6}$/);assert.match(newSeed(''),/^TOWN-[A-Z2-9]{6}$/);assert.match(newSeed('small town'),/^SMALLTOWN-/);
 });
 
 test('generation is offered only where the engine can build towns',async()=>{
  const ok=async()=>({ok:true}),missing=async()=>({ok:false,status:404});
  assert.deepEqual(await generateCapability('/api',{status:'ok',capabilities:{generate:true}},missing),{ok:true});
  assert.deepEqual(await generateCapability('/api',{status:'ok',capabilities:{generate:false}},ok),{ok:false,reason:HOSTED_NOTE});
- assert.deepEqual(await generateCapability('/api',{status:'ok',engine:'hosted',towns:['ayr']},ok),{ok:false,reason:HOSTED_NOTE});
- assert.deepEqual(await generateCapability('/api',{status:'ok',towns:['ayr']},ok),{ok:true});
- assert.equal((await generateCapability('/api',{status:'ok',towns:['ayr']},missing)).ok,false);
+ assert.deepEqual(await generateCapability('/api',{status:'ok',engine:'hosted',towns:['small_town']},ok),{ok:false,reason:HOSTED_NOTE});
+ assert.deepEqual(await generateCapability('/api',{status:'ok',towns:['small_town']},ok),{ok:true});
+ assert.equal((await generateCapability('/api',{status:'ok',towns:['small_town']},missing)).ok,false);
  assert.match((await generateCapability('/api',null,ok)).reason,/No engine is connected/);
  assert.match(HOSTED_NOTE,/cannot build towns/);
 });
@@ -105,7 +105,7 @@ test('generate posts the full config, polls until ready and reports engine refus
  assert.equal(tid,'town-abc12345');assert.deepEqual(calls[0],['POST','http://e/api/towns',{config:{seeds:{master:'X'}}}]);
  assert.deepEqual(calls.slice(1).map(c=>c[1]),Array(3).fill('http://e/api/towns/town-abc12345'));assert.deepEqual(seen,['building','building','building','ready']);
  const ready=async()=>({ok:true,status:201,json:async()=>({townId:'town-1',status:'ready'})});assert.equal(await requestTown('/api',{},{fetchImpl:ready}),'town-1');
- const named=async()=>({ok:true,status:201,json:async()=>({townId:'town-1',ref:'ayr~eNqrVs',status:'ready'})});assert.equal(await requestTown('/api',{},{fetchImpl:named}),'ayr~eNqrVs','the reference wins: any engine instance rebuilds it');
+ const named=async()=>({ok:true,status:201,json:async()=>({townId:'town-1',ref:'small_town~eNqrVs',status:'ready'})});assert.equal(await requestTown('/api',{},{fetchImpl:named}),'small_town~eNqrVs','the reference wins: any engine instance rebuilds it');
  await assert.rejects(requestTown('/api',{},{fetchImpl:async()=>({ok:false,status:405,json:async()=>({})})}),e=>e.unsupported===true);
  await assert.rejects(requestTown('/api',{},{fetchImpl:async()=>({ok:false,status:422,json:async()=>({detail:[{loc:['body','config','town','houses'],msg:'Input should be less than or equal to 10000'}]})})}),/Engine 422: town\.houses: Input should be less than or equal to 10000/);
  await assert.rejects(requestTown('/api',{},{fetchImpl:async()=>({ok:false,status:422,json:async()=>({townId:'town-9',status:'failed',error:'ValueError: no roads'})})}),/could not build this town: ValueError: no roads/);

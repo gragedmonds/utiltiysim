@@ -18,8 +18,8 @@ from utilsim.core.units import get_profile
 def test_seed_normalisation_and_derivation_are_stable():
     assert normalize_seed(42) == 42
     assert normalize_seed("42") == 42
-    assert normalize_seed("WHITBY-042") == normalize_seed(" WHITBY-042 ")
-    assert normalize_seed("WHITBY-042") != normalize_seed("WHITBY-043")
+    assert normalize_seed("TOWN-042") == normalize_seed(" TOWN-042 ")
+    assert normalize_seed("TOWN-042") != normalize_seed("TOWN-043")
     assert derive_seed(42, "roads", "arterials") == derive_seed("42", "roads", "arterials")
     assert derive_seed(42, "roads", "arterials") != derive_seed(42, "roads", "locals")
     with pytest.raises(ValueError):

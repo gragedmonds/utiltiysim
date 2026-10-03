@@ -131,7 +131,7 @@ class Episode(BaseModel):
 
 
 class RunRequest(BaseModel):
-    town: str = Field(..., description="Pack preset (e.g. 'ayr') or town id.")
+    town: str = Field(..., description="Pack preset (e.g. 'small_town') or town id.")
     settings: dict[str, dict[str, Any]] | None = Field(
         None, description=f"Overrides for the run-scoped groups ({', '.join(M2C_GROUPS)}); see GET /api/m2c/settings.")
     episodes: list[Episode] = Field(default_factory=list, max_length=EPISODE_MAX,

@@ -10,7 +10,6 @@ from pydantic import ValidationError
 
 from utilsim.config import SimConfig, load_preset
 from utilsim.gen.pipeline import generate
-from utilsim.gen.roads.osm import OsmError, parse_osm
 from utilsim.io.snapshot import build_snapshot
 from utilsim.net.electric import TRANSMISSION_KV
 from utilsim.sim.flows import FlowModel
@@ -29,9 +28,9 @@ def strip_timing(snap):
 
 
 def test_byte_identical_regeneration_and_seed_sensitivity(town120):
-    again = generate(load_preset("whitby_small", seed="T120", houses=120))
+    again = generate(load_preset("village", seed="T120", houses=120))
     assert digest(strip_timing(build_snapshot(town120))) == digest(strip_timing(build_snapshot(again)))
-    other = generate(load_preset("whitby_small", seed="T121", houses=120))
+    other = generate(load_preset("village", seed="T121", houses=120))
     assert other.id != town120.id
     assert [p for p in other.prem.ids] == [p for p in town120.prem.ids[: len(other.prem)]] or True
     assert digest(strip_timing(build_snapshot(other))) != digest(strip_timing(build_snapshot(town120)))
@@ -220,26 +219,23 @@ def test_invalid_inputs_fail_loudly():
         SimConfig.model_validate({"town": {"houses": 4.5}})
     with pytest.raises(ValidationError):
         SimConfig.model_validate({"seeds": {"master": 3.5}})
-    with pytest.raises(OsmError):
-        parse_osm({})
-    with pytest.raises(OsmError):
-        parse_osm({"elements": []})
 
 
-def test_minimal_overpass_way_with_geometry_parses():
-    raw = {"elements": [{"type": "way", "id": 1, "nodes": [10, 11, 12], "tags": {"highway": "residential",
-                                                                                "name": "Test Street"},
-                         "geometry": [{"lat": 43.0, "lon": -79.0}, {"lat": 43.001, "lon": -79.0},
-                                      {"lat": 43.002, "lon": -79.0}]}]}
-    ex = parse_osm(raw)
-    assert len(ex.lines) == 1 and ex.lines[0].name == "Test Street"
+def test_towns_are_generic_and_old_street_extract_settings_still_load():
+    """Every town is built from its settings and seed; configs that named a street extract load without it."""
+    old = {"town": {"houses": 120, "skeleton": "osm", "osm_source": "data/osm/x.json", "osm_sha256": "0" * 64,
+                    "expansion": "grow"}}
+    cfg = SimConfig.model_validate(old)
+    dumped = cfg.model_dump(mode="json")["town"]
+    assert cfg.town.houses == 120 and not {"skeleton", "osm_source", "osm_sha256", "expansion"} & set(dumped)
+    assert SimConfig.model_validate({"town": {"houses": 120}}) == cfg
 
 
 def test_knock_on_high_solar_reverses_the_town_at_noon():
-    hi = generate(load_preset("whitby_small", seed="SUN", houses=120,
+    hi = generate(load_preset("village", seed="SUN", houses=120,
                               overrides={"housing": {"solar_rate": {"pre_1945": 0.85, "postwar": 0.85,
                                                                     "modern": 0.85}}}))
-    lo = generate(load_preset("whitby_small", seed="SUN", houses=120))
+    lo = generate(load_preset("village", seed="SUN", houses=120))
     noon_hi = FlowModel(hi).flows(12.0)
     noon_lo = FlowModel(lo).flows(12.0)
     assert noon_hi.source["electric"] < 0 < noon_lo.source["electric"]

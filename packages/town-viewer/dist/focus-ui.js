@@ -40,7 +40,7 @@ export function installFocusUI({getContext,onSettings,onScenario,onWorklists=()=
   $('frequency-card').hidden=!!engine;const pc=document.getElementById('presets-card');if(pc)pc.hidden=!!engine;
   $('generator-context').hidden=!imported;
   const config=town.config||town.configuration;
-  $('engine-config-preview').textContent=JSON.stringify(config||{mode,seed:town.seed,homes:town.count,source:town.source?.name||'Frozen Whitby street extract'},null,2);
+  $('engine-config-preview').textContent=JSON.stringify(config||{mode,seed:town.seed,homes:town.count,source:town.source?.label||'Generic streets'},null,2);
   // Never invent incident-rate defaults or let local sliders imply a running engine.
   $('frequency-fields').replaceChildren();
   const fields=[['Gas leaks','gas_leak'],['Water main breaks','water_main_break'],['Lightning strikes','lightning_strike'],['Transformer failures','transformer_failure'],['AMI collector outages','ami_collector_down']];

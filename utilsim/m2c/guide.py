@@ -20,9 +20,10 @@ SUMMARY = ("utilsim is a seeded utility-town engine. It generates a town (street
 
 CAPABILITIES = (
     {"id": "town", "title": "Town generation",
-     "text": "Real street extracts (Ayr, Elora, Cobourg, Whitby) or synthetic skeletons; parcels, buildings by era, "
-             "households, commercial frontage on main roads; 120 to 10,000 homes. A town's reference names its preset "
-             "and changes, so any engine rebuilds it byte for byte.",
+     "text": "Generic towns built only from their settings and seed (no real places): synthetic streets, parcels, "
+             "buildings by era, households, commercial frontage on main roads; 20 to 10,000 homes, from the village "
+             "to the city preset. A town's reference names its preset and changes, so any engine rebuilds it byte "
+             "for byte.",
      "where": ["Configuration › Town & meters"]},
     {"id": "networks", "title": "Networks",
      "text": "Electric feeders with transformers, sectionalising switches and normally-open ties; gas mains and "
@@ -120,11 +121,11 @@ IMPACTS = (
 )
 
 MEASURED = (
-    {"town": "Whitby extract", "homes": 480, "accounts": 654, "registers": 1750, "generateS": 5, "replayS": 2},
-    {"town": "Ayr", "homes": 1861, "accounts": 2341, "registers": 6363, "generateS": 9, "replayS": 6},
-    {"town": "Elora", "homes": 3271, "accounts": 4252, "registers": 10783, "generateS": 17, "replayS": 10},
-    {"town": "Cobourg", "homes": 5500, "accounts": 6993, "registers": 18378, "generateS": 26, "replayS": 15,
-     "memoryMB": 110, "documents": 210091, "invoices": 78535},
+    {"town": "Village", "homes": 480, "accounts": 635, "registers": 1698, "generateS": 3, "replayS": 2},
+    {"town": "Small town", "homes": 1900, "accounts": 2368, "registers": 6350, "generateS": 9, "replayS": 6},
+    {"town": "Town", "homes": 3300, "accounts": 3969, "registers": 10071, "generateS": 14, "replayS": 11},
+    {"town": "Large town", "homes": 5500, "accounts": 6598, "registers": 16416, "generateS": 23, "replayS": 15,
+     "memoryMB": 260, "documents": 187767, "invoices": 73106},
 )
 
 LIMITS = (

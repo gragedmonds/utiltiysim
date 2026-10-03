@@ -160,8 +160,8 @@ def local_lines(seed: str, blocks: list[Polygon], era: EraField, lot_depth_by_er
                 ) -> tuple[list[RoadLine], list[tuple[float, float]], list[int]]:
     """Local streets for each neighbourhood block; returns lines, bulb points, template per block.
 
-    ``anchor`` is the geometry local streets may connect to (arterials, collectors and, when growing an OSM core,
-    the core boundary where connectors will be built). A parallel must touch it at one end at least, and is cut
+    ``anchor`` is the geometry local streets may connect to (arterials, collectors and, around a hole left empty,
+    its boundary). A parallel must touch it at one end at least, and is cut
     into facing courts only when both ends touch it, so courts never become islands."""
     lines: list[RoadLine] = []
     bulbs: list[tuple[float, float]] = []
@@ -299,7 +299,7 @@ def name_lines(seed: str, lines: list[RoadLine], reserved: set[str]) -> None:
 def synthetic_skeleton(seed: str, extent, center, era: EraField, *, arterial_spacing: float, arterial_warp: float,
                        collector_block: float, lot_depth_by_era: list[float], exclude: Polygon | None = None,
                        reserved_names: set[str] | None = None):
-    """All synthetic lines for an extent (optionally with a hole for an OSM core)."""
+    """All synthetic lines for an extent (optionally leaving a hole empty)."""
     frame = box(*extent)
     arts = arterial_lines(seed, extent, center, arterial_spacing, arterial_warp)
     region = frame if exclude is None else frame.difference(exclude)
@@ -319,52 +319,3 @@ def synthetic_skeleton(seed: str, extent, center, era: EraField, *, arterial_spa
     all_lines = kept_arts + cols + locs
     name_lines(seed, all_lines, reserved_names or set())
     return all_lines, np.asarray(bulbs, dtype=np.float64).reshape(-1, 2), nblocks, templates
-
-
-def growth_connectors(osm_lines: list[RoadLine], synth: list[RoadLine], core, max_reach: float = 700.0,
-                      bbox_ring=None) -> list[RoadLine]:
-    """Stitch the OSM core to the synthetic ring: extend OSM dead ends that touch the core boundary outward to the
-    first synthetic road, and pull synthetic dead ends on the core boundary to the nearest OSM node."""
-    out: list[RoadLine] = []
-    if not synth:
-        return out
-    synth_union = unary_union([LineString(s.points) for s in synth])
-    deg: dict[tuple[float, float], int] = {}
-    for ln in osm_lines:
-        for p in (ln.points[0], ln.points[-1]):
-            k = (round(float(p[0]), 2), round(float(p[1]), 2))
-            deg[k] = deg.get(k, 0) + 1
-    ring = core.boundary
-    for ln in osm_lines:
-        for end, prev in ((ln.points[-1], ln.points[-2]), (ln.points[0], ln.points[1])):
-            k = (round(float(end[0]), 2), round(float(end[1]), 2))
-            if deg.get(k, 0) != 1 or (bbox_ring is not None and bbox_ring.distance(Point(end)) > 40):
-                continue
-            v = end - prev
-            v = v / max(np.hypot(*v), 1e-9)
-            ray = LineString([end, end + v * max_reach])
-            if core.contains(Point(end + v * 60)) and ring.distance(Point(end)) > 60:
-                continue
-            hit = ray.intersection(synth_union)
-            if hit.is_empty:
-                continue
-            pts = [np.asarray(g.coords[0]) for g in getattr(hit, "geoms", [hit]) if not g.is_empty]
-            if not pts:
-                continue
-            target = min(pts, key=lambda p: np.hypot(*(p - end)))
-            seg = np.array([end, target + v * OVERHANG])
-            out.append(RoadLine(seg, ln.cls, ln.name, "connector", f"conn-{ln.source_id}"))
-    osm_nodes = np.array([k for k, c in sorted(deg.items())]) if deg else np.zeros((0, 2))
-    if len(osm_nodes):
-        from scipy.spatial import cKDTree
-
-        kd = cKDTree(osm_nodes)
-        for s in synth:
-            for end in (s.points[0], s.points[-1]):
-                if ring.distance(Point(end)) > 6:
-                    continue
-                dist, j = kd.query(end)
-                if dist < 160:
-                    out.append(RoadLine(np.array([end, osm_nodes[j]]), s.cls, s.name, "connector",
-                                        f"conn-{s.source_id}"))
-    return out

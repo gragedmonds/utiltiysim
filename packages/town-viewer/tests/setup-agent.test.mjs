@@ -4,7 +4,7 @@ import {applyAgentProposal,proposalInput,supportsVoice} from '../dist/setup-agen
 import {EngineM2C} from '../dist/m2c.js';
 import {EngineOperations} from '../dist/engine-operations.js';
 
-const proposal={name:'Recovery',purpose:'Reduce backlog',preset:'whitby_small',region:'Ontario',seed:'repeat-me',asOf:'2026-05-28',summary:'A recovery plan.',assumptions:[],limitations:[],townOverrides:{},settings:{process:{analysts:2}},operations:{crews:{fieldCrews:3}},opsSettings:{fieldCrews:3},townRef:'whitby_small',townId:'town-1',townName:'Whitby',homes:480,changes:[],episodes:[{id:'EP-1',title:'RPA off',from:'2026-04-01',to:'2026-04-30',ramp:0,settings:{process:{rpa_coverage:0}}}]};
+const proposal={name:'Recovery',purpose:'Reduce backlog',preset:'village',region:'Ontario',seed:'repeat-me',asOf:'2026-05-28',summary:'A recovery plan.',assumptions:[],limitations:[],townOverrides:{},settings:{process:{analysts:2}},operations:{crews:{fieldCrews:3}},opsSettings:{fieldCrews:3},townRef:'village',townId:'town-1',townName:'Village',homes:480,changes:[],episodes:[{id:'EP-1',title:'RPA off',from:'2026-04-01',to:'2026-04-30',ramp:0,settings:{process:{rpa_coverage:0}}}]};
 function memory(){const m=new Map();return {getItem:k=>m.get(k)??null,setItem:(k,v)=>m.set(k,v)};}
 test('reviewed proposals populate a draft without replacing identity or conversation',()=>{
  const old={id:'sim-1',status:'draft',name:'Old',agent:{messages:[{role:'user',content:'Help'}]},createdAt:'today'};
@@ -31,7 +31,7 @@ test('voice feature detection supports standard and prefixed browsers, with typi
 
 test('Year context includes live settings and existing episodes while omitting conversation metadata',async()=>{
  const {runInput,currentRunInput,inflictInput,BASELINE_TOPICS}=await import('../dist/setup-agent.js');
- const m=new EngineM2C({townRef:'whitby_small',townId:'town-1',storage:memory(),initial:proposal});
+ const m=new EngineM2C({townRef:'village',townId:'town-1',storage:memory(),initial:proposal});
  m.setSettings({process:{analysts:5}});
  const context=runInput({...currentRunInput(m,'2026-06-01'),agent:{messages:[{role:'user',content:'Private history'}]},actions:[{id:'ACT-1'}]});
  assert.equal(context.settings.process.analysts,5);assert.equal(context.startDate,'2026-06-01');assert.equal(context.episodes[0].id,'EP-1');assert.equal(context.agent,undefined);assert.equal(context.actions,undefined);
