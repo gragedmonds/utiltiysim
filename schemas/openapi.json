@@ -443,7 +443,7 @@
                 "type": "null"
               }
             ],
-            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages); see GET /api/m2c/settings.",
+            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field); see GET /api/m2c/settings.",
             "title": "Settings"
           },
           "town": {
@@ -534,7 +534,7 @@
                 "type": "null"
               }
             ],
-            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages); see GET /api/m2c/settings.",
+            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field); see GET /api/m2c/settings.",
             "title": "Settings"
           },
           "town": {
@@ -669,7 +669,7 @@
                 "type": "null"
               }
             ],
-            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages); see GET /api/m2c/settings.",
+            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field); see GET /api/m2c/settings.",
             "title": "Settings"
           },
           "sort": {
@@ -805,7 +805,7 @@
                 "type": "null"
               }
             ],
-            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages); see GET /api/m2c/settings.",
+            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field); see GET /api/m2c/settings.",
             "title": "Settings"
           },
           "status": {
@@ -1002,7 +1002,7 @@
                 "type": "null"
               }
             ],
-            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages); see GET /api/m2c/settings.",
+            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field); see GET /api/m2c/settings.",
             "title": "Settings"
           },
           "town": {
@@ -1154,7 +1154,7 @@
                 "type": "null"
               }
             ],
-            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages); see GET /api/m2c/settings.",
+            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field); see GET /api/m2c/settings.",
             "title": "Settings"
           },
           "town": {
@@ -1265,7 +1265,7 @@
                 "type": "null"
               }
             ],
-            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages); see GET /api/m2c/settings.",
+            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field); see GET /api/m2c/settings.",
             "title": "Settings"
           },
           "town": {
@@ -1327,7 +1327,7 @@
               "additionalProperties": true,
               "type": "object"
             },
-            "description": "Run-scoped groups (process, anomalies, reading, vee, billing, contact, outages) → setting → value or operator.",
+            "description": "Run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field) → setting → value or operator.",
             "title": "Settings",
             "type": "object"
           },
@@ -1531,7 +1531,7 @@
                 "type": "null"
               }
             ],
-            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages); see GET /api/m2c/settings.",
+            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field); see GET /api/m2c/settings.",
             "title": "Settings"
           },
           "town": {
@@ -1638,7 +1638,7 @@
                 "type": "null"
               }
             ],
-            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages); see GET /api/m2c/settings.",
+            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field); see GET /api/m2c/settings.",
             "title": "Settings"
           },
           "town": {
@@ -1743,7 +1743,7 @@
                 "type": "null"
               }
             ],
-            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages); see GET /api/m2c/settings.",
+            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field); see GET /api/m2c/settings.",
             "title": "Settings"
           },
           "sourceCaseId": {
@@ -1951,7 +1951,7 @@
                 "type": "null"
               }
             ],
-            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages); see GET /api/m2c/settings.",
+            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field); see GET /api/m2c/settings.",
             "title": "Settings"
           },
           "status": {
@@ -2063,7 +2063,7 @@
                 "type": "null"
               }
             ],
-            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages); see GET /api/m2c/settings.",
+            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field); see GET /api/m2c/settings.",
             "title": "Settings"
           },
           "town": {
@@ -2262,7 +2262,7 @@
                 "type": "null"
               }
             ],
-            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages); see GET /api/m2c/settings.",
+            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field); see GET /api/m2c/settings.",
             "title": "Settings"
           },
           "sort": {
@@ -2380,7 +2380,7 @@
                 "type": "null"
               }
             ],
-            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages); see GET /api/m2c/settings.",
+            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field); see GET /api/m2c/settings.",
             "title": "Settings"
           },
           "town": {
@@ -2467,7 +2467,7 @@
                 "type": "null"
               }
             ],
-            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages); see GET /api/m2c/settings.",
+            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field); see GET /api/m2c/settings.",
             "title": "Settings"
           },
           "town": {
@@ -2548,7 +2548,7 @@
                 "type": "null"
               }
             ],
-            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages); see GET /api/m2c/settings.",
+            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field); see GET /api/m2c/settings.",
             "title": "Settings"
           },
           "since": {
@@ -2703,7 +2703,7 @@
                 "type": "null"
               }
             ],
-            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages); see GET /api/m2c/settings.",
+            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field); see GET /api/m2c/settings.",
             "title": "Settings"
           },
           "sort": {
@@ -2866,7 +2866,7 @@
                 "type": "null"
               }
             ],
-            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages); see GET /api/m2c/settings.",
+            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field); see GET /api/m2c/settings.",
             "title": "Settings"
           },
           "sort": {
@@ -3367,6 +3367,43 @@
           }
         },
         "summary": "Post Contact"
+      }
+    },
+    "/api/m2c/fieldwork": {
+      "post": {
+        "description": "``m2c-fieldwork/1.0``: the field crews' year to ``asOf``: work orders created, completed, open and overdue by\nprogramme (customer emergencies, service orders, meter maintenance, preventative maintenance, capital\nconstruction) and work type, on-time and emergency response, crew utilisation and overtime, labour and materials\ncost, and the maintenance plan's compliance. Orders follow the year (collections, moves, VEE field visits, the\ncontact centre's calls, the year's outages, meter ages and the town's assets); ``settings.field`` (and episodes)\nshape the crews and the work.",
+        "operationId": "post_fieldwork_api_m2c_fieldwork_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Fieldwork"
       }
     },
     "/api/m2c/guide": {

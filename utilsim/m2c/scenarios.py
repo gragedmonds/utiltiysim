@@ -10,7 +10,7 @@ from __future__ import annotations
 SCENARIOS_VERSION = "m2c-scenarios/1.0"
 GROUPS = (("staffing", "Staffing"), ("reading", "Meter reading"), ("vee", "VEE"), ("billing", "Billing"),
           ("collections", "Collections"), ("anomalies", "Meters & anomalies"), ("contact", "Contact centre"),
-          ("operations", "Operations"))
+          ("field", "Field work"), ("operations", "Operations"))
 
 
 def _ep(title: str, settings: dict, *, start: int = 0, days: int | None = None, ramp: int = 0) -> dict:
@@ -116,13 +116,52 @@ SCENARIOS: tuple[dict, ...] = (
      "watch": "Winter holds, arrears carried through spring, and the release wave when it ends.",
      "tags": ["moratorium", "arrears"],
      "episodes": [_ep("Long moratorium", {"billing": {"moratorium_start": "10-15", "moratorium_end": "05-31"}})]},
+    {"id": "collections_rule", "title": "Collections rule approves disconnections", "group": "collections",
+     "description": "From this day a collections rule approves every disconnection notice as it is issued, instead of "
+                    "waiting for a person in the Collections worklist.",
+     "watch": "Notices turn into disconnections at the earliest day; most customers pay and are reconnected the next "
+              "business day. Disconnected contacts follow, and the meter technicians get disconnects and reconnects "
+              "(AMI electric meters with a switch are done remotely). The winter moratorium still holds notices.",
+     "tags": ["disconnections", "field work", "contacts"],
+     "episodes": [_ep("Rule approves disconnections", {"billing": {"disconnect_rule_share": 1.0}})]},
+    {"id": "meter_tech_shortage", "title": "Meter technicians short", "group": "field",
+     "description": "Half the meter technicians are off for two months (injuries, a retirement, a vacancy not filled).",
+     "watch": "VEE field visits still take their time first and customer work goes ahead of planned work, so planned "
+              "meter work (seal samples, batteries, water meter replacement) backs up and goes overdue. It bites "
+              "hardest from March to May, when the seal samples are due; in high summer the meter work is light.",
+     "tags": ["field work", "backlog", "overtime"],
+     "episodes": [_ep("Half the meter technicians", {"field": {"crew_meter": {"per_1000_premises": "*0.5"}}}, days=60)]},
+    {"id": "ami_conversion", "title": "AMI conversion programme", "group": "field",
+     "description": "The utility converts AMR and manually read meters to AMI, route by route, with contract "
+                    "installers joining the meter technicians.",
+     "watch": "AMI conversion orders fill the meter maintenance programme through the season; capital materials "
+              "climb. The converted meters keep their old reading method in this run (the conversion does not yet "
+              "reach the reads).",
+     "tags": ["field work", "capital", "AMI"],
+     "episodes": [_ep("Convert 40% of AMR and manual meters", {"field": {"ami_conversion": {"rate": 0.4},
+                                                                      "crew_meter": {"per_1000_premises": "*2"}}})]},
+    {"id": "seal_lot_failures", "title": "Seal lots fail sampling", "group": "field",
+     "description": "From this day every lot whose sample finishes testing fails compliance sampling (a meter "
+                    "model drifting out of tolerance).",
+     "watch": "Each failed lot has every other meter exchanged through the rest of the year, due 31 December: seal "
+              "exchanges, the meter technicians' hours and materials jump. Add Meter technicians short to see the "
+              "exchanges compete with the rest of the meter work.",
+     "tags": ["field work", "compliance", "meters"],
+     "episodes": [_ep("Lots fail", {"field": {"seal_lot_pass_rate": 0.0}})]},
+    {"id": "contractor_stoppage", "title": "Construction crews off the job", "group": "field",
+     "description": "The construction contractor stops work for six weeks (a dispute, or crews moved to another "
+                    "utility's storm recovery).",
+     "watch": "New services and main renewal wait: capital construction backlog grows and on-time falls; meter sets "
+              "follow late. Work not built by the end of the season carries into next year.",
+     "tags": ["field work", "capital", "backlog"],
+     "episodes": [_ep("No construction crews", {"field": {"crew_construction": {"per_1000_premises": 0}}}, days=42)]},
     {"id": "storm_season", "title": "Storm season", "group": "operations",
      "description": "Three months with three times the storm days: more overhead line faults, longer outages, and the "
                     "outage reports that come with them.",
      "watch": "Outage contacts and the emergency line climb on storm days; with one agent the queue spills into "
-              "hang-ups and call backs (Year: contact charts; Data: Outages & leaks, Contacts). The year's reads do "
-              "not see these outages yet.",
-     "tags": ["outages", "contact centre"],
+              "hang-ups and call backs (Year: contact charts; Data: Outages & leaks, Contacts). The line crews' "
+              "outage repairs and overtime climb too (Field work). The year's reads do not see these outages yet.",
+     "tags": ["outages", "contact centre", "field work"],
      "episodes": [_ep("Storms ×3", {"outages": {"storm_factor": "*3"}}, days=92)]},
     {"id": "phones_mornings_only", "title": "Lines open mornings only", "group": "contact",
      "description": "For a month the agents cover the phones only until 1 pm; the rest of the day goes to the "

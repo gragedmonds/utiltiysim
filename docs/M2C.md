@@ -396,7 +396,9 @@ the reason ("account CA-… has nothing overdue on 2026-01-02", "the disconnecti
 | `disconnect_approve` | `{day, invoiceId, note?}` | After a disconnection notice: a crew disconnects at 10:00 on the earliest disconnection day (notice + `disconnect_notice_days`), or the next morning, if the bill is still unpaid. A dunning hold or an open referral moves it to their end; under a payment arrangement the approval lapses. A customer who would not have paid within a week pays the overdue bills 2–7 days later with `disconnect_payment_rate` and is reconnected the next business day at 10:00 |
 | `disconnect_cancel` | `{day, invoiceId, note}` | No disconnection for that notice |
 
-The engine never disconnects without your approval. **The call centre** (simulated, `createdBy: collections`)
+The engine never disconnects without your approval, unless you set a collections rule: `disconnect_rule_share`
+(0 by default) approves that share of disconnection notices as they are issued (`approvedBy: RULE`), and the scenario
+**Collections rule approves disconnections** sets it to 1 from a day. **The call centre** (simulated, `createdBy: collections`)
 refers a customer to a low-income programme after a disconnection notice or a moratorium hold
 (`low_income_referral_rate`, once a year per account), and enrols one in budget billing after an overdue notice
 (`budget_billing_offer_rate`, once a year per account); the agency and a collections agent (`CC-01`) then work them as
@@ -535,6 +537,86 @@ a second agent), and **Storm season** (operations) triples the storm days for th
 
 Not yet modelled: contacts do not open back-office cases (a bill-wrong call does not raise a billing exception), and
 the year's outages do not reach the reads.
+
+## Field work
+
+The field crews' year (`utilsim/m2c/fieldwork.py`): work orders in five programmes, each raised by something that
+happens in the replayed year or by the town itself, worked by six kinds of crew. Every setting is in the run group
+**Field work** (`field`); every work type is an object with four parts: `rate` (how much of it there is; its meaning is
+in the setting's description), `minutes` (crew minutes on site), `target_days` (business days from release to due; an
+emergency counts calendar time) and `materials` (dollars per order).
+
+| Programme | Work | Raised by |
+|---|---|---|
+| Customer emergencies | gas odour | a gas leak's first odour report and every background odour report (contact centre) |
+| | no supply | single-premise outage reports (the contact centre's background outage contacts) |
+| | outage and leak repair | the year's incidents, timed by the incident model (start, restoration) on the utility's crew |
+| Service orders | disconnect, reconnect | the year's disconnections and reconnections (collections). AMI electric meters with a remote switch (`remote_switch_share`) are switched without a truck |
+| | move-out, move-in read | account closings and openings at premises with an AMR or manual meter; a move-in the day after a move-out there is the same visit |
+| | meter investigation, corrective exchange | the run's VEE field visits (truck rolls) and the meters they exchange; the run times them, so they take the meter technicians' time on their day |
+| Meter maintenance | seal exchange | lots (commodity, model, install year) whose seal period ends this year: the sample (`seal_sample_size`) is pulled and tested from January to April; a lot that fails (`seal_lot_pass_rate`, decided when its last sample is tested) has every other meter exchanged by 31 December |
+| | module battery | gas and water radio modules (AMI and AMR) whose battery reaches `battery_years` this year, before the anniversary |
+| | water meter replacement | water meters `water_meter_life_years` old or older, route by route from February to November |
+| | removal | vacant premises (service abandoned), per 1,000 premises a year |
+| | AMI conversion | AMR and manual meters, route by route through the construction season (0 by default) |
+| Preventative maintenance | pole inspection → pole replacement | the town's poles; inspections find poles to replace |
+| | tree trimming | overhead distribution spans |
+| | valve exercise → valve repair | water and gas valves, on the utility's crew |
+| | hydrant flushing → hydrant repair | hydrants, May to October |
+| | leak survey → gas leak repair | gas main in routes of about a kilometre, April to November; leaks found per surveyed kilometre |
+| | regulator inspection | city gate and district regulator stations |
+| Capital construction | new service → meter set | new-connection contacts that go ahead (`new_set.rate`), designed for 15 business days and built in the construction season, then a meter technician sets the meter |
+| | service upgrade | homes with an EV or electric heat |
+| | main renewal | 100 m segments of cast-iron water and gas main, in the construction season |
+
+Planned programmes spread their items over their window in asset or route order, and the rate in force on an item's
+scheduled day decides whether it is ordered, so an episode on a rate applies from its day.
+
+How the crews work:
+1. **On-call responders** (`crew_emergency`, whole crews, at least one) work emergencies around the clock, first come
+   first served, several at once. After hours a responder takes `callout_minutes` to get on the road; the response is
+   from the report to on site (half of `travel_minutes` each way).
+2. **Business-day crews** (`crew_meter`, `crew_electric`, `crew_water`, `crew_gas`, `crew_construction`) have
+   `per_1000_premises` crews per 1,000 premises (a fraction is a crew's share of the day on this work) for
+   `shift_hours` from `shift_start_hour` on business days. Work timed elsewhere (VEE visits, outage repairs) takes their
+   time on its day first; then they work released orders by priority (1 emergencies, 2 customer work, 3 maintenance, 4
+   capital and conversion) and due date. A long job carries over to the next day. Customer work due today or overdue
+   may run into overtime, up to `overtime_max_hours` per crew.
+3. **Cost** is crew time at `cost_per_hour` (times `overtime_factor` after hours) plus each order's `materials`.
+
+Field settings never change the rest of the year (reads, cases, bills, collections and contacts are identical, which
+`tests/test_m2c_fieldwork.py` checks). Field work does not yet feed back: a late disconnect does not move the
+collections timeline, a removal does not end billing, and an AMI conversion does not change how the meter is read.
+
+**Summary** (`POST /api/m2c/fieldwork`, `m2c-fieldwork/1.0`): as of `asOf`, `kpis` (created, completed, open,
+planned, overdue, `onTimePct`, remote, `responseMin` and `responseP90Min` for gas odour and no-supply calls, hours,
+overtime hours, `daysToComplete`, `utilisationPct` of the business-day crews, `cost` {labour, materials, total}),
+`programs` and `types` with the same figures (types with their settings), `crews` (crews, available, busy and
+overtime hours, utilisation, labour), `plan` (each planned programme: due this year, not ordered, orders, completed,
+due by now, on time, compliance), `daily` (the last 60 days with the backlog by programme) and `notes`. The trend's
+months carry the same figures under `field`, with `byProgram` (completed) and `backlog` (released and open at the
+month's end) by programme.
+
+Measured on the default settings, year to 31 December (the field year itself takes 0.05 to 0.4 s after the replay):
+
+| Town | Premises | Orders | Emergency · service · meter · maintenance · construction | On time | Emergency response | Crew utilisation | Overtime | Cost (labour + materials) |
+|---|---|---|---|---|---|---|---|---|
+| `village` | 570 | 442 | 14 · 75 · 169 · 175 · 9 | 79% | 40 min | 52% | 19 h | $124k ($58k + $65k) |
+| `small_town` | 2,103 | 1,399 | 34 · 270 · 508 · 513 · 74 | 100% | 35 min | 49% | 44 h | $682k ($209k + $474k) |
+| `town` | 3,570 | 1,975 | 52 · 409 · 645 · 764 · 105 | 100% | 34 min | 43% | 72 h | $830k ($309k + $521k) |
+| `large_town` | 5,864 | 3,252 | 88 · 670 · 1,039 · 1,236 · 219 | 100% | 32 min | 42% | 116 h | $1.25M ($513k + $739k) |
+
+The village's fifth of a meter technician is fully booked from January to April by the seal samples (a lot's sample is
+the same size in any town), so a fifth of its orders finish late. On the small town, half the meter technicians from
+March to April drop meter maintenance on time to 73% with 33 orders overdue at the end of May, while service orders
+stay on time (they go first, with overtime); a meter crew of 0.2 per 1,000 premises all year runs at 88% and leaves 53
+orders overdue in May. With the collections rule approving every notice, the year has 145 disconnects and reconnects
+on the village (82 remote), 286 on the small town (160), 483 on the town (229) and 922 on the large town (508).
+
+The scenario library's **Field work** group tries the levers: meter technicians short (half for two months), an AMI
+conversion programme, seal lots that fail sampling, and construction crews off the job for six weeks. **Storm
+season** loads the line crews with outage repairs, and **Collections rule approves disconnections** gives the meter
+technicians disconnects and reconnects.
 
 ## Run statistics for a period
 
@@ -698,6 +780,7 @@ opening each case.
 | `GET /api/m2c/scenarios` | `m2c-scenarios/1.0`: the scenario library (groups, episode templates, what to watch, coming) |
 | `POST /api/m2c/trend` | `m2c-trend/1.0`: the year month by month as of `asOf` (reads, cases and backlog, cost, billing, dunning, collections phases) with the run's `episodes` |
 | `POST /api/m2c/contact` | `m2c-contact/1.0`: the contact centre as of `asOf` (KPIs, reasons, groups, the last 60 days, the year's incidents, notes); see "Contact centre" |
+| `POST /api/m2c/fieldwork` | `m2c-fieldwork/1.0`: the field crews' year as of `asOf` (KPIs, programmes, work types, crews, the maintenance plan, the last 60 days, notes); see "Field work" |
 | `GET /api/m2c/tables` | `m2c-tables/1.0`: the Data pages' catalog: table groups, each table's source, description and columns (key, label, kind, facet, link), and the page limits (see "Data tables") |
 | `POST /api/m2c/table` | `m2c-table/1.0`: one page (≤ 500 rows) of a table as of `asOf`, filtered (`search`, `filters`), sorted (`sort`, `desc`) and paged; rows as arrays in `columns` order, `facets` over the whole table, `total` matching rows |
 | `POST /api/m2c/table.csv` | one CSV page (≤ 5,000 rows, header on every page) of the same selection; a client stitches the pages |
@@ -727,6 +810,7 @@ one column (missing values last either way) and takes one page. Built tables are
 | Collections | `dunning` (reminders, notices, disconnection notices, winter holds, returned payments), `collectionsAccounts` (every account with an invoice in its phase: current, overdue, reminder, overdue notice, winter moratorium, dunning hold, payment arrangement, disconnection notice, disconnected), `disconnections`, `collectionsWork` (arrangements, budget plans, dunning holds, low-income referrals) | run | 2,392 · 2,175 · 145 · 468 |
 | Work | `cases`, `fieldOrders`, `interruptions` | run | 1,398 · your orders · the map's outages |
 | Contact centre | `contacts` (every contact: reason, channel, outcome, wait, handle time, attempt, what caused it), `contactDaily` (each day's contacts, answered, hung up, service level, agents, cost), `yearIncidents` (the year's outages and leaks: premises out, hours, who could smell gas, contacts) | run | 1,630 · 217 · 17 |
+| Field work | `workOrders` (every order: work, programme, crew, priority, status, created, released, due, started, completed, on time, response, crew hours, overtime, labour, materials, premise, asset, what raised it), `crewDays` (each crew type's day: crews, available, busy and overtime hours, utilisation, completed, open and overdue), `maintenancePlan` (each planned programme's compliance) | run | 1,278 · 1,302 · 12 |
 
 `tests/test_m2c_tables.py` builds every table for the small town, bounds the pages (JSON and CSV under the hosted 4.5 MB), and
 checks the counts against the run (reads taken, documents and invoices created by the date, usage against

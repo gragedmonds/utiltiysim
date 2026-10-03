@@ -7,8 +7,10 @@ After the year's billing (``books.py``), each contract account replays its invoi
   notice. The winter moratorium holds a disconnection notice for electricity and water until May 1, when it is issued
   if the bill is still unpaid;
 - **disconnection** needs a person's approval (``disconnect_approve``) and happens at the earliest
-  ``disconnect_notice_days`` after the notice, at 10:00. The engine never disconnects on its own. Most disconnected
-  customers pay within a week (``disconnect_payment_rate``) and are reconnected the next business day;
+  ``disconnect_notice_days`` after the notice, at 10:00. The engine never disconnects on its own, unless you set a
+  collections rule (``disconnect_rule_share``, 0 by default) that approves a share of notices when they are issued.
+  Most disconnected customers pay within a week (``disconnect_payment_rate``) and are reconnected the next business
+  day;
 - **the call centre** refers some customers to a low-income programme after a disconnection notice or a moratorium
   hold (``LOW_INCOME`` cases; the agency decides after ``low_income_review_days`` and may credit a grant), and enrols
   some in budget billing after an overdue notice (``BUDGET_BILL`` cases; a collections agent sets the plan up), at the
@@ -59,8 +61,8 @@ LISTS = ("disconnect", "moratorium", "rejected", "overdue")
 LIST_SORTS = ("age", "amount", "created")
 ACCOUNT_LOG = ("PAYMENT_ARRANGEMENT", "ARRANGEMENT_COMPLETED", "ARRANGEMENT_BROKEN", "DUNNING_HOLD")
 # Draw columns per invoice: payment (2-5, as before collections existed), call-centre referral and budget offer (7, 8),
-# paying after a disconnection and when (12, 13).
-DRAWS = (2, 3, 4, 5, 7, 8, 12, 13)
+# paying after a disconnection and when (12, 13), the collections rule approving a disconnection (14).
+DRAWS = (2, 3, 4, 5, 7, 8, 12, 13, 14)
 
 
 def invoice_account(invoice_id: str) -> str:
@@ -416,6 +418,11 @@ class Collections:
             inv["disc"] = {"notice": t}
             inv["level"] = 3
             self._call_centre(A, inv, t, "referral")
+            if b.disconnect_rule_share > 0 and inv["u"][8] < b.disconnect_rule_share:  # the collections rule
+                d = inv["disc"]
+                d.update(approved=t, scheduled=int(t) + b.disconnect_notice_days + 10.0 / 24, approvedBy="RULE")
+                inv["dunning"].append((t, "DISCONNECT_APPROVED"))
+                self.push(d["scheduled"], "disconnect", inv)
             return
         if level == 1:
             fee = round(amount_due(inv) * b.late_fee_pct / 100.0, 2)

@@ -161,10 +161,12 @@ def trend(run: M2CRun, as_of: str | None = None) -> dict:
                        "end": date_of(end_day).isoformat(), "complete": end_excl - 1 <= day, "reads": reads,
                        "cases": cases, "cost": cost, "billing": billing,
                        "collections": {**counts, "phases": phases}})
-    from utilsim.m2c import contact
+    from utilsim.m2c import contact, fieldwork
 
     for m, figures in zip(months, contact.monthly(run, day, T, MONTH_START)):
         m["contact"] = figures
+    for m, figures in zip(months, fieldwork.monthly(run, day, T, MONTH_START)):
+        m["field"] = figures
     out = {"schemaVersion": TREND_VERSION, "simulationId": run.simulation_id, "asOf": date_of(day).isoformat(),
            "scenarioDate": c.scenario.date, "episodes": episode_json(run), "months": months}
     cache[day] = out

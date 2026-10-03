@@ -511,6 +511,10 @@ IMPACT: dict[str, tuple[str, str]] = {
     "billing.disconnect_notice_days": ("year", "Days from a disconnection notice to the earliest "
                                                "disconnection. Acts only on disconnections you approve: the "
                                                "engine never disconnects on its own."),
+    "billing.disconnect_rule_share": ("year", "Disconnection notices a collections rule approves as they are "
+                                             "issued: disconnections, reconnections, disconnected contacts and the "
+                                             "field crews' disconnects and reconnects follow. 0 (the default): every "
+                                             "disconnection waits for your approval."),
     "billing.disconnect_payment_rate": ("year", "Disconnected customers who pay within a week and are "
                                                 "reconnected the next business day. Acts only on "
                                                 "disconnections you approve in the Collections worklist."),
@@ -591,6 +595,78 @@ IMPACT: dict[str, tuple[str, str]] = {
                                         "the contacts they bring."),
     "outages.restore_factor": ("year", "Multiplies the time to restore service: longer outages bring twice the outage "
                                        "reports past two hours."),
+    # ---- field work (run) ---------------------------------------------------------------------------------------------
+    "field.shift_start_hour": ("year", "When the business-day crews start. It moves when work is done in the day and "
+                                       "which emergencies fall after hours (call-out and overtime)."),
+    "field.shift_hours": ("year", "Hours in a crew's day: every business-day crew's capacity. Shorter days build "
+                                  "backlog, overdue work and overtime."),
+    "field.travel_minutes": ("year", "Driving to each job and back: more travel fills the crews' day with fewer "
+                                     "jobs, and slows emergency response."),
+    "field.callout_minutes": ("year", "Time for an on-call responder to get on the road after hours: emergency "
+                                      "response times at night and on weekends."),
+    "field.overtime_max_hours": ("year", "Overtime per crew for customer work due today or overdue: more keeps "
+                                         "disconnects, reconnects and move reads on time, at overtime cost."),
+    "field.remote_switch_share": ("year", "AMI electric meters with a remote switch: their disconnects and "
+                                          "reconnects need no truck."),
+    "field.seal_years_electric": ("year", "Electric seal period: picks which install year's lots are sampled this "
+                                          "year (the meters' install cohorts set the volume)."),
+    "field.seal_years_gas": ("year", "Gas seal period: picks which install year's lots are sampled this year."),
+    "field.seal_sample_size": ("year", "Meters pulled from each expiring lot: more sample exchanges."),
+    "field.seal_lot_pass_rate": ("year", "Lots that pass sampling. A failed lot has every meter exchanged by "
+                                         "31 December: the biggest swing in meter work."),
+    "field.battery_years": ("year", "Module battery life: picks which install year's gas and water modules get "
+                                    "new batteries this year."),
+    "field.water_meter_life_years": ("year", "Water meters this old or older are due for replacement: a shorter "
+                                             "life puts more cohorts in the backlog."),
+    "field.construction_start_month": ("year", "First month of the construction season: new services, upgrades, AMI "
+                                               "conversion and main renewal wait for it."),
+    "field.construction_end_month": ("year", "Last month of the construction season: work not built by then waits "
+                                             "for next year."),
+    "field.crew_emergency": ("year", "On-call responders: fewer stretch emergency response when emergencies "
+                                     "overlap; the cost prices their time."),
+    "field.crew_meter": ("year", "Meter technicians: service orders, VEE visits, exchanges, batteries and meter sets "
+                                 "share them. Fewer: backlog, late disconnects and move reads, overtime."),
+    "field.crew_electric": ("year", "Electric line crews: outage repairs take their time first, then pole and tree "
+                                    "programmes and service upgrades."),
+    "field.crew_water": ("year", "Water crews: main break repairs, valve and hydrant programmes and their repairs."),
+    "field.crew_gas": ("year", "Gas crews: leak repairs, leak surveys and regulator inspections."),
+    "field.crew_construction": ("year", "Construction crews: new services and main renewal through the season."),
+    "field.gas_odour": ("year", "Gas odour reports a responder attends; follows the year's gas leaks and the contact "
+                                "centre's gas odour calls."),
+    "field.no_supply": ("year", "Single-premise no-supply reports that need a truck; follows the contact centre's "
+                                "outage reports."),
+    "field.outage_repair": ("year", "Outage and leak repairs on the utilities' crews, timed by the incident model; "
+                                    "follows the outages settings."),
+    "field.disconnect": ("year", "Disconnect orders: follow the disconnections approved in Collections."),
+    "field.reconnect": ("year", "Reconnect orders: follow the reconnections after payment."),
+    "field.move_out": ("year", "Move-out visits: account closings at premises without AMI."),
+    "field.move_in": ("year", "Move-in visits: account openings at premises without AMI (not the day after a "
+                              "move-out there)."),
+    "field.meter_investigation": ("year", "VEE field visits on the meter technicians' time: follows the process "
+                                          "settings (field orders a day, field days) and the anomalies."),
+    "field.corrective_exchange": ("year", "Faulty meters exchanged on field visits: follows the anomalies (stuck, "
+                                          "slow, tamper) and the field visits that find them."),
+    "field.seal_exchange": ("year", "Seal-expiry exchanges: the samples and failed lots due this year."),
+    "field.ami_battery": ("year", "Module battery replacements due this year."),
+    "field.water_meter_replacement": ("year", "Over-age water meters replaced this year; the rest stay due."),
+    "field.removal": ("year", "Meter removals at vacant premises."),
+    "field.ami_conversion": ("year", "AMR and manually read meters converted to AMI, route by route in the season. "
+                                     "Off by default."),
+    "field.pole_inspection": ("year", "Poles inspected a year; inspections find poles to replace."),
+    "field.pole_replacement": ("year", "Inspected poles found needing replacement: long, costly line crew jobs."),
+    "field.tree_trimming": ("year", "Overhead spans trimmed a year."),
+    "field.valve_exercise": ("year", "Water and gas valves exercised a year; exercising finds valves to repair."),
+    "field.valve_repair": ("year", "Exercised valves found broken: repairs on the utility's crew."),
+    "field.hydrant_flush": ("year", "Hydrants flushed May to October; flushing finds hydrants to repair."),
+    "field.hydrant_repair": ("year", "Flushed hydrants found defective."),
+    "field.leak_survey": ("year", "Gas main walked a year; surveys find leaks to repair."),
+    "field.gas_leak_repair": ("year", "Leaks found per surveyed kilometre: grade 2 repairs on the gas crews."),
+    "field.regulator_inspection": ("year", "Regulator stations inspected a year."),
+    "field.new_set": ("year", "New-connection requests that go ahead: new services built in the season, then meter "
+                              "sets. Follows the contact centre's new connection contacts."),
+    "field.meter_set": ("year", "Meter sets on finished new services by the meter technicians."),
+    "field.service_upgrade": ("year", "Homes with an EV or electric heat upgrading their service a year."),
+    "field.main_replacement": ("year", "Cast-iron main renewed a year: the biggest capital cost."),
 }
 
 

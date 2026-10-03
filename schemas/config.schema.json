@@ -369,6 +369,20 @@
           "x-impact": "Disconnected customers who pay within a week and are reconnected the next business day. Acts only on disconnections you approve in the Collections worklist.",
           "x-reach": "year"
         },
+        "disconnect_rule_share": {
+          "default": 0.0,
+          "description": "Share of disconnection notices a collections rule approves when they are issued (the disconnection follows at the earliest day); the rest wait for a person's approval. 0: every disconnection needs you.",
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Disconnect Rule Share",
+          "type": "number",
+          "x-effects": [
+            "disconnections",
+            "field disconnects and reconnects"
+          ],
+          "x-impact": "Disconnection notices a collections rule approves as they are issued: disconnections, reconnections, disconnected contacts and the field crews' disconnects and reconnects follow. 0 (the default): every disconnection waits for your approval.",
+          "x-reach": "year"
+        },
         "first_bill_limit": {
           "default": 600.0,
           "description": "Block a bill with no expected use (vacant, new) above this total.",
@@ -1789,6 +1803,657 @@
         "modern"
       ],
       "title": "EraValues",
+      "type": "object"
+    },
+    "FieldConfig": {
+      "additionalProperties": false,
+      "description": "The work the field crews do over the year and the crews that do it: customer emergencies, service orders (disconnects, reconnects, move-ins and move-outs), meter maintenance (seal exchanges, batteries, removals), preventative maintenance on the networks and capital construction (new sets, upgrades, main renewal). Work follows the year: collections, moves, VEE field visits, the contact centre's calls, the year's outages and leaks, the meters' install years and the town's assets.",
+      "properties": {
+        "ami_battery": {
+          "$ref": "#/$defs/FieldWorkType",
+          "default": {
+            "materials": 35.0,
+            "minutes": 20.0,
+            "rate": 1.0,
+            "target_days": 20.0
+          },
+          "description": "Module battery replacement on gas and water meters: share of batteries reaching their life this year.",
+          "title": "Module battery",
+          "x-impact": "Module battery replacements due this year.",
+          "x-reach": "year"
+        },
+        "ami_conversion": {
+          "$ref": "#/$defs/FieldWorkType",
+          "default": {
+            "materials": 180.0,
+            "minutes": 35.0,
+            "rate": 0.0,
+            "target_days": 20.0
+          },
+          "description": "AMI conversion: share of AMR and manually read meters converted to AMI this year (capital, priority 4).",
+          "title": "AMI conversion",
+          "x-impact": "AMR and manually read meters converted to AMI, route by route in the season. Off by default.",
+          "x-reach": "year"
+        },
+        "battery_years": {
+          "default": 15,
+          "description": "Radio module battery life on gas and water meters, AMI and AMR (they have no mains power).",
+          "maximum": 40,
+          "minimum": 1,
+          "title": "Battery Years",
+          "type": "integer",
+          "x-impact": "Module battery life: picks which install year's gas and water modules get new batteries this year.",
+          "x-reach": "year",
+          "x-unit": "yr"
+        },
+        "callout_minutes": {
+          "default": 30.0,
+          "description": "After hours, the time an on-call responder takes to get on the road.",
+          "maximum": 240,
+          "minimum": 0,
+          "title": "Callout Minutes",
+          "type": "number",
+          "x-impact": "Time for an on-call responder to get on the road after hours: emergency response times at night and on weekends.",
+          "x-reach": "year",
+          "x-unit": "min"
+        },
+        "construction_end_month": {
+          "default": 11,
+          "description": "Last month of the construction season.",
+          "maximum": 12,
+          "minimum": 1,
+          "title": "Construction End Month",
+          "type": "integer",
+          "x-impact": "Last month of the construction season: work not built by then waits for next year.",
+          "x-reach": "year"
+        },
+        "construction_start_month": {
+          "default": 4,
+          "description": "First month of the construction season (digging is frost-free).",
+          "maximum": 12,
+          "minimum": 1,
+          "title": "Construction Start Month",
+          "type": "integer",
+          "x-impact": "First month of the construction season: new services, upgrades, AMI conversion and main renewal wait for it.",
+          "x-reach": "year"
+        },
+        "corrective_exchange": {
+          "$ref": "#/$defs/FieldWorkType",
+          "default": {
+            "materials": 140.0,
+            "minutes": 60.0,
+            "rate": 1.0,
+            "target_days": 10.0
+          },
+          "description": "Faulty meter exchanged on a field visit (the run decides when): share recorded.",
+          "x-impact": "Faulty meters exchanged on field visits: follows the anomalies (stuck, slow, tamper) and the field visits that find them.",
+          "x-reach": "year"
+        },
+        "crew_construction": {
+          "$ref": "#/$defs/FieldCrew",
+          "default": {
+            "cost_per_hour": 230.0,
+            "overtime_factor": 1.5,
+            "per_1000_premises": 0.08
+          },
+          "description": "Contractors: new services, main renewal.",
+          "title": "Construction crews",
+          "x-impact": "Construction crews: new services and main renewal through the season.",
+          "x-reach": "year"
+        },
+        "crew_electric": {
+          "$ref": "#/$defs/FieldCrew",
+          "default": {
+            "cost_per_hour": 165.0,
+            "overtime_factor": 1.5,
+            "per_1000_premises": 0.15
+          },
+          "description": "Pole work, tree trimming, outage repairs, service upgrades.",
+          "title": "Electric line crews",
+          "x-impact": "Electric line crews: outage repairs take their time first, then pole and tree programmes and service upgrades.",
+          "x-reach": "year"
+        },
+        "crew_emergency": {
+          "$ref": "#/$defs/FieldCrew",
+          "default": {
+            "cost_per_hour": 110.0,
+            "overtime_factor": 1.5,
+            "per_1000_premises": 0.4
+          },
+          "description": "Gas odour and no-supply calls, any hour of any day.",
+          "title": "On-call responders",
+          "x-impact": "On-call responders: fewer stretch emergency response when emergencies overlap; the cost prices their time.",
+          "x-reach": "year"
+        },
+        "crew_gas": {
+          "$ref": "#/$defs/FieldCrew",
+          "default": {
+            "cost_per_hour": 150.0,
+            "overtime_factor": 1.5,
+            "per_1000_premises": 0.08
+          },
+          "description": "Leak surveys, regulator stations, leak repairs.",
+          "title": "Gas crews",
+          "x-impact": "Gas crews: leak repairs, leak surveys and regulator inspections.",
+          "x-reach": "year"
+        },
+        "crew_meter": {
+          "$ref": "#/$defs/FieldCrew",
+          "default": {
+            "cost_per_hour": 75.0,
+            "overtime_factor": 1.5,
+            "per_1000_premises": 0.3
+          },
+          "description": "Disconnects, reconnects, move visits, exchanges, batteries, removals, investigations, meter sets.",
+          "title": "Meter technicians",
+          "x-impact": "Meter technicians: service orders, VEE visits, exchanges, batteries and meter sets share them. Fewer: backlog, late disconnects and move reads, overtime.",
+          "x-reach": "year"
+        },
+        "crew_water": {
+          "$ref": "#/$defs/FieldCrew",
+          "default": {
+            "cost_per_hour": 140.0,
+            "overtime_factor": 1.5,
+            "per_1000_premises": 0.15
+          },
+          "description": "Valves, hydrants, main break repairs.",
+          "title": "Water crews",
+          "x-impact": "Water crews: main break repairs, valve and hydrant programmes and their repairs.",
+          "x-reach": "year"
+        },
+        "disconnect": {
+          "$ref": "#/$defs/FieldWorkType",
+          "default": {
+            "materials": 0.0,
+            "minutes": 30.0,
+            "rate": 1.0,
+            "target_days": 0.0
+          },
+          "description": "Disconnect for non-payment: share of collections disconnections worked (AMI electric with a switch is done remotely).",
+          "x-impact": "Disconnect orders: follow the disconnections approved in Collections.",
+          "x-reach": "year"
+        },
+        "gas_leak_repair": {
+          "$ref": "#/$defs/FieldWorkType",
+          "default": {
+            "materials": 800.0,
+            "minutes": 360.0,
+            "rate": 0.15,
+            "target_days": 15.0
+          },
+          "description": "Gas leak repair (grade 2): leaks found per surveyed km.",
+          "x-impact": "Leaks found per surveyed kilometre: grade 2 repairs on the gas crews.",
+          "x-reach": "year"
+        },
+        "gas_odour": {
+          "$ref": "#/$defs/FieldWorkType",
+          "default": {
+            "materials": 0.0,
+            "minutes": 45.0,
+            "rate": 1.0,
+            "target_days": 0.041666666666666664
+          },
+          "description": "Gas odour investigation: share of gas odour reports (a leak's first report, every background report) a responder attends.",
+          "title": "Gas odour",
+          "x-impact": "Gas odour reports a responder attends; follows the year's gas leaks and the contact centre's gas odour calls.",
+          "x-reach": "year"
+        },
+        "hydrant_flush": {
+          "$ref": "#/$defs/FieldWorkType",
+          "default": {
+            "materials": 0.0,
+            "minutes": 40.0,
+            "rate": 1.0,
+            "target_days": 15.0
+          },
+          "description": "Hydrant flushing and inspection: share of hydrants a year (May to October).",
+          "title": "Hydrant flushing",
+          "x-impact": "Hydrants flushed May to October; flushing finds hydrants to repair.",
+          "x-reach": "year"
+        },
+        "hydrant_repair": {
+          "$ref": "#/$defs/FieldWorkType",
+          "default": {
+            "materials": 900.0,
+            "minutes": 240.0,
+            "rate": 0.04,
+            "target_days": 10.0
+          },
+          "description": "Hydrant repair: share of flushed hydrants found defective.",
+          "x-impact": "Flushed hydrants found defective.",
+          "x-reach": "year"
+        },
+        "leak_survey": {
+          "$ref": "#/$defs/FieldWorkType",
+          "default": {
+            "materials": 0.0,
+            "minutes": 90.0,
+            "rate": 0.33,
+            "target_days": 20.0
+          },
+          "description": "Gas leak survey: share of gas main length walked a year (minutes per km).",
+          "x-impact": "Gas main walked a year; surveys find leaks to repair.",
+          "x-reach": "year"
+        },
+        "main_replacement": {
+          "$ref": "#/$defs/FieldWorkType",
+          "default": {
+            "materials": 45000.0,
+            "minutes": 1440.0,
+            "rate": 0.02,
+            "target_days": 40.0
+          },
+          "description": "Main renewal: share of cast-iron water and gas main length replaced a year (minutes and materials per 100 m).",
+          "title": "Main renewal",
+          "x-impact": "Cast-iron main renewed a year: the biggest capital cost.",
+          "x-reach": "year"
+        },
+        "meter_investigation": {
+          "$ref": "#/$defs/FieldWorkType",
+          "default": {
+            "materials": 0.0,
+            "minutes": 40.0,
+            "rate": 1.0,
+            "target_days": 10.0
+          },
+          "description": "VEE field visit (the run decides when): share recorded against the meter technicians.",
+          "x-impact": "VEE field visits on the meter technicians' time: follows the process settings (field orders a day, field days) and the anomalies.",
+          "x-reach": "year"
+        },
+        "meter_set": {
+          "$ref": "#/$defs/FieldWorkType",
+          "default": {
+            "materials": 250.0,
+            "minutes": 45.0,
+            "rate": 1.0,
+            "target_days": 5.0
+          },
+          "description": "Meter set on a finished new service: share set by a meter technician (the rest come with the contractor).",
+          "x-impact": "Meter sets on finished new services by the meter technicians.",
+          "x-reach": "year"
+        },
+        "move_in": {
+          "$ref": "#/$defs/FieldWorkType",
+          "default": {
+            "materials": 0.0,
+            "minutes": 25.0,
+            "rate": 0.5,
+            "target_days": 1.0
+          },
+          "description": "Move-in turn-on or first read: share of account openings at a premise with a meter that cannot be read remotely.",
+          "title": "Move-in read",
+          "x-impact": "Move-in visits: account openings at premises without AMI (not the day after a move-out there).",
+          "x-reach": "year"
+        },
+        "move_out": {
+          "$ref": "#/$defs/FieldWorkType",
+          "default": {
+            "materials": 0.0,
+            "minutes": 20.0,
+            "rate": 1.0,
+            "target_days": 1.0
+          },
+          "description": "Move-out final read or lock-off: share of account closings at a premise with a meter that cannot be read remotely.",
+          "title": "Move-out read",
+          "x-impact": "Move-out visits: account closings at premises without AMI.",
+          "x-reach": "year"
+        },
+        "new_set": {
+          "$ref": "#/$defs/FieldWorkType",
+          "default": {
+            "materials": 1500.0,
+            "minutes": 480.0,
+            "rate": 0.8,
+            "target_days": 30.0
+          },
+          "description": "New service: share of new-connection requests (the contact centre's new connection contacts) that go ahead; built in the construction season.",
+          "title": "New set (new service)",
+          "x-impact": "New-connection requests that go ahead: new services built in the season, then meter sets. Follows the contact centre's new connection contacts.",
+          "x-reach": "year"
+        },
+        "no_supply": {
+          "$ref": "#/$defs/FieldWorkType",
+          "default": {
+            "materials": 40.0,
+            "minutes": 60.0,
+            "rate": 0.6,
+            "target_days": 0.16666666666666666
+          },
+          "description": "No supply at one premise (a service fault, a blown fuse, a curb stop): share of single-premise outage reports that need a truck.",
+          "x-impact": "Single-premise no-supply reports that need a truck; follows the contact centre's outage reports.",
+          "x-reach": "year"
+        },
+        "outage_repair": {
+          "$ref": "#/$defs/FieldWorkType",
+          "default": {
+            "materials": 900.0,
+            "minutes": 120.0,
+            "rate": 1.0,
+            "target_days": 1.0
+          },
+          "description": "Repair of the year's outages and leaks (the incident model times it): share recorded against the utility's crew.",
+          "title": "Outage and leak repair",
+          "x-impact": "Outage and leak repairs on the utilities' crews, timed by the incident model; follows the outages settings.",
+          "x-reach": "year"
+        },
+        "overtime_max_hours": {
+          "default": 3.0,
+          "description": "Most hours a crew works past its shift to finish same-day and overdue customer work (priority 1 and 2).",
+          "maximum": 12,
+          "minimum": 0,
+          "title": "Overtime Max Hours",
+          "type": "number",
+          "x-impact": "Overtime per crew for customer work due today or overdue: more keeps disconnects, reconnects and move reads on time, at overtime cost.",
+          "x-reach": "year",
+          "x-unit": "h"
+        },
+        "pole_inspection": {
+          "$ref": "#/$defs/FieldWorkType",
+          "default": {
+            "materials": 0.0,
+            "minutes": 15.0,
+            "rate": 0.1,
+            "target_days": 20.0
+          },
+          "description": "Pole inspection: share of poles inspected a year (0.1 is a ten-year cycle).",
+          "x-impact": "Poles inspected a year; inspections find poles to replace.",
+          "x-reach": "year"
+        },
+        "pole_replacement": {
+          "$ref": "#/$defs/FieldWorkType",
+          "default": {
+            "materials": 2500.0,
+            "minutes": 480.0,
+            "rate": 0.03,
+            "target_days": 40.0
+          },
+          "description": "Pole replacement: share of inspected poles found needing replacement.",
+          "x-impact": "Inspected poles found needing replacement: long, costly line crew jobs.",
+          "x-reach": "year"
+        },
+        "reconnect": {
+          "$ref": "#/$defs/FieldWorkType",
+          "default": {
+            "materials": 0.0,
+            "minutes": 30.0,
+            "rate": 1.0,
+            "target_days": 1.0
+          },
+          "description": "Reconnect after payment: share of reconnections worked, due the next business day.",
+          "x-impact": "Reconnect orders: follow the reconnections after payment.",
+          "x-reach": "year"
+        },
+        "regulator_inspection": {
+          "$ref": "#/$defs/FieldWorkType",
+          "default": {
+            "materials": 0.0,
+            "minutes": 180.0,
+            "rate": 1.0,
+            "target_days": 10.0
+          },
+          "description": "Regulator station inspection: share of stations (city gate, district regulators) a year.",
+          "x-impact": "Regulator stations inspected a year.",
+          "x-reach": "year"
+        },
+        "remote_switch_share": {
+          "default": 0.85,
+          "description": "Share of AMI electric meters with a remote connect switch: their disconnects, reconnects and move reads need no truck.",
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Remote Switch Share",
+          "type": "number",
+          "x-impact": "AMI electric meters with a remote switch: their disconnects and reconnects need no truck.",
+          "x-reach": "year"
+        },
+        "removal": {
+          "$ref": "#/$defs/FieldWorkType",
+          "default": {
+            "materials": 0.0,
+            "minutes": 30.0,
+            "rate": 2.0,
+            "target_days": 10.0
+          },
+          "description": "Meter removal (vacant premise, service abandoned): removals per 1,000 premises a year.",
+          "title": "Meter removal",
+          "x-impact": "Meter removals at vacant premises.",
+          "x-reach": "year"
+        },
+        "seal_exchange": {
+          "$ref": "#/$defs/FieldWorkType",
+          "default": {
+            "materials": 140.0,
+            "minutes": 45.0,
+            "rate": 1.0,
+            "target_days": 20.0
+          },
+          "description": "Seal-expiry exchange: share of the meters due (the sample of every expiring lot, every meter of a failed lot) exchanged. A failed lot's meters are due by 31 December.",
+          "x-impact": "Seal-expiry exchanges: the samples and failed lots due this year.",
+          "x-reach": "year"
+        },
+        "seal_lot_pass_rate": {
+          "default": 0.8,
+          "description": "Share of lots that pass compliance sampling and are resealed; a failed lot is exchanged meter by meter before its seal expires.",
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Seal Lot Pass Rate",
+          "type": "number",
+          "x-impact": "Lots that pass sampling. A failed lot has every meter exchanged by 31 December: the biggest swing in meter work.",
+          "x-reach": "year"
+        },
+        "seal_sample_size": {
+          "default": 32,
+          "description": "Meters pulled and tested from each lot whose seal expires.",
+          "maximum": 500,
+          "minimum": 1,
+          "title": "Seal Sample Size",
+          "type": "integer",
+          "x-impact": "Meters pulled from each expiring lot: more sample exchanges.",
+          "x-reach": "year"
+        },
+        "seal_years_electric": {
+          "default": 10,
+          "description": "Electric meter seal period: a lot whose seal expires this year is sampled.",
+          "maximum": 30,
+          "minimum": 1,
+          "title": "Seal Years Electric",
+          "type": "integer",
+          "x-impact": "Electric seal period: picks which install year's lots are sampled this year (the meters' install cohorts set the volume).",
+          "x-reach": "year",
+          "x-unit": "yr"
+        },
+        "seal_years_gas": {
+          "default": 10,
+          "description": "Gas meter seal period.",
+          "maximum": 30,
+          "minimum": 1,
+          "title": "Seal Years Gas",
+          "type": "integer",
+          "x-impact": "Gas seal period: picks which install year's lots are sampled this year.",
+          "x-reach": "year",
+          "x-unit": "yr"
+        },
+        "service_upgrade": {
+          "$ref": "#/$defs/FieldWorkType",
+          "default": {
+            "materials": 900.0,
+            "minutes": 240.0,
+            "rate": 0.04,
+            "target_days": 20.0
+          },
+          "description": "Electric service upgrade: share of homes with an EV or electric heat upgrading a year.",
+          "x-impact": "Homes with an EV or electric heat upgrading their service a year.",
+          "x-reach": "year"
+        },
+        "shift_hours": {
+          "default": 8.0,
+          "description": "Hours in a crew's working day.",
+          "maximum": 16,
+          "minimum": 1,
+          "title": "Shift Hours",
+          "type": "number",
+          "x-impact": "Hours in a crew's day: every business-day crew's capacity. Shorter days build backlog, overdue work and overtime.",
+          "x-reach": "year",
+          "x-unit": "h"
+        },
+        "shift_start_hour": {
+          "default": 7.0,
+          "description": "Crews start their day (local time, business days).",
+          "maximum": 20,
+          "minimum": 0,
+          "title": "Shift Start Hour",
+          "type": "number",
+          "x-impact": "When the business-day crews start. It moves when work is done in the day and which emergencies fall after hours (call-out and overtime).",
+          "x-reach": "year",
+          "x-unit": "h"
+        },
+        "travel_minutes": {
+          "default": 20.0,
+          "description": "Driving to the job and back, added to every visit.",
+          "maximum": 240,
+          "minimum": 0,
+          "title": "Travel Minutes",
+          "type": "number",
+          "x-impact": "Driving to each job and back: more travel fills the crews' day with fewer jobs, and slows emergency response.",
+          "x-reach": "year",
+          "x-unit": "min"
+        },
+        "tree_trimming": {
+          "$ref": "#/$defs/FieldWorkType",
+          "default": {
+            "materials": 0.0,
+            "minutes": 25.0,
+            "rate": 0.25,
+            "target_days": 20.0
+          },
+          "description": "Tree trimming: share of overhead spans trimmed a year (minutes per span).",
+          "x-impact": "Overhead spans trimmed a year.",
+          "x-reach": "year"
+        },
+        "valve_exercise": {
+          "$ref": "#/$defs/FieldWorkType",
+          "default": {
+            "materials": 0.0,
+            "minutes": 30.0,
+            "rate": 0.25,
+            "target_days": 20.0
+          },
+          "description": "Valve exercising: share of water and gas valves a year.",
+          "x-impact": "Water and gas valves exercised a year; exercising finds valves to repair.",
+          "x-reach": "year"
+        },
+        "valve_repair": {
+          "$ref": "#/$defs/FieldWorkType",
+          "default": {
+            "materials": 1800.0,
+            "minutes": 300.0,
+            "rate": 0.05,
+            "target_days": 20.0
+          },
+          "description": "Valve repair: share of exercised valves found broken or stuck.",
+          "x-impact": "Exercised valves found broken: repairs on the utility's crew.",
+          "x-reach": "year"
+        },
+        "water_meter_life_years": {
+          "default": 15,
+          "description": "Water meters this old or older are due for replacement.",
+          "maximum": 60,
+          "minimum": 1,
+          "title": "Water Meter Life Years",
+          "type": "integer",
+          "x-impact": "Water meters this old or older are due for replacement: a shorter life puts more cohorts in the backlog.",
+          "x-reach": "year",
+          "x-unit": "yr"
+        },
+        "water_meter_replacement": {
+          "$ref": "#/$defs/FieldWorkType",
+          "default": {
+            "materials": 160.0,
+            "minutes": 45.0,
+            "rate": 0.5,
+            "target_days": 20.0
+          },
+          "description": "Water meter replacement by age: share of over-age water meters replaced this year.",
+          "x-impact": "Over-age water meters replaced this year; the rest stay due.",
+          "x-reach": "year"
+        }
+      },
+      "title": "Field work",
+      "type": "object",
+      "x-applies": "run",
+      "x-group": true,
+      "x-order": 19
+    },
+    "FieldCrew": {
+      "additionalProperties": false,
+      "description": "One kind of field crew: how many there are for the town's size, and what an hour costs.",
+      "properties": {
+        "cost_per_hour": {
+          "default": 120.0,
+          "description": "Loaded cost of a crew hour, truck included.",
+          "maximum": 1000,
+          "minimum": 0,
+          "title": "Cost Per Hour",
+          "type": "number"
+        },
+        "overtime_factor": {
+          "default": 1.5,
+          "description": "Multiplies the hourly cost after hours.",
+          "maximum": 3,
+          "minimum": 1,
+          "title": "Overtime Factor",
+          "type": "number"
+        },
+        "per_1000_premises": {
+          "default": 0.5,
+          "description": "Crews per 1,000 premises. A fraction is part of a crew's time (the rest goes to work this model does not draw); on-call responders are at least one when above zero.",
+          "maximum": 20,
+          "minimum": 0,
+          "title": "Per 1000 Premises",
+          "type": "number"
+        }
+      },
+      "title": "FieldCrew",
+      "type": "object"
+    },
+    "FieldWorkType": {
+      "additionalProperties": false,
+      "description": "One kind of field work order: how much of it there is, what it takes and how soon it is due.",
+      "properties": {
+        "materials": {
+          "default": 0.0,
+          "description": "Materials cost per order.",
+          "maximum": 500000,
+          "minimum": 0,
+          "title": "Materials",
+          "type": "number",
+          "x-unit": "$"
+        },
+        "minutes": {
+          "default": 30.0,
+          "description": "Crew minutes on site per order (travel is added for premise visits).",
+          "maximum": 10000,
+          "minimum": 1,
+          "title": "Minutes",
+          "type": "number"
+        },
+        "rate": {
+          "default": 1.0,
+          "description": "How much of this work there is (its meaning is in the setting's own description).",
+          "maximum": 500,
+          "minimum": 0,
+          "title": "Rate",
+          "type": "number"
+        },
+        "target_days": {
+          "default": 5.0,
+          "description": "Business days from the order's release to its due date (0: the same day; planned work is released on its scheduled day). Emergencies count calendar time: fractions of a day.",
+          "maximum": 365,
+          "minimum": 0,
+          "title": "Target Days",
+          "type": "number"
+        }
+      },
+      "title": "FieldWorkType",
       "type": "object"
     },
     "GasConfig": {
@@ -3961,6 +4626,9 @@
     },
     "electric": {
       "$ref": "#/$defs/ElectricConfig"
+    },
+    "field": {
+      "$ref": "#/$defs/FieldConfig"
     },
     "gas": {
       "$ref": "#/$defs/GasConfig"

@@ -96,7 +96,7 @@ class Spec:
 
 
 GROUPS = (("customers", "Customers"), ("metering", "Meters & reading"), ("billing", "Billing & pricing"),
-          ("collections", "Collections"), ("contact", "Contact centre"), ("work", "Work"))
+          ("collections", "Collections"), ("contact", "Contact centre"), ("field", "Field work"), ("work", "Work"))
 
 
 # ---- value helpers ----------------------------------------------------------------------------------------------
@@ -1159,6 +1159,101 @@ def b_year_incidents(c) -> list[list]:
     return _rows_to_cols(YEAR_INCIDENTS, rows)
 
 
+STATUS_LABEL = {"planned": "Planned", "open": "Open", "in_progress": "In progress", "completed": "Completed"}
+WORK_ORDERS = (Col("orderId", "Work order", "id", search=True), Col("type", "Work", facet=True, search=True),
+               Col("program", "Programme", facet=True), Col("crew", "Crew", facet=True),
+               Col("crewId", "Crew id", search=True), Col("priority", "Priority", "int", facet=True),
+               Col("status", "Status", facet=True), Col("created", "Created", "date"),
+               Col("released", "Released", "date"), Col("due", "Due", "date"), Col("started", "Started", "date"),
+               Col("completed", "Completed", "date"), Col("onTime", "On time", "bool", facet=True),
+               Col("responseMin", "Response", "num", unit="min",
+                   hint="Emergencies: from the report to the responder on site."),
+               Col("hours", "Crew hours", "num", unit="h"), Col("overtimeHours", "Overtime", "num", unit="h"),
+               Col("labour", "Labour", "money"), Col("materials", "Materials", "money"),
+               Col("premiseId", "Premise", "id", link="premise", search=True), Col("address", "Address", search=True),
+               Col("asset", "Asset", search=True), Col("cause", "Because of", search=True))
+
+
+def b_work_orders(c) -> list[list]:
+    from utilsim.m2c import fieldwork as fwk
+
+    fw = fwk.fieldwork(c.run)
+    tw = c.run.town
+    rows = []
+    for o in fw.orders:
+        st = fwk.status_at(o, c.T)
+        if st is None:
+            continue
+        key, label, prog, _, _ = fwk.TYPES[o.type]
+        done = st == "completed"
+        met = o.arrive if key in fwk.EMERGENCY else o.end
+        pid = tw.premise_ids[o.prem] if o.prem >= 0 else None
+        rows.append([o.id, label, fwk.PROGRAMS[prog], "Remote (AMI)" if o.remote else fwk.CREWS[o.crew],
+                     o.crew_id or None, o.prio, STATUS_LABEL[st], _d(o.created), _d(o.release) if o.release <= c.T
+                     else _d(o.release), _d(o.due - 1e-6), _d(o.start) if o.start <= c.T else None,
+                     _d(o.end) if done else None, (met <= o.due + 1e-9) if done else None,
+                     round((o.arrive - o.created) * 1440.0, 1) if key in fwk.EMERGENCY and o.arrive <= c.T else None,
+                     round((o.regular + o.overtime) / 60.0, 2) if done else None,
+                     round(o.overtime / 60.0, 2) if done and o.overtime else None,
+                     round(o.labour, 2) if done else None, round(o.materials, 2) if done else None, pid,
+                     _address(c, pid) if pid else None, o.asset or None, o.cause or None])
+    rows.reverse()  # newest first
+    return _rows_to_cols(WORK_ORDERS, rows)
+
+
+CREW_DAYS = (Col("date", "Date", "date"), Col("weekday", "Day", facet=True), Col("crew", "Crew", facet=True),
+             Col("crews", "Crews", "num", hint="Part of a crew: its share of the day on this work."),
+             Col("availableHours", "Available", "num", unit="h"), Col("busyHours", "Busy", "num", unit="h"),
+             Col("overtimeHours", "Overtime", "num", unit="h"), Col("utilisationPct", "Utilisation", "pct"),
+             Col("completed", "Orders completed", "int"), Col("open", "Open at day end", "int"),
+             Col("overdue", "Overdue at day end", "int"))
+
+
+def b_crew_days(c) -> list[list]:
+    from utilsim.m2c import fieldwork as fwk
+
+    fw = fwk.fieldwork(c.run)
+    cols = fw.cols
+    rows = []
+    for d in range(min(c.day, len(fw.crews["meter"]["crews"]) - 1), -1, -1):
+        Td = min(d + 1 - 1e-6, c.T)
+        for crew, label in fwk.CREWS.items():
+            cr = fw.crews[crew]
+            k = cols["crew"] == crew
+            avail, busy = float(cr["availableMin"][d]), float(cr["busyMin"][d])
+            live = k & (cols["release"] <= Td) & (cols["end"] > Td)
+            rows.append([_d(d), date_of(d).strftime("%a"), label, round(float(cr["crews"][d]), 3),
+                         round(avail / 60.0, 1), round(busy / 60.0, 1), round(float(cr["overtimeMin"][d]) / 60.0, 1),
+                         round(busy / avail, 4) if avail else None,
+                         int((k & (cols["end"] >= d) & (cols["end"] <= Td)).sum()), int(live.sum()),
+                         int((live & (cols["due"] < Td)).sum())])
+    return _rows_to_cols(CREW_DAYS, rows)
+
+
+PLAN = (Col("work", "Work", facet=True, search=True), Col("program", "Programme", facet=True),
+        Col("crew", "Crew", facet=True), Col("dueThisYear", "Due this year", "int",
+                                             hint="Items the year's plan requires (assets, meters)."),
+        Col("notOrdered", "Not ordered", "int", hint="Due items the work's rate left out."),
+        Col("orders", "Orders", "int"), Col("completed", "Completed", "int"),
+        Col("dueByNow", "Due by the view date", "int"), Col("onTime", "Done on time", "int"),
+        Col("compliancePct", "Compliance", "pct", hint="Orders due by the view date that were done by their due date."),
+        Col("overdue", "Overdue", "int"), Col("hours", "Crew hours", "num", unit="h"), Col("cost", "Cost", "money"))
+
+
+def b_plan(c) -> list[list]:
+    from utilsim.m2c import fieldwork as fwk
+
+    s = fwk.summary(c.run, _d(c.day))
+    types = {t["id"]: t for t in s["types"]}
+    rows = []
+    for p in s["plan"]:
+        t = types[p["id"]]
+        rows.append([p["label"], fwk.PROGRAMS[p["program"]], fwk.CREWS.get(t["crew"], "By utility"), p["due"],
+                     p["skipped"], p["orders"], p["completed"], p["dueByNow"], p["onTime"], p["compliancePct"],
+                     t["overdue"], t["hours"], t["cost"]["total"]])
+    return _rows_to_cols(PLAN, rows)
+
+
 # ---- catalog ------------------------------------------------------------------------------------------------------
 SPECS: tuple[Spec, ...] = (
     Spec("premises", "Premises", "customers", "town", "Every premise of the town with its building, household and "
@@ -1218,6 +1313,15 @@ SPECS: tuple[Spec, ...] = (
     Spec("yearIncidents", "Outages & leaks", "contact", "run", "The year's background incidents (the operations "
          "day's draws for every date): premises out and for how long, who could smell gas, and the contacts each "
          "caused.", YEAR_INCIDENTS, b_year_incidents),
+    Spec("workOrders", "Work orders", "field", "run", "Every field work order created by the view date: customer "
+         "emergencies, service orders, meter maintenance, preventative maintenance and construction, with its crew, "
+         "status, due date, crew hours, cost and what raised it.", WORK_ORDERS, b_work_orders),
+    Spec("crewDays", "Crews by day", "field", "run", "Each crew type's day: crews, hours available and worked, "
+         "overtime, utilisation, orders completed and the open and overdue work at the end of the day.", CREW_DAYS,
+         b_crew_days),
+    Spec("maintenancePlan", "Maintenance plan", "field", "run", "The year's planned programmes (seal exchanges, "
+         "batteries, water meter replacement, AMI conversion, inspections, flushing, surveys, upgrades and main "
+         "renewal): due, ordered, completed and on time as of the view date.", PLAN, b_plan),
     Spec("cases", "Cases", "work", "run", "Every clarification case raised by the view date, across the queues, "
          "with its disposition, assignee and outcome.", CASES, b_cases),
     Spec("fieldOrders", "Field service orders", "work", "run", "Field service orders raised in the Studio, with stage, "

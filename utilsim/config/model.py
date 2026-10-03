@@ -596,6 +596,10 @@ class BillingConfig(BaseModel):
     disconnect_notice_days: int = F(10, "Days from a disconnection notice to the earliest disconnection. A "
                                     "disconnection also needs a person's approval (the Collections worklist).",
                                     unit="d", ge=1, le=60, effects=["disconnections"])
+    disconnect_rule_share: float = F(0.0, "Share of disconnection notices a collections rule approves when they are "
+                                     "issued (the disconnection follows at the earliest day); the rest wait for a "
+                                     "person's approval. 0: every disconnection needs you.", ge=0, le=1,
+                                     effects=["disconnections", "field disconnects and reconnects"])
     disconnect_payment_rate: float = F(0.6, "Disconnected customers who pay within a week of the disconnection (and "
                                        "are reconnected the next business day); the rest stay off until they pay.",
                                        ge=0, le=1, advanced=True, effects=["collections", "reconnections"])
@@ -726,6 +730,155 @@ class OutagesConfig(BaseModel):
     restore_factor: float = F(1.0, "Multiplies the time to restore service.", ge=0.1, le=20)
 
 
+class FieldCrew(BaseModel):
+    """One kind of field crew: how many there are for the town's size, and what an hour costs."""
+
+    model_config = ConfigDict(extra="forbid")
+    per_1000_premises: float = Field(0.5, ge=0, le=20, description="Crews per 1,000 premises. A fraction is part "
+                                     "of a crew's time (the rest goes to work this model does not draw); on-call "
+                                     "responders are at least one when above zero.")
+    cost_per_hour: float = Field(120.0, ge=0, le=1000, description="Loaded cost of a crew hour, truck included.")
+    overtime_factor: float = Field(1.5, ge=1, le=3, description="Multiplies the hourly cost after hours.")
+
+
+def _crew(per_1000_premises: float, cost_per_hour: float, title: str, text: str, overtime_factor: float = 1.5):
+    return F(FieldCrew(per_1000_premises=per_1000_premises, cost_per_hour=cost_per_hour,
+                       overtime_factor=overtime_factor), text, title=title)
+
+
+class FieldWorkType(BaseModel):
+    """One kind of field work order: how much of it there is, what it takes and how soon it is due."""
+
+    model_config = ConfigDict(extra="forbid")
+    rate: float = Field(1.0, ge=0, le=500, description="How much of this work there is (its meaning is in the "
+                        "setting's own description).")
+    minutes: float = Field(30.0, ge=1, le=10_000, description="Crew minutes on site per order (travel is added for "
+                           "premise visits).")
+    target_days: float = Field(5.0, ge=0, le=365, description="Business days from the order's release to its due "
+                               "date (0: the same day; planned work is released on its scheduled day). Emergencies "
+                               "count calendar time: fractions of a day.")
+    materials: float = Field(0.0, ge=0, le=500_000, description="Materials cost per order.", json_schema_extra={
+        "x-unit": "$"})
+
+
+def _work(rate: float, minutes: float, target_days: float, materials: float, text: str, title: str | None = None):
+    kw = {"title": title} if title else {}
+    return F(FieldWorkType(rate=rate, minutes=minutes, target_days=target_days, materials=materials), text, **kw)
+
+
+class FieldConfig(BaseModel):
+    model_config = group("Field work", 19, "The work the field crews do over the year and the crews that do it: "
+                         "customer emergencies, service orders (disconnects, reconnects, move-ins and move-outs), "
+                         "meter maintenance (seal exchanges, batteries, removals), preventative maintenance on the "
+                         "networks and capital construction (new sets, upgrades, main renewal). Work follows the "
+                         "year: collections, moves, VEE field visits, the contact centre's calls, the year's outages "
+                         "and leaks, the meters' install years and the town's assets.", applies="run")
+    shift_start_hour: float = F(7.0, "Crews start their day (local time, business days).", unit="h", ge=0, le=20)
+    shift_hours: float = F(8.0, "Hours in a crew's working day.", unit="h", ge=1, le=16)
+    travel_minutes: float = F(20.0, "Driving to the job and back, added to every visit.", unit="min", ge=0,
+                              le=240)
+    callout_minutes: float = F(30.0, "After hours, the time an on-call responder takes to get on the road.",
+                               unit="min", ge=0, le=240)
+    overtime_max_hours: float = F(3.0, "Most hours a crew works past its shift to finish same-day and overdue "
+                                  "customer work (priority 1 and 2).", unit="h", ge=0, le=12)
+    remote_switch_share: float = F(0.85, "Share of AMI electric meters with a remote connect switch: their "
+                                   "disconnects, reconnects and move reads need no truck.", ge=0, le=1)
+    seal_years_electric: int = F(10, "Electric meter seal period: a lot whose seal expires this year is sampled.",
+                                 unit="yr", ge=1, le=30)
+    seal_years_gas: int = F(10, "Gas meter seal period.", unit="yr", ge=1, le=30)
+    seal_sample_size: int = F(32, "Meters pulled and tested from each lot whose seal expires.", ge=1, le=500)
+    seal_lot_pass_rate: float = F(0.8, "Share of lots that pass compliance sampling and are resealed; a failed lot "
+                                  "is exchanged meter by meter before its seal expires.", ge=0, le=1)
+    battery_years: int = F(15, "Radio module battery life on gas and water meters, AMI and AMR (they have no mains "
+                           "power).", unit="yr", ge=1, le=40)
+    water_meter_life_years: int = F(15, "Water meters this old or older are due for replacement.", unit="yr", ge=1,
+                                    le=60)
+    construction_start_month: int = F(4, "First month of the construction season (digging is frost-free).", ge=1,
+                                      le=12)
+    construction_end_month: int = F(11, "Last month of the construction season.", ge=1, le=12)
+    # ---- crews -----------------------------------------------------------------------------------------------------
+    crew_emergency: FieldCrew = _crew(0.4, 110.0, "On-call responders", "Gas odour and no-supply calls, any hour "
+                                      "of any day.")
+    crew_meter: FieldCrew = _crew(0.3, 75.0, "Meter technicians", "Disconnects, reconnects, move visits, exchanges, "
+                                  "batteries, removals, investigations, meter sets.")
+    crew_electric: FieldCrew = _crew(0.15, 165.0, "Electric line crews", "Pole work, tree trimming, outage repairs, "
+                                     "service upgrades.")
+    crew_water: FieldCrew = _crew(0.15, 140.0, "Water crews", "Valves, hydrants, main break repairs.")
+    crew_gas: FieldCrew = _crew(0.08, 150.0, "Gas crews", "Leak surveys, regulator stations, leak repairs.")
+    crew_construction: FieldCrew = _crew(0.08, 230.0, "Construction crews", "Contractors: new services, main "
+                                         "renewal.")
+    # ---- customer emergencies (priority 1, on-call crew) -----------------------------------------------------------
+    gas_odour: FieldWorkType = _work(1.0, 45.0, 1 / 24, 0.0, "Gas odour investigation: share of gas odour reports "
+                                     "(a leak's first report, every background report) a responder attends.",
+                                     title="Gas odour")
+    no_supply: FieldWorkType = _work(0.6, 60.0, 4 / 24, 40.0, "No supply at one premise (a service fault, a blown "
+                                     "fuse, a curb stop): share of single-premise outage reports that need a truck.")
+    outage_repair: FieldWorkType = _work(1.0, 120.0, 1.0, 900.0, "Repair of the year's outages and leaks (the "
+                                         "incident model times it): share recorded against the utility's crew.",
+                                         title="Outage and leak repair")
+    # ---- customer service orders (priority 2, meter technicians) ---------------------------------------------------
+    disconnect: FieldWorkType = _work(1.0, 30.0, 0.0, 0.0, "Disconnect for non-payment: share of collections "
+                                      "disconnections worked (AMI electric with a switch is done remotely).")
+    reconnect: FieldWorkType = _work(1.0, 30.0, 1.0, 0.0, "Reconnect after payment: share of reconnections worked, "
+                                     "due the next business day.")
+    move_out: FieldWorkType = _work(1.0, 20.0, 1.0, 0.0, "Move-out final read or lock-off: share of account closings "
+                                    "at a premise with a meter that cannot be read remotely.",
+                                    title="Move-out read")
+    move_in: FieldWorkType = _work(0.5, 25.0, 1.0, 0.0, "Move-in turn-on or first read: share of account openings at "
+                                   "a premise with a meter that cannot be read remotely.",
+                                   title="Move-in read")
+    meter_investigation: FieldWorkType = _work(1.0, 40.0, 10.0, 0.0, "VEE field visit (the run decides when): share "
+                                               "recorded against the meter technicians.")
+    corrective_exchange: FieldWorkType = _work(1.0, 60.0, 10.0, 140.0, "Faulty meter exchanged on a field visit (the "
+                                               "run decides when): share recorded.")
+    # ---- meter maintenance (priority 3, meter technicians) ---------------------------------------------------------
+    seal_exchange: FieldWorkType = _work(1.0, 45.0, 20.0, 140.0, "Seal-expiry exchange: share of the meters due (the "
+                                         "sample of every expiring lot, every meter of a failed lot) exchanged. A "
+                                         "failed lot's meters are due by 31 December.")
+    ami_battery: FieldWorkType = _work(1.0, 20.0, 20.0, 35.0, "Module battery replacement on gas and water meters: "
+                                       "share of batteries reaching their life this year.",
+                                       title="Module battery")
+    water_meter_replacement: FieldWorkType = _work(0.5, 45.0, 20.0, 160.0, "Water meter replacement by age: share "
+                                                   "of over-age water meters replaced this year.")
+    removal: FieldWorkType = _work(2.0, 30.0, 10.0, 0.0, "Meter removal (vacant premise, service abandoned): "
+                                   "removals per 1,000 premises a year.", title="Meter removal")
+    ami_conversion: FieldWorkType = _work(0.0, 35.0, 20.0, 180.0, "AMI conversion: share of AMR and manually read "
+                                          "meters converted to AMI this year (capital, priority 4).",
+                                          title="AMI conversion")
+    # ---- preventative maintenance (priority 3, utility crews) ------------------------------------------------------
+    pole_inspection: FieldWorkType = _work(0.1, 15.0, 20.0, 0.0, "Pole inspection: share of poles inspected a year "
+                                           "(0.1 is a ten-year cycle).")
+    pole_replacement: FieldWorkType = _work(0.03, 480.0, 40.0, 2500.0, "Pole replacement: share of inspected poles "
+                                            "found needing replacement.")
+    tree_trimming: FieldWorkType = _work(0.25, 25.0, 20.0, 0.0, "Tree trimming: share of overhead spans trimmed a "
+                                         "year (minutes per span).")
+    valve_exercise: FieldWorkType = _work(0.25, 30.0, 20.0, 0.0, "Valve exercising: share of water and gas valves a "
+                                        "year.")
+    valve_repair: FieldWorkType = _work(0.05, 300.0, 20.0, 1800.0, "Valve repair: share of exercised valves found "
+                                        "broken or stuck.")
+    hydrant_flush: FieldWorkType = _work(1.0, 40.0, 15.0, 0.0, "Hydrant flushing and inspection: share of hydrants "
+                                         "a year (May to October).", title="Hydrant flushing")
+    hydrant_repair: FieldWorkType = _work(0.04, 240.0, 10.0, 900.0, "Hydrant repair: share of flushed hydrants found "
+                                          "defective.")
+    leak_survey: FieldWorkType = _work(0.33, 90.0, 20.0, 0.0, "Gas leak survey: share of gas main length walked a "
+                                       "year (minutes per km).")
+    gas_leak_repair: FieldWorkType = _work(0.15, 360.0, 15.0, 800.0, "Gas leak repair (grade 2): leaks found per "
+                                           "surveyed km.")
+    regulator_inspection: FieldWorkType = _work(1.0, 180.0, 10.0, 0.0, "Regulator station inspection: share of "
+                                                "stations (city gate, district regulators) a year.")
+    # ---- capital construction (priority 4, construction crews) -----------------------------------------------------
+    new_set: FieldWorkType = _work(0.8, 480.0, 30.0, 1500.0, "New service: share of new-connection requests (the "
+                                   "contact centre's new connection contacts) that go ahead; built in the "
+                                   "construction season.", title="New set (new service)")
+    meter_set: FieldWorkType = _work(1.0, 45.0, 5.0, 250.0, "Meter set on a finished new service: share set by a "
+                                     "meter technician (the rest come with the contractor).")
+    service_upgrade: FieldWorkType = _work(0.04, 240.0, 20.0, 900.0, "Electric service upgrade: share of homes with an "
+                                           "EV or electric heat upgrading a year.")
+    main_replacement: FieldWorkType = _work(0.02, 1440.0, 40.0, 45000.0, "Main renewal: share of cast-iron water and "
+                                            "gas main length replaced a year (minutes and materials per 100 m).",
+                                            title="Main renewal")
+
+
 class SimConfig(BaseModel):
     """Complete simulator configuration. ``town_id`` is a pure function of this object and the generator version."""
 
@@ -751,6 +904,7 @@ class SimConfig(BaseModel):
     billing: BillingConfig = Field(default_factory=BillingConfig)
     contact: ContactConfig = Field(default_factory=ContactConfig)
     outages: OutagesConfig = Field(default_factory=OutagesConfig)
+    field: FieldConfig = Field(default_factory=FieldConfig)
 
     @model_validator(mode="after")
     def _check(self) -> SimConfig:

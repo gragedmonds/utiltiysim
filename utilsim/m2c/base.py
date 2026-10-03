@@ -89,6 +89,14 @@ class M2CTown:
     # AMI network: the collector each AMI meter reports through (None for AMR and walked meters), and the collectors.
     meter_collector: list[str | None] = field(default_factory=list)
     collectors: dict[str, dict] = field(default_factory=dict)  # id -> {mountedOn, mountId, x, z}
+    # Field work (utilsim/m2c/fieldwork.py): when each meter was installed (decimal year), its AMI battery's install
+    # year (0: none) and model; each premise's position, street and the attributes that drive its work.
+    meter_installed: np.ndarray = field(default_factory=lambda: np.zeros(0))
+    meter_battery: np.ndarray = field(default_factory=lambda: np.zeros(0, dtype=np.int64))
+    meter_model: list[str] = field(default_factory=list)
+    premise_xz: np.ndarray = field(default_factory=lambda: np.zeros((0, 2)))
+    premise_street: list[str] = field(default_factory=list)
+    premise_attrs: dict[str, np.ndarray] = field(default_factory=dict)  # yearBuilt, hasEV, electricHeat, residential
 
     def collector_of(self, r: int) -> str | None:
         """The AMI collector register row ``r``'s meter reports through, if any."""
@@ -146,8 +154,9 @@ class M2CTown:
         reg_rows = {r["id"]: r for r in snap["registers"]}
         meters = snap["meters"]
         rows: list[tuple] = []
-        m_prem, m_comm, m_tech, m_keys = [], [], [], []
+        m_prem, m_comm, m_tech, m_keys, m_inst = [], [], [], [], []
         for mi, m in enumerate(meters):
+            m_inst.append(_year(m.get("installedAt")))
             sp = sps[m["servicePointId"]]
             i = pidx[sp["premiseId"]]
             c = sp["commodity"]
@@ -225,7 +234,18 @@ class M2CTown:
             meter_collector=[((m.get("ami") or {}).get("collectorId") if m["technology"] == "AMI" else None)
                              for m in meters],
             collectors={c["id"]: {x: c.get(x) for x in ("mountedOn", "mountId", "x", "z")}
-                        for c in (snap.get("amiNetwork") or {}).get("collectors") or []})
+                        for c in (snap.get("amiNetwork") or {}).get("collectors") or []},
+            meter_installed=np.array(m_inst, dtype=float),
+            meter_battery=np.array([int(m.get("batteryInstallYear") or 0) for m in meters], dtype=np.int64),
+            meter_model=[str(m.get("model") or m["technology"]) for m in meters],
+            premise_xz=np.array([(float(p.get("x") or 0.0), float(p.get("z") or 0.0)) for p in premises],
+                                dtype=float).reshape(len(premises), 2),
+            premise_street=[str(p.get("street") or "") for p in premises],
+            premise_attrs={"yearBuilt": np.array([int(p.get("yearBuilt") or 0) for p in premises], dtype=np.int64),
+                           "hasEV": np.array([bool(p.get("hasEV")) for p in premises]),
+                           "electricHeat": np.array([bool(p.get("electricHeat")) for p in premises]),
+                           "residential": np.array([p.get("premiseType", "residential") == "residential"
+                                                    for p in premises])})
 
 
 INST_FIELDS = ("premiseId", "servicePointId", "division", "mruId", "readCycle", "rateCategory", "billingClass",
@@ -239,6 +259,14 @@ def town_name(snap: dict) -> str:
     """The town's preset name for people ("Small Town" for ``small_town``), else "Utility"."""
     name = str((snap.get("config") or {}).get("name") or "")
     return name.replace("_", " ").title() if name and name != "custom" else "Utility"
+
+
+def _year(iso: str | None) -> float:
+    """A timestamp as a decimal year (2015-07-02 -> 2015.5); 0 when missing."""
+    if not iso:
+        return 0.0
+    d = datetime.fromisoformat(iso.replace("Z", "+00:00")).date()
+    return d.year + (d.timetuple().tm_yday - 1) / 365.0
 
 
 def date_of(day: int) -> date:

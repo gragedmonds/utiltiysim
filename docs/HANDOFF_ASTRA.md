@@ -416,3 +416,43 @@ What changed for the Studio:
 
 Generator 0.10.0: every town id changed, and the town contents changed with them (new streets).
 
+
+## 19. Field work over the year (Configuration, Data, Year)
+
+The engine now simulates the field crews' year (`utilsim/m2c/fieldwork.py`, [M2C.md](M2C.md) "Field work"): work
+orders in five programmes, each raised by what happens in the replayed year.
+
+- **Customer emergencies:** gas odour and no-supply calls (from the contact centre), and outage and leak repairs (from
+  the year's incidents).
+- **Service orders:** disconnects and reconnects (from collections; AMI electric meters with a remote switch are
+  switched remotely), move-in and move-out reads at premises without AMI, and the run's VEE field visits and meter
+  exchanges.
+- **Meter maintenance:** seal sampling by lot (a failed lot has every meter exchanged), module batteries, water
+  meters past their life, removals at vacant premises, AMI conversion.
+- **Preventative maintenance:** pole inspection, tree trimming, valve exercising, hydrant flushing, leak survey and
+  regulator inspection on the town's assets; their findings raise repairs.
+- **Capital construction:** new services from new-connection calls (then a meter set), electric service upgrades,
+  cast-iron main renewal, in the construction season.
+
+On-call responders work emergencies around the clock; meter technicians, line, water, gas and construction crews work
+business days by priority and due date, with overtime for customer work due today.
+
+What the Studio shows:
+
+- **Configuration:** a run group **Field work** (`field`): shift, travel, call-out, overtime, the remote switch share,
+  seal, battery and water meter lives, the construction season, six crews (objects with `per_1000_premises`,
+  `cost_per_hour`, `overtime_factor`) and twenty-eight work types (objects with `rate`, `minutes`, `target_days`,
+  `materials`). `schema-form.js` labels the new parts (`SUB_LABEL`: `per_1000_premises`, `target_days`,
+  `overtime_factor`). Episodes may set one part (`field.crew_meter` `{"per_1000_premises": "*0.5"}`). Billing gains
+  `disconnect_rule_share` (0 by default): a collections rule that approves that share of disconnection notices.
+- **Year:** four trend charts (`year-page.js`): field work completed by programme, field backlog by programme, on time
+  (with emergency response in the detail) and field work cost (labour and materials). The trend's months carry
+  `field`. The scenario library adds a **Field work** group (meter technicians short, AMI conversion programme, seal
+  lots fail sampling, construction crews off the job) and **Collections rule approves disconnections**.
+- **Data:** a **Field work** group with `workOrders` (every order with work, programme, crew, status, dates, on time,
+  response, hours, cost, premise, asset and what raised it), `crewDays` and `maintenancePlan`.
+
+`POST /api/m2c/fieldwork` (`m2c-fieldwork/1.0`) returns the summary for a page of its own: KPIs, programmes, work
+types with their settings, crews, the maintenance plan's compliance, the last 60 days and notes. There is no field
+work page yet; the Year charts and the Data tables cover it. A dispatch board (orders by crew and day) and orders on
+the map are the natural next steps.
