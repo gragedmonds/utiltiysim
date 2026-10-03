@@ -133,6 +133,32 @@ test('the field work charts read the trend field block',()=>{
  assert.equal(chartModel(c.fieldDone,[{month:1,label:'Jan',start:'2026-01-01',end:'2026-01-31',complete:true,field:null}]).latest,-1);
 });
 
+test('inflicting runs to the last period end, including open-ended and year-clamped periods',async()=>{
+ const {episodeRunEnd}=await import('../dist/year-page.js');
+ assert.equal(episodeRunEnd([{to:'2026-04-30'},{to:'2026-03-31'}]),'2026-04-30');
+ assert.equal(episodeRunEnd([{to:null},{to:'2026-03-31'}]),'2026-12-31');
+ const late=episodeDates({id:'late',episodes:[{durationDays:90,settings:{}}]},'2026-12-01');assert.equal(episodeRunEnd(late),'2026-12-31');
+});
+
+test('reviewed voice tweaks append periods, preserve user decisions and run through the validated date',async()=>{
+ const {inflictReviewedEpisodes}=await import('../dist/year-page.js');
+ const m=new EngineM2C({townRef:'whitby_small',townId:'town-1',storage:memory()});
+ m.setAsOf('2026-03-31');m.setSettings({process:{analysts:4}});m.seed='keep-me';m.actions=[{id:'ACT-1',day:'2026-03-01'}];m.outages={};
+ const earlier=m.addEpisode({title:'Existing',from:'2026-01-01',to:'2026-02-01',settings:{process:{analysts:3}}});
+ const patch={name:'Voice tweak',runTo:'2026-05-12',episodes:[{title:'Half staff',from:'2026-04-01',to:'2026-05-12',ramp:0,settings:{process:{analysts:'*0.5'}}}]};
+ let analysed;
+ await inflictReviewedEpisodes(m,patch,async()=>{analysed=structuredClone(m.body());return null;});
+ assert.equal(analysed.asOf,'2026-05-12');assert.equal(m.episodes.length,2);assert.deepEqual(m.episodes[0],earlier);
+ assert.deepEqual(m.settings,{process:{analysts:4}});assert.equal(m.seed,'keep-me');assert.equal(m.actions.length,1);assert.equal(m.townRef,'whitby_small');
+ const refusal=Object.assign(Error('Overlap rejected'),{status:422});
+ await assert.rejects(inflictReviewedEpisodes(m,patch,async()=>refusal),/Overlap rejected/);
+ assert.equal(m.episodes.length,2);assert.equal(m.asOf,'2026-05-12');
+ const reopened=new EngineM2C({townRef:'whitby_small',townId:'town-1',storage:m.storage});assert.equal(reopened.episodes.length,2);
+ await assert.rejects(inflictReviewedEpisodes(m,patch,async()=>{throw Error('Network down');}),/Network down/);
+ assert.equal(m.episodes.length,2,'network failure restores episodes before retry');
+ m.readOnly=true;await assert.rejects(inflictReviewedEpisodes(m,patch,async()=>null),/live simulation/);
+});
+
 test('the contact centre charts read the trend contact block',()=>{
  const c=Object.fromEntries(CHARTS.map(x=>[x.id,x]));
  assert.ok(c.contacts&&c.service&&c.contactCost);

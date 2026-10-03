@@ -324,6 +324,42 @@ def run_seed(cfg: SimConfig, seed: str | None) -> str | None:
     return s if s and s != town_seed(cfg) else None
 
 
+def resolve_episode_days(cfg: SimConfig, episodes: list[dict]) -> list[SimConfig]:
+    """The configuration in force on each day of the year: the base, then every active episode in date order
+    (later episodes see earlier ones' values); a ramp slides a numeric value from the base to the target over
+    ``ramp`` days from the episode's first day. Distinct configurations are validated once and shared."""
+    full = cfg.model_dump(mode="json")
+    base = {g: dict(full[g]) for g in M2C_GROUPS}
+    cache: dict[bytes, SimConfig] = {}
+    out: list[SimConfig] = []
+    for day in range(YEAR_DAYS):
+        cur = {g: dict(v) for g, v in base.items()}
+        for ep in episodes:
+            if not ep["start"] <= day <= ep["end"]:
+                continue
+            frac = 1.0 if ep["ramp"] <= 0 else min(1.0, (day - ep["start"] + 1) / ep["ramp"])
+            for g, vals in ep["settings"].items():
+                for key, target in vals.items():
+                    was = cur[g][key]
+                    tgt = _episode_value(was, target, f"{g}.{key}")
+                    if frac < 1.0 and isinstance(was, _NUMERIC) and not isinstance(was, bool) \
+                            and isinstance(tgt, _NUMERIC) and not isinstance(tgt, bool):
+                        v = was + (tgt - was) * frac
+                        cur[g][key] = int(round(v)) if isinstance(was, int) else v
+                    else:
+                        cur[g][key] = tgt
+        sig = orjson.dumps(cur, option=orjson.OPT_SORT_KEYS)
+        cfg = cache.get(sig)
+        if cfg is None:
+            try:
+                cfg = SimConfig.model_validate({**full, **cur})
+            except Exception as exc:  # pydantic: a target outside the field's bounds
+                raise ValueError(f"episode settings on {date_of(day).isoformat()}: {exc}") from exc
+            cache[sig] = cfg
+        out.append(cfg)
+    return out
+
+
 class M2CRun:
     def __init__(self, town: M2CTown, settings: dict | None = None, actions: list[dict] | None = None,
                  outages: list[dict] | None = None, *, strict: bool = True, seed: str | None = None,
@@ -353,39 +389,7 @@ class M2CRun:
 
     # ---- the day's configuration -----------------------------------------------------------------------------------
     def _resolve_days(self) -> list[SimConfig]:
-        """The configuration in force on each day of the year: the base, then every active episode in date order
-        (later episodes see earlier ones' values); a ramp slides a numeric value from the base to the target over
-        ``ramp`` days from the episode's first day. Distinct configurations are validated once and shared."""
-        full = self.cfg.model_dump(mode="json")
-        base = {g: dict(full[g]) for g in M2C_GROUPS}
-        cache: dict[bytes, SimConfig] = {}
-        out: list[SimConfig] = []
-        for day in range(YEAR_DAYS):
-            cur = {g: dict(v) for g, v in base.items()}
-            for ep in self.episodes:
-                if not ep["start"] <= day <= ep["end"]:
-                    continue
-                frac = 1.0 if ep["ramp"] <= 0 else min(1.0, (day - ep["start"] + 1) / ep["ramp"])
-                for g, vals in ep["settings"].items():
-                    for key, target in vals.items():
-                        was = cur[g][key]
-                        tgt = _episode_value(was, target, f"{g}.{key}")
-                        if frac < 1.0 and isinstance(was, _NUMERIC) and not isinstance(was, bool) \
-                                and isinstance(tgt, _NUMERIC) and not isinstance(tgt, bool):
-                            v = was + (tgt - was) * frac
-                            cur[g][key] = int(round(v)) if isinstance(was, int) else v
-                        else:
-                            cur[g][key] = tgt
-            sig = orjson.dumps(cur, option=orjson.OPT_SORT_KEYS)
-            cfg = cache.get(sig)
-            if cfg is None:
-                try:
-                    cfg = SimConfig.model_validate({**full, **cur})
-                except Exception as exc:  # pydantic: a target outside the field's bounds
-                    raise ValueError(f"episode settings on {date_of(day).isoformat()}: {exc}") from exc
-                cache[sig] = cfg
-            out.append(cfg)
-        return out
+        return resolve_episode_days(self.cfg, self.episodes)
 
     def cfg_at(self, day) -> SimConfig:
         """The configuration in force on run day ``day`` (the base when the run has no episodes)."""

@@ -1,19 +1,20 @@
 // Meter-to-cash client. The viewer keeps only the run's settings overrides, its seed (blank: the town's), the analyst's actions (append-only,
 // dated), the episodes the Year tab inflicted (dated setting changes from the scenario library) and the service interruptions the map's operations days produced; the engine replays the year (POST /api/m2c/*, /api/process/*, /api/vee/*) and returns one bounded view at a
 // time. Nothing here decides VEE outcomes, queue order, costs or estimates.
+import {simulationKey} from './simulation-library.js';
 const KEY='utility-town-m2c:';
 export const YEAR_END='2026-12-31';
 const addDays=(day,n)=>new Date(Date.parse(day+'T12:00:00Z')+n*86400000).toISOString().slice(0,10);
 export class EngineM2C{
- constructor({api='/api',townRef,townId,storage=globalThis.localStorage,fetchImpl}={}){
-  this.api=api;this.townRef=townRef;this.townId=townId||townRef;this.storage=storage;this.fetchImpl=fetchImpl;this.tickets={};this.cache=new Map();
+ constructor({api='/api',townRef,townId,simulationId=null,initial={},onSave=null,onSaveError=null,storage=globalThis.localStorage,fetchImpl}={}){
+  this.api=api;this.townRef=townRef;this.townId=townId||townRef;this.storage=storage;this.fetchImpl=fetchImpl;this.storageKey=simulationKey(simulationId,this.townId);this.onSave=onSave;this.onSaveError=onSaveError;this.initial=initial;this.tickets={};this.cache=new Map();
   const saved=this.load();this.settings=saved.settings||null;this.actions=Array.isArray(saved.actions)?saved.actions:[];this.asOf=saved.asOf||null;this.outages=saved.outages&&typeof saved.outages==='object'?saved.outages:{};
   this.outageSources=saved.outageSources&&typeof saved.outageSources==='object'?saved.outageSources:{};this.seed=typeof saved.seed==='string'&&saved.seed?saved.seed.slice(0,64):null;
   this.episodes=Array.isArray(saved.episodes)?saved.episodes:[];
  }
  get fetch(){return this.fetchImpl||globalThis.fetch.bind(globalThis);}
- load(){try{return JSON.parse(this.storage?.getItem(KEY+this.townId)||'{}')||{};}catch{return {};}}
- save(){try{this.storage?.setItem(KEY+this.townId,JSON.stringify({settings:this.settings,seed:this.seed,actions:this.actions,episodes:this.episodes,asOf:this.asOf,outages:this.outages,outageSources:this.outageSources}));}catch{}}
+ load(){try{return JSON.parse(this.storage?.getItem(KEY+this.storageKey)||'null')||this.initial;}catch{return {};}}
+ save(){try{this.storage?.setItem(KEY+this.storageKey,JSON.stringify({settings:this.settings,seed:this.seed,actions:this.actions,episodes:this.episodes,asOf:this.asOf,outages:this.outages,outageSources:this.outageSources}));this.onSave?.(this);}catch(e){this.onSaveError?.(e);}}
  body(extra={}){const b={town:this.townRef,actions:this.actions,...extra};if(this.settings)b.settings=this.settings;if(this.seed)b.seed=this.seed;const o=this.outageList();if(o.length)b.outages=o;if(this.episodes.length)b.episodes=this.episodes;if(this.asOf)b.asOf=this.asOf;return b;}
  // Episodes (the Year tab): a scenario's setting changes from one day to another (`to` null: year end), at most 40, kept
  // sorted by `from`. Ids are EP-n and never reused. The engine applies them when it replays the year; a bad one is a 422.

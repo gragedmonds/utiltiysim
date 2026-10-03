@@ -8,7 +8,7 @@ operators on the base (``"*0.5"``, ``"+2"``, ``"-1"``), so a scenario fits any t
 from __future__ import annotations
 
 SCENARIOS_VERSION = "m2c-scenarios/1.0"
-GROUPS = (("staffing", "Staffing"), ("reading", "Meter reading"), ("vee", "VEE"), ("billing", "Billing"),
+GROUPS = (("starters", "Starter setups"), ("staffing", "Staffing"), ("reading", "Meter reading"), ("vee", "VEE"), ("billing", "Billing"),
           ("collections", "Collections"), ("anomalies", "Meters & anomalies"), ("contact", "Contact centre"),
           ("field", "Field work"), ("operations", "Operations"))
 
@@ -181,6 +181,46 @@ SCENARIOS: tuple[dict, ...] = (
      "watch": "Waits, hang-ups and call backs fall; staffing cost and idle time rise. Compare with the busiest months.",
      "tags": ["contact centre", "staffing"],
      "episodes": [_ep("Second agent", {"contact": {"agents": "+1"}})]},
+)
+# Starter setups deliberately combine existing supported effects. They are ordinary episodes,
+# so the wizard and Year view use the same authoritative settings and editable periods.
+SCENARIOS += (
+    {"id": "starter_busy", "title": "A little busy", "group": "starters",
+     "description": "A quarter of extra missed reads and payment hiccups. The team is still at full strength.",
+     "watch": "Missing reads, estimates and returned debits, compared with normal operations.",
+     "tags": ["starter", "light pressure"],
+     "episodes": [_ep("A busier quarter", {"reading": {"ami_missed_read": "*1.5"},
+                                             "billing": {"pad_reject_rate": "*1.5"}}, days=90)]},
+    {"id": "starter_pressure", "title": "Under pressure", "group": "starters",
+     "description": "A quarter with half the queue hours, more missed reads and billing master-data mistakes.",
+     "watch": "A growing backlog, blocked bills, estimates and labour cost.",
+     "tags": ["starter", "backlog", "billing"],
+     "episodes": [_ep("A stretched team", {"process": {"analyst_hours_per_day": "*0.5"},
+                                            "reading": {"ami_missed_read": "*2"},
+                                            "billing": {"data_error_rate": "*2"}}, days=90)]},
+    {"id": "starter_chaos", "title": "Organised chaos", "group": "starters",
+     "description": "Half the billing team, patchy AMI, and more returned debits for a quarter. Automation also "
+                    "disappears for the first month, then returns.",
+     "watch": "Queue recovery when automation returns, delayed bills, returned debits and overdue balances.",
+     "tags": ["starter", "recovery", "cash flow"],
+     "episodes": [_ep("A rough quarter", {"process": {"analysts": "*0.5", "analyst_hours_per_day": "*0.5"},
+                                            "reading": {"ami_missed_read": 0.08},
+                                            "billing": {"pad_reject_rate": 0.08}}, days=90),
+                  _ep("Automation takes a holiday", {"process": {"rpa_coverage": 0}}, days=30)]},
+    {"id": "catchup_team", "title": "The catch-up team", "group": "staffing",
+     "description": "A six-week recovery effort doubles queue hours and adds two analysts to clear old cases.",
+     "watch": "Backlog and case age falling, alongside higher staffing costs.",
+     "tags": ["recovery", "cost"],
+     "episodes": [_ep("Extra hands on the queues", {"process": {"analysts": "+2", "analyst_hours_per_day": "*2"}},
+                      days=42)]},
+    {"id": "migration_hangover", "title": "The migration hangover", "group": "billing",
+     "description": "A billing migration leaves wrong rate classes for a month. Automation is off for two weeks; "
+                    "then a four-week catch-up shift tackles the backlog.",
+     "watch": "Blocked bills and rebills during the migration, then the shape and cost of recovery.",
+     "tags": ["migration", "recovery", "rebills"],
+     "episodes": [_ep("Migration errors", {"billing": {"data_error_rate": "*5"}}, days=30),
+                  _ep("Manual checks only", {"process": {"rpa_coverage": 0}}, days=14),
+                  _ep("Catch-up shift", {"process": {"analyst_hours_per_day": "*1.5"}}, start=30, days=28)]},
 )
 COMING: tuple[dict, ...] = (
     {"id": "water_loss", "title": "Undetected water loss", "group": "operations",

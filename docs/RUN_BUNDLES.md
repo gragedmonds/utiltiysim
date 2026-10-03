@@ -102,6 +102,15 @@ queries. The exporter currently handles one town and the engine's 2026 calendar.
 
 ## Following milestones
 
+The planned runner will expose a **Storage folder** selector and remember paths such as `P:\UtilitySim\` for models,
+archives, downloads and runtime caches. The current CLI already supports an explicit location, for example
+`utilsim export-run --town ayr --as-of 2026-12-31 --store "P:\UtilitySim"` on Windows. The runner's folder picker,
+library migration and unavailable-drive handling are still to be built. Archive identities are independent of paths.
+
+The product uses downloadable archive copies and local libraries, with no NAS integration required. Opening an old
+archive reads its saved results; switching scenarios uses the existing device connection and creates a new run.
+Pairing screens will use eight individual boxes with a central dash, such as `K7M2-Q9RX`; the dash is display-only.
+
 This implements architecture step 1. The next milestone is **log in to Sim → download and open the small launcher →
 configure online → pair with an eight-character alphanumeric code → see the local engine Ready**. See
 [the connection flow](PORTAL_ARCHITECTURE.md#the-user-flow-login-launch-pair). The launcher downloads and caches the
