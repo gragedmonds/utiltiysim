@@ -334,6 +334,8 @@ Injected faults with ground truth. Rates per 1,000 meters per year.
 | `exchange_registration_failure` | `2.0` | 0–100 |  | Meter exchanges whose new serial fails registration. |
 | `vacant_consuming` | `3.0` | 0–100 |  | Vacant premises that still consume. |
 | `tamper` | `1.0` | 0–50 |  | Bypass/tamper (50–90% under-registration). |
+| `amr_factor` | `1.0` | 0–20 |  | (advanced) Multiplier on every anomaly rate for AMR (drive-by) meters: an ageing ERT fleet misreads and under-registers more. |
+| `manual_factor` | `1.0` | 0–20 |  | (advanced) Multiplier on every anomaly rate for manually read meters. |
 
 ## Scenario
 
@@ -407,6 +409,8 @@ Bill checks, tariff versions, invoicing, payments and dunning.
 | `notice_days` | `21` | 1–90 | d | Days after the due date for an overdue notice and late fee. |
 | `disconnect_days` | `45` | 5–180 | d | Days after the due date for a disconnection notice. *Affects: disconnection notices.* |
 | `winter_moratorium` | `True` |  |  | No disconnection notices for electricity and water from Nov 15 to Apr 30 (Ontario); a notice held for the winter is issued on May 1 if the bill is still unpaid. |
+| `moratorium_start` | `11-15` |  |  | (advanced) First day of the winter moratorium (MM-DD). |
+| `moratorium_end` | `04-30` |  |  | (advanced) Last day of the winter moratorium (MM-DD); held notices go out the day after. |
 | `disconnect_notice_days` | `10` | 1–60 | d | Days from a disconnection notice to the earliest disconnection. A disconnection also needs a person's approval (the Collections worklist). *Affects: disconnections.* |
 | `disconnect_payment_rate` | `0.6` | 0–1 |  | (advanced) Disconnected customers who pay within a week of the disconnection (and are reconnected the next business day); the rest stay off until they pay. *Affects: collections, reconnections.* |
 | `arrangement_break_rate` | `0.3` | 0–1 |  | (advanced) At-risk payers who break a payment arrangement after a few instalments (dunning resumes); other payers pay every instalment. *Affects: collections.* |

@@ -399,6 +399,15 @@
             "title": "Caseid",
             "type": "string"
           },
+          "episodes": {
+            "description": "Scenarios inflicted from a day (GET /api/m2c/scenarios lists the library); the run replays the year with each day's settings.",
+            "items": {
+              "$ref": "#/components/schemas/Episode"
+            },
+            "maxItems": 40,
+            "title": "Episodes",
+            "type": "array"
+          },
           "outages": {
             "description": "Service interruptions from the operations simulator (a timeline's ``interruptions``): consumption stops, AMI meters without power miss their reads, and VEE sees the outage.",
             "items": {
@@ -480,6 +489,15 @@
             ],
             "description": "View date (YYYY-MM-DD); default: the town's scenario date.",
             "title": "Asof"
+          },
+          "episodes": {
+            "description": "Scenarios inflicted from a day (GET /api/m2c/scenarios lists the library); the run replays the year with each day's settings.",
+            "items": {
+              "$ref": "#/components/schemas/Episode"
+            },
+            "maxItems": 40,
+            "title": "Episodes",
+            "type": "array"
           },
           "outages": {
             "description": "Service interruptions from the operations simulator (a timeline's ``interruptions``): consumption stops, AMI meters without power miss their reads, and VEE sees the outage.",
@@ -569,6 +587,15 @@
               }
             ],
             "title": "Commodity"
+          },
+          "episodes": {
+            "description": "Scenarios inflicted from a day (GET /api/m2c/scenarios lists the library); the run replays the year with each day's settings.",
+            "items": {
+              "$ref": "#/components/schemas/Episode"
+            },
+            "maxItems": 40,
+            "title": "Episodes",
+            "type": "array"
           },
           "list": {
             "description": "disconnect: disconnection notices; moratorium: notices held for the winter; rejected: returned debits; overdue: accounts with overdue bills.",
@@ -712,6 +739,15 @@
               }
             ],
             "title": "Collector"
+          },
+          "episodes": {
+            "description": "Scenarios inflicted from a day (GET /api/m2c/scenarios lists the library); the run replays the year with each day's settings.",
+            "items": {
+              "$ref": "#/components/schemas/Episode"
+            },
+            "maxItems": 40,
+            "title": "Episodes",
+            "type": "array"
           },
           "minCases": {
             "default": 2,
@@ -918,6 +954,15 @@
             "description": "View date (YYYY-MM-DD); default: the town's scenario date.",
             "title": "Asof"
           },
+          "episodes": {
+            "description": "Scenarios inflicted from a day (GET /api/m2c/scenarios lists the library); the run replays the year with each day's settings.",
+            "items": {
+              "$ref": "#/components/schemas/Episode"
+            },
+            "maxItems": 40,
+            "title": "Episodes",
+            "type": "array"
+          },
           "outages": {
             "description": "Service interruptions from the operations simulator (a timeline's ``interruptions``): consumption stops, AMI meters without power miss their reads, and VEE sees the outage.",
             "items": {
@@ -1065,6 +1110,15 @@
             "title": "Decisions",
             "type": "array"
           },
+          "episodes": {
+            "description": "Scenarios inflicted from a day (GET /api/m2c/scenarios lists the library); the run replays the year with each day's settings.",
+            "items": {
+              "$ref": "#/components/schemas/Episode"
+            },
+            "maxItems": 40,
+            "title": "Episodes",
+            "type": "array"
+          },
           "outages": {
             "description": "Service interruptions from the operations simulator (a timeline's ``interruptions``): consumption stops, AMI meters without power miss their reads, and VEE sees the outage.",
             "items": {
@@ -1136,6 +1190,15 @@
             ],
             "description": "View date (YYYY-MM-DD); default: the town's scenario date.",
             "title": "Asof"
+          },
+          "episodes": {
+            "description": "Scenarios inflicted from a day (GET /api/m2c/scenarios lists the library); the run replays the year with each day's settings.",
+            "items": {
+              "$ref": "#/components/schemas/Episode"
+            },
+            "maxItems": 40,
+            "title": "Episodes",
+            "type": "array"
           },
           "kind": {
             "enum": [
@@ -1216,6 +1279,88 @@
           "kind"
         ],
         "title": "EntriesRequest",
+        "type": "object"
+      },
+      "Episode": {
+        "description": "A scenario inflicted from a day: setting overrides in force from ``from`` to ``to`` (inclusive; null = the\nyear's end), sliding from the base to the target over ``ramp`` days. A value is a number or boolean, or an\noperator on the value in force before the episode: ``\"*0.5\"``, ``\"+2\"``, ``\"-1\"`` (numeric settings).",
+        "properties": {
+          "from": {
+            "description": "First day (YYYY-MM-DD, in 2026).",
+            "title": "From",
+            "type": "string"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "ramp": {
+            "default": 0,
+            "description": "Days over which numeric values slide to the target (0: a step).",
+            "maximum": 365.0,
+            "minimum": 0.0,
+            "title": "Ramp",
+            "type": "integer"
+          },
+          "scenario": {
+            "anyOf": [
+              {
+                "maxLength": 60,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The library scenario it came from, if any.",
+            "title": "Scenario"
+          },
+          "settings": {
+            "additionalProperties": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "description": "Run-scoped groups (process, anomalies, reading, vee, billing) → setting → value or operator.",
+            "title": "Settings",
+            "type": "object"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "to": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Last day (inclusive); null runs to the end of the year.",
+            "title": "To"
+          }
+        },
+        "required": [
+          "from",
+          "settings"
+        ],
+        "title": "Episode",
         "type": "object"
       },
       "FrameRequest": {
@@ -1338,6 +1483,15 @@
             "description": "View date (YYYY-MM-DD); default: the town's scenario date.",
             "title": "Asof"
           },
+          "episodes": {
+            "description": "Scenarios inflicted from a day (GET /api/m2c/scenarios lists the library); the run replays the year with each day's settings.",
+            "items": {
+              "$ref": "#/components/schemas/Episode"
+            },
+            "maxItems": 40,
+            "title": "Episodes",
+            "type": "array"
+          },
           "installationId": {
             "title": "Installationid",
             "type": "string"
@@ -1419,6 +1573,15 @@
             ],
             "description": "View date (YYYY-MM-DD); default: the town's scenario date.",
             "title": "Asof"
+          },
+          "episodes": {
+            "description": "Scenarios inflicted from a day (GET /api/m2c/scenarios lists the library); the run replays the year with each day's settings.",
+            "items": {
+              "$ref": "#/components/schemas/Episode"
+            },
+            "maxItems": 40,
+            "title": "Episodes",
+            "type": "array"
           },
           "month": {
             "maximum": 12.0,
@@ -1512,6 +1675,15 @@
             ],
             "description": "View date (YYYY-MM-DD); default: the town's scenario date.",
             "title": "Asof"
+          },
+          "episodes": {
+            "description": "Scenarios inflicted from a day (GET /api/m2c/scenarios lists the library); the run replays the year with each day's settings.",
+            "items": {
+              "$ref": "#/components/schemas/Episode"
+            },
+            "maxItems": 40,
+            "title": "Episodes",
+            "type": "array"
           },
           "orderId": {
             "anyOf": [
@@ -1682,6 +1854,15 @@
             "description": "View date (YYYY-MM-DD); default: the town's scenario date.",
             "title": "Asof"
           },
+          "episodes": {
+            "description": "Scenarios inflicted from a day (GET /api/m2c/scenarios lists the library); the run replays the year with each day's settings.",
+            "items": {
+              "$ref": "#/components/schemas/Episode"
+            },
+            "maxItems": 40,
+            "title": "Episodes",
+            "type": "array"
+          },
           "kind": {
             "anyOf": [
               {
@@ -1834,6 +2015,15 @@
             "description": "View date (YYYY-MM-DD); default: the town's scenario date.",
             "title": "Asof"
           },
+          "episodes": {
+            "description": "Scenarios inflicted from a day (GET /api/m2c/scenarios lists the library); the run replays the year with each day's settings.",
+            "items": {
+              "$ref": "#/components/schemas/Episode"
+            },
+            "maxItems": 40,
+            "title": "Episodes",
+            "type": "array"
+          },
           "outages": {
             "description": "Service interruptions from the operations simulator (a timeline's ``interruptions``): consumption stops, AMI meters without power miss their reads, and VEE sees the outage.",
             "items": {
@@ -1984,6 +2174,15 @@
             "description": "Only cases raised that day (YYYY-MM-DD): with collector, one collector group (POST /api/m2c/collector-groups).",
             "title": "Createdon"
           },
+          "episodes": {
+            "description": "Scenarios inflicted from a day (GET /api/m2c/scenarios lists the library); the run replays the year with each day's settings.",
+            "items": {
+              "$ref": "#/components/schemas/Episode"
+            },
+            "maxItems": 40,
+            "title": "Episodes",
+            "type": "array"
+          },
           "outages": {
             "description": "Service interruptions from the operations simulator (a timeline's ``interruptions``): consumption stops, AMI meters without power miss their reads, and VEE sees the outage.",
             "items": {
@@ -2132,6 +2331,15 @@
             "description": "View date (YYYY-MM-DD); default: the town's scenario date.",
             "title": "Asof"
           },
+          "episodes": {
+            "description": "Scenarios inflicted from a day (GET /api/m2c/scenarios lists the library); the run replays the year with each day's settings.",
+            "items": {
+              "$ref": "#/components/schemas/Episode"
+            },
+            "maxItems": 40,
+            "title": "Episodes",
+            "type": "array"
+          },
           "outages": {
             "description": "Service interruptions from the operations simulator (a timeline's ``interruptions``): consumption stops, AMI meters without power miss their reads, and VEE sees the outage.",
             "items": {
@@ -2215,6 +2423,15 @@
             "description": "View date (YYYY-MM-DD); default: the town's scenario date.",
             "title": "Asof"
           },
+          "episodes": {
+            "description": "Scenarios inflicted from a day (GET /api/m2c/scenarios lists the library); the run replays the year with each day's settings.",
+            "items": {
+              "$ref": "#/components/schemas/Episode"
+            },
+            "maxItems": 40,
+            "title": "Episodes",
+            "type": "array"
+          },
           "outages": {
             "description": "Service interruptions from the operations simulator (a timeline's ``interruptions``): consumption stops, AMI meters without power miss their reads, and VEE sees the outage.",
             "items": {
@@ -2286,6 +2503,15 @@
             ],
             "description": "View date (YYYY-MM-DD); default: the town's scenario date.",
             "title": "Asof"
+          },
+          "episodes": {
+            "description": "Scenarios inflicted from a day (GET /api/m2c/scenarios lists the library); the run replays the year with each day's settings.",
+            "items": {
+              "$ref": "#/components/schemas/Episode"
+            },
+            "maxItems": 40,
+            "title": "Episodes",
+            "type": "array"
           },
           "outages": {
             "description": "Service interruptions from the operations simulator (a timeline's ``interruptions``): consumption stops, AMI meters without power miss their reads, and VEE sees the outage.",
@@ -2391,6 +2617,15 @@
             "default": false,
             "title": "Desc",
             "type": "boolean"
+          },
+          "episodes": {
+            "description": "Scenarios inflicted from a day (GET /api/m2c/scenarios lists the library); the run replays the year with each day's settings.",
+            "items": {
+              "$ref": "#/components/schemas/Episode"
+            },
+            "maxItems": 40,
+            "title": "Episodes",
+            "type": "array"
           },
           "filters": {
             "anyOf": [
@@ -2545,6 +2780,15 @@
             "default": false,
             "title": "Desc",
             "type": "boolean"
+          },
+          "episodes": {
+            "description": "Scenarios inflicted from a day (GET /api/m2c/scenarios lists the library); the run replays the year with each day's settings.",
+            "items": {
+              "$ref": "#/components/schemas/Episode"
+            },
+            "maxItems": 40,
+            "title": "Episodes",
+            "type": "array"
           },
           "filters": {
             "anyOf": [
@@ -3310,6 +3554,23 @@
         "summary": "Post Read Document"
       }
     },
+    "/api/m2c/scenarios": {
+      "get": {
+        "description": "``m2c-scenarios/1.0``: the scenario library for the Year page: groups, scenarios with their episode templates\n(start offset in days from the day inflicted, duration, ramp, settings as values or operators) and what to watch,\nplus the scenarios still coming.",
+        "operationId": "get_scenarios_api_m2c_scenarios_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Scenarios"
+      }
+    },
     "/api/m2c/settings": {
       "get": {
         "description": "Run settings for meter-to-cash: JSON Schema (groups, defaults, bounds, units, effects), defaults, vocabulary,\nand the run ``seed`` (blank = the town's seed). ``?town=`` takes the defaults and the seed from that town.",
@@ -3481,6 +3742,43 @@
           }
         },
         "summary": "Get Tables"
+      }
+    },
+    "/api/m2c/trend": {
+      "post": {
+        "description": "``m2c-trend/1.0``: month by month as of ``asOf``: reads taken, missed and estimated; cases opened, resolved\nand the backlog by queue at month end; cost and carry; bills, invoices, collected, overdue and receivable;\ndunning events and accounts by collections phase; with the run's episodes. Months after the view date are null;\nthe month holding it is partial (``complete: false``).",
+        "operationId": "post_trend_api_m2c_trend_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Trend"
       }
     },
     "/api/m2c/vocabulary": {

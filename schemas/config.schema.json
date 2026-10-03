@@ -126,6 +126,15 @@
       "additionalProperties": false,
       "description": "Injected faults with ground truth. Rates per 1,000 meters per year.",
       "properties": {
+        "amr_factor": {
+          "default": 1.0,
+          "description": "Multiplier on every anomaly rate for AMR (drive-by) meters: an ageing ERT fleet misreads and under-registers more.",
+          "maximum": 20,
+          "minimum": 0,
+          "title": "Amr Factor",
+          "type": "number",
+          "x-advanced": true
+        },
         "consecutive_estimates": {
           "default": 15.0,
           "description": "Runs of 2–4 estimated periods (higher on manual routes).",
@@ -155,6 +164,15 @@
           "minimum": 0,
           "title": "Leak",
           "type": "number"
+        },
+        "manual_factor": {
+          "default": 1.0,
+          "description": "Multiplier on every anomaly rate for manually read meters.",
+          "maximum": 20,
+          "minimum": 0,
+          "title": "Manual Factor",
+          "type": "number",
+          "x-advanced": true
         },
         "misread": {
           "default": 6.0,
@@ -403,6 +421,20 @@
           "type": "integer",
           "x-advanced": true,
           "x-unit": "d"
+        },
+        "moratorium_end": {
+          "default": "04-30",
+          "description": "Last day of the winter moratorium (MM-DD); held notices go out the day after.",
+          "title": "Moratorium End",
+          "type": "string",
+          "x-advanced": true
+        },
+        "moratorium_start": {
+          "default": "11-15",
+          "description": "First day of the winter moratorium (MM-DD).",
+          "title": "Moratorium Start",
+          "type": "string",
+          "x-advanced": true
         },
         "notice_days": {
           "default": 21,

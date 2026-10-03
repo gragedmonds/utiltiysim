@@ -315,3 +315,18 @@ case or order by hash), the Columns menu hides columns (remembered per table in 
 the whole filtered table in pages of 5,000. The run date is the Workspace's. On a phone the sidebar becomes a select.
 Pure helpers (`parseDataRoute`, `fmtCell`, `linkTarget`, `facetMarkup`, `stitchCsv`, …) are tested in
 `tests/data-page.test.mjs`; the engine side in `tests/test_m2c_tables.py` and [M2C.md](M2C.md) "Data tables".
+
+## 13. The Year tab: inflict a scenario from a day
+
+A fourth primary tab, **Year** (`#/year`, `year-page.js`), shows the simulated year as a chronological calendar.
+Clicking a day opens the scenario library (`GET /api/m2c/scenarios`: staffing, meter reading, VEE, billing,
+collections, meters and anomalies; storm season and undetected water loss listed as coming) and "Inflict" turns the
+scenario's episode templates into the run's **episodes** (`EngineM2C.addEpisode`): dated setting overrides from that
+day, optionally ramped, absolute or relative to the base (`"*0.5"`, `"+2"`). Episodes travel with every engine
+request like actions, so the engine replays the year with each day's settings and every page (Workspace, Worklists,
+Data, the map's day) shows the new run after one recalculation (5–15 s). Episode bars sit under the months they
+cover; clicking one edits or removes it. Under the calendar, trend charts (`POST /api/m2c/trend`) show the year month
+by month (backlog by queue, cases opened and resolved, missed and estimated reads, cost and carry, blocked bills,
+invoiced and collected, overdue and receivable, dunning steps, accounts by collections phase) with the episodes shaded,
+so the before and after of a scenario is visible. The engine side (per-day configuration, the library, the trend) is
+described in [M2C.md](M2C.md) "Episodes"; the page's pure helpers are tested in `tests/year-page.test.mjs`.

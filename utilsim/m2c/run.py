@@ -89,6 +89,76 @@ def resolve_settings(cfg: SimConfig, overrides: dict | None) -> SimConfig:
     return SimConfig.model_validate(d)
 
 
+EPISODE_MAX = 40
+_NUMERIC = (int, float)
+
+
+def _episode_value(base, target, path: str):
+    """An episode's target for a setting: a number or boolean as given, or an operator on the base value
+    (``"*0.5"``, ``"+2"``, ``"-1"``; numeric settings only)."""
+    if isinstance(target, str):
+        s = target.strip()
+        if not s or s[0] not in "*+-" or isinstance(base, bool) or not isinstance(base, _NUMERIC):
+            if isinstance(base, str):
+                return s  # a text setting (an estimation method, a date): the value itself
+            raise ValueError(f"episode setting {path}: {target!r} is not a number or an operator (*k, +k, -k)")
+        try:
+            k = float(s[1:])
+        except ValueError as exc:
+            raise ValueError(f"episode setting {path}: {target!r} is not an operator (*k, +k, -k)") from exc
+        v = base * k if s[0] == "*" else base + k if s[0] == "+" else base - k
+        return int(round(v)) if isinstance(base, int) else v
+    if isinstance(base, bool) or isinstance(target, bool):
+        if isinstance(target, bool):
+            return target
+        raise ValueError(f"episode setting {path}: expected true or false")
+    if isinstance(base, _NUMERIC) and isinstance(target, _NUMERIC):
+        return int(round(target)) if isinstance(base, int) else float(target)
+    return target
+
+
+def parse_episodes(cfg: SimConfig, episodes: list[dict] | None) -> list[dict]:
+    """Dated setting overrides, checked and normalised: ``{id, title, scenario, start, end, ramp, settings}`` with
+    ``start``/``end`` as inclusive run days. A setting is a run-scoped group's field; its value is absolute or an
+    operator on the value in force before the episode. ValueError says what is wrong."""
+    out = []
+    for k, ep in enumerate(episodes or []):
+        if k >= EPISODE_MAX:
+            raise ValueError(f"at most {EPISODE_MAX} episodes")
+        if not isinstance(ep, dict):
+            raise ValueError(f"episode {k + 1}: expected an object")
+        eid = str(ep.get("id") or f"EP-{k + 1}")
+        start = parse_day(ep.get("from"), -1)
+        if not 0 <= start < YEAR_DAYS:
+            raise ValueError(f"episode {eid}: 'from' must be a day of 2026")
+        end = parse_day(ep.get("to"), YEAR_DAYS - 1) if ep.get("to") else YEAR_DAYS - 1
+        if end < start:
+            raise ValueError(f"episode {eid}: 'to' is before 'from'")
+        end = min(end, YEAR_DAYS - 1)
+        ramp = int(ep.get("ramp") or 0)
+        if not 0 <= ramp <= YEAR_DAYS:
+            raise ValueError(f"episode {eid}: ramp must be 0–{YEAR_DAYS} days")
+        settings = ep.get("settings") or {}
+        if not isinstance(settings, dict) or not settings:
+            raise ValueError(f"episode {eid}: settings must name at least one setting")
+        clean: dict[str, dict] = {}
+        for g, vals in settings.items():
+            if g not in M2C_GROUPS:
+                raise ValueError(f"episode {eid}: unknown settings group {g!r} (use {', '.join(M2C_GROUPS)})")
+            if not isinstance(vals, dict) or not vals:
+                raise ValueError(f"episode {eid}: settings.{g} must be an object")
+            fields = type(getattr(cfg, g)).model_fields
+            for key, target in vals.items():
+                if key not in fields:
+                    raise ValueError(f"episode {eid}: unknown setting {g}.{key}")
+                _episode_value(getattr(getattr(cfg, g), key), target, f"{g}.{key}")  # type check against the base
+                clean.setdefault(g, {})[key] = target
+        out.append({"id": eid, "title": str(ep.get("title") or eid)[:120], "scenario": ep.get("scenario"),
+                    "start": start, "end": end, "ramp": ramp, "settings": clean})
+    out.sort(key=lambda e: (e["start"], e["id"]))
+    return out
+
+
 def settings_schema() -> dict:
     """JSON Schema for the run settings page: the four run-scoped groups with defaults, bounds, units and hints."""
     props, defs = {}, {}
@@ -245,13 +315,19 @@ def run_seed(cfg: SimConfig, seed: str | None) -> str | None:
 
 class M2CRun:
     def __init__(self, town: M2CTown, settings: dict | None = None, actions: list[dict] | None = None,
-                 outages: list[dict] | None = None, *, strict: bool = True, seed: str | None = None):
+                 outages: list[dict] | None = None, *, strict: bool = True, seed: str | None = None,
+                 episodes: list[dict] | None = None):
         self.town = town
         self.strict = strict  # refuse (raise) when the newest action does not apply; else skip it with a warning
-        self.cfg = resolve_settings(town.cfg, settings)
+        self.cfg = resolve_settings(town.cfg, settings)  # the year's base settings
+        # Episodes: dated overrides on the base (a scenario inflicted from a day); the day's config is cfg_at(day).
+        self.episodes = parse_episodes(self.cfg, episodes)
+        self._cfg_day: list[SimConfig] | None = self._resolve_days() if self.episodes else None
         # A run seed re-rolls every draw of the run (reads, anomalies, work, bill checks); the town stays the same.
         self.run_seed = run_seed(town.cfg, seed)
         groups = {g: self.cfg.model_dump(mode="json")[g] for g in M2C_GROUPS}
+        if self.episodes:
+            groups["episodes"] = self.episodes
         self.settings_hash = _hash(groups if self.run_seed is None else {**groups, "seed": self.run_seed})
         self.warnings: list[str] = []
         self.meter_index = {mid: i for i, mid in enumerate(town.meter_ids)}
@@ -263,6 +339,63 @@ class M2CRun:
         self._setup()
         self._setup_outages()
         self._simulate()
+
+    # ---- the day's configuration -----------------------------------------------------------------------------------
+    def _resolve_days(self) -> list[SimConfig]:
+        """The configuration in force on each day of the year: the base, then every active episode in date order
+        (later episodes see earlier ones' values); a ramp slides a numeric value from the base to the target over
+        ``ramp`` days from the episode's first day. Distinct configurations are validated once and shared."""
+        full = self.cfg.model_dump(mode="json")
+        base = {g: dict(full[g]) for g in M2C_GROUPS}
+        cache: dict[bytes, SimConfig] = {}
+        out: list[SimConfig] = []
+        for day in range(YEAR_DAYS):
+            cur = {g: dict(v) for g, v in base.items()}
+            for ep in self.episodes:
+                if not ep["start"] <= day <= ep["end"]:
+                    continue
+                frac = 1.0 if ep["ramp"] <= 0 else min(1.0, (day - ep["start"] + 1) / ep["ramp"])
+                for g, vals in ep["settings"].items():
+                    for key, target in vals.items():
+                        was = cur[g][key]
+                        tgt = _episode_value(was, target, f"{g}.{key}")
+                        if frac < 1.0 and isinstance(was, _NUMERIC) and not isinstance(was, bool) \
+                                and isinstance(tgt, _NUMERIC) and not isinstance(tgt, bool):
+                            v = was + (tgt - was) * frac
+                            cur[g][key] = int(round(v)) if isinstance(was, int) else v
+                        else:
+                            cur[g][key] = tgt
+            sig = orjson.dumps(cur, option=orjson.OPT_SORT_KEYS)
+            cfg = cache.get(sig)
+            if cfg is None:
+                try:
+                    cfg = SimConfig.model_validate({**full, **cur})
+                except Exception as exc:  # pydantic: a target outside the field's bounds
+                    raise ValueError(f"episode settings on {date_of(day).isoformat()}: {exc}") from exc
+                cache[sig] = cfg
+            out.append(cfg)
+        return out
+
+    def cfg_at(self, day) -> SimConfig:
+        """The configuration in force on run day ``day`` (the base when the run has no episodes)."""
+        if self._cfg_day is None:
+            return self.cfg
+        return self._cfg_day[min(max(int(day), 0), YEAR_DAYS - 1)]
+
+    def month_rate(self, group: str, key: str) -> np.ndarray:
+        """A numeric setting averaged over the days of each month of 2026 ((12,); the base value everywhere when the
+        run has no episodes)."""
+        if self._cfg_day is None:
+            return np.full(12, float(getattr(getattr(self.cfg, group), key)))
+        vals = np.array([float(getattr(getattr(c, group), key)) for c in self._cfg_day])
+        return np.array([vals[regs.MONTH_START[m]:regs.MONTH_START[m + 1]].mean() for m in range(1, 13)])
+
+    def rpa_types_at(self, day) -> set[str]:
+        """The exception types an RPA rule covers on ``day`` (``process.rpa_coverage``, the first types in order)."""
+        cov = self.cfg_at(day).process.rpa_coverage
+        if cov == self.cfg.process.rpa_coverage:
+            return self.rpa_types
+        return set(cat.EXCEPTIONS[:int(len(cat.EXCEPTIONS) * cov + 0.5)])
 
     # ---- inputs --------------------------------------------------------------------------------------------------
     def _check_actions(self, actions: list[dict]) -> list[dict]:
@@ -451,9 +584,18 @@ class M2CRun:
         vacant = ~tw.occupied[tw.meter_prem]
         on = bool(a.enabled)
 
+        # Rates per 1,000 meters per year, month by month (an episode can raise them from a date), scaled per
+        # technology (anomalies.amr_factor, manual_factor); the draws themselves never change.
+        factor = np.where(tech[:, None] == "AMR", self.month_rate("anomalies", "amr_factor")[None, :],
+                          np.where(tech[:, None] == "MANUAL", self.month_rate("anomalies", "manual_factor")[None, :],
+                                   1.0))
+
+        def monthly(name: str, scale=1.0) -> np.ndarray:
+            return self.month_rate("anomalies", name)[None, :] * factor * np.asarray(scale, dtype=float).reshape(-1, 1)
+
         def onset(type_id: int, rate, mask: np.ndarray) -> np.ndarray:
             p = np.asarray(rate, dtype=float) / 1000.0 / 12.0 * on
-            p = p[:, None] if p.ndim else p
+            p = p[:, None] if p.ndim == 1 else p
             u = self._u(P_ANOM, mk[:, None], type_id, months[None, :])
             hit = (u < p) & mask[:, None]
             first = np.where(hit.any(1), hit.argmax(1) + 1, 0)
@@ -463,9 +605,10 @@ class M2CRun:
             return np.where(first > 0, t, INF)
 
         anyc = np.ones(M, dtype=bool)
-        fault_on = {"stuck_meter": onset(1, a.stuck_meter, anyc), "slow_meter": onset(2, a.slow_meter, anyc),
-                    "tamper": onset(3, a.tamper, comm == "electric"),
-                    "exchange_registration_failure": onset(4, a.exchange_registration_failure, anyc)}
+        fault_on = {"stuck_meter": onset(1, monthly("stuck_meter"), anyc),
+                    "slow_meter": onset(2, monthly("slow_meter"), anyc),
+                    "tamper": onset(3, monthly("tamper"), comm == "electric"),
+                    "exchange_registration_failure": onset(4, monthly("exchange_registration_failure"), anyc)}
         stack = np.vstack([fault_on[f] for f in FAULTS])
         self.fault_type = np.where(np.isfinite(stack.min(0)), stack.argmin(0), -1)
         self.fault_t = stack.min(0)
@@ -473,25 +616,25 @@ class M2CRun:
         self.fault_k = np.select([self.fault_type == 1, self.fault_type == 2, self.fault_type == 3],
                                  [0.6 + 0.3 * ku, 0.1 + 0.4 * ku, 5.0 + 40.0 * ku], 0.0)
         self.fix_t = np.full(M, INF)
-        self.leak_t = onset(6, a.leak, comm == "water")
+        self.leak_t = onset(6, monthly("leak"), comm == "water")
         self.leak_q = 0.4 + 2.1 * self._u(P_ANOM, mk, 7)
         self.leak_end = np.full(M, INF)
-        self.vac_t = onset(8, a.vacant_consuming, vacant & (comm != "gas"))
+        self.vac_t = onset(8, monthly("vacant_consuming"), vacant & (comm != "gas"))
         self.vac_q = np.where(comm == "electric", 6.0 + 9.0 * self._u(P_ANOM, mk, 9), 0.15 + 0.25 * self._u(P_ANOM, mk, 9))
         self.vac_end = np.full(M, INF)
-        cest = onset(10, a.consecutive_estimates * np.where(tech == "MANUAL", 2.0, 1.0), anyc)
+        cest = onset(10, monthly("consecutive_estimates", np.where(tech == "MANUAL", 2.0, 1.0)), anyc)
         self.cest_from = np.where(np.isfinite(cest), np.searchsorted(regs.MONTH_START, cest, side="right") - 1, 99)
         self.cest_len = 2 + np.floor(3 * self._u(P_ANOM, mk, 11)).astype(int)
         manual = tech == "MANUAL"
 
-        def per_read(type_id: int, rate: float, mask: np.ndarray) -> np.ndarray:
-            p = rate / 1000.0 / 12.0 if on else 0.0
+        def per_read(type_id: int, name: str, mask: np.ndarray) -> np.ndarray:
+            p = monthly(name) / 1000.0 / 12.0 * on
             hit = (self._u(P_ANOM, mk[:, None], type_id, months[None, :]) < p) & mask[:, None]
             return np.hstack([np.zeros((M, 1), dtype=bool), hit])  # column = month index (0 = Dec 2025)
 
-        self.transposed = per_read(12, a.transposed_digits, manual)
-        self.misread = per_read(13, a.misread, manual)
-        self.no_doc = per_read(14, a.missing_read, anyc)
+        self.transposed = per_read(12, "transposed_digits", manual)
+        self.misread = per_read(13, "misread", manual)
+        self.no_doc = per_read(14, "missing_read", anyc)
         self.missed_last = np.zeros(M, dtype=bool)
         # Read batches: day -> (month index, register rows).
         self.batches: dict[int, tuple[int, np.ndarray]] = {}
@@ -698,7 +841,7 @@ class M2CRun:
             self.series[q][:, 2] = np.cumsum(diff[q])[:YEAR_DAYS]
 
     def _evening(self, day: int, m: int, rows: np.ndarray) -> None:
-        tw, c = self.town, self.cfg
+        tw, c = self.town, self.cfg_at(day)
         t = self.read_t[rows, m]
         meters = tw.meter_of[rows]
         tech = tw.tech[rows]
@@ -855,7 +998,7 @@ class M2CRun:
         ``precursor`` (time, event, reason) is an upstream signal that explains the exception: an AMI last gasp or a
         collector outage."""
         idx = len(self.cases)
-        p = self.cfg.process
+        p = self.cfg_at(day).process
         case = Case(idx, self.case_id(day, kind, r, m, t), r, m, kind, t, disposition, round(impact, 2), confidence,
                     truth, created_by=created_by)
         self.cases.append(case)
@@ -874,7 +1017,7 @@ class M2CRun:
         lag = p.analyst_queue_days_min + int(u * (p.analyst_queue_days_max - p.analyst_queue_days_min + 1))
         case.eligible = add_bdays(day, lag if queue != "SUPERVISOR" else p.supervisor_queue_days_min)
         self.series[queue][day, 0] += 1
-        if kind in self.rpa_types and disposition != 2 and rpa:
+        if kind in self.rpa_types_at(day) and disposition != 2 and rpa:
             if float(self._u(P_WORK, key, m, 2)) < 0.5:
                 case.rpa_at = None
                 self._rpa_later.append((case, t + 1.0 / 24))
@@ -910,7 +1053,8 @@ class M2CRun:
                  "physics": "accept_callback"}[case.truth]
         if back and right in ("accept", "accept_callback"):
             right = "estimate"
-        if float(self._u(P_WORK, self.reg_keys[case.r], case.month, 3)) >= self.cfg.process.analyst_accuracy:
+        if float(self._u(P_WORK, self.reg_keys[case.r], case.month, 3)) >= \
+                self.cfg_at(case.created).process.analyst_accuracy:
             return "field_order" if case.truth == "clean" else ("estimate" if back else "accept")
         return right
 
@@ -944,7 +1088,7 @@ class M2CRun:
         self.series[case.queue][int(t), 1] += 1
         case.ev(t, "FIELD_ORDER", {"reason": case.type})
         case.move(t, "FIELD", "field_pending")
-        case.eligible = add_bdays(int(t), self.cfg.process.field_days_min)
+        case.eligible = add_bdays(int(t), self.cfg_at(t).process.field_days_min)
         self.series["FIELD"][int(t), 0] += 1
         others = cover if cover is not None else (self.related(case, t, lambda c: self.unclaimed(c) and c.queue in (
             "VEE_REVIEW", "ESTIMATION")) if bundle else [])
@@ -969,7 +1113,7 @@ class M2CRun:
     def _escalate(self, case: Case, t: float, kind: str = "ANALYST_ESCALATE") -> None:
         """Hand ``case`` to the supervisors: one picks it up after ``supervisor_queue_days_min``–``max`` business
         days (oldest first, within their daily capacity), unless someone takes it explicitly (assign)."""
-        p = self.cfg.process
+        p = self.cfg_at(t).process
         self.series[case.queue][int(t), 1] += 1
         case.ev(t, kind, {"impact": case.impact})
         case.move(t, "SUPERVISOR", "escalated")
@@ -979,12 +1123,13 @@ class M2CRun:
         self.series["SUPERVISOR"][int(t), 0] += 1
 
     def _analysts(self, day: int) -> None:
-        p = self.cfg.process
+        c = self.cfg_at(day)
+        p = c.process
         if p.analysts <= 0:
             return
         cap = p.analysts * p.analyst_hours_per_day * 60.0
         used = 0.0
-        queues = ("VEE_REVIEW", "ESTIMATION", "BILLING") if self.cfg.billing.billing_queue_worked_by == "analysts" \
+        queues = ("VEE_REVIEW", "ESTIMATION", "BILLING") if c.billing.billing_queue_worked_by == "analysts" \
             else ("VEE_REVIEW", "ESTIMATION")  # billing blocks wait for you
         todo = [c for c in self.open if c.resolved is None and c.queue in queues
                 and c.eligible <= day and c.rpa_at is None and c.owner is None]
@@ -1001,7 +1146,7 @@ class M2CRun:
             case.move(t0, case.queue, "in_review")
             t1 = t0 + minutes / 1440.0
             case.proposal = self._proposal(case)
-            if case.disposition == 2 or (case.impact >= self.cfg.vee.escalate_impact and case.proposal != "estimate"):
+            if case.disposition == 2 or (case.impact >= c.vee.escalate_impact and case.proposal != "estimate"):
                 self._escalate(case, t1)
             elif case.proposal == "field_order":
                 self._to_field(case, t1)
@@ -1009,7 +1154,7 @@ class M2CRun:
                 self._resolve(case, t1, case.proposal, actor=case.assignee)
 
     def _supervisors(self, day: int) -> None:
-        p = self.cfg.process
+        p = self.cfg_at(day).process
         if p.supervisors <= 0:
             return
         n = int(p.supervisors * p.supervisor_hours_per_day * 60.0 // p.supervisor_minutes)
@@ -1031,7 +1176,7 @@ class M2CRun:
     def _field(self, day: int) -> None:
         """The field crews' day: up to ``field_orders_per_day`` premises, oldest work first. One truck roll per
         premise settles every open read case there that nobody owns (one access visit per premise)."""
-        p = self.cfg.process
+        p = self.cfg_at(day).process
         todo = [c for c in self.open if c.resolved is None and c.queue == "FIELD" and c.eligible <= day
                 and c.owner is None]  # your own orders are dispatched by you (order_dispatch), not by this pool
         visits: dict[int, list[Case]] = {}
@@ -1509,7 +1654,8 @@ class M2CRun:
         tw = self.town
         mi = int(tw.meter_of[r])
         act = ords.ACTIVITY.get(o.fields.get("activityType"), "special_read")
-        p = self.cfg.reading.manual_no_access if tw.tech[r] == "MANUAL" and act != "access_investigation" else 0.0
+        p = self.cfg_at(t).reading.manual_no_access if tw.tech[r] == "MANUAL" and act != "access_investigation" \
+            else 0.0
         if float(self._u(P_WORK, self.reg_keys[r], o.n, 21)) < p:
             return {"kind": "no_access"}
         shown = self.display(r, t)
@@ -1781,7 +1927,7 @@ class M2CRun:
             x = self.change_between(r, prev_t, float(self.read_t[r, m]))
             floor = x.initial[r] if x is not None else floor  # never below the new register's initial read
         use = max(0.0, (self.normal_at[r, m] - prev_n) * float(self._hist(np.array([r]), m)[0]))
-        if self.cfg.vee.estimation == "recent_average":
+        if self.cfg_at(self.read_t[r, m]).vee.estimation == "recent_average":
             k = [j for j in range(m - 1, 0, -1) if self.status[r, j] == 1][:3]
             if k:
                 days = sum(self.read_t[r, j] - self.prev_t_at_read[r, j] for j in k)

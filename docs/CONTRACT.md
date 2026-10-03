@@ -166,6 +166,7 @@ net-exports at noon in July. M2 weather-driven profiles replace them.
 | `GET /api/towns/{id}/fixtures/vee.json` · `/fixtures/vee/{premiseId}/{commodity}.json?variant=actual\|stuck\|missing\|spike` | `vee-input-fixture/1.1` (`truth` stripped unless `include_truth=true`) |
 | `GET /api/towns/{id}/render.png` | static render |
 | `GET /api/packs` · `POST /api/sim/timeline` · `POST /api/sim/days` · `POST /api/sim/frame` | operations (below); also served by the hosted engine |
+| `GET /api/m2c/scenarios` · `POST /api/m2c/trend` | the scenario library and the year month by month; every meter-to-cash request also takes `episodes` (scenarios inflicted from a day), see [M2C.md](M2C.md) "Episodes" |
 | `GET /api/m2c/tables` · `POST /api/m2c/table` · `POST /api/m2c/table.csv` | flat tables of the town and its meter-to-cash run as of a date, paged (the Studio's Data tab); also served by the hosted engine, see [M2C.md](M2C.md) "Data tables" |
 
 Scenarios: `normal`, `solar_noon`, `leak` (`target` = premise id; default the first premise), `substation_outage`.

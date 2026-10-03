@@ -50,7 +50,7 @@ ACTIONS = (*ACCOUNT_ACTIONS, *INVOICE_ACTIONS)
 FEES = {"late_fee": "late fee", "nsf_fee": "NSF fee"}
 STEPS = ("DUNNING_REMINDER", "DUNNING_NOTICE", "DISCONNECT_NOTICE")
 PAID = ("received", "instalment", "grant")  # payments that settle an invoice (a returned debit does not)
-MAY_1 = regs.day_of(date(2026, 5, 1))
+MAY_1 = regs.day_of(date(2026, 5, 1))  # the default moratorium release (billing.moratorium_end + 1)
 ARRANGEMENT_FIRST_DAYS, ARRANGEMENT_EVERY_DAYS = 7, 30  # first instalment a week after the arrangement, then monthly
 INSTALMENTS = (2, 12)
 EXTEND_DAYS = (1, 60)
@@ -111,8 +111,30 @@ def check(town, a: dict) -> dict:
     return out
 
 
-def _winter(d: date) -> bool:
-    return (d.month, d.day) >= (11, 15) or (d.month, d.day) <= (4, 30)
+def _md(s: str, default: tuple[int, int]) -> tuple[int, int]:
+    try:
+        m, d = str(s).split("-")
+        return (int(m), int(d)) if 1 <= int(m) <= 12 and 1 <= int(d) <= 31 else default
+    except (ValueError, AttributeError):
+        return default
+
+
+def _winter(d: date, b=None) -> bool:
+    """Inside the winter moratorium window (``billing.moratorium_start`` .. ``moratorium_end``, MM-DD; the window may
+    wrap the year end)."""
+    start = _md(b.moratorium_start, (11, 15)) if b is not None else (11, 15)
+    end = _md(b.moratorium_end, (4, 30)) if b is not None else (4, 30)
+    md = (d.month, d.day)
+    return (md >= start or md <= end) if start > end else (start <= md <= end)
+
+
+def moratorium_release(b) -> int:
+    """The run day held notices go out: the day after ``billing.moratorium_end`` in 2026."""
+    m, d = _md(b.moratorium_end, (4, 30))
+    try:
+        return regs.day_of(date(2026, m, d)) + 1
+    except ValueError:
+        return MAY_1
 
 
 def _day(t: float) -> str:
@@ -202,13 +224,17 @@ class Collections:
     def __init__(self, run) -> None:
         self.run = run
         self.books = run.books
-        self.cfg = run.cfg.billing
+        self.cfg = run.cfg.billing  # the year's base; the day's values come from bcfg(t)
         self.accounts: dict[str, Account] = {}
         self.invoice = {inv["id"]: inv for inv in run.books.invoices}
         self.instalment: dict[str, float] = {}
         self.notes: dict[str, list] = {}
         self._heap: list = []
         self._seq = count()
+
+    def bcfg(self, t: float):
+        """The billing settings in force at ``t`` (dunning timings, fees, the moratorium window, rates)."""
+        return self.run.cfg_at(int(t)).billing
 
     def replay(self) -> None:
         run, bk = self.run, self.books
@@ -320,13 +346,13 @@ class Collections:
             inv["payAt"] = at
             if at is not None:
                 self.push(at, "pay", inv)
-        self.push(due + self.cfg.reminder_days, "dun", inv, 0, 0)
+        self.push(due + self.bcfg(t).reminder_days, "dun", inv, 0, 0)
 
     def _debit(self, A: Account, t: float, inv: dict) -> None:
         if inv["out"] <= 0.005 or self.covering(A, inv, t):
             return
         u = inv["u"]
-        if u[0] < self.cfg.pad_reject_rate and "rejected" not in inv:  # returned for insufficient funds
+        if u[0] < self.bcfg(t).pad_reject_rate and "rejected" not in inv:  # returned for insufficient funds
             inv["rejected"] = t
             inv["payments"].append({"at": t, "amount": inv["out"], "status": "rejected"})
             self.push(t + 2, "nsf", inv)
@@ -336,8 +362,9 @@ class Collections:
         self._pay_inv(A, inv, t, inv["out"], "received")
 
     def _nsf(self, A: Account, t: float, inv: dict) -> None:
-        self.ledger(A, t, "nsf_fee", self.cfg.nsf_fee, inv["id"])
-        inv["fees"].append((t, "nsf_fee", self.cfg.nsf_fee))
+        fee = self.bcfg(t).nsf_fee
+        self.ledger(A, t, "nsf_fee", fee, inv["id"])
+        inv["fees"].append((t, "nsf_fee", fee))
         inv["dunning"].append((t, "PAYMENT_REJECTED"))
 
     def _pay(self, A: Account, t: float, inv: dict) -> None:
@@ -375,14 +402,15 @@ class Collections:
             else:
                 self.push(end, "dun", inv, level, ver)
             return
-        b = self.cfg
+        b = self.bcfg(t)
         if level == 2:
-            if b.winter_moratorium and _winter(date_of(int(t))) and self.mains(inv):  # held until May 1
+            if b.winter_moratorium and _winter(date_of(int(t)), b) and self.mains(inv):  # held for the winter
                 if inv["moratorium"] is None:
                     inv["moratorium"] = t
                     inv["dunning"].append((t, "MORATORIUM_HOLD"))
                     self._call_centre(A, inv, t, "referral")
-                self.push(MAY_1 if t < MAY_1 else INF, "dun", inv, 2, ver)
+                release = moratorium_release(b)
+                self.push(release if t < release else INF, "dun", inv, 2, ver)
                 return
             inv["dunning"].append((t, "DISCONNECT_NOTICE"))
             inv["disc"] = {"notice": t}
@@ -410,7 +438,7 @@ class Collections:
     def _call_centre(self, A: Account, inv: dict, t: float, what: str) -> None:
         """After a disconnection notice or moratorium hold the call centre may refer the customer to a low-income
         programme; after an overdue notice it may enrol them in budget billing (each once a year per account)."""
-        b = self.cfg
+        b = self.bcfg(t)
         if what == "referral" and not A.referred and inv["u"][4] < b.low_income_referral_rate:
             A.referred = True
             self.push(self.run.next_bday(int(t)) + 10.0 / 24, "cc_referral")
@@ -477,7 +505,7 @@ class Collections:
         case.move(t, None, "resolved")
 
     def _referral(self, A: Account, t: float, source: str, k: int | None = None, a: dict | None = None) -> None:
-        run, b = self.run, self.cfg
+        run, b = self.run, self.bcfg(t)
         n = len(A.referrals)
         decide = run.next_bday(int(t), b.low_income_review_days) + 14.0 / 24
         approved = float(hash_u01(run.seed, P_BILL, str_key(A.id), 21, n)) < b.low_income_approval_rate
@@ -491,7 +519,7 @@ class Collections:
         """The low-income agency decides: an approved referral credits a grant to the arrears, oldest bill first."""
         ref["decided"] = t
         if ref["approved"]:
-            left, grant = self.cfg.low_income_grant_max, 0.0
+            left, grant = self.bcfg(t).low_income_grant_max, 0.0
             for inv in A.invs:
                 if left <= 0.005:
                     break
@@ -540,7 +568,7 @@ class Collections:
         # How the customer keeps it: on-time payers and debits on each due date; late payers 1-10 days late; an
         # at-risk payer may stop after a few instalments (arrangement_break_rate).
         u = hash_u01(run.seed, P_BILL, str_key(A.id), 20, len(A.arrangements), np.arange(2 + n)).tolist()
-        stop = int(u[1] * n) if A.profile == "at_risk" and u[0] < self.cfg.arrangement_break_rate else n
+        stop = int(u[1] * n) if A.profile == "at_risk" and u[0] < self.bcfg(t).arrangement_break_rate else n
         prompt = A.profile == "on_time" or A.method == "pre_authorized_debit"
         for j in range(stop):
             self.push(arr["schedule"][j]["due"] + (0.42 if prompt else 1 + 9 * u[2 + j]), "instalment", arr, j)
@@ -581,7 +609,7 @@ class Collections:
         d["at"] = t
         inv["dunning"].append((t, "DISCONNECTED"))
         pay = inv.get("payAt")
-        if (pay is None or pay > t + 7) and inv["u"][6] < self.cfg.disconnect_payment_rate:
+        if (pay is None or pay > t + 7) and inv["u"][6] < self.bcfg(t).disconnect_payment_rate:
             self.push(t + 2 + 5 * inv["u"][7], "pay_all", inv)
 
     def _reconnect(self, A: Account, t: float, inv: dict) -> None:
@@ -612,7 +640,7 @@ class Collections:
                 inv["dueChanges"].append((t, new))
                 inv["ver"] += 1
                 inv["dunning"].append((t, "DUE_DATE_EXTENDED"))
-                b, level = self.cfg, inv["level"]
+                b, level = self.bcfg(t), inv["level"]
                 if level < 3:
                     offset = (b.reminder_days, b.notice_days, b.disconnect_days)[level]
                     A.waiting.pop(inv["id"], None)
@@ -624,7 +652,7 @@ class Collections:
                 inv["dunning"].append((t, "FEE_WAIVED"))
             elif typ == "disconnect_approve":
                 d = inv["disc"]
-                d.update(approved=t, scheduled=max(int(d["notice"]) + self.cfg.disconnect_notice_days, int(t))
+                d.update(approved=t, scheduled=max(int(d["notice"]) + self.bcfg(t).disconnect_notice_days, int(t))
                          + 10.0 / 24, approvedBy=a["id"])
                 inv["dunning"].append((t, "DISCONNECT_APPROVED"))
                 self.push(d["scheduled"], "disconnect", inv)
@@ -819,7 +847,7 @@ def _items(run, col: Collections, kind: str, T: float) -> list[tuple]:
                 d = inv["disc"]
                 approved = _at(d, "approved", T)
                 row = {**_head(run, inv, T), "noticeAt": run.iso(d["notice"]), "state": state,
-                       "earliestDisconnectAt": _day(int(d["notice"]) + col.cfg.disconnect_notice_days),
+                       "earliestDisconnectAt": _day(int(d["notice"]) + col.bcfg(d["notice"]).disconnect_notice_days),
                        "approvedAt": _iso(run, approved), "scheduledAt": _iso(run, d.get("scheduled")) if approved
                        else None, "disconnectedAt": _iso(run, _at(d, "at", T)),
                        "reconnectedAt": _iso(run, _at(d, "reconnected", T)),

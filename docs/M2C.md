@@ -52,6 +52,43 @@ A run is stateless and deterministic: `(town, settings, actions, outages, seed)`
 The engine (`utilsim/m2c/`, numpy only) runs locally (`utilsim serve`) and on the hosted Vercel function. A
 Cobourg-sized town (16k registers) replays its year in about 2 s, and warm instances keep the last four runs.
 
+## Episodes: a scenario inflicted from a day
+
+The run's settings are the year's base. An **episode** overrides some of them from a day (``from``) to a day
+(``to``, inclusive; null runs to the year's end), optionally sliding numeric values from the base to the target over
+``ramp`` days, so a situation can get progressively worse. A value is absolute (a number, a boolean, a text choice)
+or an operator on the value in force before the episode (``"*0.5"``, ``"+2"``, ``"-1"``), so the same episode fits
+any town. Episodes travel with the run like actions (``episodes`` on every run request) and enter the simulation id;
+a run without episodes is byte-identical to the base.
+
+The engine resolves the configuration in force on every day (``M2CRun.cfg_at(day)``; distinct configurations are
+validated once) and the day's values reach: the reading batch (missed-read rates, VEE thresholds, the trend tests,
+the estimation method), case creation (queue waits, RPA coverage), the analysts, supervisors and field pool
+(headcount, hours, review minutes, field days), bill checks and the release rule, invoicing lag, and dunning (reminder,
+notice and disconnection timings, fees, the moratorium window ``billing.moratorium_start``/``moratorium_end``, PAD
+rejections, arrangements, low-income decisions) at the time each event happens. Anomaly onsets and master-data
+errors are drawn per month from the month's average rate (``month_rate``), scaled per technology by
+``anomalies.amr_factor`` and ``manual_factor``; the random draws themselves never change, so raising a rate from March
+adds onsets from March and keeps every earlier one. Settings read once for the whole year stay at the base: the rate
+change (``billing.rate_change_date``/``pct``), prior-year history noise, the price used for bill impact, and the
+carry rates and read costs in the summary's cost figures.
+
+**The scenario library** (``GET /api/m2c/scenarios``, ``utilsim/m2c/scenarios.py``) lists situations as episode
+templates relative to the day they are inflicted (start offset, duration, ramp, settings) with what to watch:
+staffing (half staff, nobody on the queues, supervisor away, automation off), reading (no-access summer, AMI heat
+dropouts), meters (ERT/AMR fleet drift, anomaly wave), VEE (loosened, tightened), billing (master data slips, blocks
+wait for you) and collections (bank debit failures, lenient and aggressive dunning, a longer moratorium). Storm season
+and undetected water loss are listed as coming: they need the engine to generate the year's operations and the
+unbilled-loss physics. ``tests/test_m2c_episodes.py`` checks that every template parses and that the ones that must
+show on a small town do.
+
+**The trend** (``POST /api/m2c/trend``, ``m2c-trend/1.0``) reports the year month by month as of the view date:
+reads scheduled, taken, missed, estimated and adjusted; cases opened and resolved, the backlog by queue at month end,
+escalations and field orders; labour, system and CX cost and carry; documents, blocked bills, billed, invoices,
+invoiced, collected, overdue and receivable; dunning events and every account's collections phase at month end. It
+echoes the run's episodes so the Year page shades them behind the lines. Months after the view date are null; the
+month holding it is partial.
+
 ## A day in the run
 
 Each business day goes in this order:
@@ -538,6 +575,7 @@ opening each case.
 |---|---|
 | `GET /api/m2c/settings?town=` | Schema, defaults (the town's with `?town=`), the run `seed` (default: the town seed), queues, exception vocabulary, action types, clarification categories |
 | `GET /api/m2c/vocabulary?town=` | `m2c-vocabulary/1.0`: the field service order form as data (fields with label, tab, required, kind, bounds and choices; the town's planning plant; component units; stages and system status; the structured field `outcomes`), action types (`decisions`, `orders`, `caseWork`, `collections`, `devices`) and the `collections` block, queues and categories |
+| *every run request* | takes `episodes` (see "Episodes"): dated setting overrides that make the run replay the year with each day's settings |
 | `POST /api/m2c/summary` | `m2c-summary/1.0`: KPIs, cost (labour, system, CX, reads), carry, VEE precision/recall against truth, `billing` (with `collections`), `reliability`, `weather`, queues with aging and daily opened/closed/backlog, exception mix, RPA rules, one status per premise. `since` adds `window`, the figures for a period (see "Run statistics for a period") |
 | `POST /api/process/queue` | Paged worklist: `queue` (incl. `BILLING`, `COLLECTIONS`), `category`, `assignee`, `status`, `sort` (`age` oldest first, `impact`, `confidence`, `created` newest first; ties by case id, so pages never overlap), `page`, `pageSize` ≤ 200, `type`, `commodity`, `search` (case, address, premise, account, meter or order id), `collector` and `createdOn` (an AMI collector's cases raised that day). `total` counts every matching row |
 | `POST /api/m2c/collections` | `m2c-collections/1.0`: a Collections worklist (`disconnect`, `moratorium`, `rejected`, `overdue`), filtered, sorted and paged, rows with `actions` and `flags`, `counts` per list (see "Collections") |
@@ -556,6 +594,8 @@ opening each case.
 | `POST /api/vee/dispositions` | Import decisions from an external VEE engine (m2c.vee v5) by `readId`. Each becomes the equivalent append-only action on the case holding the read: accept → accept; reject or estimate → estimate; an edit → override; escalate and field order map directly; review keeps the case open. Unmatched decisions are returned with a reason. |
 | `POST /api/process/graph` | Activity Sequence nodes and edges for a month |
 | `POST /api/process/costs` | Cost, carry and days to release by exception type |
+| `GET /api/m2c/scenarios` | `m2c-scenarios/1.0`: the scenario library (groups, episode templates, what to watch, coming) |
+| `POST /api/m2c/trend` | `m2c-trend/1.0`: the year month by month as of `asOf` (reads, cases and backlog, cost, billing, dunning, collections phases) with the run's `episodes` |
 | `GET /api/m2c/tables` | `m2c-tables/1.0`: the Data pages' catalog: table groups, each table's source, description and columns (key, label, kind, facet, link), and the page limits (see "Data tables") |
 | `POST /api/m2c/table` | `m2c-table/1.0`: one page (≤ 500 rows) of a table as of `asOf`, filtered (`search`, `filters`), sorted (`sort`, `desc`) and paged; rows as arrays in `columns` order, `facets` over the whole table, `total` matching rows |
 | `POST /api/m2c/table.csv` | one CSV page (≤ 5,000 rows, header on every page) of the same selection; a client stitches the pages |
