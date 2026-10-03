@@ -147,15 +147,13 @@ def export_run(snapshot: dict, request: dict, store: str | Path) -> tuple[Path, 
     if destination.exists():
         return destination, read_manifest(destination), True
 
-    run = M2CRun(town, inputs["settings"], inputs["actions"], inputs["outages"],
-                 seed=seed, episodes=inputs["episodes"], strict=True)
-
-    def _ops():  # the year's outages and leaks for the contact centre (needs the networks)
+    def _ops():  # the networks: the year's incidents, the field crews' assets, overdue maintenance failing
         from utilsim.ops.opstown import ops_town
 
         return ops_town(snapshot)
 
-    run.ops_factory = _ops
+    run = M2CRun(town, inputs["settings"], inputs["actions"], inputs["outages"],
+                 seed=seed, episodes=inputs["episodes"], strict=True, ops_factory=_ops)
     runs.mkdir(parents=True, exist_ok=True)
     staging = Path(tempfile.mkdtemp(prefix=f".tmp-{key}-", dir=runs))
     files = []

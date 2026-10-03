@@ -22,7 +22,10 @@ from utilsim.sim.usage import UsageInputs, monthly_energy
 
 ROOT = Path(__file__).resolve().parents[1]
 QUIET = {"anomalies": {"enabled": False},
-         "reading": {"ami_missed_read": 0, "amr_missed_read": 0, "manual_no_access": 0}}
+         "reading": {"ami_missed_read": 0, "amr_missed_read": 0, "manual_no_access": 0},
+         # no field work that changes meters: exchanges, removals, drifting or dead-battery meters
+         "field": {"old_water_meter_drift": 0, "dead_battery_miss": 0, "seal_exchange": {"rate": 0},
+                   "water_meter_replacement": {"rate": 0}, "removal": {"rate": 0}}}
 
 
 @pytest.fixture(scope="module")

@@ -14,7 +14,7 @@ from utilsim.m2c import collections as colls
 from utilsim.m2c import views
 from utilsim.m2c.base import date_of
 from utilsim.m2c.registers import MONTH_START
-from utilsim.m2c.run import INF, M2CRun
+from utilsim.m2c.run import INF, OFF, M2CRun
 from utilsim.m2c.tables import PHASES, _phase
 
 TREND_VERSION = "m2c-trend/1.0"
@@ -104,7 +104,7 @@ def trend(run: M2CRun, as_of: str | None = None) -> dict:
         end_day = min(end_excl - 1, day)
         Tm = min(end_day + 1 - 1e-6, T)
         win = _window(start, Tm)
-        sched = (read_day >= start) & (read_day <= end_day) & (read_t <= Tm)
+        sched = (read_day >= start) & (read_day <= end_day) & (read_t <= Tm) & (status != OFF)
         taken = sched & ~np.isnan(obs)
         n_sched = int(sched.sum())
         reads = {"scheduled": n_sched, "taken": int(taken.sum()), "missed": int((sched & np.isnan(obs)).sum()),

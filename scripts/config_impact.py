@@ -44,7 +44,6 @@ def _contact(run, ops, tid) -> tuple[str, dict]:
     """The contact centre to 31 December, with the town's network (outages and gas leaks drawn for every day)."""
     from utilsim.m2c import contact
 
-    run.ops_factory = lambda: ops
     c = contact.summary(run, "2026-12-31")
     k = c["kpis"]
     return _h({"kpis": k, "incidents": c["incidents"]}, tid), {
@@ -146,7 +145,10 @@ def measure_town(preset: str, group: str | None, key: str | None, value) -> dict
            "cust": _h([snap.get(k) for k in CUST] + [prem_cust], tid)}
     mt = M2CTown.from_snapshot(snap)
     out["usage"] = {k: float(v[-1].sum()) for k, v in mt.normal.items()}
-    run = M2CRun(mt)
+    from utilsim.ops.opstown import OpsTown
+
+    ops = OpsTown(snap)
+    run = M2CRun(mt, ops_factory=lambda: ops)
     s = views.summary(run, "2026-12-31")
     keep = {k: s[k] for k in ("kpis", "billing", "queues", "exceptions")}
     out["m2c"] = _h(keep, tid)
@@ -155,9 +157,7 @@ def measure_town(preset: str, group: str | None, key: str | None, value) -> dict
                    "estimated": s["kpis"]["estimated"]}
     b = s.get("billing") or {}
     out["billing"] = {k: v for k, v in b.items() if isinstance(v, (int, float)) and not isinstance(v, bool)}
-    from utilsim.ops.opstown import OpsTown
-
-    out["cx"], out["contact"] = _contact(run, OpsTown(snap), tid)
+    out["cx"], out["contact"] = _contact(run, ops, tid)
     out["seconds"] = round(time.time() - t0, 1)
     return out
 
@@ -182,7 +182,7 @@ def measure_run(preset: str, group: str | None, key: str | None, value) -> dict:
 
         _TOWN[preset] = (snap["id"], M2CTown.from_snapshot(snap), OpsTown(snap))
     tid, mt, ops = _TOWN[preset]
-    run = M2CRun(mt, {group: {key: value}} if group else None)
+    run = M2CRun(mt, {group: {key: value}} if group else None, ops_factory=lambda: ops)
     s = views.summary(run, "2026-12-31")
     keep = {k: s[k] for k in ("kpis", "billing", "queues", "exceptions")}
     b = s.get("billing") or {}

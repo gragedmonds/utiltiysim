@@ -56,7 +56,8 @@ COLLECTION_ACTIONS = colls.ACTIONS  # collections work on an account or an invoi
 DEVICE_ACTIONS = ("device_replace",)  # a new device (meter) and register on an installation
 ACTION_TYPES = (*DECISIONS, "field_read", *ORDER_ACTIONS, *CASE_WORK, *COLLECTION_ACTIONS, *DEVICE_ACTIONS)
 ActionError = ords.ActionError
-STATUS = ("pending", "released", "estimated", "adjusted", "held", "missing")
+STATUS = ("pending", "released", "estimated", "adjusted", "held", "missing", "off")
+OFF = 6  # the service was off at the read (disconnected or the meter removed): no read, so no bill for the period
 # How a released register value was obtained (``released.method`` in case views, ``method`` in read histories).
 METHODS = (None, "as_read", "estimated", "corrected", "field_read")
 ACTUAL = (1, 3, 4)  # methods that give a real register value (an estimate is not one)
@@ -64,6 +65,7 @@ CODE_ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"  # Crockford base 32 (no I, L
 UTILITIES = ("electric", "water", "gas")
 OUTAGE_KINDS = (*UTILITIES, "ami")  # "ami": a collector outage (no service lost; AMI meters cannot report)
 OUTAGE_REASON = "SIM_POWER_OUTAGE"
+BATTERY_REASON = "SIM_BATTERY_DEAD"
 COLLECTOR_REASON = "SIM_COLLECTOR_OUTAGE"
 MAX_OUTAGE_DAYS = 7
 MAX_SEED = 64
@@ -302,6 +304,7 @@ class Install:
     order: str | None = None
     case: str | None = None
     note: str | None = None
+    planned: bool = False  # a planned exchange by the field crews (seal, age, AMI conversion)
 
     def carry(self, r: int, value: float, normal: float) -> float:
         """A register value read before the change, on the new register's scale: the initial read less the old
@@ -363,8 +366,11 @@ def resolve_episode_days(cfg: SimConfig, episodes: list[dict]) -> list[SimConfig
 class M2CRun:
     def __init__(self, town: M2CTown, settings: dict | None = None, actions: list[dict] | None = None,
                  outages: list[dict] | None = None, *, strict: bool = True, seed: str | None = None,
-                 episodes: list[dict] | None = None):
+                 episodes: list[dict] | None = None, ops_factory=None):
         self.town = town
+        # The town's operations model (networks, incidents), built on demand: the field crews and the year's
+        # outages need it during the replay. None: a run without networks (no incidents, no network assets).
+        self.ops_factory = ops_factory
         self.strict = strict  # refuse (raise) when the newest action does not apply; else skip it with a warning
         self.cfg = resolve_settings(town.cfg, settings)  # the year's base settings
         # Episodes: dated overrides on the base (a scenario inflicted from a day); the day's config is cfg_at(day).
@@ -677,6 +683,19 @@ class M2CRun:
         self.swaps: dict[int, list[tuple[float, float]]] = {}
         self.has_swap = np.zeros(R, dtype=bool)
         self.dev_change = np.full(shape, None, dtype=object)  # (r, m) -> the Install inside read period m
+        # Field work's effects on the meters (utilsim/m2c/fieldwork.py): service switched off (disconnected or
+        # removed) per register, the technology a meter has now (AMI conversion), a module battery that died
+        # (past its life, not replaced), and under-registration (a failed seal lot, a water meter past its life).
+        self.off_spans: dict[int, list[list]] = {}  # register -> [[off at, back at (INF), why], ...]
+        self.off_any = np.zeros(R, dtype=bool)
+        self.meter_tech_now = tw.meter_tech.copy()
+        self.battery_dead = np.full(M, INF)  # when the module's battery died (INF: alive)
+        self.battery_new = np.full(M, INF)  # when a new battery went in after it died
+        self.drift_k = np.zeros(M)  # share the meter under-registers by
+        self.drift_t = np.full(M, INF)  # from when
+        self.drift_end = np.full(M, INF)  # until the meter was exchanged
+        self._drift_base: dict[int, float] = {}
+        self.field = None  # the field engine, from the first day (_simulate)
 
     def _setup_outages(self) -> None:
         """Per register, the merged spans (start, end as day + fraction) during which it had no service, and those
@@ -750,6 +769,79 @@ class M2CRun:
             out[pos[hit]] = t0[span[hit]]
         return out
 
+    # ---- service switched off by the field crews (disconnections, removals) -------------------------------------
+    def service_off(self, rows, t: float, why: str) -> None:
+        """Registers ``rows`` lose service at ``t`` (``disconnected`` or ``removed``): nothing flows, and their reads
+        are not taken (so no bill) until service_on."""
+        for r in np.atleast_1d(rows).tolist():
+            spans = self.off_spans.setdefault(int(r), [])
+            if not spans or spans[-1][1] <= t:
+                spans.append([float(t), INF, why])
+            self.off_any[r] = True
+
+    def service_on(self, rows, t: float) -> None:
+        for r in np.atleast_1d(rows).tolist():
+            spans = self.off_spans.get(int(r))
+            if spans and spans[-1][1] == INF and spans[-1][0] <= t:
+                spans[-1][1] = float(t)
+
+    def off_reason(self, r: int, t: float) -> str | None:
+        """Why register ``r`` has no service at ``t`` (``disconnected``, ``removed``), or None."""
+        for a, b, why in self.off_spans.get(int(r), ()):
+            if a <= t < b:
+                return why
+        return None
+
+    def _off_loss(self, rows: np.ndarray, t: np.ndarray) -> np.ndarray:
+        """Normal use that did not flow while each register's service was off, from 2026 to ``t``."""
+        out = np.zeros(len(rows))
+        if not self.off_any.any():
+            return out
+        tt = np.broadcast_to(t, len(rows))
+        for k in np.flatnonzero(self.off_any[rows]).tolist():
+            r = int(rows[k])
+            for a, b, _ in self.off_spans[r]:
+                if tt[k] <= a:
+                    continue
+                c = min(float(tt[k]), b)
+                da, dc = int(np.floor(a)), int(np.floor(c))
+                adv = self.town.true_advance(np.array([r, r]), np.array([da, dc]),
+                                             np.array([(a - da) * 24.0, (c - dc) * 24.0]))
+                out[k] += float(adv[1] - adv[0])
+        return out
+
+    def period_start(self, r: int, m: int) -> int:
+        """The read month a bill for register ``r``'s period ending at month ``m`` starts from: the previous month,
+        or the last month read before the service was off."""
+        j = m - 1
+        while j > 0 and self.status[r, j] == OFF:
+            j -= 1
+        return j
+
+    # ---- planned meter work (the field crews) ---------------------------------------------------------------------
+    def exchange_meter(self, meter: int, t: float, by: str, note: str, order: str | None = None,
+                       tech: str | None = None) -> Install | None:
+        """A crew swaps the meter on slot ``meter`` at ``t`` for a new one (its registers start at zero): reads are
+        diffed against the new register, a fault (or drift) on the old meter ends, and an AMI conversion changes how
+        the meter is read. None when it cannot apply (the slot is off, or a read after ``t`` is already out)."""
+        rows = np.flatnonzero(self.town.meter_of == meter)
+        if any(self.off_reason(int(r), t) for r in rows):
+            return None
+        device = self.new_device_id(meter)
+        if self.install_check(meter, t, t, device) is not None:
+            return None
+        x = self._install(meter, t, t, device, {}, by=by, order=order, note=note, planned=True)
+        if self.drift_t[meter] < INF:
+            self.drift_end[meter] = min(self.drift_end[meter], t)
+        if tech:
+            self.meter_tech_now[meter] = tech
+        return x
+
+    def set_drift(self, meter: int, k: float, t: float) -> None:
+        """The meter under-registers by ``k`` from ``t`` (until it is exchanged)."""
+        if k > 0 and self.drift_k[meter] == 0 and not self.has_swap[np.flatnonzero(self.town.meter_of == meter)].any():
+            self.drift_k[meter], self.drift_t[meter] = float(k), float(t)
+
     # ---- physics of a register ----------------------------------------------------------------------------------
     def _extras(self, rows: np.ndarray, t: np.ndarray) -> np.ndarray:
         tw = self.town
@@ -759,7 +851,7 @@ class M2CRun:
                         self.leak_q[m] * np.clip(np.minimum(t, self.leak_end[m]) - self.leak_t[m], 0, None), 0.0)
         vac = np.where(np.isfinite(self.vac_t[m]) & imp,
                        self.vac_q[m] * np.clip(np.minimum(t, self.vac_end[m]) - self.vac_t[m], 0, None), 0.0)
-        return np.nan_to_num(leak) + np.nan_to_num(vac) - self._outage_loss(rows, t)[0]
+        return np.nan_to_num(leak) + np.nan_to_num(vac) - self._outage_loss(rows, t)[0] - self._off_loss(rows, t)
 
     def _true(self, rows: np.ndarray, t: np.ndarray) -> np.ndarray:
         """Physical register (everything that flowed, anomalies included) at times ``t``."""
@@ -784,6 +876,14 @@ class M2CRun:
                             [at, at + kk * (true_now[k] - at), at + kk * (true_now[k] - at), true_now[k] - at + kk],
                             true_now[k])
             out[k] = val
+        drift = (self.drift_k[m] > 0) & (t > self.drift_t[m]) & (t < self.drift_end[m]) & ~active
+        for k in np.flatnonzero(drift).tolist():  # an old meter that under-registers (a failed lot, past its life)
+            r = int(rows[k])
+            base = self._drift_base.get(r)
+            if base is None:
+                tb = float(self.drift_t[m[k]])
+                base = self._drift_base[r] = float(self._true(np.array([r]), np.array([tb]))[0])
+            out[k] = base + (1.0 - self.drift_k[m[k]]) * (true_now[k] - base)
         for k in np.flatnonzero(self.has_swap[rows]):  # a meter swapped by a crew: the new meter
             off = next((o for ts, o in reversed(self.swaps[int(rows[k])]) if ts <= t[k]), None)
             if off is not None:
@@ -806,7 +906,12 @@ class M2CRun:
         self.case_index: dict[str, Case] = {}
         self.open: list[Case] = []
         self._unseen: list[tuple[int, dict, float]] = []  # actions on a case id the run has not raised (yet)
-        self._handled: set[int] = set()  # of those, the ones a collections case opened after the year took
+        self._handled: set[int] = set()  # of those, the ones a collections case took when it opened
+        from utilsim.m2c.fieldwork import FieldEngine
+
+        self.books.start_collections()
+        col = self.books.collections
+        self.field = FieldEngine(self)
         for day in range(YEAR_DAYS):
             acts = by_day.get(day, [])
             self._roll_orders(day)  # crews for your dispatched orders that start today (07:00-09:00)
@@ -815,6 +920,7 @@ class M2CRun:
                     self._act(day, k, a)
                 self._crew_complete(day)
                 self.open = [c for c in self.open if c.resolved is None]
+                self.field.step(day)  # the year's incidents, emergencies and overdue-maintenance failures
             if day in _BSET:
                 for k, a in acts:
                     if a["type"] != "field_read":
@@ -828,6 +934,9 @@ class M2CRun:
                 for _, a in acts:
                     if a["type"] == "field_read":
                         self._field_read(day, a)
+                col.advance(day + self.cfg_at(day).field.shift_start_hour / 24.0)
+                self.field.step(day)  # the field crews' day: their disconnections, removals and exchanges
+                col.advance(day + 18.0 / 24)  # before the read batch: what the crews did today
                 if day in self.batches:
                     self._evening(day, *self.batches[day])
                 self._same_day_rpa()
@@ -835,7 +944,9 @@ class M2CRun:
                 self._same_day_rpa()
                 self.books.invoice(day)
                 self.open = [c for c in self.open if c.resolved is None]
-        self.books.collect()  # payments, dunning and collections; opens the collections cases (notes on them too)
+            col.advance(day + 1)  # the day's payments, dunning and collections work
+        self.books.collect()  # the rest of the year's collections events
+        self.field.finish()
         for k, a, t in self._unseen:  # raised later (that evening, or a later day), or never: say which
             if k in self._handled:
                 continue
@@ -858,13 +969,23 @@ class M2CRun:
     def _evening(self, day: int, m: int, rows: np.ndarray) -> None:
         tw, c = self.town, self.cfg_at(day)
         t = self.read_t[rows, m]
+        if self.off_any[rows].any():  # service off at the read (disconnected, removed): no read, no bill
+            why = [self.off_reason(int(r), float(x)) if self.off_any[r] else None for r, x in zip(rows, t)]
+            off = np.array([w is not None for w in why])
+            if off.any():
+                for r, w in zip(rows[off].tolist(), [w for w in why if w is not None]):
+                    self.status[r, m] = OFF
+                    self.reason[r, m] = "SIM_DISCONNECTED" if w == "disconnected" else "SIM_REMOVED"
+                rows, t = rows[~off], t[~off]
+                if not len(rows):
+                    return
         meters = tw.meter_of[rows]
-        tech = tw.tech[rows]
+        tech = self.meter_tech_now[meters]
         for k, name in enumerate(("AMI", "AMR", "MANUAL")):
             self.read_counts[day, k] += int((tech == name).sum())
         # Did we get a read? One draw per meter and month; a walker who cannot get in misses every meter there.
         mm = np.unique(meters)
-        mt = tw.meter_tech[mm]
+        mt = self.meter_tech_now[mm]
         u = np.where(mt == "MANUAL", self._u(P_READ, self.prem_keys[tw.meter_prem[mm]], m, 1),
                      self._u(P_READ, tw.meter_keys[mm], m, 1))
         p = np.select([mt == "AMI", mt == "AMR"], [c.reading.ami_missed_read, c.reading.amr_missed_read],
@@ -881,8 +1002,13 @@ class M2CRun:
         first = np.unique(meters, return_index=True)[1]
         dark_m = ~np.isnan(dark[first])
         mute_m = ~np.isnan(mute[first])
-        miss_m = (u < p) | episode | self.no_doc[mm, m] | dark_m | mute_m
+        # A radio module whose battery died (past its life, not replaced) misses most reads.
+        tm = t[first]
+        dead_m = (self.battery_dead[mm] <= tm) & (tm < self.battery_new[mm]) & (
+            hash_u01(self.seed, Purpose.FIELD, tw.meter_keys[mm], m, 1) < c.field.dead_battery_miss)
+        miss_m = (u < p) | episode | self.no_doc[mm, m] | dark_m | mute_m | dead_m
         self.missed_last[mm] = miss_m & (mt == "MANUAL")
+        dead_of = dict(zip(mm.tolist(), dead_m.tolist(), strict=True))
         miss_of = dict(zip(mm.tolist(), miss_m.tolist(), strict=True))
         nodoc_of = dict(zip(mm.tolist(), self.no_doc[mm, m].tolist(), strict=True))
         dark_of = dict(zip(mm.tolist(), dark[first].tolist(), strict=True))
@@ -914,6 +1040,7 @@ class M2CRun:
         lost_prev, h_prev = self._outage_loss(rows, self.prev_t[rows])
         self.outage_h[rows, m] = h_now - h_prev
         known = (lost_now - lost_prev) if c.vee.oms_events else 0.0  # outage events (OMS, AMI last gasps) lower it
+        known = known + self._off_loss(rows, t) - self._off_loss(rows, self.prev_t[rows])  # the utility switched it off
         expected = np.maximum(0.0, (normal - self.prev_normal[rows] - known) * self._hist(rows, m))
         self.expected[rows, m] = expected
         mod = 10.0 ** digits
@@ -952,7 +1079,9 @@ class M2CRun:
         self.disp[rows, m] = np.where(missed, -1, res.disposition)
         self.reason[rows, m] = np.where(missed, [("NO_READ" if nodoc_of[x] else OUTAGE_REASON if dark_of[x] == dark_of[x]
                                                   else COLLECTOR_REASON if mute_of[x] == mute_of[x]
-                                                  else cat.REASON[str(tw.meter_tech[x])]) for x in meters.tolist()], "")
+                                                  else BATTERY_REASON if dead_of[x]
+                                                  else cat.REASON[str(self.meter_tech_now[x])]) for x in meters.tolist()],
+                                        "")
         clean = ~missed & (res.disposition == 0) & (self.open_case[rows] < 0)
         acc = rows[clean]
         if len(acc):
@@ -976,14 +1105,15 @@ class M2CRun:
                 continue
             if missed[k]:
                 self.status[r, m] = 5
+                tech_r = str(self.meter_tech_now[tw.meter_of[r]])
                 kind = "CONSECUTIVE_ESTIMATES" if self.consec[r] + 1 > c.vee.max_consecutive_estimates else \
                     ("NO_READ" if self.reason[r, m] == "NO_READ" else
-                     ("NO_ACCESS" if tw.tech[r] == "MANUAL" else "COMM_FAIL"))
+                     ("NO_ACCESS" if tech_r == "MANUAL" else "COMM_FAIL"))
                 gasp, down = dark_of[int(tw.meter_of[r])], mute_of[int(tw.meter_of[r])]
                 pre = (gasp, "AMI_LAST_GASP", OUTAGE_REASON) if gasp == gasp else \
                     (down, "AMI_COLLECTOR_OUTAGE", COLLECTOR_REASON) if down == down else None
                 by = "vee_batch" if kind in ("CONSECUTIVE_ESTIMATES", "NO_READ") else \
-                    ("ami_head_end" if tw.tech[r] == "AMI" else "meter_reading_route")
+                    ("ami_head_end" if tech_r == "AMI" else "meter_reading_route")
                 self._raise(day, r, m, kind, disposition=-1, impact=float(expected[k] * self.price[r]),
                             confidence=float("nan"), truth="clean", queue="ESTIMATION", precursor=pre, created_by=by)
             else:
@@ -1205,6 +1335,8 @@ class M2CRun:
             cases += self.related(lead, t0, lambda c, ids=ids: c.id not in ids and self.unclaimed(c) and c.queue in (
                 "VEE_REVIEW", "ESTIMATION", "FIELD"))
             lead.ev(t0, "TRUCK_ROLL", {"crew": crew, **({"caseIds": [c.id for c in cases]} if len(cases) > 1 else {})})
+            if self.field is not None:
+                self.field.vee_visit(lead, t0, crew)
             for c in cases[1:]:
                 c.ev(max(t0, c.events[-1][0]), "VISIT_SHARED", {"crew": crew, "caseId": lead.id})
                 c.rpa_at = INF if c.rpa_at is not None else None
@@ -1235,7 +1367,7 @@ class M2CRun:
 
     def _install(self, meter: int, t_inst: float, t_reg: float, device: str, initial: dict[int, float], *, by: str,
                  removal: dict[int, float] | None = None, order: str | None = None, case: str | None = None,
-                 note: str | None = None) -> Install:
+                 note: str | None = None, planned: bool = False) -> Install:
         """Register a new device on ``meter`` from ``t_inst`` with its registers' ``initial`` reads (0 for a register
         not named; a swap made earlier keeps its dial). A meter that shows a failed registration's swap is registered
         as found (no swap now); otherwise the meter is swapped at ``t_reg``, and its new dial reads the initial read
@@ -1250,7 +1382,8 @@ class M2CRun:
         day = np.floor(t_inst)
         normal = tw.true_advance(rows, np.full(len(rows), int(day)), np.full(len(rows), (t_inst - day) * 24.0))
         x = Install(meter, t_inst, t_reg, device, self.device_at(meter, t_inst), init, rem,
-                    dict(zip(rows.tolist(), normal.tolist(), strict=True)), {}, by, physical, order, case, note)
+                    dict(zip(rows.tolist(), normal.tolist(), strict=True)), {}, by, physical, order, case, note,
+                    planned)
         if self.fault_t[meter] <= t_reg < self.fix_t[meter]:
             self.fix_t[meter] = t_reg  # the fault (or the unregistered swap) ends with the new device
         if physical:  # from t_reg the dial is the new meter's: initial + what flowed since t_inst
@@ -1266,6 +1399,8 @@ class M2CRun:
             self.installs_of.setdefault(r, []).append(x)
             self.prev_val[r] = x.carry(r, float(self.prev_val[r]), float(self.prev_normal[r]))
         self.installs.append(x)
+        if physical and self.field is not None and not planned:  # a corrective exchange: the meter crew's time
+            self.field.exchanged(x)
         return x
 
     def change_between(self, r: int, t0: float, t1: float, T: float = INF) -> Install | None:
@@ -1509,7 +1644,7 @@ class M2CRun:
         elif typ in ("note", "assign"):
             self._note_or_assign(day, k, a)
         elif typ in COLLECTION_ACTIONS:
-            return  # replayed with the account's payments and dunning after the year (books.collect)
+            return  # replayed with the account's payments and dunning (books.collections, 09:00 on its day)
         else:
             self._hold(day, k, a)
 
@@ -1795,6 +1930,8 @@ class M2CRun:
         arrive = t + TRAVEL_MIN / 1440.0
         o.done_t = min(arrive + o.minutes / 1440.0, int(t) + 0.999)
         o.case.ev(t, "TRUCK_ROLL", {"crew": o.crew, "orderId": o.id})
+        if self.field is not None:
+            self.field.vee_visit(o.case, t, o.crew)
         o.case.move(t, "FIELD", "en_route")
         o.case.ev(arrive, "ON_SITE", {"crew": o.crew, "orderId": o.id})
         o.case.move(arrive, "FIELD", "on_site")
@@ -1804,6 +1941,9 @@ class M2CRun:
     def _note_or_assign(self, day: int, k: int, a: dict) -> None:
         case = self._open_case(k, a, day + 9.0 / 24)
         if case is None:
+            return
+        if case.work in ("low_income", "budget_bill"):  # a collections case: in time order with its own events
+            self.books.collections.note(case, k, a, day + 9.0 / 24)
             return
         t = self._user_t(case, day)
         if a["type"] == "note":

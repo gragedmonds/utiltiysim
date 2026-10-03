@@ -27,7 +27,7 @@ def window(run: M2CRun, since: str, as_of: str | None = None) -> dict:
     S = t0 - 1e-6  # the end of the day before the window: the stocks at its start
     M = slice(1, 13)
     rt, obs = run.read_t[:, M], run.obs[:, M]
-    inwin = (rt >= t0) & (rt <= T)
+    inwin = (rt >= t0) & (rt <= T) & (run.status[:, M] != 6)  # not the reads of a service off (run.OFF)
     got = inwin & ~np.isnan(obs)
     disp = run.disp[:, M]
     rel = run.release_t[:, M]

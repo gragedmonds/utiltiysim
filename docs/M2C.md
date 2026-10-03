@@ -393,7 +393,7 @@ the reason ("account CA-… has nothing overdue on 2026-01-02", "the disconnecti
 | `low_income_referral` | `{day, accountId, note?}` | Opens a Low Income Process case `CASE-{yymmdd}-L{nnnn}`. Dunning waits until the agency decides, `low_income_review_days` business days later at 14:00; it approves with `low_income_approval_rate` and credits a grant (up to `low_income_grant_max`) to the oldest unpaid bills |
 | `budget_billing` | `{day, accountId, note?}` | Opens a Budget Bill Cases case `CASE-{yymmdd}-B{nnnn}`. A collections agent sets the plan up after the analyst pickup lag (10:00); invoices issued after that owe the plan's instalment (the account's average monthly expected bill: prior-year use at current prices, whole dollars, at least $10) and the difference goes to `budget_deferral` on the ledger. Refused for an account already on a plan (master data `budgetBilling`, or enrolled) |
 | `waive_fee` | `{day, invoiceId, fee: late_fee \| nsf_fee, note?}` | Credits the invoice's posted late fee (or NSF fee) back (`fee_waived` on the ledger) |
-| `disconnect_approve` | `{day, invoiceId, note?}` | After a disconnection notice: a crew disconnects at 10:00 on the earliest disconnection day (notice + `disconnect_notice_days`), or the next morning, if the bill is still unpaid. A dunning hold or an open referral moves it to their end; under a payment arrangement the approval lapses. A customer who would not have paid within a week pays the overdue bills 2–7 days later with `disconnect_payment_rate` and is reconnected the next business day at 10:00 |
+| `disconnect_approve` | `{day, invoiceId, note?}` | After a disconnection notice: the meter technicians (or the remote switch of an AMI electric meter) disconnect from 10:00 on the earliest disconnection day (notice + `disconnect_notice_days`), or the next morning, if the bill is still unpaid when they get there (see "Field work"). A dunning hold or an open referral moves it to their end; under a payment arrangement the approval lapses. A customer who would not have paid within a week pays the overdue bills 2–7 days later with `disconnect_payment_rate` and is reconnected the next business day at 10:00 |
 | `disconnect_cancel` | `{day, invoiceId, note}` | No disconnection for that notice |
 
 The engine never disconnects without your approval, unless you set a collections rule: `disconnect_rule_share`
@@ -584,9 +584,26 @@ How the crews work:
    may run into overtime, up to `overtime_max_hours` per crew.
 3. **Cost** is crew time at `cost_per_hour` (times `overtime_factor` after hours) plus each order's `materials`.
 
-Field settings never change the rest of the year (reads, cases, bills, collections and contacts are identical, which
-`tests/test_m2c_fieldwork.py` checks). Field work does not yet feed back: a late disconnect does not move the
-collections timeline, a removal does not end billing, and an AMI conversion does not change how the meter is read.
+### What field work changes
+
+The crews work inside the replay (`FieldEngine`, `run.field`), day by day with the reads, bills and collections:
+collections steps day by day too, and each business day runs the crews before the 18:00 read batch. So what a crew
+does changes the rest of the year from that moment:
+
+| Field work | What it changes |
+|---|---|
+| Disconnect (crew, or the remote switch of an AMI electric meter) | Collections asks for it on the earliest disconnection day; the service is off when the crew finishes, and a customer who paid first is not disconnected ("not needed on arrival"). While off nothing flows, the scheduled reads are not taken (read status `off`, reason `SIM_DISCONNECTED`), so no bill is made for those months |
+| Reconnect | After payment, the next business day: service back when the crew (or switch) is done. The next bill runs from the last read before the disconnection (the billing document's `from` month) and holds only the use since reconnection |
+| Removal | The premise's meters are off for good (`SIM_REMOVED`): no more reads or bills |
+| Seal exchange, water meter replacement, AMI conversion | A new meter on the installation (a device change, registers from zero): reads and bills on the new register, an old meter's fault or drift ends, a converted meter is read as AMI from then on |
+| Module battery | Replaced before its anniversary, the module keeps reading; otherwise it dies on the anniversary and misses `dead_battery_miss` of its reads (`SIM_BATTERY_DEAD`) until replaced: estimates and estimation cases follow |
+| Failed seal lot, water meters past their life | Under-register by `failed_lot_drift` (from the failed test) or `old_water_meter_drift` (all year) until exchanged: billed below the truth |
+| Overdue pole replacement, tree trimming, gas leak repair | Can fail (`deferred_pole_failures` a year, ten times as likely on storm days; `deferred_tree_faults` per storm day; `deferred_leak_escalation` a year): an incident with its customers out or gas odour reports, contacts, emergency response and repair. A failed pole or leak is fixed by the emergency repair (the planned order is called off) |
+
+The summary's `effects` (and each trend month's `field.effects`) count it: reads not taken because the service was
+off, disconnections, reconnections, remote switches, removals, meters exchanged and converted, batteries replaced,
+reads a dead battery missed, meters drifting, and failures by kind; `failures` lists the latest with their incident.
+The Year page's **What field work changed** chart draws the reads it stopped.
 
 **Summary** (`POST /api/m2c/fieldwork`, `m2c-fieldwork/1.0`): as of `asOf`, `kpis` (created, completed, open,
 planned, overdue, `onTimePct`, remote, `responseMin` and `responseP90Min` for gas odour and no-supply calls, hours,

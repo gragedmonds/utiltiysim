@@ -119,35 +119,46 @@ SCENARIOS: tuple[dict, ...] = (
     {"id": "collections_rule", "title": "Collections rule approves disconnections", "group": "collections",
      "description": "From this day a collections rule approves every disconnection notice as it is issued, instead of "
                     "waiting for a person in the Collections worklist.",
-     "watch": "Notices turn into disconnections at the earliest day; most customers pay and are reconnected the next "
-              "business day. Disconnected contacts follow, and the meter technicians get disconnects and reconnects "
-              "(AMI electric meters with a switch are done remotely). The winter moratorium still holds notices.",
+     "watch": "Notices turn into disconnections when the crew (or the remote switch on an AMI electric meter) gets "
+              "there; a customer who pays first is not disconnected. A disconnected meter is not read and gets no bill "
+              "until it is reconnected (Year: What field work changed). Most customers pay and are reconnected the "
+              "next business day. The winter moratorium still holds notices.",
      "tags": ["disconnections", "field work", "contacts"],
      "episodes": [_ep("Rule approves disconnections", {"billing": {"disconnect_rule_share": 1.0}})]},
     {"id": "meter_tech_shortage", "title": "Meter technicians short", "group": "field",
      "description": "Half the meter technicians are off for two months (injuries, a retirement, a vacancy not filled).",
      "watch": "VEE field visits still take their time first and customer work goes ahead of planned work, so planned "
-              "meter work (seal samples, batteries, water meter replacement) backs up and goes overdue. It bites "
-              "hardest from March to May, when the seal samples are due; in high summer the meter work is light.",
+              "meter work (seal samples, batteries, water meter replacement) backs up and goes overdue. Batteries not "
+              "replaced by their anniversary die and miss reads (estimates follow), and old meters under-register "
+              "longer. It bites hardest from March to May, when the seal samples are due.",
      "tags": ["field work", "backlog", "overtime"],
      "episodes": [_ep("Half the meter technicians", {"field": {"crew_meter": {"per_1000_premises": "*0.5"}}}, days=60)]},
     {"id": "ami_conversion", "title": "AMI conversion programme", "group": "field",
      "description": "The utility converts AMR and manually read meters to AMI, route by route, with contract "
                     "installers joining the meter technicians.",
      "watch": "AMI conversion orders fill the meter maintenance programme through the season; capital materials "
-              "climb. The converted meters keep their old reading method in this run (the conversion does not yet "
-              "reach the reads).",
+              "climb. Each converted meter is read as AMI from its exchange: fewer missed reads and no-access visits, "
+              "and its disconnects can be remote.",
      "tags": ["field work", "capital", "AMI"],
      "episodes": [_ep("Convert 40% of AMR and manual meters", {"field": {"ami_conversion": {"rate": 0.4},
                                                                       "crew_meter": {"per_1000_premises": "*2"}}})]},
     {"id": "seal_lot_failures", "title": "Seal lots fail sampling", "group": "field",
      "description": "From this day every lot whose sample finishes testing fails compliance sampling (a meter "
                     "model drifting out of tolerance).",
-     "watch": "Each failed lot has every other meter exchanged through the rest of the year, due 31 December: seal "
-              "exchanges, the meter technicians' hours and materials jump. Add Meter technicians short to see the "
-              "exchanges compete with the rest of the meter work.",
+     "watch": "Each failed lot's meters under-register until exchanged, through the rest of the year: seal "
+              "exchanges, the meter technicians' hours and materials jump, and billed revenue falls against the truth "
+              "while the exchanges wait. Add Meter technicians short to see it last longer.",
      "tags": ["field work", "compliance", "meters"],
      "episodes": [_ep("Lots fail", {"field": {"seal_lot_pass_rate": 0.0}})]},
+    {"id": "line_crews_short", "title": "Line crews short", "group": "field",
+     "description": "Two thirds of the line crews' time goes to a capital project for four months: inspections, "
+                    "pole replacements and tree trimming fall behind.",
+     "watch": "Poles found needing replacement and spans overdue for trimming start to fail, on storm days most: "
+              "outages, outage reports and emergency repairs follow (Year: What field work changed, the contact "
+              "charts; Data: Outages & leaks).",
+     "tags": ["field work", "reliability", "outages"],
+     "episodes": [_ep("A third of the line crews", {"field": {"crew_electric": {"per_1000_premises": "*0.33"}}},
+                      days=120)]},
     {"id": "contractor_stoppage", "title": "Construction crews off the job", "group": "field",
      "description": "The construction contractor stops work for six weeks (a dispute, or crews moved to another "
                     "utility's storm recovery).",

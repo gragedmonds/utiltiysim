@@ -221,7 +221,12 @@ class Account:
 
 # ---- the replay ---------------------------------------------------------------------------------------------------
 class Collections:
-    """Payments, dunning and collections work for every account of a run (``run.books.collections``)."""
+    """Payments, dunning and collections work for every account of a run (``run.books.collections``).
+
+    It steps with the run's day loop: ``start`` before the first day, ``issue`` as the 20:00 invoice run creates
+    invoices, ``advance`` to a moment of the day (every event before it, in time order across accounts) and
+    ``finish`` after the last day. Nothing in it looks ahead, so what happens to an account (a disconnection) can
+    change the account's later reads and bills."""
 
     def __init__(self, run) -> None:
         self.run = run
@@ -229,77 +234,138 @@ class Collections:
         self.cfg = run.cfg.billing  # the year's base; the day's values come from bcfg(t)
         self.accounts: dict[str, Account] = {}
         self.invoice = {inv["id"]: inv for inv in run.books.invoices}
-        self.instalment: dict[str, float] = {}
-        self.notes: dict[str, list] = {}
+        self.instalment: dict[str, float | None] = {}
         self._heap: list = []
         self._seq = count()
+        self._cur: Account | None = None
+        self._late: list[tuple[int, dict]] = []  # invoice actions on an invoice not created yet: judged at the end
+        self._master: set[str] = set()
 
     def bcfg(self, t: float):
         """The billing settings in force at ``t`` (dunning timings, fees, the moratorium window, rates)."""
         return self.run.cfg_at(int(t)).billing
 
-    def replay(self) -> None:
-        run, bk = self.run, self.books
-        tw = run.town
-        keys = np.array([str_key(inv["id"]) for inv in bk.invoices], dtype=np.int64)
-        draws = hash_u01(run.seed, P_BILL, keys[:, None], np.array(DRAWS)[None, :]) if len(keys) else \
-            np.zeros((0, len(DRAWS)))
-        by_acct: dict[str, list[dict]] = {}
-        for inv, u in zip(bk.invoices, draws.tolist(), strict=True):
-            inv.update(u=u, amountDue=inv["total"], dueChanges=[], fees=[], waived=[], disc=None, level=0, ver=0,
-                       payAt=None, moratorium=None, out=inv["total"])
-            by_acct.setdefault(inv["account"], []).append(inv)
+    def start(self) -> None:
+        """Before the first day: the master-data budget plans and your collections actions (at 09:00 on their day)."""
+        from utilsim.m2c.run import parse_day
+
+        run = self.run
+        self._master = {a for a, meta in run.town.accounts.items() if meta.get("budgetBilling")}
+        if run.__dict__.get("_fixed_instalments") is None:  # the master-data plans' instalments, in one go
+            self.instalment.update(self._instalments(sorted(self._master)))
         acts: dict[str, list] = {}
         for k, a in enumerate(run.actions):
             if a["type"] in ACTIONS:
                 acts.setdefault(a["accountId"], []).append((k, a))
-        # Your notes and assignments on a collections case wait in the day loop (the case is opened here).
-        for k, a, _ in run._unseen:
-            if a["type"] in ("note", "assign") and a.get("caseId"):
-                self.notes.setdefault(a["caseId"], []).append((k, a))
-        self.instalment = self._instalments(by_acct)
-        master = {a for a, meta in tw.accounts.items() if meta.get("budgetBilling")}
-        for acct in sorted(set(by_acct) | set(acts)):
-            A = Account(acct, tw.account_method.get(acct, "online"), tw.account_profile.get(acct, "on_time"),
-                        by_acct.get(acct, []))
-            if acct in master:
-                A.plans.append({"requested": -1.0, "start": -1.0, "instalment": self.instalment.get(acct),
+        for acct in sorted(acts):
+            A = self._account(acct)
+            for k, a in acts[acct]:
+                self._push(A, parse_day(a["day"], 0) + 9.0 / 24, "action", k, a)
+
+    def _account(self, acct: str) -> Account:
+        A = self.accounts.get(acct)
+        if A is None:
+            tw = self.run.town
+            A = self.accounts[acct] = Account(acct, tw.account_method.get(acct, "online"),
+                                              tw.account_profile.get(acct, "on_time"))
+            if acct in self._master:
+                A.plans.append({"requested": -1.0, "start": -1.0, "instalment": self.instalment_of(acct),
                                 "source": "master_data", "caseId": None})
-            self.accounts[acct] = A
-            self._replay(A, acts.get(acct, []))
-        for led in bk.ledger.values():
+        return A
+
+    def issue(self, invs: list[dict]) -> None:
+        """New invoices (the 20:00 run): their draws, their account, and the issue event."""
+        if not invs:
+            return
+        keys = np.array([str_key(inv["id"]) for inv in invs], dtype=np.int64)
+        draws = hash_u01(self.run.seed, P_BILL, keys[:, None], np.array(DRAWS)[None, :]).tolist()
+        for inv, u in zip(invs, draws, strict=True):
+            inv.update(u=u, amountDue=inv["total"], dueChanges=[], fees=[], waived=[], disc=None, level=0, ver=0,
+                       payAt=None, moratorium=None, out=inv["total"])
+            self.invoice[inv["id"]] = inv
+            A = self._account(inv["account"])
+            A.invs.append(inv)
+            self._push(A, max(float(inv["issued"]), float(inv["created"])), "issue", inv)
+
+    def advance(self, until: float) -> None:
+        """Every collections event before ``until``, in time order."""
+        heap = self._heap
+        while heap and heap[0][0] < until:
+            t, _, acct, kind, data = heapq.heappop(heap)
+            A = self._cur = self.accounts[acct]
+            getattr(self, "_" + kind)(A, t, *data)
+        self._cur = None
+
+    def finish(self) -> None:
+        """After the last day: the rest of the year, invoice actions on invoices that never came, the ledgers."""
+        self.advance(INF)
+        for k, a in self._late:
+            inv = self.invoice.get(a["invoiceId"])
+            iid = a["invoiceId"]
+            self.run._reject(k, a, f"invoice {iid} is issued on {_day(inv['issued'])}: work it from then"
+                             if inv is not None and inv["account"] == a.get("accountId", inv["account"])
+                             else f"invoice {iid} does not exist in this run")
+        self.accounts = dict(sorted(self.accounts.items()))
+        for led in self.books.ledger.values():
             led.sort(key=lambda e: e[0])
 
-    def _instalments(self, by_acct: dict[str, list[dict]]) -> dict[str, float]:
-        """A budget plan's monthly instalment per account: its average monthly expected bill (prior-year use at
-        current prices, the billing run's ``expectedTotal``), in whole dollars, at least $10."""
-        docs = self.books.docs
-        out = {}
-        for acct, invs in by_acct.items():
-            total, months = 0.0, set()
-            for inv in invs:
-                for k in inv["docs"]:
-                    total += docs[k]["expectedTotal"]
-                    months.add(docs[k]["month"])
-            if months:
-                out[acct] = float(max(10, round(total / len(months))))
+    def note(self, case, k: int, a: dict, t: float) -> None:
+        """Your note or assignment on an open collections case, in time order with its events."""
+        acct = case.ref
+        self._push(self._account(acct), t, "case_note", case, k, a)
+
+    def instalment_of(self, acct: str) -> float | None:
+        """A budget plan's monthly instalment: the account's average monthly expected bill (normal use, with the
+        account's usage history, at current prices) over the months it holds its installations, in whole dollars,
+        at least $10; None for an account with nothing to bill."""
+        if acct not in self.instalment:
+            fixed = self.run.__dict__.get("_fixed_instalments")
+            self.instalment[acct] = fixed.get(acct) if fixed is not None else self._instalments([acct])[acct]
+        return self.instalment[acct]
+
+    def _instalments(self, accts: list[str]) -> dict[str, float | None]:
+        """Expected monthly bills for several accounts at once (one vectorised pricing call)."""
+        run, bk, tw = self.run, self.books, self.run.town
+        out: dict[str, float | None] = {a: None for a in accts}
+        owner, inst, month = [], [], []
+        for a in accts:
+            for i in tw.account_insts.get(a, []):
+                r = int(bk.main[i])
+                if r < 0:
+                    continue
+                for m in range(1, 13):
+                    if tw.contract_at(r, int(tw.read_day[r, m - 1]))[1] == a:  # billed to the holder at its start
+                        owner.append(a)
+                        inst.append(i)
+                        month.append(m)
+        if not owner:
+            return out
+        inst_a, m_a = np.array(inst), np.array(month)
+        q = []
+        for rows in (bk.main[inst_a], bk.export_row[inst_a]):
+            ok = rows >= 0
+            rr = np.where(ok, rows, 0)
+            a0 = tw.true_advance(rr, tw.read_day[rr, m_a - 1], tw.hour[rr])
+            a1 = tw.true_advance(rr, tw.read_day[rr, m_a], tw.hour[rr])
+            q.append(np.where(ok, np.maximum(0.0, a1 - a0) * run.hist[rr, m_a], 0.0))
+        totals = bk.compute([(i, m, tw.inst_rate[i], qi, qe) for i, m, qi, qe in
+                             zip(inst, month, q[0].tolist(), q[1].tolist(), strict=True)])
+        total: dict[str, float] = {}
+        months: dict[str, set] = {}
+        for a, m, (_, _, tot) in zip(owner, month, totals, strict=True):
+            total[a] = total.get(a, 0.0) + tot
+            months.setdefault(a, set()).add(m)
+        for a in total:
+            out[a] = float(max(10, round(total[a] / len(months[a]))))
         return out
 
     def push(self, t: float, kind: str, *data) -> None:
+        """An event for the account being handled."""
+        self._push(self._cur, t, kind, *data)
+
+    def _push(self, A: Account, t: float, kind: str, *data) -> None:
         if t < YEAR_DAYS:
-            heapq.heappush(self._heap, (t, next(self._seq), kind, data))
-
-    def _replay(self, A: Account, acts: list) -> None:
-        from utilsim.m2c.run import parse_day
-
-        self._heap = []
-        for inv in A.invs:
-            self.push(float(inv["issued"]), "issue", inv)
-        for k, a in acts:
-            self.push(parse_day(a["day"], 0) + 9.0 / 24, "action", k, a)
-        while self._heap:
-            t, _, kind, data = heapq.heappop(self._heap)
-            getattr(self, "_" + kind)(A, t, *data)
+            heapq.heappush(self._heap, (t, next(self._seq), A.id, kind, data))
 
     # ---- ledger and payments ---------------------------------------------------------------------------------------
     def ledger(self, A: Account, t: float, kind: str, amount: float, ref: str) -> None:
@@ -318,6 +384,7 @@ class Collections:
             if d and d.get("at") is not None and d.get("reconnectAt") is None:  # paid while disconnected
                 d["reconnectAt"] = self.run.next_bday(int(t)) + 10.0 / 24
                 self.push(d["reconnectAt"], "reconnect", inv)
+                self._crew(inv, "reconnect", d["reconnectAt"], t)
             for arr in A.arrangements:
                 if arr["state"] == "active" and inv["id"] in arr["invoices"] and all(
                         self.invoice[x]["out"] <= 0.005 for x in arr["invoices"]):
@@ -423,6 +490,7 @@ class Collections:
                 d.update(approved=t, scheduled=int(t) + b.disconnect_notice_days + 10.0 / 24, approvedBy="RULE")
                 inv["dunning"].append((t, "DISCONNECT_APPROVED"))
                 self.push(d["scheduled"], "disconnect", inv)
+                self._crew(inv, "disconnect", d["scheduled"], t)
             return
         if level == 1:
             fee = round(amount_due(inv) * b.late_fee_pct / 100.0, 2)
@@ -458,7 +526,7 @@ class Collections:
             self._referral(A, t, "call_centre")
 
     def _cc_budget(self, A: Account, t: float) -> None:
-        if self.plan_requested(A, t) is None and self.instalment.get(A.id) is not None:
+        if self.plan_requested(A, t) is None and self.instalment_of(A.id) is not None:
             self._enrol(A, t, "call_centre")
 
     # ---- collections cases ------------------------------------------------------------------------------------------
@@ -487,10 +555,11 @@ class Collections:
         run.series["COLLECTIONS"][day, 0] += 1
         from utilsim.m2c.run import parse_day
 
-        for k2, a2 in self.notes.get(cid, []):  # your notes and assignments on it, in time order with its events
-            t2 = parse_day(a2["day"], 0) + 9.0 / 24
-            if t2 >= t:
-                self.push(t2, "case_note", case, k2, a2)
+        for k2, a2, _ in run._unseen:  # your notes and assignments on it so far, in time order with its events
+            if a2.get("caseId") == cid and a2["type"] in ("note", "assign"):
+                t2 = parse_day(a2["day"], 0) + 9.0 / 24
+                if t2 >= t:
+                    self.push(t2, "case_note", case, k2, a2)
         return case
 
     def _case_note(self, A: Account, t: float, case, k: int, a: dict) -> None:
@@ -546,7 +615,7 @@ class Collections:
         lag = p.analyst_queue_days_min + int(u * (p.analyst_queue_days_max - p.analyst_queue_days_min + 1))
         case = self._case(A, t, "BUDGET_BILL", source, k, a)
         plan = {"requested": t, "start": run.next_bday(int(t), lag) + 10.0 / 24,
-                "instalment": self.instalment.get(A.id), "source": source, "caseId": case.id}
+                "instalment": self.instalment_of(A.id), "source": source, "caseId": case.id}
         A.plans.append(plan)
         self.push(plan["start"], "setup", plan, case)
 
@@ -601,30 +670,78 @@ class Collections:
         A.log.append((t, "ARRANGEMENT_BROKEN", {"arrangementId": arr["id"]}))
         self._wake(A, t, arr["invoices"])
 
+    def _crew(self, inv: dict, kind: str, release: float, now: float) -> None:
+        """Ask the field crews for a disconnect or reconnect at ``release`` (remote for an AMI meter with a switch)."""
+        field = self.run.field
+        o = field.request(kind, inv, release, now) if field is not None else None
+        inv["disc"].setdefault("orders", {})[kind] = None if o is None else o.k  # the field order's index
+
+    def _call_off(self, inv: dict, kind: str, t: float, why: str) -> None:
+        k = (inv["disc"].get("orders") or {}).get(kind)
+        if k is not None and self.run.field is not None:
+            self.run.field.cancel(self.run.field.orders[k], t, why)
+
     def _disconnect(self, A: Account, t: float, inv: dict) -> None:
+        """The earliest disconnection day: still owed and nothing holding it, the crew (or the remote switch) asked
+        for it does it; a payment, a hold or an arrangement calls it off."""
         d = inv["disc"]
         if d.get("cancelled") is not None or d.get("at") is not None or inv["out"] <= 0.005:
+            self._call_off(inv, "disconnect", t, "not needed: paid or cancelled")
             return
         end = self.paused_until(A, inv, t)
         if end == INF:  # a payment arrangement covers the bill: the approval lapses
             d["lapsed"] = t
+            self._call_off(inv, "disconnect", t, "not needed: payment arrangement")
             return
         if end is not None:  # a dunning hold or an open low-income referral: the crew goes when it ends
             d["scheduled"] = end
+            self._call_off(inv, "disconnect", t, "rescheduled: held")
             self.push(end, "disconnect", inv)
+            self._crew(inv, "disconnect", end, t)
             return
-        d["at"] = t
-        inv["dunning"].append((t, "DISCONNECTED"))
-        pay = inv.get("payAt")
-        if (pay is None or pay > t + 7) and inv["u"][6] < self.bcfg(t).disconnect_payment_rate:
-            self.push(t + 2 + 5 * inv["u"][7], "pay_all", inv)
+        if (d.get("orders") or {}).get("disconnect") is None:  # nobody goes (field.disconnect.rate): it never happens
+            d["unworked"] = t
+
+    def _field_done(self, A: Account, t: float, inv: dict, kind: str, k: int) -> None:
+        """A crew (or the remote switch) finished a disconnect or reconnect at ``t``."""
+        run = self.run
+        o = run.field.orders[k]
+        d = inv["disc"]
+        rows = np.flatnonzero(run.town.meter_of == o.meter)
+        if kind == "disconnect":
+            if (d.get("cancelled") is not None or d.get("lapsed") is not None or d.get("at") is not None
+                    or inv["out"] <= 0.005 or float(d.get("scheduled") or 0.0) > t + 1e-6):
+                o.outcome = "not needed on arrival: paid, held or cancelled"
+                return
+            d["at"] = t
+            d["meter"] = o.meter
+            inv["dunning"].append((t, "DISCONNECTED"))
+            run.service_off(rows, t, "disconnected")
+            pay = inv.get("payAt")
+            if (pay is None or pay > t + 7) and inv["u"][6] < self.bcfg(t).disconnect_payment_rate:
+                self.push(t + 2 + 5 * inv["u"][7], "pay_all", inv)
+        elif d.get("reconnected") is None:
+            self._reconnected(inv, t)
 
     def _reconnect(self, A: Account, t: float, inv: dict) -> None:
-        inv["disc"]["reconnected"] = t
+        """The reconnection is due (the business day after payment): the crew or the remote switch does it; with no
+        crew asked for (field.reconnect.rate), service comes back now."""
+        d = inv["disc"]
+        if d.get("reconnected") is None and (d.get("orders") or {}).get("reconnect") is None:
+            self._reconnected(inv, t)
+
+    def _reconnected(self, inv: dict, t: float) -> None:
+        d = inv["disc"]
+        d["reconnected"] = t
         inv["dunning"].append((t, "RECONNECTED"))
+        if d.get("meter") is not None:
+            self.run.service_on(np.flatnonzero(self.run.town.meter_of == d["meter"]), t)
 
     # ---- your actions -------------------------------------------------------------------------------------------
     def _action(self, A: Account, t: float, k: int, a: dict) -> None:
+        if a["type"] in INVOICE_ACTIONS and a["invoiceId"] not in self.invoice:  # not created yet (or never)
+            self._late.append((k, {**a, "accountId": A.id}))
+            return
         why = self.refusal(A, a, t)
         if why is not None:
             self.run._reject(k, a, why)
@@ -663,6 +780,7 @@ class Collections:
                          + 10.0 / 24, approvedBy=a["id"])
                 inv["dunning"].append((t, "DISCONNECT_APPROVED"))
                 self.push(d["scheduled"], "disconnect", inv)
+                self._crew(inv, "disconnect", d["scheduled"], t)
             else:
                 inv["disc"]["cancelled"] = t
                 inv["dunning"].append((t, "DISCONNECT_CANCELLED"))
@@ -752,7 +870,7 @@ class Collections:
                 return (f"account {A.id} is on budget billing" + (" (master data)" if p["source"] == "master_data" else
                                                                    f" since {_day(p['start'])}" if p["start"] <= t else
                                                                    f": enrolment {p['caseId']} is being set up"))
-            if self.instalment.get(A.id) is None:
+            if self.instalment_of(A.id) is None:
                 return f"account {A.id} has no bills to base a budget plan on"
         return None
 
