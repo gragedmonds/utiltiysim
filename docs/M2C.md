@@ -465,8 +465,11 @@ Who is affected, and for how long:
 - **AMI collector outage:** recorded; nobody loses service.
 
 This is a consequence model, not the operations day's crew dispatch: travel is a flat 20 minutes and crews are never
-busy elsewhere. The year's reads do not see these outages yet (the operations day's interruptions you carry into a run
-do). A run without a network (a town with no `ops` data) draws none and says so in the contact summary's `notes`.
+busy elsewhere. The replay applies each outage as it happens, like the operations day's interruptions you carry into a
+run: the premises lose their use until restored (reads and bills show less), an AMI electric meter that is dark at its
+read misses it (`SIM_POWER_OUTAGE`), a collector outage mutes the AMI meters behind it (`SIM_COLLECTOR_OUTAGE`), and the
+reliability KPIs (customers interrupted, customer-minutes, SAIDI, use lost) count them. A day whose operations
+interruptions the run carries in keeps those instead of its background incidents, so nothing is counted twice. A run without a network (a town with no `ops` data) draws none and says so in the contact summary's `notes`.
 
 ## Contact centre
 
@@ -535,8 +538,7 @@ one person busy for a tenth of the day, and storm days or a week of disconnectio
 The scenario library's **Contact centre** group tries the levers (lines open mornings only, IVR and website down, hire
 a second agent), and **Storm season** (operations) triples the storm days for three months.
 
-Not yet modelled: contacts do not open back-office cases (a bill-wrong call does not raise a billing exception), and
-the year's outages do not reach the reads.
+Not yet modelled: contacts do not open back-office cases (a bill-wrong call does not raise a billing exception).
 
 ## Field work
 
@@ -598,7 +600,7 @@ does changes the rest of the year from that moment:
 | Seal exchange, water meter replacement, AMI conversion | A new meter on the installation (a device change, registers from zero): reads and bills on the new register, an old meter's fault or drift ends, a converted meter is read as AMI from then on |
 | Module battery | Replaced before its anniversary, the module keeps reading; otherwise it dies on the anniversary and misses `dead_battery_miss` of its reads (`SIM_BATTERY_DEAD`) until replaced: estimates and estimation cases follow |
 | Failed seal lot, water meters past their life | Under-register by `failed_lot_drift` (from the failed test) or `old_water_meter_drift` (all year) until exchanged: billed below the truth |
-| Overdue pole replacement, tree trimming, gas leak repair | Can fail (`deferred_pole_failures` a year, ten times as likely on storm days; `deferred_tree_faults` per storm day; `deferred_leak_escalation` a year): an incident with its customers out or gas odour reports, contacts, emergency response and repair. A failed pole or leak is fixed by the emergency repair (the planned order is called off) |
+| Overdue pole replacement, tree trimming, gas leak repair | Can fail (`deferred_pole_failures` a year, ten times as likely on storm days; `deferred_tree_faults` per storm day; `deferred_leak_escalation` a year): an incident whose customers lose supply until the repair (no use, an AMI electric meter dark at its read misses it) or gas odour reports, contacts, emergency response and repair. A failed pole or leak is fixed by the emergency repair (the planned order is called off) |
 
 The summary's `effects` (and each trend month's `field.effects`) count it: reads not taken because the service was
 off, disconnections, reconnections, remote switches, removals, meters exchanged and converted, batteries replaced,

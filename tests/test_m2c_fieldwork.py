@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 
 from api._m2c import RunRequest, _master, _town, run_for
 from api.index import app
-from utilsim.m2c import contact, tables, trend
+from utilsim.m2c import contact, tables, trend, views
 from utilsim.m2c import fieldwork as fwk
 from utilsim.m2c.run import BATTERY_REASON, OFF, YEAR_DAYS, M2CRun, parse_day
 
@@ -74,6 +74,15 @@ def test_orders_point_at_what_raised_them(base):
     done = [o for o in _of(fw, "seal_exchange") + _of(fw, "water_meter_replacement") if o.end < YEAR_DAYS
             and not o.outcome and not o.cancelled]
     assert len(planned) == len(done) > 100
+    # An exchange on a meter's read day, after the overnight read and before the evening batch: that read is diffed on
+    # the old meter and the next one on the new meter, so neither bills the old register's whole dial as use.
+    same_day = [(r, x.period[r]) for x in planned for r in x.period
+                if 2 <= x.period[r] < 13 and run.town.read_day[r, x.period[r] - 1] == int(x.t)]
+    assert same_day
+    for r, m in same_day:
+        for j in (m - 1, m):
+            if not np.isnan(run.cons[r, j]):
+                assert 0 <= run.cons[r, j] < 5 * run.expected[r, j] + 50, (r, j)
     # Move visits only at premises with a meter that cannot be read remotely.
     tw = run.town
     for o in _of(fw, "move_in") + _of(fw, "move_out"):
@@ -156,6 +165,14 @@ def test_deferred_maintenance_fails_and_shows_in_reads_and_bills(base):
     for f in fs.failures:
         assert f["incident"] in incs and incs[f["incident"]]["kind"] == f["kind"]
     assert {o.asset for o in _of(fs, "outage_repair")} >= {f["incident"] for f in fs.failures}
+    # Each failure cuts its customers' supply in the replay: their use stops while they are out.
+    out = [o for o in short.outage_log if o.get("incident") in {f["incident"] for f in fs.failures}]
+    assert out and all(len(o["prem"]) and o["t1"] > o["t0"] for o in out)
+    rows = np.concatenate([o["rows"] for o in out])
+    rows = rows[short.town.direction[rows] == "import"]
+    assert short._outage_loss(rows, np.full(len(rows), float(YEAR_DAYS)))[0].sum() > 0
+    # So do the year's background incidents, in the default run too: the reliability KPIs count them.
+    assert any(o.get("incident") for o in run.outage_log) and views.reliability(run, float(YEAR_DAYS))
     # Less revenue against the truth when meters drift longer.
     gap = lambda r: sum(d["total"] - d["truthTotal"] for d in r.books.docs if d["reversed"] is None)  # noqa: E731
     assert gap(short) < gap(run)

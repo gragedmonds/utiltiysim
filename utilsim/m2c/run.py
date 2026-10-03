@@ -723,6 +723,42 @@ class M2CRun:
         self.o_ptr, self.o_t0, self.o_t1 = _merge_spans(spans["supply"], R)
         self.c_ptr, self.c_t0, self.c_t1 = _merge_spans(spans["comms"], R)
         self.outage_h = np.zeros((R, 13), dtype=np.float32)  # outage hours inside each read's period
+        self._by_prem, self._span_raw = by_prem, spans
+        self._ops_days = {parse_day(o["day"], 0) for o in self.outages}  # days carried in from operations
+
+    def incident_outage(self, inc: dict, background: bool = True) -> None:
+        """A year incident as it happens in the replay (a storm fault, a transformer, a main break, a failure of
+        overdue maintenance, a collector outage): the premises it cuts lose supply until each is restored, so their use
+        stops and their AMI electric meters go dark; a collector outage mutes the AMI meters behind it. A background
+        incident on a day whose operations interruptions the run carries is that day's own incident: not counted
+        twice."""
+        prem, restored = inc.get("premises"), inc.get("restoredAt")
+        if prem is None or not len(prem):  # a gas main leak: an odour, no outage
+            return
+        t0 = float(inc["t"])
+        if background and int(t0) in self._ops_days:
+            return
+        util = inc["utility"]
+        comms = util == "ami"
+        raw = self._span_raw["comms" if comms else "supply"]
+        restored = np.broadcast_to(np.asarray(restored, dtype=float), len(prem))
+        for k, t1 in enumerate(np.unique(restored).tolist()):  # back-fed sections come back first
+            ps = prem[restored == t1]
+            rows = [r for p in ps.tolist() for r in self._by_prem.get((int(p), util), ())]
+            for r in rows:
+                raw.setdefault(r, []).append((t0, t1))
+            d = int(t0)
+            self.outage_log.append({"id": inc["id"] if k == 0 else f"{inc['id']}-{k + 1}", "day": date_of(d).isoformat(),
+                                    "utility": util, "start": round((t0 - d) * 86400.0),
+                                    "end": round((t1 - d) * 86400.0), "premiseIds": [self.town.premise_ids[p] for p in
+                                                                                     ps.tolist()],
+                                    "t0": t0, "t1": t1, "prem": ps, "rows": np.array(rows, dtype=np.int64),
+                                    "incident": inc["id"], "kind": inc["kind"]})
+        R = self.town.n_registers
+        if comms:
+            self.c_ptr, self.c_t0, self.c_t1 = _merge_spans(raw, R)
+        else:
+            self.o_ptr, self.o_t0, self.o_t1 = _merge_spans(raw, R)
 
     def _spans(self, rows: np.ndarray, comms: bool = False) -> tuple[np.ndarray, np.ndarray]:
         """(position in ``rows``, span index) for every outage span (collector outage span) of the registers."""

@@ -587,14 +587,16 @@ IMPACT: dict[str, tuple[str, str]] = {
     "contact.complaint": ("year", "Complaints after a second unresolved contact or giving up on hold twice: long waits "
                                   "and low first-contact resolution drive them."),
     # ---- outages & leaks over the year (run) ------------------------------------------------------------------------
-    "outages.enabled": ("year", "Draw the operations day's incidents for every day of the year. Off: outage and gas "
-                                "odour contacts are background only."),
-    "outages.storm_factor": ("year", "Multiplies the chance of a storm day: more overhead line faults, outages and "
-                                     "outage reports, mostly May to September."),
-    "outages.incident_factor": ("year", "Multiplies every incident rate: more outages, main breaks and gas leaks, and "
-                                        "the contacts they bring."),
-    "outages.restore_factor": ("year", "Multiplies the time to restore service: longer outages bring twice the outage "
-                                       "reports past two hours."),
+    "outages.enabled": ("year", "Draw the operations day's incidents for every day of the year: customers out lose "
+                                "their use and AMI meters go dark. Off: no outages, and outage and gas odour contacts "
+                                "are background only."),
+    "outages.storm_factor": ("year", "Multiplies the chance of a storm day: more overhead line faults, outages (use "
+                                     "lost, a read missed when one falls inside) and outage reports, mostly May to "
+                                     "September."),
+    "outages.incident_factor": ("year", "Multiplies every incident rate: more outages, main breaks and gas leaks, the "
+                                        "use they cut and the contacts they bring."),
+    "outages.restore_factor": ("year", "Multiplies the time to restore service: more use lost, more AMI reads falling "
+                                       "inside an outage, and twice the outage reports past two hours."),
     # ---- field work (run) ---------------------------------------------------------------------------------------------
     "field.shift_start_hour": ("year", "When the business-day crews start. It moves when work is done in the day and "
                                        "which emergencies fall after hours (call-out and overtime)."),
@@ -628,10 +630,10 @@ IMPACT: dict[str, tuple[str, str]] = {
                                        "billed against the truth while the exchanges wait."),
     "field.old_water_meter_drift": ("year", "How much water meters past their life under-register until replaced: "
                                             "the revenue a replacement programme recovers."),
-    "field.deferred_pole_failures": ("year", "How likely an overdue pole replacement fails: outages, outage reports "
-                                             "and repairs on the line crews."),
-    "field.deferred_tree_faults": ("year", "How likely a span overdue for trimming faults on a storm day: outages and "
-                                           "outage reports."),
+    "field.deferred_pole_failures": ("year", "How likely an overdue pole replacement fails: an outage (use lost, AMI "
+                                             "meters dark), outage reports and repairs on the line crews."),
+    "field.deferred_tree_faults": ("year", "How likely a span overdue for trimming faults on a storm day: an outage "
+                                           "(use lost, AMI meters dark) and outage reports."),
     "field.deferred_leak_escalation": ("year", "How likely a surveyed leak overdue for repair becomes a public gas "
                                                "leak: odour calls and emergency response."),
     "field.crew_emergency": ("year", "On-call responders: fewer stretch emergency response when emergencies "

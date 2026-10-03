@@ -723,10 +723,11 @@ class FieldEngine:
 
             todays, storm = incs.draw_day(run, self.ops, day)
             self.storm[day] = storm
-            todays += self._failures(day, storm)
-            for inc in todays:
+            failed = self._failures(day, storm)
+            for inc, background in [*((x, True) for x in todays), *((x, False) for x in failed)]:
                 self.incidents.append(inc)
                 b.repair(inc, len(self.incidents) - 1)
+                run.incident_outage(inc, background)  # customers out: no use, dark AMI meters
         self._absorb(day)
         if add_bdays(day, 0) == day:
             self._work(day)

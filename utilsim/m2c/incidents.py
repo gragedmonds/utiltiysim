@@ -21,8 +21,9 @@ Who is affected, and for how long (in hours from the incident):
 * **AMI collector outage**: recorded (no one loses service; the meters behind it cannot report).
 
 This is a consequence model, not the operations day's crew dispatch: travel is a flat ``TRAVEL_MINUTES``, crews are
-never busy elsewhere, and the year's reads do not yet see these outages (the operations day's interruptions you carry
-into a run do).
+never busy elsewhere. The replay applies each outage as it happens (``M2CRun.incident_outage``): the premises lose
+their use until restored, AMI electric meters go dark, and a collector outage mutes the AMI meters behind it. A day
+whose operations interruptions the run carries in keeps those instead of its background incidents (not counted twice).
 """
 
 from __future__ import annotations

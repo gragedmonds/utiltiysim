@@ -151,13 +151,14 @@ SCENARIOS: tuple[dict, ...] = (
      "tags": ["field work", "compliance", "meters"],
      "episodes": [_ep("Lots fail", {"field": {"seal_lot_pass_rate": 0.0}})]},
     {"id": "line_crews_short", "title": "Line crews short", "group": "field",
-     "description": "Two thirds of the line crews' time goes to a capital project for four months: inspections, "
-                    "pole replacements and tree trimming fall behind.",
-     "watch": "Poles found needing replacement and spans overdue for trimming start to fail, on storm days most: "
-              "outages, outage reports and emergency repairs follow (Year: What field work changed, the contact "
-              "charts; Data: Outages & leaks).",
+     "description": "Nine tenths of the line crews' time goes to a capital project for four months: pole "
+                    "inspections, pole replacements and tree trimming fall behind.",
+     "watch": "Inspections and trims go weeks overdue (about a quarter of the season's in a small town). Each "
+              "overdue pole or span is more likely to fail, on storm days most: an outage, outage reports and an "
+              "emergency repair (Year: What field work changed, the contact charts; Data: Outages & leaks). "
+              "Failures stay rare in a small town; add Storm season, or try a large town, to see more.",
      "tags": ["field work", "reliability", "outages"],
-     "episodes": [_ep("A third of the line crews", {"field": {"crew_electric": {"per_1000_premises": "*0.33"}}},
+     "episodes": [_ep("A tenth of the line crews", {"field": {"crew_electric": {"per_1000_premises": "*0.1"}}},
                       days=120)]},
     {"id": "contractor_stoppage", "title": "Construction crews off the job", "group": "field",
      "description": "The construction contractor stops work for six weeks (a dispute, or crews moved to another "
@@ -171,7 +172,8 @@ SCENARIOS: tuple[dict, ...] = (
                     "outage reports that come with them.",
      "watch": "Outage contacts and the emergency line climb on storm days; with one agent the queue spills into "
               "hang-ups and call backs (Year: contact charts; Data: Outages & leaks, Contacts). The line crews' "
-              "outage repairs and overtime climb too (Field work). The year's reads do not see these outages yet.",
+              "outage repairs and overtime climb too (Field work). Customers out lose their use, and an AMI read that "
+              "falls inside an outage is missed (Workspace: Outage Follow-up).",
      "tags": ["outages", "contact centre", "field work"],
      "episodes": [_ep("Storms ×3", {"outages": {"storm_factor": "*3"}}, days=92)]},
     {"id": "phones_mornings_only", "title": "Lines open mornings only", "group": "contact",

@@ -395,7 +395,8 @@ def test_outages_from_operations_reach_meter_to_cash(small_town):
     outages = [{"day": day, **{k: i[k] for k in ("utility", "start", "end", "premiseIds")}} for i in tl["interruptions"]]
     run = run_for(RunRequest(town="small_town", outages=outages))
     before = tw.read_day[:, 1:] < parse_day(day, 0)  # nothing changes before the outage
-    assert np.array_equal(np.where(before, run.truth[:, 1:], 0), np.where(before, base.truth[:, 1:], 0))
+    assert np.array_equal(np.where(before, run.truth[:, 1:], 0), np.where(before, base.truth[:, 1:], 0),
+                          equal_nan=True)  # a meter the crews removed has no read (NaN)
     p = tw.premise_index[tw.premise_ids[tw.prem[ami]]]
     rows = np.flatnonzero((tw.prem == p) & (tw.commodity == "electric") & (tw.direction == "import"))
     assert (run.truth[rows, 12] < base.truth[rows, 12]).all()  # the outage's use never flowed
