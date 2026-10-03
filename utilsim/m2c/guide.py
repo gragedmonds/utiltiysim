@@ -87,8 +87,11 @@ CAPABILITIES = (
      "where": ["Configuration › Contact centre", "Year", "Data › Contact centre"]},
     {"id": "incidents", "title": "Outages and leaks over the year",
      "text": "The operations day's background incidents drawn for every date of the year (the same storm or leak the "
-             "map shows on that date): who loses power or water, for how long, and who smells gas. Storm, incident "
-             "and restoration factors are run settings, so Storm season can be inflicted from a day.",
+             "map shows on that date): who loses power or water, for how long, and who smells gas. The replay "
+             "applies each as it happens: customers out lose their use until restored, an AMI meter dark at its read "
+             "misses it (VEE sees the outage event), a collector outage mutes the meters behind it, and reliability "
+             "counts it. Storm, incident and restoration factors are run settings, so Storm season can be inflicted "
+             "from a day.",
      "where": ["Configuration › Outages & leaks over the year", "Data › Outages & leaks"]},
     {"id": "fieldwork", "title": "Field work over the year",
      "text": "Work orders in five programmes, each raised by what happens in the year: customer emergencies (gas "
@@ -164,9 +167,6 @@ LIMITS = (
 )
 
 GAPS = (
-    {"title": "Outages in the year's reads", "text": "The year's outages and leaks reach the contact centre, but not "
-     "yet the reads, VEE or bills: only interruptions you carry from a day on the map do.", "plan": "Feed the year's "
-     "incidents into the replay as interruptions (AMI misses, lost use, VEE outage events)."},
     {"title": "Contact centre feedback", "text": "Contacts do not create back-office work yet: a bill dispute or a "
      "complaint is answered and counted, but opens no case for the analysts.", "plan": "Disputes and complaints open "
      "Billing cases; long queues and failed resolutions raise churn and collections risk."},

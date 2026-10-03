@@ -878,6 +878,9 @@ class M2CRun:
             self.drift_end[meter] = min(self.drift_end[meter], t)
         if tech:
             self.meter_tech_now[meter] = tech
+            if tech != "MANUAL":  # nobody reads it by hand from here: no misread or transposed digits
+                later = self.read_t[rows[0]] >= t
+                self.transposed[meter, later] = self.misread[meter, later] = False
         return x
 
     def set_drift(self, meter: int, k: float, t: float) -> None:
@@ -1071,8 +1074,9 @@ class M2CRun:
         self.meter_true[rows, m] = shown
         imp = tw.direction[rows] == "import"
         obs = shown.copy()
-        tr = self.transposed[meters, m] & imp
-        mr = self.misread[meters, m] & imp & ~tr
+        by_hand = tech == "MANUAL"  # a person reads it (a meter converted to AMI is not misread any more)
+        tr = self.transposed[meters, m] & imp & by_hand
+        mr = self.misread[meters, m] & imp & ~tr & by_hand
         for k in np.flatnonzero(tr | mr):
             obs[k] = _transpose(shown[k], int(digits[k]), int(self.reg_keys[rows[k]])) if tr[k] else \
                 _misread(shown[k], int(digits[k]), int(self.reg_keys[rows[k]]))
