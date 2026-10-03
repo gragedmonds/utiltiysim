@@ -90,6 +90,19 @@ CAPABILITIES = (
              "map shows on that date): who loses power or water, for how long, and who smells gas. Storm, incident "
              "and restoration factors are run settings, so Storm season can be inflicted from a day.",
      "where": ["Configuration › Outages & leaks over the year", "Data › Outages & leaks"]},
+    {"id": "fieldwork", "title": "Field work over the year",
+     "text": "Work orders in five programmes, each raised by what happens in the year: customer emergencies (gas "
+             "odour and no-supply calls, outage and leak repairs), service orders (disconnects and reconnects from "
+             "collections, remote when the AMI meter has a switch; move-in and move-out visits; the VEE field visits "
+             "and meter exchanges), meter maintenance (seal sampling by lot with failed lots exchanged, module "
+             "batteries, water meters past their life, removals, AMI conversion), preventative maintenance on the "
+             "town's poles, spans, valves, hydrants, gas main and regulators, whose findings raise repairs, and "
+             "capital construction (new services from new-connection calls, then meter sets; service upgrades; "
+             "cast-iron main renewal in the construction season). On-call responders work emergencies around the "
+             "clock; meter technicians, line, water, gas and construction crews work business days by priority and "
+             "due date, with overtime for customer work due today. Crews, shifts, travel, rates, minutes, targets and "
+             "costs are run settings.",
+     "where": ["Configuration › Field work", "Year", "Data › Field work"]},
     {"id": "weather", "title": "Weather year",
      "text": "Daily temperatures drive usage, flows, state frames and reading conditions through the year.",
      "where": ["Map", "Data › Usage by month"]},
@@ -116,8 +129,9 @@ IMPACTS = (
      "undetected.", "where": "VEE scorecard, Data › Meter reads"},
     {"title": "Reliability", "text": "Interruptions, SAIDI, lost use, AMI last gasps and the reads an outage cost.",
      "where": "Map, Workspace › Outage Follow-up"},
-    {"title": "Field work", "text": "Truck rolls, orders by stage, exchanges, visits per premise.",
-     "where": "Workspace › Field Work, Data › Field service orders"},
+    {"title": "Field work", "text": "Work orders completed and in backlog by programme, on time, emergency response, "
+     "crew utilisation and overtime, labour and materials cost, maintenance compliance; truck rolls and exchanges.",
+     "where": "Year, Data › Work orders, Data › Maintenance plan, Workspace › Field Work"},
 )
 
 MEASURED = (
@@ -153,6 +167,11 @@ GAPS = (
     {"title": "Contact centre feedback", "text": "Contacts do not create back-office work yet: a bill dispute or a "
      "complaint is answered and counted, but opens no case for the analysts.", "plan": "Disputes and complaints open "
      "Billing cases; long queues and failed resolutions raise churn and collections risk."},
+    {"title": "Field work feedback", "text": "Field work follows the year but does not change it yet: a late "
+     "disconnect does not move collections, a removal does not end billing, an AMI conversion does not change how "
+     "the meter is read, and crews do not route between jobs (travel is a flat time).", "plan": "Feed completed "
+     "orders back into the replay (disconnection and reconnection times, device changes, technology) and route "
+     "crews on the street graph."},
     {"title": "Undetected water loss", "text": "No mains leakage fraction and no supplied-versus-billed water "
      "balance.", "plan": "Per-zone unbilled loss that shows in flows but never in bills, and a monthly water-balance "
      "report."},

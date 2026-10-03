@@ -120,6 +120,19 @@ test('the client keeps episodes with the run: sorted, ided, persisted, sent on e
  m.reset();assert.deepEqual(m.actions,[]);
 });
 
+test('the field work charts read the trend field block',()=>{
+ const c=Object.fromEntries(CHARTS.map(x=>[x.id,x]));
+ assert.ok(c.fieldDone&&c.fieldBacklog&&c.fieldOnTime&&c.fieldCost);
+ const months=[{month:1,label:'Jan',start:'2026-01-01',end:'2026-01-31',complete:true,field:{created:140,completed:130,remote:12,overdue:4,onTimePct:0.97,responseMin:34,responseP90Min:52,daysToComplete:2.4,hours:310.5,overtimeHours:6,utilisationPct:0.61,byProgram:{emergency:3,service:60,meter:40,maintenance:25,construction:2},backlog:{emergency:0,service:5,meter:30,maintenance:12,construction:8},cost:{labour:24000,materials:9000,total:33000}}}];
+ assert.deepEqual(chartModel(c.fieldDone,months).series.map(s=>s.values[0]),[3,60,40,25,2]);
+ assert.deepEqual(chartModel(c.fieldBacklog,months).series.map(s=>s.values[0]),[0,5,30,12,8]);
+ assert.equal(chartModel(c.fieldOnTime,months).series[0].values[0],0.97);
+ assert.deepEqual(chartModel(c.fieldCost,months).series.map(s=>s.values[0]),[24000,9000]);
+ assert.deepEqual(c.fieldOnTime.detail(months[0])[0],['Emergency response (min)',34]);
+ assert.deepEqual(c.fieldBacklog.detail(months[0]),[['Overdue',4],['Crew utilisation','61%']]);
+ assert.equal(chartModel(c.fieldDone,[{month:1,label:'Jan',start:'2026-01-01',end:'2026-01-31',complete:true,field:null}]).latest,-1);
+});
+
 test('inflicting runs to the last period end, including open-ended and year-clamped periods',async()=>{
  const {episodeRunEnd}=await import('../dist/year-page.js');
  assert.equal(episodeRunEnd([{to:'2026-04-30'},{to:'2026-03-31'}]),'2026-04-30');

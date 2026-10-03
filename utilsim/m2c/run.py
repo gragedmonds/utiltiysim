@@ -41,7 +41,7 @@ from utilsim.m2c import vee as vee_mod
 from utilsim.m2c.base import M2CTown, date_of
 from utilsim.m2c.books import Books
 
-M2C_GROUPS = ("process", "anomalies", "reading", "vee", "billing", "contact", "outages")
+M2C_GROUPS = ("process", "anomalies", "reading", "vee", "billing", "contact", "outages", "field")
 SUMMARY_VERSION = "m2c-summary/1.0"
 CASE_VERSION = "work-case/1.0"
 DECISION_VERSION = "vee-decision/1.0"

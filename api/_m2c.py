@@ -20,7 +20,7 @@ from api._ops import J, load_snapshot, town_key
 from utilsim.config.model import SimConfig
 from utilsim.m2c import catalog as cat
 from utilsim.m2c import collections as colls
-from utilsim.m2c import contact, followup, guide, lookups, scenarios, tables, trend, views
+from utilsim.m2c import contact, fieldwork, followup, guide, lookups, scenarios, tables, trend, views
 from utilsim.m2c import orders as ords
 from utilsim.m2c.base import M2CTown, cached_m2c_town, m2c_town
 from utilsim.m2c.run import (
@@ -504,6 +504,17 @@ def post_contact(req: RunRequest):
     outages and leaks so far. Contacts follow the run's bills, errors, rebills, dunning, payments, move-ins and
     move-outs, missed reads and incidents; ``settings.contact`` and ``settings.outages`` (and episodes) shape them."""
     return _view(contact.summary, run_for(req), req.asOf)
+
+
+@router.post("/api/m2c/fieldwork")
+def post_fieldwork(req: RunRequest):
+    """``m2c-fieldwork/1.0``: the field crews' year to ``asOf``: work orders created, completed, open and overdue by
+    programme (customer emergencies, service orders, meter maintenance, preventative maintenance, capital
+    construction) and work type, on-time and emergency response, crew utilisation and overtime, labour and materials
+    cost, and the maintenance plan's compliance. Orders follow the year (collections, moves, VEE field visits, the
+    contact centre's calls, the year's outages, meter ages and the town's assets); ``settings.field`` (and episodes)
+    shape the crews and the work."""
+    return _view(fieldwork.summary, run_for(req), req.asOf)
 
 
 @router.get("/api/m2c/tables")
