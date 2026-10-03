@@ -59,8 +59,8 @@ class Books:
         self.export_row = np.array([next((int(r) for r in rows if tw.direction[r] == "export"), -1)
                                     for rows in tw.inst_rows], dtype=np.int64)
         months = np.arange(1, 13)
-        p = b.data_error_rate / 1000.0 / 12.0 * bool(run.cfg.anomalies.enabled)
-        hit = hash_u01(run.seed, P_BILL, self.inst_keys[:, None], 1, months[None, :]) < p
+        p = run.month_rate("billing", "data_error_rate") / 1000.0 / 12.0 * bool(run.cfg.anomalies.enabled)
+        hit = hash_u01(run.seed, P_BILL, self.inst_keys[:, None], 1, months[None, :]) < p[None, :]
         first = np.where(hit.any(1), hit.argmax(1) + 1, 0)
         self.rate_err_t = np.where(first > 0, regs.MONTH_START[first] + 0.0, INF)
         self.rate_fix_t = np.full(n, INF)
@@ -158,7 +158,7 @@ class Books:
         totals = self.compute(list(zip(i.tolist(), m.tolist(), rates, qi.tolist(), qe.tolist(), strict=True)))
         true_totals = self.compute(list(zip(i.tolist(), m.tolist(), right, ti.tolist(), te.tolist(), strict=True)))
         expected = self.compute(list(zip(i.tolist(), m.tolist(), right, ei.tolist(), ee.tolist(), strict=True)))
-        b = run.cfg.billing
+        b = run.cfg_at(day).billing
         tw = run.town
         for k, (a, mm) in enumerate(ready):
             sub, tax, total = totals[k]
@@ -196,7 +196,7 @@ class Books:
         truth = cat.TRUTH[bad] if off and bad in (1, 2) else ("physics" if bad == 3 else "clean")
         # RPA releases small outsorts only; a large one (and any true-up block) needs a person. With the queue left to
         # you (billing_queue_worked_by), no automation touches it.
-        b = run.cfg.billing
+        b = run.cfg_at(t).billing
         rpa = b.billing_queue_worked_by == "analysts" and (kind not in cat.OUTSORTS or
                                                            abs(doc["total"]) <= b.outsort_auto_release_max)
         case = run.new_case(day=int(t), r=r, m=m, kind=kind, disposition=-1, impact=impact,
@@ -285,7 +285,7 @@ class Books:
             if doc["reversed"] is not None:
                 continue
             by_acct.setdefault(self.account(doc), []).append(k)
-        b, due_days = run.cfg.billing, run.cfg.customers_billing.due_days
+        b, due_days = run.cfg_at(day).billing, run.cfg.customers_billing.due_days
         issued = run.next_bday(day, b.print_lag_days) if b.print_lag_days else day
         for acct, docs in sorted(by_acct.items()):
             hold = run.hold_on(acct, day + 20.0 / 24)

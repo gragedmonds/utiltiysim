@@ -14,13 +14,13 @@ import numpy as np
 import orjson
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import Response
-from pydantic import BaseModel, Field, ValidationError, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from api._ops import J, load_snapshot, town_key
 from utilsim.config.model import SimConfig
 from utilsim.m2c import catalog as cat
 from utilsim.m2c import collections as colls
-from utilsim.m2c import followup, lookups, tables, views
+from utilsim.m2c import followup, lookups, scenarios, tables, trend, views
 from utilsim.m2c import orders as ords
 from utilsim.m2c.base import M2CTown, cached_m2c_town, m2c_town
 from utilsim.m2c.run import (
@@ -29,6 +29,7 @@ from utilsim.m2c.run import (
     COLLECTION_ACTIONS,
     DECISIONS,
     DEVICE_ACTIONS,
+    EPISODE_MAX,
     M2C_GROUPS,
     MAX_SEED,
     ORDER_ACTIONS,
@@ -114,10 +115,28 @@ class Outage(BaseModel):
     premiseIds: list[str] = Field(..., min_length=1, max_length=20000)
 
 
+class Episode(BaseModel):
+    """A scenario inflicted from a day: setting overrides in force from ``from`` to ``to`` (inclusive; null = the
+    year's end), sliding from the base to the target over ``ramp`` days. A value is a number or boolean, or an
+    operator on the value in force before the episode: ``"*0.5"``, ``"+2"``, ``"-1"`` (numeric settings)."""
+    model_config = ConfigDict(populate_by_name=True)
+    id: str | None = Field(None, max_length=40)
+    title: str | None = Field(None, max_length=120)
+    scenario: str | None = Field(None, max_length=60, description="The library scenario it came from, if any.")
+    from_: str = Field(..., alias="from", description="First day (YYYY-MM-DD, in 2026).")
+    to: str | None = Field(None, description="Last day (inclusive); null runs to the end of the year.")
+    ramp: int = Field(0, ge=0, le=365, description="Days over which numeric values slide to the target (0: a step).")
+    settings: dict[str, dict[str, Any]] = Field(..., description=f"Run-scoped groups ({', '.join(M2C_GROUPS)}) → "
+                                                                 "setting → value or operator.")
+
+
 class RunRequest(BaseModel):
     town: str = Field(..., description="Pack preset (e.g. 'ayr') or town id.")
     settings: dict[str, dict[str, Any]] | None = Field(
         None, description=f"Overrides for the run-scoped groups ({', '.join(M2C_GROUPS)}); see GET /api/m2c/settings.")
+    episodes: list[Episode] = Field(default_factory=list, max_length=EPISODE_MAX,
+                                    description="Scenarios inflicted from a day (GET /api/m2c/scenarios lists the "
+                                                "library); the run replays the year with each day's settings.")
     actions: list[Action] = Field(default_factory=list, max_length=2000)
     outages: list[Outage] = Field(
         default_factory=list, max_length=500,
@@ -283,17 +302,19 @@ def run_for(req: RunRequest, *, strict: bool = True) -> M2CRun:
     town = _town(req.town)
     actions = [a.model_dump(exclude_none=True) for a in req.actions]
     outages = [o.model_dump(exclude_none=True) for o in req.outages]
+    episodes = [e.model_dump(by_alias=True, exclude_none=True) for e in req.episodes]
     try:
         seed = run_seed(town.cfg, req.seed)
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
-    key = orjson.dumps([town.id, req.settings, actions, outages, strict, seed], option=orjson.OPT_SORT_KEYS)
+    key = orjson.dumps([town.id, req.settings, actions, outages, strict, seed, episodes],
+                       option=orjson.OPT_SORT_KEYS)
     hit = _RUNS.get(key)
     if hit is not None:
         _RUNS.move_to_end(key)
         return hit
     try:
-        run = M2CRun(town, req.settings, actions, outages, strict=strict, seed=seed)
+        run = M2CRun(town, req.settings, actions, outages, strict=strict, seed=seed, episodes=episodes)
     except ValidationError as exc:
         raise HTTPException(422, orjson.loads(exc.json(include_url=False))) from exc
     except ValueError as exc:
@@ -441,6 +462,23 @@ def post_possible_entries(req: EntriesRequest):
                  page_size=req.pageSize)
 
 
+@router.get("/api/m2c/scenarios")
+def get_scenarios():
+    """``m2c-scenarios/1.0``: the scenario library for the Year page: groups, scenarios with their episode templates
+    (start offset in days from the day inflicted, duration, ramp, settings as values or operators) and what to watch,
+    plus the scenarios still coming."""
+    return J(scenarios.catalog())
+
+
+@router.post("/api/m2c/trend")
+def post_trend(req: RunRequest):
+    """``m2c-trend/1.0``: month by month as of ``asOf``: reads taken, missed and estimated; cases opened, resolved
+    and the backlog by queue at month end; cost and carry; bills, invoices, collected, overdue and receivable;
+    dunning events and accounts by collections phase; with the run's episodes. Months after the view date are null;
+    the month holding it is partial (``complete: false``)."""
+    return _view(trend.trend, run_for(req), req.asOf)
+
+
 @router.get("/api/m2c/tables")
 def get_tables():
     """``m2c-tables/1.0``: the Data pages' catalog: table groups (customers, meters & reading, billing & pricing,
@@ -528,7 +566,7 @@ def m2c_day(town: str, day: str, m2c: dict) -> tuple[list[dict], dict[str, dict]
         d = parse_day(day, -1)
         outages = m2c.get("outages") or []
         base = {"town": town, "settings": m2c.get("settings"), "actions": m2c.get("actions") or [],
-                "seed": m2c.get("seed")}
+                "seed": m2c.get("seed"), "episodes": m2c.get("episodes") or []}
         req = RunRequest(**base, outages=[o for o in outages if parse_day(o.get("day"), YEAR_DAYS) < d])
         full = RunRequest(**base, outages=outages) if len(req.outages) < len(outages) else req
     except ValidationError as exc:

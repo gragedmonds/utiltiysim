@@ -519,6 +519,10 @@ class AnomaliesConfig(BaseModel):
                                              le=100)
     vacant_consuming: float = F(3.0, "Vacant premises that still consume.", ge=0, le=100)
     tamper: float = F(1.0, "Bypass/tamper (50–90% under-registration).", ge=0, le=50)
+    amr_factor: float = F(1.0, "Multiplier on every anomaly rate for AMR (drive-by) meters: an ageing ERT fleet "
+                          "misreads and under-registers more.", ge=0, le=20, advanced=True)
+    manual_factor: float = F(1.0, "Multiplier on every anomaly rate for manually read meters.", ge=0, le=20,
+                             advanced=True)
 
 
 class ReadingConfig(BaseModel):
@@ -601,6 +605,9 @@ class BillingConfig(BaseModel):
     winter_moratorium: bool = F(True, "No disconnection notices for electricity and water from Nov 15 to Apr 30 "
                                 "(Ontario); a notice held for the winter is issued on May 1 if the bill is still "
                                 "unpaid.")
+    moratorium_start: str = F("11-15", "First day of the winter moratorium (MM-DD).", advanced=True)
+    moratorium_end: str = F("04-30", "Last day of the winter moratorium (MM-DD); held notices go out the day after.",
+                            advanced=True)
     disconnect_notice_days: int = F(10, "Days from a disconnection notice to the earliest disconnection. A "
                                     "disconnection also needs a person's approval (the Collections worklist).",
                                     unit="d", ge=1, le=60, effects=["disconnections"])
