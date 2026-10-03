@@ -96,7 +96,7 @@ class Spec:
 
 
 GROUPS = (("customers", "Customers"), ("metering", "Meters & reading"), ("billing", "Billing & pricing"),
-          ("collections", "Collections"), ("work", "Work"))
+          ("collections", "Collections"), ("contact", "Contact centre"), ("work", "Work"))
 
 
 # ---- value helpers ----------------------------------------------------------------------------------------------
@@ -1072,6 +1072,93 @@ def b_interruptions(c) -> list[list]:
     return _rows_to_cols(INTERRUPTIONS, rows)
 
 
+CHANNEL_LABEL = {"self_serve": "Self-service", "agent": "Agent", "callback": "Call back", "emergency": "Emergency line",
+                 "none": "Lines closed"}
+OUTCOME_LABEL = {"resolved": "Resolved", "unresolved": "Unresolved", "abandoned": "Hung up", "gave_up": "Gave up",
+                 "dispatched": "Dispatched"}
+CONTACTS = (Col("contactId", "Contact", "id", search=True), Col("date", "Date", "date"), Col("time", "Time", "time"),
+            Col("reason", "Reason", facet=True, search=True), Col("group", "Group", facet=True),
+            Col("channel", "Channel", facet=True), Col("outcome", "Outcome", facet=True),
+            Col("waitS", "Wait", "num", unit="s"), Col("handleMin", "Handle", "num", unit="min"),
+            Col("attempt", "Attempt", "int"), Col("repeat", "Repeat", "bool"),
+            Col("accountId", "Account", "id", link="account", search=True),
+            Col("premiseId", "Premise", "id", link="premise", search=True), Col("address", "Address", search=True),
+            Col("trigger", "Because of", search=True))
+
+
+def b_contacts(c) -> list[list]:
+    from utilsim.m2c import contact
+
+    cx = contact.contacts(c.run)
+    tw = c.run.town
+    keep = np.flatnonzero(cx.t <= c.T)
+    labels = [r[1] for r in contact.REASONS]
+    groups = [contact.GROUPS[r[2]] for r in contact.REASONS]
+    rows = []
+    for i in keep.tolist():
+        t = float(cx.t[i])
+        a, p = int(cx.acct[i]), int(cx.prem[i])
+        pid = tw.premise_ids[p] if p >= 0 else None
+        w = float(cx.wait[i])
+        rows.append([f"CT-{i + 1:06d}", _d(int(t)), _hm(t), labels[cx.reason[i]], groups[cx.reason[i]],
+                     CHANNEL_LABEL[contact.CHANNELS[cx.channel[i]]], OUTCOME_LABEL[contact.OUTCOMES[cx.outcome[i]]],
+                     None if w != w else round(w, 1), round(float(cx.handle[i]) / 60.0, 2) or None,
+                     int(cx.attempt[i]), bool(cx.repeat[i]), cx.accounts[a] if a >= 0 else None, pid,
+                     _address(c, pid) if pid else None, cx.trigger[i]])
+    rows.reverse()  # newest first
+    return _rows_to_cols(CONTACTS, rows)
+
+
+CONTACT_DAILY = (Col("date", "Date", "date"), Col("weekday", "Day", facet=True), Col("agents", "Agents", "int"),
+                 Col("contacts", "Contacts", "int"), Col("selfServed", "Self-served", "int"),
+                 Col("toAgents", "To agents", "int"), Col("answered", "Answered live", "int"),
+                 Col("callbacks", "Call backs", "int"), Col("abandoned", "Hung up", "int"),
+                 Col("abandonedPct", "Hung up", "pct"), Col("asaS", "Average wait", "num", unit="s"),
+                 Col("serviceLevelPct", "In target", "pct"), Col("occupancyPct", "Occupancy", "pct"),
+                 Col("emergency", "Emergency line", "int"), Col("cost", "Cost", "money"))
+
+
+def b_contact_daily(c) -> list[list]:
+    from utilsim.m2c import contact
+
+    cx = contact.contacts(c.run)
+    cfgs = [c.run.cfg_at(d).contact for d in range(len(cx.daily["agents"]))]
+    rows = []
+    for d in range(min(c.day, len(cfgs) - 1), -1, -1):
+        k = (cx.t >= d) & (cx.t < d + 1) & (cx.t <= c.T)
+        s = contact._stats(cx, k, cfgs, d, d)
+        rows.append([_d(d), date_of(d).strftime("%a"), int(cx.daily["agents"][d]), s["contacts"], s["selfServed"],
+                     s["toAgents"], s["answered"], s["callbacks"], s["abandoned"],
+                     s["abandonedPct"] if s["toAgents"] else None, s["asaS"], s["serviceLevelPct"], s["occupancyPct"],
+                     s["emergency"], s["cost"]["total"]])
+    return _rows_to_cols(CONTACT_DAILY, rows)
+
+
+YEAR_INCIDENTS = (Col("incidentId", "Incident", "id", search=True), Col("date", "Date", "date"),
+                  Col("time", "Time", "time"), Col("kind", "What", facet=True, search=True),
+                  Col("utility", "Utility", facet=True), Col("storm", "Storm day", "bool"),
+                  Col("customersOut", "Premises out", "int"), Col("hoursOut", "Average hours out", "num"),
+                  Col("smelled", "Premises that could smell it", "int"), Col("contacts", "Contacts", "int"))
+
+
+def b_year_incidents(c) -> list[list]:
+    from utilsim.m2c import contact
+
+    cx = contact.contacts(c.run)
+    by_trigger = Counter(cx.trigger[i] for i in np.flatnonzero(cx.t <= c.T).tolist())
+    rows = []
+    for x in cx.incidents:
+        if x["t"] > c.T:
+            continue
+        out = len(x["premises"]) if x["utility"] in ("electric", "water", "gas") else 0
+        hours = float((x["restoredAt"] - x["t"]).mean() * 24.0) if out else None
+        rows.append([x["id"], _d(int(x["t"])), _hm(x["t"]), x["label"], x["utility"], x["storm"], out,
+                     None if hours is None else round(hours, 2), len(x["odour"]) + (1 if x["odourOwner"] >= 0 else 0),
+                     by_trigger.get(x["id"], 0)])
+    rows.reverse()
+    return _rows_to_cols(YEAR_INCIDENTS, rows)
+
+
 # ---- catalog ------------------------------------------------------------------------------------------------------
 SPECS: tuple[Spec, ...] = (
     Spec("premises", "Premises", "customers", "town", "Every premise of the town with its building, household and "
@@ -1122,6 +1209,15 @@ SPECS: tuple[Spec, ...] = (
          "approved, scheduled, disconnected, reconnected, cancelled or held.", DISCONNECTIONS, b_disconnections),
     Spec("collectionsWork", "Arrangements, plans & holds", "collections", "run", "Payment arrangements, budget "
          "billing plans, dunning holds and low-income referrals, by account.", COLLECTIONS_WORK, b_collections_work),
+    Spec("contacts", "Contacts", "contact", "run", "Every contact by the view date: why the customer got in touch, "
+         "how (self-service, agent, call back, emergency line), the wait, the handling time, what it resolved and "
+         "what caused it.", CONTACTS, b_contacts),
+    Spec("contactDaily", "Contact centre by day", "contact", "run", "Each day's contacts, self-service, answered, "
+         "call backs and hang-ups, average wait, service level, agent occupancy and cost.", CONTACT_DAILY,
+         b_contact_daily),
+    Spec("yearIncidents", "Outages & leaks", "contact", "run", "The year's background incidents (the operations "
+         "day's draws for every date): premises out and for how long, who could smell gas, and the contacts each "
+         "caused.", YEAR_INCIDENTS, b_year_incidents),
     Spec("cases", "Cases", "work", "run", "Every clarification case raised by the view date, across the queues, "
          "with its disposition, assignee and outcome.", CASES, b_cases),
     Spec("fieldOrders", "Field service orders", "work", "run", "Field service orders raised in the Studio, with stage, "

@@ -20,7 +20,7 @@ export function infoLines(f,reaches=null){const r=f.reach&&REACH[f.reach];
   f.status&&`${f.status==='deprecated'?'Deprecated':f.status==='not-modelled'?'Not modelled':'Unavailable'}: ${f.reason}`,
   [f.unit&&`Unit ${f.unit}`,f.default!==undefined&&`Default ${show(f.default)}`,f.advanced&&'Advanced'].filter(Boolean).join(' · '),
   f.effects?.length&&`Affects ${f.effects.join(', ')}`,f.path].filter(Boolean);}
-const SUB_LABEL={pre_1945:'Pre-1945',postwar:'Post-war',modern:'Modern',mean_c:'Mean',sd_c:'Std dev',min_c:'Min',max_c:'Max',up_to:'Up to',price:'Price'};
+const SUB_LABEL={per_event:'Per event',per_1000:'Per 1,000 a month',self_serve:'Self-serve',handle_min:'Handle min',resolved:'Resolved first time',pre_1945:'Pre-1945',postwar:'Post-war',modern:'Modern',mean_c:'Mean',sd_c:'Std dev',min_c:'Min',max_c:'Max',up_to:'Up to',price:'Price'};
 export const prettyKey=k=>SUB_LABEL[k]||(s=>s.charAt(0).toUpperCase()+s.slice(1))(String(k).replaceAll('_',' '));
 // Field titles read as sentences: a generated Title Case title ("Analyst Queue Days Max") becomes "Analyst queue days
 // max", and the utility acronyms keep their capitals ("Rpa Coverage" → "RPA coverage"). A title someone wrote stays.

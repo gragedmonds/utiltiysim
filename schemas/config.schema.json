@@ -616,6 +616,460 @@
       "x-group": true,
       "x-order": 16
     },
+    "ContactConfig": {
+      "additionalProperties": false,
+      "description": "Why customers phone, write or use the IVR, and the agents, hours and self-service that answer them. Contacts follow the year: bills, errors, rebills, dunning, payments, move-ins and move-outs, missed reads and the year's outages and gas leaks.",
+      "properties": {
+        "abandon_cx_cost": {
+          "default": 6.0,
+          "description": "Customer-experience cost of a caller who hangs up.",
+          "maximum": 200,
+          "minimum": 0,
+          "title": "Abandon Cx Cost",
+          "type": "number",
+          "x-advanced": true,
+          "x-impact": "Prices the customer-experience cost of each hang-up. No contact changes.",
+          "x-reach": "year",
+          "x-unit": "$"
+        },
+        "agent_cost_per_hour": {
+          "default": 38.0,
+          "description": "Loaded cost of an agent hour on the phones.",
+          "maximum": 500,
+          "minimum": 0,
+          "title": "Agent Cost Per Hour",
+          "type": "number",
+          "x-advanced": true,
+          "x-impact": "Prices the agents' open hours in the contact cost. No contact changes.",
+          "x-reach": "year",
+          "x-unit": "$"
+        },
+        "agents": {
+          "default": 1,
+          "description": "Agents on the phones on a business day (a small utility often has one, shared with billing).",
+          "maximum": 500,
+          "minimum": 0,
+          "title": "Agents",
+          "type": "integer",
+          "x-effects": [
+            "wait",
+            "abandonment"
+          ],
+          "x-impact": "Agents answering during opening hours. Fewer: longer waits, more hang-ups, call backs and repeat calls; more: shorter waits but more idle time and staffing cost.",
+          "x-reach": "year"
+        },
+        "back_bill": {
+          "$ref": "#/$defs/ContactReason",
+          "default": {
+            "handle_min": 12.0,
+            "per_1000": 0.0,
+            "per_event": 0.45,
+            "resolved": 0.7,
+            "self_serve": 0.0
+          },
+          "description": "Back bill: a rebill, or the first actual bill after estimates, that catches up on under-billed use.",
+          "x-impact": "Contacts about catch-up bills: rebills, and the first actual bill after a run of estimates (no-access and missed reads drive them).",
+          "x-reach": "year"
+        },
+        "balance": {
+          "$ref": "#/$defs/ContactReason",
+          "default": {
+            "handle_min": 3.0,
+            "per_1000": 4.0,
+            "per_event": 0.03,
+            "resolved": 0.98,
+            "self_serve": 0.75
+          },
+          "description": "What's my balance: around due dates; mostly the IVR.",
+          "x-impact": "Balance enquiries around due dates; the IVR answers most.",
+          "x-reach": "year"
+        },
+        "bill_question": {
+          "$ref": "#/$defs/ContactReason",
+          "default": {
+            "handle_min": 6.0,
+            "per_1000": 1.5,
+            "per_event": 0.008,
+            "resolved": 0.9,
+            "self_serve": 0.2
+          },
+          "description": "Questions about a bill: any invoice, more for estimated bills, first bills and bills after a rate change.",
+          "x-impact": "Questions about bills: more with estimated bills, first bills after a move-in and bills just after a rate change.",
+          "x-reach": "year"
+        },
+        "bill_wrong": {
+          "$ref": "#/$defs/ContactReason",
+          "default": {
+            "handle_min": 11.0,
+            "per_1000": 0.3,
+            "per_event": 0.35,
+            "resolved": 0.6,
+            "self_serve": 0.0
+          },
+          "description": "Bill wrong: a bill that overcharges the customer (customers rarely call about undercharges).",
+          "x-impact": "Disputes over bills that overcharge against the truth: VEE misses, rate-class errors and misreads drive them.",
+          "x-reach": "year"
+        },
+        "callback": {
+          "default": true,
+          "description": "Offer a call back instead of holding when the wait is long.",
+          "title": "Callback",
+          "type": "boolean",
+          "x-impact": "Offer a call back instead of holding when the wait is long: fewer hang-ups, the same agent time spread later in the day.",
+          "x-reach": "year"
+        },
+        "callback_after_s": {
+          "default": 300.0,
+          "description": "Offer the call back when the expected wait exceeds this.",
+          "maximum": 3600,
+          "minimum": 0,
+          "title": "Call back after",
+          "type": "number",
+          "x-advanced": true,
+          "x-impact": "Expected wait at which the call back is offered: lower offers it more often, turning hang-ups into later calls.",
+          "x-reach": "year",
+          "x-unit": "s"
+        },
+        "callback_take_share": {
+          "default": 0.5,
+          "description": "Callers offered a call back who take it.",
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Callback Take Share",
+          "type": "number",
+          "x-advanced": true,
+          "x-impact": "Callers who accept the call back offer.",
+          "x-reach": "year"
+        },
+        "close_hour": {
+          "default": 17.0,
+          "description": "Lines close (local time).",
+          "maximum": 24,
+          "minimum": 1,
+          "title": "Close Hour",
+          "type": "number",
+          "x-impact": "When the lines close. Earlier closing squeezes contacts into fewer hours; callers who find the lines closed try again the next day.",
+          "x-reach": "year",
+          "x-unit": "h"
+        },
+        "complaint": {
+          "$ref": "#/$defs/ContactReason",
+          "default": {
+            "handle_min": 14.0,
+            "per_1000": 0.2,
+            "per_event": 0.5,
+            "resolved": 0.6,
+            "self_serve": 0.0
+          },
+          "description": "Complaint: after a second unresolved contact about the same thing, or after giving up on hold twice.",
+          "x-impact": "Complaints after a second unresolved contact or giving up on hold twice: long waits and low first-contact resolution drive them.",
+          "x-reach": "year"
+        },
+        "disconnection": {
+          "$ref": "#/$defs/ContactReason",
+          "default": {
+            "handle_min": 9.0,
+            "per_1000": 0.0,
+            "per_event": 0.8,
+            "resolved": 0.85,
+            "self_serve": 0.0
+          },
+          "description": "Disconnected: customers asking to be reconnected after a disconnection you approved.",
+          "x-impact": "Reconnection requests after disconnections you approve.",
+          "x-reach": "year"
+        },
+        "emergency_answer_s": {
+          "default": 15.0,
+          "description": "Answer time on the emergency line (gas odour, outages after hours).",
+          "maximum": 600,
+          "minimum": 1,
+          "title": "Emergency answer",
+          "type": "number",
+          "x-advanced": true,
+          "x-impact": "Answer time on the emergency line (gas odours, after-hours outages).",
+          "x-reach": "year",
+          "x-unit": "s"
+        },
+        "gas_odour": {
+          "$ref": "#/$defs/ContactReason",
+          "default": {
+            "handle_min": 4.0,
+            "per_1000": 0.15,
+            "per_event": 0.06,
+            "resolved": 1.0,
+            "self_serve": 0.0
+          },
+          "description": "I smell gas: neighbours of a gas leak (the household with a service leak calls 9 times in 10); emergency line.",
+          "x-impact": "Gas odour calls from neighbours of the year's gas leaks, on the emergency line.",
+          "x-reach": "year"
+        },
+        "handle_factor": {
+          "default": 1.0,
+          "description": "Multiplies every reason's handling time.",
+          "maximum": 10,
+          "minimum": 0.1,
+          "title": "Handle Factor",
+          "type": "number",
+          "x-impact": "Multiplies every handling time: slower handling fills the agents' day, so waits and hang-ups rise.",
+          "x-reach": "year"
+        },
+        "high_bill": {
+          "$ref": "#/$defs/ContactReason",
+          "default": {
+            "handle_min": 7.5,
+            "per_1000": 2.0,
+            "per_event": 0.25,
+            "resolved": 0.85,
+            "self_serve": 0.1
+          },
+          "description": "High bill: an invoice at least 1.5 times what the account usually pays (and $40 more).",
+          "x-impact": "High-bill contacts: invoices at 1.5 times the expected amount. More estimates, leaks, cold months and rate changes raise them.",
+          "x-reach": "year"
+        },
+        "meter_access": {
+          "$ref": "#/$defs/ContactReason",
+          "default": {
+            "handle_min": 6.0,
+            "per_1000": 0.3,
+            "per_event": 0.08,
+            "resolved": 0.85,
+            "self_serve": 0.2
+          },
+          "description": "Meter access: after a no-access read card, and to book field visits.",
+          "x-impact": "Contacts after no-access read cards and to book field visits: walked routes and no-access rates drive them.",
+          "x-reach": "year"
+        },
+        "move_in": {
+          "$ref": "#/$defs/ContactReason",
+          "default": {
+            "handle_min": 10.0,
+            "per_1000": 0.0,
+            "per_event": 0.85,
+            "resolved": 0.95,
+            "self_serve": 0.3
+          },
+          "description": "Start service: a new account at a premise, days before the move-in.",
+          "x-impact": "Start-service contacts before each move-in: rentals and turnover drive them.",
+          "x-reach": "year"
+        },
+        "move_out": {
+          "$ref": "#/$defs/ContactReason",
+          "default": {
+            "handle_min": 8.0,
+            "per_1000": 0.0,
+            "per_event": 0.85,
+            "resolved": 0.95,
+            "self_serve": 0.3
+          },
+          "description": "Stop service: days before an account closes.",
+          "x-impact": "Stop-service contacts before each move-out.",
+          "x-reach": "year"
+        },
+        "new_connection": {
+          "$ref": "#/$defs/ContactReason",
+          "default": {
+            "handle_min": 14.0,
+            "per_1000": 0.4,
+            "per_event": 0.0,
+            "resolved": 0.7,
+            "self_serve": 0.1
+          },
+          "description": "New connection: builders and owners asking for a new service.",
+          "x-impact": "New-connection requests (background only).",
+          "x-reach": "year"
+        },
+        "open_hour": {
+          "default": 8.0,
+          "description": "Lines open (local time, business days).",
+          "maximum": 23,
+          "minimum": 0,
+          "title": "Open Hour",
+          "type": "number",
+          "x-impact": "When the lines open on business days. Later opening squeezes the same contacts into fewer hours: longer waits at peaks.",
+          "x-reach": "year",
+          "x-unit": "h"
+        },
+        "outage": {
+          "$ref": "#/$defs/ContactReason",
+          "default": {
+            "handle_min": 3.5,
+            "per_1000": 0.2,
+            "per_event": 0.18,
+            "resolved": 0.9,
+            "self_serve": 0.65
+          },
+          "description": "Outage report: customers who lose power or water (twice as many when it lasts over two hours); the IVR's outage message answers most.",
+          "x-impact": "Outage reports from customers who lose power or water in the year's incidents; the IVR's outage message answers most, after hours the emergency line.",
+          "x-reach": "year"
+        },
+        "password": {
+          "$ref": "#/$defs/ContactReason",
+          "default": {
+            "handle_min": 4.0,
+            "per_1000": 3.0,
+            "per_event": 0.01,
+            "resolved": 0.95,
+            "self_serve": 0.6
+          },
+          "description": "Forgot password or online account help: when bills arrive; most reset online.",
+          "x-impact": "Online account help when bills arrive; most reset online.",
+          "x-reach": "year"
+        },
+        "patience_s": {
+          "default": 240.0,
+          "description": "Average time a caller waits before hanging up.",
+          "maximum": 3600,
+          "minimum": 10,
+          "title": "Patience",
+          "type": "number",
+          "x-impact": "How long callers hold before hanging up. Less patience: more hang-ups and retries at the same waits.",
+          "x-reach": "year",
+          "x-unit": "s"
+        },
+        "payment_arrangement": {
+          "$ref": "#/$defs/ContactReason",
+          "default": {
+            "handle_min": 9.0,
+            "per_1000": 0.5,
+            "per_event": 0.12,
+            "resolved": 0.8,
+            "self_serve": 0.1
+          },
+          "description": "Can't pay: after overdue notices, more after disconnection notices.",
+          "x-impact": "Can't-pay contacts after reminders, overdue notices and disconnection notices: collections settings and payer mix drive them.",
+          "x-reach": "year"
+        },
+        "payment_problem": {
+          "$ref": "#/$defs/ContactReason",
+          "default": {
+            "handle_min": 6.0,
+            "per_1000": 0.4,
+            "per_event": 0.4,
+            "resolved": 0.85,
+            "self_serve": 0.3
+          },
+          "description": "Payment problem: a pre-authorized debit returned.",
+          "x-impact": "Contacts after a returned pre-authorized debit (the PAD reject rate drives them).",
+          "x-reach": "year"
+        },
+        "repeat_share": {
+          "default": 0.5,
+          "description": "Callers whose problem was not resolved who contact again within days.",
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Repeat Share",
+          "type": "number",
+          "x-impact": "Customers whose problem was not resolved who contact again: repeat contacts, and complaints after a second failure.",
+          "x-reach": "year"
+        },
+        "retry_share": {
+          "default": 0.6,
+          "description": "Callers who hung up or found the lines closed and try again.",
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Retry Share",
+          "type": "number",
+          "x-impact": "Callers who hung up or found the lines closed and try again: retries add load at busy times; the rest give up unanswered.",
+          "x-reach": "year"
+        },
+        "self_serve_cost": {
+          "default": 0.4,
+          "description": "Cost of a contact the IVR or website handles.",
+          "maximum": 50,
+          "minimum": 0,
+          "title": "Self Serve Cost",
+          "type": "number",
+          "x-advanced": true,
+          "x-impact": "Prices each self-served contact. No contact changes.",
+          "x-reach": "year",
+          "x-unit": "$"
+        },
+        "self_serve_factor": {
+          "default": 1.0,
+          "description": "Multiplies every reason's self-service share (0: IVR and web down).",
+          "maximum": 3,
+          "minimum": 0,
+          "title": "Self Serve Factor",
+          "type": "number",
+          "x-impact": "Multiplies the share the IVR and website handle; zero sends every contact to an agent.",
+          "x-reach": "year"
+        },
+        "service_target_s": {
+          "default": 30.0,
+          "description": "Answer target for the service level (answered within it).",
+          "maximum": 600,
+          "minimum": 5,
+          "title": "Service target",
+          "type": "number",
+          "x-impact": "The answer target the service level counts against. It changes the reported service level, not who waits.",
+          "x-reach": "year",
+          "x-unit": "s"
+        },
+        "volume_factor": {
+          "default": 1.0,
+          "description": "Multiplies every reason's contact rates.",
+          "maximum": 20,
+          "minimum": 0,
+          "title": "Volume Factor",
+          "type": "number",
+          "x-impact": "Multiplies every reason's rates: a quick way to test a busier or quieter year.",
+          "x-reach": "year"
+        }
+      },
+      "title": "Contact centre",
+      "type": "object",
+      "x-applies": "run",
+      "x-group": true,
+      "x-order": 17
+    },
+    "ContactReason": {
+      "additionalProperties": false,
+      "description": "One reason customers contact the utility: how often it happens and what handling it takes.",
+      "properties": {
+        "handle_min": {
+          "default": 6.0,
+          "description": "Agent minutes per contact (talk and wrap-up).",
+          "maximum": 120,
+          "minimum": 0.5,
+          "title": "Handle Min",
+          "type": "number"
+        },
+        "per_1000": {
+          "default": 0.0,
+          "description": "Background contacts per 1,000 accounts per month.",
+          "maximum": 500,
+          "minimum": 0,
+          "title": "Per 1000",
+          "type": "number"
+        },
+        "per_event": {
+          "default": 0.0,
+          "description": "Share of triggering events that lead to a contact.",
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Per Event",
+          "type": "number"
+        },
+        "resolved": {
+          "default": 0.9,
+          "description": "Share resolved on the first contact.",
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Resolved",
+          "type": "number"
+        },
+        "self_serve": {
+          "default": 0.0,
+          "description": "Share handled by the IVR or online, with no agent.",
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Self Serve",
+          "type": "number"
+        }
+      },
+      "title": "ContactReason",
+      "type": "object"
+    },
     "CustomersBillingConfig": {
       "additionalProperties": false,
       "description": "Accounts, reading routes, calendars and tariffs.",
@@ -1762,7 +2216,7 @@
           "minimum": 0,
           "title": "Collector Outages Per Year",
           "type": "number",
-          "x-impact": "AMI collector outages: the meters behind it miss their nightly read that day.",
+          "x-impact": "AMI collector outages: the meters behind it miss their nightly read that day. Customers do not notice them.",
           "x-reach": "operations",
           "x-run-setting": "collectorOutagesPerYear"
         },
@@ -1773,8 +2227,8 @@
           "minimum": 0,
           "title": "Gas Main Leaks Per 100Km",
           "type": "number",
-          "x-impact": "Random gas main leaks on the operations day: crew calls and isolations.",
-          "x-reach": "operations",
+          "x-impact": "Random gas main leaks on the operations day and across the year: crew calls, isolations and gas odour calls from the neighbours.",
+          "x-reach": "town",
           "x-run-setting": "gasMainLeaksPer100km"
         },
         "gas_service_leaks_per_1000": {
@@ -1784,8 +2238,8 @@
           "minimum": 0,
           "title": "Gas Service Leaks Per 1000",
           "type": "number",
-          "x-impact": "Random service leaks on the operations day: crew calls and shut-offs.",
-          "x-reach": "operations",
+          "x-impact": "Random service leaks on the operations day and across the year: gas odour calls and a household without gas until the repair.",
+          "x-reach": "town",
           "x-run-setting": "gasServiceLeaksPer1000"
         },
         "manual_only": {
@@ -1796,7 +2250,7 @@
           "x-effects": [
             "background incidents"
           ],
-          "x-impact": "Turns random incidents off on the operations day; only the ones you inject happen.",
+          "x-impact": "Turns random incidents off on the operations day; only the ones you inject happen. The year draws them unless Outages & leaks is off.",
           "x-reach": "operations",
           "x-run-setting": "randomIncidents"
         },
@@ -1812,8 +2266,8 @@
             "SAIDI/SAIFI",
             "zero-usage reads"
           ],
-          "x-impact": "Storm faults on overhead lines: feeder outages on storm days.",
-          "x-reach": "operations",
+          "x-impact": "Storm faults on overhead lines: feeder outages on storm days, on the operations day and across the year, and the outage reports.",
+          "x-reach": "town",
           "x-run-setting": "overheadFaultsPerKmStormDay"
         },
         "transformer_failures_per_1000": {
@@ -1823,8 +2277,8 @@
           "minimum": 0,
           "title": "Transformer Failures Per 1000",
           "type": "number",
-          "x-impact": "Transformer failures: small outages, three times as many where units are overloaded.",
-          "x-reach": "operations",
+          "x-impact": "Transformer failures (three times as many where units are overloaded): small outages on the operations day and across the year.",
+          "x-reach": "town",
           "x-run-setting": "transformerFailuresPer1000"
         },
         "water_main_breaks_per_100km": {
@@ -1838,8 +2292,8 @@
             "water outages",
             "crew workload"
           ],
-          "x-impact": "Random main breaks on the operations day: valve shut-offs and customers without water.",
-          "x-reach": "operations",
+          "x-impact": "Random main breaks on the operations day and across the year: customers without water and the outage reports they make.",
+          "x-reach": "town",
           "x-run-setting": "waterMainBreaksPer100km"
         }
       },
@@ -2017,6 +2471,55 @@
       "x-applies": "town",
       "x-group": true,
       "x-order": 9
+    },
+    "OutagesConfig": {
+      "additionalProperties": false,
+      "description": "The operations day's background incidents drawn for every day of the year (same storms and leaks the map shows on a date): who loses power or water, for how long, and where gas is smelled. The contact centre hears about them.",
+      "properties": {
+        "enabled": {
+          "default": true,
+          "description": "Draw outages and leaks across the year.",
+          "title": "Enabled",
+          "type": "boolean",
+          "x-impact": "Draw the operations day's incidents for every day of the year. Off: outage and gas odour contacts are background only.",
+          "x-reach": "year"
+        },
+        "incident_factor": {
+          "default": 1.0,
+          "description": "Multiplies every incident rate (leaks, breaks, failures, faults).",
+          "maximum": 30,
+          "minimum": 0,
+          "title": "Incident Factor",
+          "type": "number",
+          "x-impact": "Multiplies every incident rate: more outages, main breaks and gas leaks, and the contacts they bring.",
+          "x-reach": "year"
+        },
+        "restore_factor": {
+          "default": 1.0,
+          "description": "Multiplies the time to restore service.",
+          "maximum": 20,
+          "minimum": 0.1,
+          "title": "Restore Factor",
+          "type": "number",
+          "x-impact": "Multiplies the time to restore service: longer outages bring twice the outage reports past two hours.",
+          "x-reach": "year"
+        },
+        "storm_factor": {
+          "default": 1.0,
+          "description": "Multiplies the chance that a day is a storm day.",
+          "maximum": 30,
+          "minimum": 0,
+          "title": "Storm Factor",
+          "type": "number",
+          "x-impact": "Multiplies the chance of a storm day: more overhead line faults, outages and outage reports, mostly May to September.",
+          "x-reach": "year"
+        }
+      },
+      "title": "Outages & leaks over the year",
+      "type": "object",
+      "x-applies": "run",
+      "x-group": true,
+      "x-order": 18
     },
     "ProcessConfig": {
       "additionalProperties": false,
@@ -2514,8 +3017,8 @@
           "description": "Override seed for incident hazards.",
           "title": "Incidents",
           "x-advanced": true,
-          "x-impact": "Re-rolls the operations day's random leaks, breaks, faults and collector outages. The year is unchanged.",
-          "x-reach": "operations"
+          "x-impact": "Re-rolls the random leaks, breaks, faults and collector outages, on the operations day and across the year, so the outage and gas odour contacts move too.",
+          "x-reach": "town"
         },
         "master": {
           "default": "WHITBY-042",
@@ -3445,8 +3948,8 @@
             "lightning outages",
             "estimated reads"
           ],
-          "x-impact": "Thunderstorm days: overhead faults and outages on the operations day. The year does not draw storms.",
-          "x-reach": "operations",
+          "x-impact": "Thunderstorm days: overhead faults and outages on the operations day and across the year, with the outage reports they bring to the contact centre.",
+          "x-reach": "town",
           "x-run-setting": "stormDaysPerYear"
         },
         "summer": {
@@ -3493,6 +3996,9 @@
     "billing": {
       "$ref": "#/$defs/BillingConfig"
     },
+    "contact": {
+      "$ref": "#/$defs/ContactConfig"
+    },
     "customers_billing": {
       "$ref": "#/$defs/CustomersBillingConfig"
     },
@@ -3522,6 +4028,9 @@
     },
     "operations": {
       "$ref": "#/$defs/OperationsConfig"
+    },
+    "outages": {
+      "$ref": "#/$defs/OutagesConfig"
     },
     "process": {
       "$ref": "#/$defs/ProcessConfig"

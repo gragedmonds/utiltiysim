@@ -75,6 +75,20 @@ CAPABILITIES = (
      "text": "The year month by month with episodes shaded; summary KPIs and period windows; the VEE scorecard; "
              "outage follow-up and AMI collector groups.",
      "where": ["Year", "Workspace › Statistics", "Workspace › Outage Follow-up"]},
+    {"id": "contact", "title": "Contact centre",
+     "text": "Sixteen reasons customers get in touch (high bill, bill question, bill wrong, back bill, balance, online "
+             "account, can't pay, payment problem, disconnected, start and stop service, new connection, meter access, "
+             "outage report, gas odour, complaint), each triggered by what happens in the year: invoices, billing "
+             "errors, rebills and catch-up bills, dunning, returned debits, move-ins and move-outs, no-access reads, "
+             "field visits and the year's outages and leaks. Self-service, an emergency line, and agents in opening "
+             "hours with patience, retries, call backs, repeat contacts and complaints. Every rate, handling time and "
+             "staffing level is a run setting, and episodes can change them from a day.",
+     "where": ["Configuration › Contact centre", "Year", "Data › Contact centre"]},
+    {"id": "incidents", "title": "Outages and leaks over the year",
+     "text": "The operations day's background incidents drawn for every date of the year (the same storm or leak the "
+             "map shows on that date): who loses power or water, for how long, and who smells gas. Storm, incident "
+             "and restoration factors are run settings, so Storm season can be inflicted from a day.",
+     "where": ["Configuration › Outages & leaks over the year", "Data › Outages & leaks"]},
     {"id": "weather", "title": "Weather year",
      "text": "Daily temperatures drive usage, flows, state frames and reading conditions through the year.",
      "where": ["Map", "Data › Usage by month"]},
@@ -132,9 +146,12 @@ LIMITS = (
 )
 
 GAPS = (
-    {"title": "Storm season", "text": "The engine does not yet generate a year of operations itself; interruptions "
-     "reach the run only from days played on the map.", "plan": "An engine-generated operations year with "
-     "episode-driven incident rates; then Storm season joins the library."},
+    {"title": "Outages in the year's reads", "text": "The year's outages and leaks reach the contact centre, but not "
+     "yet the reads, VEE or bills: only interruptions you carry from a day on the map do.", "plan": "Feed the year's "
+     "incidents into the replay as interruptions (AMI misses, lost use, VEE outage events)."},
+    {"title": "Contact centre feedback", "text": "Contacts do not create back-office work yet: a bill dispute or a "
+     "complaint is answered and counted, but opens no case for the analysts.", "plan": "Disputes and complaints open "
+     "Billing cases; long queues and failed resolutions raise churn and collections risk."},
     {"title": "Undetected water loss", "text": "No mains leakage fraction and no supplied-versus-billed water "
      "balance.", "plan": "Per-zone unbilled loss that shows in flows but never in bills, and a monthly water-balance "
      "report."},
