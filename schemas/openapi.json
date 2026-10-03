@@ -373,6 +373,107 @@
         "title": "Action",
         "type": "object"
       },
+      "AgentEpisode": {
+        "additionalProperties": false,
+        "properties": {
+          "from": {
+            "title": "From",
+            "type": "string"
+          },
+          "ramp": {
+            "default": 0,
+            "maximum": 365.0,
+            "minimum": 0.0,
+            "title": "Ramp",
+            "type": "integer"
+          },
+          "settings": {
+            "additionalProperties": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Settings",
+            "type": "object"
+          },
+          "title": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          },
+          "to": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To"
+          }
+        },
+        "required": [
+          "title",
+          "from",
+          "settings"
+        ],
+        "title": "AgentEpisode",
+        "type": "object"
+      },
+      "AssignedEpisode": {
+        "additionalProperties": false,
+        "properties": {
+          "from": {
+            "title": "From",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "ramp": {
+            "default": 0,
+            "maximum": 365.0,
+            "minimum": 0.0,
+            "title": "Ramp",
+            "type": "integer"
+          },
+          "settings": {
+            "additionalProperties": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Settings",
+            "type": "object"
+          },
+          "title": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          },
+          "to": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To"
+          }
+        },
+        "required": [
+          "title",
+          "from",
+          "settings",
+          "id"
+        ],
+        "title": "AssignedEpisode",
+        "type": "object"
+      },
       "CaseRequest": {
         "properties": {
           "actions": {
@@ -462,6 +563,67 @@
           "caseId"
         ],
         "title": "CaseRequest",
+        "type": "object"
+      },
+      "ChatRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "draft": {
+            "additionalProperties": true,
+            "title": "Draft",
+            "type": "object"
+          },
+          "messages": {
+            "items": {
+              "$ref": "#/components/schemas/Message"
+            },
+            "maxItems": 24,
+            "minItems": 1,
+            "title": "Messages",
+            "type": "array"
+          },
+          "schemaVersion": {
+            "const": "setup-agent/1.0",
+            "default": "setup-agent/1.0",
+            "title": "Schemaversion",
+            "type": "string"
+          }
+        },
+        "required": [
+          "messages"
+        ],
+        "title": "ChatRequest",
+        "type": "object"
+      },
+      "ChatResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "proposal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ValidatedProposal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "schemaVersion": {
+            "const": "setup-agent/1.0",
+            "default": "setup-agent/1.0",
+            "title": "Schemaversion",
+            "type": "string"
+          }
+        },
+        "required": [
+          "message",
+          "proposal"
+        ],
+        "title": "ChatResponse",
         "type": "object"
       },
       "CollectionsAccountRequest": {
@@ -864,6 +1026,28 @@
           "type"
         ],
         "title": "Command",
+        "type": "object"
+      },
+      "ConfigurationChange": {
+        "additionalProperties": false,
+        "properties": {
+          "after": {
+            "title": "After"
+          },
+          "before": {
+            "title": "Before"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "before",
+          "after"
+        ],
+        "title": "ConfigurationChange",
         "type": "object"
       },
       "DaysRequest": {
@@ -1552,6 +1736,31 @@
         "title": "InstallationRequest",
         "type": "object"
       },
+      "Message": {
+        "additionalProperties": false,
+        "properties": {
+          "content": {
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Content",
+            "type": "string"
+          },
+          "role": {
+            "enum": [
+              "user",
+              "assistant"
+            ],
+            "title": "Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "role",
+          "content"
+        ],
+        "title": "Message",
+        "type": "object"
+      },
       "MonthRequest": {
         "properties": {
           "actions": {
@@ -2085,6 +2294,125 @@
         "title": "PremiseRequest",
         "type": "object"
       },
+      "Proposal": {
+        "additionalProperties": false,
+        "properties": {
+          "asOf": {
+            "default": "2026-03-31",
+            "title": "Asof",
+            "type": "string"
+          },
+          "assumptions": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 12,
+            "title": "Assumptions",
+            "type": "array"
+          },
+          "episodes": {
+            "items": {
+              "$ref": "#/components/schemas/AgentEpisode"
+            },
+            "maxItems": 40,
+            "title": "Episodes",
+            "type": "array"
+          },
+          "limitations": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "Limitations",
+            "type": "array"
+          },
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "operations": {
+            "additionalProperties": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "description": "Grouped operations overrides, as in inspect_configuration.",
+            "title": "Operations",
+            "type": "object"
+          },
+          "preset": {
+            "description": "A preset from the supplied prepared-town catalogue.",
+            "title": "Preset",
+            "type": "string"
+          },
+          "purpose": {
+            "default": "",
+            "maxLength": 500,
+            "title": "Purpose",
+            "type": "string"
+          },
+          "region": {
+            "default": "",
+            "maxLength": 200,
+            "title": "Region",
+            "type": "string"
+          },
+          "seed": {
+            "default": "",
+            "maxLength": 64,
+            "title": "Seed",
+            "type": "string"
+          },
+          "settings": {
+            "additionalProperties": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "description": "Base meter-to-cash settings.",
+            "title": "Settings",
+            "type": "object"
+          },
+          "summary": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Summary",
+            "type": "string"
+          },
+          "townOverrides": {
+            "additionalProperties": true,
+            "description": "Generation groups only; never filesystem paths.",
+            "title": "Townoverrides",
+            "type": "object"
+          }
+        },
+        "required": [
+          "name",
+          "preset",
+          "summary"
+        ],
+        "title": "Proposal",
+        "type": "object"
+      },
+      "ProposalResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "proposal": {
+            "$ref": "#/components/schemas/ValidatedProposal"
+          },
+          "schemaVersion": {
+            "const": "setup-agent/1.0",
+            "default": "setup-agent/1.0",
+            "title": "Schemaversion",
+            "type": "string"
+          }
+        },
+        "required": [
+          "proposal"
+        ],
+        "title": "ProposalResponse",
+        "type": "object"
+      },
       "QueueRequest": {
         "properties": {
           "actions": {
@@ -2480,6 +2808,32 @@
           "town"
         ],
         "title": "RunRequest",
+        "type": "object"
+      },
+      "StatusResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "available": {
+            "title": "Available",
+            "type": "boolean"
+          },
+          "provider": {
+            "const": "Anthropic",
+            "default": "Anthropic",
+            "title": "Provider",
+            "type": "string"
+          },
+          "schemaVersion": {
+            "const": "setup-agent/1.0",
+            "default": "setup-agent/1.0",
+            "title": "Schemaversion",
+            "type": "string"
+          }
+        },
+        "required": [
+          "available"
+        ],
+        "title": "StatusResponse",
         "type": "object"
       },
       "SummaryRequest": {
@@ -3046,6 +3400,140 @@
           }
         },
         "title": "TownRequest",
+        "type": "object"
+      },
+      "ValidatedProposal": {
+        "additionalProperties": false,
+        "properties": {
+          "asOf": {
+            "default": "2026-03-31",
+            "title": "Asof",
+            "type": "string"
+          },
+          "assumptions": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 12,
+            "title": "Assumptions",
+            "type": "array"
+          },
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/ConfigurationChange"
+            },
+            "title": "Changes",
+            "type": "array"
+          },
+          "episodes": {
+            "items": {
+              "$ref": "#/components/schemas/AssignedEpisode"
+            },
+            "maxItems": 40,
+            "title": "Episodes",
+            "type": "array"
+          },
+          "homes": {
+            "title": "Homes",
+            "type": "integer"
+          },
+          "limitations": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "Limitations",
+            "type": "array"
+          },
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "operations": {
+            "additionalProperties": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "description": "Grouped operations overrides, as in inspect_configuration.",
+            "title": "Operations",
+            "type": "object"
+          },
+          "opsSettings": {
+            "additionalProperties": true,
+            "title": "Opssettings",
+            "type": "object"
+          },
+          "preset": {
+            "description": "A preset from the supplied prepared-town catalogue.",
+            "title": "Preset",
+            "type": "string"
+          },
+          "purpose": {
+            "default": "",
+            "maxLength": 500,
+            "title": "Purpose",
+            "type": "string"
+          },
+          "region": {
+            "default": "",
+            "maxLength": 200,
+            "title": "Region",
+            "type": "string"
+          },
+          "seed": {
+            "default": "",
+            "maxLength": 64,
+            "title": "Seed",
+            "type": "string"
+          },
+          "settings": {
+            "additionalProperties": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "description": "Base meter-to-cash settings.",
+            "title": "Settings",
+            "type": "object"
+          },
+          "summary": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Summary",
+            "type": "string"
+          },
+          "townId": {
+            "title": "Townid",
+            "type": "string"
+          },
+          "townName": {
+            "title": "Townname",
+            "type": "string"
+          },
+          "townOverrides": {
+            "additionalProperties": true,
+            "description": "Generation groups only; never filesystem paths.",
+            "title": "Townoverrides",
+            "type": "object"
+          },
+          "townRef": {
+            "title": "Townref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "preset",
+          "summary",
+          "opsSettings",
+          "townRef",
+          "townId",
+          "townName",
+          "homes",
+          "changes"
+        ],
+        "title": "ValidatedProposal",
         "type": "object"
       },
       "ValidationError": {
@@ -4007,6 +4495,101 @@
           }
         },
         "summary": "Get Published Schema"
+      }
+    },
+    "/api/setup-agent/chat": {
+      "post": {
+        "operationId": "chat_api_setup_agent_chat_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Chat"
+      }
+    },
+    "/api/setup-agent/status": {
+      "get": {
+        "operationId": "status_api_setup_agent_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Status"
+      }
+    },
+    "/api/setup-agent/validate": {
+      "post": {
+        "description": "Revalidate a reviewed proposal before saving it; no API key or paid model call needed.",
+        "operationId": "validate_api_setup_agent_validate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Proposal"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProposalResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Validate"
       }
     },
     "/api/sim/days": {

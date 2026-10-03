@@ -119,3 +119,10 @@ test('the client keeps episodes with the run: sorted, ided, persisted, sent on e
  m.clearEpisodes();assert.deepEqual(m.episodes,[]);assert.equal('episodes' in m.body(),false);assert.equal(new EngineM2C({townRef:'ayr',townId:'town-1',storage:store}).episodes.length,0);
  m.reset();assert.deepEqual(m.actions,[]);
 });
+
+test('inflicting runs to the last period end, including open-ended and year-clamped periods',async()=>{
+ const {episodeRunEnd}=await import('../dist/year-page.js');
+ assert.equal(episodeRunEnd([{to:'2026-04-30'},{to:'2026-03-31'}]),'2026-04-30');
+ assert.equal(episodeRunEnd([{to:null},{to:'2026-03-31'}]),'2026-12-31');
+ const late=episodeDates({id:'late',episodes:[{durationDays:90,settings:{}}]},'2026-12-01');assert.equal(episodeRunEnd(late),'2026-12-31');
+});

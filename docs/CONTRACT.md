@@ -15,6 +15,24 @@ it against the committed example (`scripts/viewer_conformance.mjs`).
 | Meter read | `meter-read/1.1` | `schemas/meter-read-1.1.schema.json` |
 | VEE input fixture | `vee-input-fixture/1.1` | `schemas/vee-input-fixture-1.1.schema.json` |
 | Settings | `SimConfig` with UI hints | `schemas/config.schema.json` (`GET /api/config/schema`) |
+| Setup conversation | `setup-agent/1.0` | `schemas/openapi.json`: `ChatRequest`, `AgentEpisode`, `Proposal` |
+
+## Conversational setup API
+
+`GET /api/setup-agent/status` returns `{schemaVersion: "setup-agent/1.0", available, provider: "Anthropic"}`;
+availability means a server key is configured, not that provider authentication has already been tested.
+`POST /api/setup-agent/chat` accepts `{schemaVersion, messages: [{role: user | assistant, content}], draft}` and
+returns `{schemaVersion, message, proposal: null | validatedProposal}`. Only text history and configuration fields
+are forwarded. `proposal: null` is a follow-up question, not a failed configuration.
+
+`POST /api/setup-agent/validate` accepts a `Proposal` and returns `{schemaVersion, proposal}` without a model call.
+A proposal has name, purpose, region context, preset, seed, asOf, townOverrides, base M2C settings, grouped
+operations settings, dated episodes, summary, assumptions and limitations. The validated result additionally
+contains the portable townRef, townId, townName, homes, flattened opsSettings, assigned episode IDs, and changes
+`[{path, before, after}]`. These derived fields are stripped before revalidation. Proposals are applied only to
+draft simulations; opening the simulation is a separate user action. Errors use FastAPI's `detail` envelope.
+
+See [SETUP_AGENT.md](SETUP_AGENT.md) for environment variables, voice behavior, validation and request limits.
 
 Native 2.0 is validated against its own schema and the receiver. It makes no claim of validity against the
 prototype's 1.0 schema, and the engine emits no 1.0 projection.

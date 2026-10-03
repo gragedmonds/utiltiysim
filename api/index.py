@@ -16,6 +16,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 
+from api._agent import router as agent_router
 from api._m2c import router as m2c_router
 from api._ops import J, router
 from api._towns import health as health_body
@@ -29,6 +30,7 @@ app.add_middleware(GZipMiddleware, minimum_size=2048)
 app.add_middleware(CORSMiddleware, allow_origins=os.environ.get("CORS_ORIGINS", "*").split(","),
                    allow_methods=["GET", "POST"], allow_headers=["*"])
 app.include_router(router)
+app.include_router(agent_router)
 app.include_router(m2c_router)
 app.include_router(towns_router)  # POST /api/towns: answers 501 until the function ships the generation stack
 

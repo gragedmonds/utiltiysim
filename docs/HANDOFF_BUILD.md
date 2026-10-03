@@ -1,5 +1,10 @@
 # Build handoff: the portal as command centre, the offline worker, utilities and campaigns
 
+> **Current product decision:** link access, no login or WorkOS. The entry wizard and browser-local simulation
+> chooser are implemented in milestone 2 below. Any remaining account-scoped examples in later, unbuilt runner
+> contracts describe the older proposal; use workspace/device scope when those contracts are implemented.
+
+
 *For Astra. October 3, 2026. Companion to [PORTAL_ARCHITECTURE.md](PORTAL_ARCHITECTURE.md) (the architecture),
 [DATA_FIRST.md](DATA_FIRST.md) (what gets generated), [RUN_BUNDLES.md](RUN_BUNDLES.md) (step 1, implemented) and
 [M2C.md](M2C.md) (the engine being replayed). This document is the instructions: what to build, in what order, what
@@ -55,13 +60,19 @@ prebuilt packs and generates towns up to 6,000 houses. Limits that shape everyth
 | Elora | 3,271 | 4,252 | 10,783 | 17 s | 10 s |
 | Cobourg | 5,500 | 6,993 | 18,378 | 26 s | 15 s, about 110 MB, 210,091 documents |
 
-A 100,000-account utility is therefore 10 to 40 towns, replayed side by side in a process pool in minutes, with
-150 to 300 MB of archives on disk and about 100 KB of aggregates online per run. Nothing in the engine needs to get
-faster for this plan; it needs an object above the town, a place to run, and a portal that commands it.
+A 100,000-account utility is planned as 10 to 40 towns replayed in a process pool. Archive sizing has been measured
+separately from these replay benchmarks: 654 accounts and 1,832 registers for a full 2026 archive occupy 3.61 MB
+compressed, or 30.29 MB expanded JSON. Linear scaling gives about 55 MB per 10,000-account year; five separately
+archived years would be about 275 MB compressed or 2.32 GB expanded. These are projections until year chaining is
+built and measured, and replace the earlier 150–300 MB estimate for a 100,000-account archive. Runtime installation,
+working copies and detailed interval-meter histories need separate budgets.
 
-**Not built yet:** account login, the launcher, pairing, the control plane (jobs, runs, specs, devices), the worker
+**Not built yet:** shared metadata across browsers, the launcher, pairing, the control plane (jobs, runs, specs, devices), the worker
 loop, the Runs queue and Utility board in the Studio, the utility spec and structure synthesis, roll-ups, campaigns,
 year chaining.
+
+The product direction is agreed, but the downloadable runner is not release-ready. The earlier login/pairing images are
+design mockups. A usable online-to-local run requires milestones 2–5; two-to-five-year execution also needs milestone 7.
 
 ## 2. The target in one page
 
@@ -86,10 +97,25 @@ Where data lives:
 
 ```
 browser        Studio state (episodes, actions, view date), nothing durable
-control plane  KV: accounts' configurations (revisioned), pairings, devices, jobs, runs index, campaigns, specs
+control plane  KV: workspace configurations (revisioned), pairings, devices, jobs, runs index, campaigns, specs
                Blob: runs/<key>/aggregates.json (always), runs/<key>/details/<file> (on request, evictable), specs
-worker disk    store/towns/<townId>/…, store/runs/<runKey>/… (RUN_BUNDLES.md), store/device.json (credential)
+worker disk    selected store/towns/<townId>/…, store/runs/<runKey>/…, store/runtime/<version>/…
+device state   platform credential store; small bootstrap preference remembers the selected storage path
 ```
+
+Product decisions to carry into implementation:
+
+- Pairing links a computer to a workspace. Model/scenario selection can change without another pairing code.
+- Eight separate code boxes, four per group with a dash between them (`K7M2-Q9RX`), on both screens. Whole-code
+  paste fills the boxes; separators are removed before validating the eight-character code.
+- First setup chooses a storage folder, downloads the runtime and pairs. Returning users reconnect automatically
+  and open the existing library; opening saved results does not trigger a replay.
+- All large files use the selected storage root, including a Windows drive such as `P:\UtilitySim\`. The runner
+  remembers the location, shows free space, pauses when the drive is unavailable, and supports changing libraries.
+- People can obtain complete archive copies and keep them locally. No NAS integration or archive-sharing code is
+  required. Full downloads depend on all archive files being available; metadata alone is not a complete copy.
+- Keep the original run when a scenario changes; create a new run on explicit execution. True checkpoint resume
+  remains a later capability.
 
 ## 3. Milestones
 
@@ -119,64 +145,45 @@ Two things to keep from step 1 in every later step: the archive is both the uplo
 the Studio pages take a client object (`getClient`) and a `readOnly` flag rather than talking to an engine directly.
 Portal mode is a third client beside `EngineM2C` (live) and `SavedM2C` (archive).
 
-### Milestone 2: account, configurations, pairing codes, device registry
+### Milestone 2: guided setup, simulation library, then shared metadata and pairing
 
-**Goal.** A logged-in user saves a configuration, issues a pairing code, a device redeems it and reports a heartbeat,
-and Sim shows that computer with the configuration revision it received. No engine is involved.
+**Current access decision (supersedes the previous account/login proposal):** opening the Studio link is enough.
+Do not add WorkOS, another identity provider, a login screen or an Account page to the entry flow.
 
-**Done when**
+**Implemented browser flow**
 
-- A user logs in to the hosted Studio and sees an Account page with their configurations and computers; another
-  account sees none of them (a test proves scoping on every route).
-- "Connect a computer" shows a code such as `K7M2Q9RX` with a ten-minute countdown; the code is single-use, expires,
-  and two concurrent redemptions cannot both succeed (a test runs them concurrently).
-- A test device (a Python client in the test suite) redeems the code, receives a device credential, fetches its
-  assigned configuration revision and heartbeats; the Account page shows it as **Preparing** then **Ready** with the
-  revision number, and "last contact" updates.
-- Revoking a computer invalidates its credential at once; its next heartbeat is refused.
-- `api/index.py` still imports without scipy and shapely, and the new router imports nothing from `utilsim.gen`,
-  `utilsim.sim` or `utilsim.m2c` (add a test that walks the module graph).
-- Everything works locally with no cloud account: `uv run utilsim serve` plus `node web/serve.mjs`, storage in a
-  folder, a development account from an environment variable.
+- `/` opens a four-step wizard when this browser has no saved simulations; otherwise it opens the simulation chooser.
+- Name and purpose → prepared town → starter/scenario and view date → review → Year dashboard.
+- Four intensity starters: Normal operations, A little busy, Under pressure, Organised chaos. The latter three are
+  engine scenario templates, not separate browser simulation rules. Catch-up team and migration hangover add
+  recovery cases to the same Year catalogue.
+- Browser-local `studio-simulation/1.0` metadata stores named drafts and completed setups. Setup resumes after a
+  reload. M2C state and operations settings are scoped by simulation and town; previous pack-town work is adopted
+  without deleting its original keys. The same URL on another browser does not share this list yet.
+- `studio.html` only opens after a saved simulation is selected. Config is a named header tab; Year is the default.
+- Inflicting episodes analyses through the last episode end (December 31 for an open-ended episode). Engine 422
+  refusal restores the prior date and removes the new episodes.
+- A floating monitor shows the actual browser analysis queue (at most two concurrent requests), elapsed times,
+  estimates learned from completed calls, errors and loading messages. It does not claim server CPU telemetry or
+  durable jobs. Existing cached browser results do not create engine requests.
 
-**Build**
+**Still to build**
 
-- `api/_portal.py`: a new FastAPI router mounted in `api/app.py` and `api/index.py`. Routes from the architecture's
-  table, this milestone's share: `POST /api/pairings`, `POST /api/pairings/redeem`, `GET /api/devices`,
-  `DELETE /api/devices/{id}`, `POST /api/devices/heartbeat`, `GET /api/device/config`, and configurations
-  (`GET/POST /api/configurations`, `GET /api/configurations/{id}`, `POST /api/configurations/{id}/revisions`).
-- `api/_kv.py`: a key-value interface (`get`, `set`, `delete`, `list(prefix)`, `claim(key, owner, ttl)` as an atomic
-  compare-and-set) with two implementations: a local JSON folder (`UTILSIM_PORTAL_STORE`, default `.utilsim_portal/`)
-  for development and tests, and the hosted provider (recommendation: Vercel KV or Upstash Redis; the choice is yours,
-  the interface is not). `api/_blob.py` likewise: `put`, `get`, `signed_upload_url`, `signed_download_url`, `delete`,
-  local folder and Vercel Blob.
-- `api/_auth.py`: `current_account(request)` as a FastAPI dependency. Hosted: a session cookie from an identity
-  provider (recommendation: email magic links through a hosted provider; keep the provider behind this one function).
-  Local: `UTILSIM_DEV_ACCOUNT=<email>` names the account. Device routes authenticate with `Authorization: Bearer
-  <device credential>`; credentials are random 32-byte tokens stored hashed (SHA-256) with the device record.
-- Pairing codes: 8 characters from an alphabet without `0 O 1 I L`, random, stored hashed, `expiresAt` ten minutes
-  out, `redeemedAt` set atomically by the `claim` primitive so a second redemption fails. Rate limit: 10 failed
-  redemptions per code per minute per IP, then refuse until the code expires.
-- Studio: `account-page.js` (route `#/account`, a cog-menu entry and a header avatar), `portal.js` (the browser
-  client: configurations, pairings, devices, later jobs and runs). Reuse the Configuration page's schema form for a
-  configuration's inputs; a configuration is the Studio's `viewer-m2c-run/1.0` export plus a name, or (milestone 6)
-  a utility spec reference.
+- A durable shared metadata store if the chooser should follow a link across computers. Browser localStorage is
+  explicit first-pass scope; do not substitute a serverless filesystem and call it durable storage.
+- Online configuration revisions, device registry and eight-box `K7M2-Q9RX` pairing. Pair once, then select models
+  without another code. Keep pairing redemption atomic, expiring and single-use; keep device credentials revocable.
+- The launcher in milestone 3. Local folder selection (`P:\UtilitySim\`), runtime download and real device status
+  remain runner work. Do not display fake paired/Ready state in the web wizard.
+- Live views currently replay input; stored archive views use `runs.html` without recomputation. Browser metadata
+  and analyst actions are not a full engine checkpoint. Operations-day commands remain transient.
 
-**Contracts** (add schemas and CONTRACT.md rows)
+**Validation**
 
-- `configuration/1.0`: `{id, accountId, name, revision, inputs: viewer-m2c-run/1.0 | {spec: <id@version>},
-  createdAt, updatedAt}`; a revision is immutable once a job or device references it.
-- `pairing/1.0`: `{id, accountId, configurationId, codeHash, expiresAt, redeemedAt, deviceId}`.
-- `device/1.0`: `{id, accountId, name, platform, engineVersion, capabilities: {cores, memoryGB, maxAccounts},
-  readiness: preparing | ready | disconnected, configurationRevision, lastSeenAt, revokedAt}`.
-- `heartbeat/1.0` (request body): `{engineVersion, engineBuild, capabilities, readiness, configurationRevision,
-  message}`; the response carries the assigned configuration id and revision and, from milestone 4, whether jobs wait.
-
-**Tests.** `tests/test_portal_pairing.py` (single use, expiry, concurrency, rate limit, scoping, revoke),
-`tests/test_portal_imports.py` (no engine imports in the control plane), `tests/test_hosted_deploy.py` extended for
-the new router; viewer `account-page.test.mjs` (markup for code display and device states).
-
-**Out of scope.** The launcher binary, the runtime download, any job. The device in this milestone is a test client.
+Viewer tests cover persistence, simulation isolation, old-work adoption, corrupt/blocked storage, actual queue
+concurrency/cancellation/failure and period end selection. Engine episode tests validate every template against
+engine settings. Browser verification covers first visit, returning chooser, drafts, starters, Year and Config,
+period-end analysis and desktop/phone layouts. The existing engine/viewer CI and build remain required.
 
 ### Milestone 3: the launcher, the cached runtime, the local server, Ready
 
@@ -188,6 +195,13 @@ configuration revision received. Pairing does not start a simulation.
 - On macOS (arm64 and x64), Windows x64 and Linux x64 the launcher starts, shows a pairing screen in the default
   browser (`http://127.0.0.1:8010/launcher`), accepts the code, downloads and verifies the runtime once (progress and
   size shown as **Preparing**), starts the local engine and reports **Ready**.
+- Before any bulk download, **Storage folder** lets the user choose a writable root and shows free space. The
+  launcher remembers it across restarts; runtime, model, archive and temporary-file writes all use that root.
+  Windows drive-letter paths such as `P:\UtilitySim\` and paths containing spaces are explicitly covered.
+- If the selected drive is unavailable, show **Storage drive unavailable** and pause dependent work. Restoring the
+  drive recovers the same library; large writes must not silently fall back to the system drive.
+- Changing storage offers **Move existing library** or **Open another library**. Move with jobs stopped; copy and
+  verify before switching the stored path, retain the source on interruption, and preserve every run key.
 - Quitting and reopening reconnects without a new code; revoking from Sim puts the launcher back on the pairing
   screen with the stored archives intact.
 - A tampered runtime download is refused (signature and SHA-256 both checked) and the previous runtime keeps working.
@@ -197,16 +211,18 @@ configuration revision received. Pairing does not start a simulation.
 
 **Build**
 
-- `utilsim/worker/` (engine side, Python): `device.py` (the credential store: platform keychain through `keyring`
-  when available, else `store/device.json` with 0600 permissions), `agent.py` (pair, heartbeat every 30 s with
+- `utilsim/worker/` (engine side, Python): `device.py` (the credential store: platform keychain through `keyring`,
+  independent of the selected model storage root), `agent.py` (pair, heartbeat every 30 s with
   engine version and build, cores, memory and a `maxAccounts` estimate, readiness, the configuration revision held;
   fetches `GET /api/device/config` and caches it under `store/config/<revision>.json`), and the CLI entry
   `utilsim worker --portal <url> --store <dir> [--serve] [--cores N]`. `--serve` starts the local API (today's
   `api.app`) with two extra routes: `GET /launcher` (the status and pairing page, plain HTML served by FastAPI) and
   `POST /api/local/pair` (the code, forwarded to the control plane). The local API binds to `127.0.0.1` only.
 - `launcher/` (a new top-level folder, its own CI job): the small bootstrapper. Recommendation: Go, one static binary
-  per platform, no runtime dependencies. It reads a runtime manifest (`runtime/<version>/manifest.json`: files,
-  sizes, SHA-256, Ed25519 signature) from the portal's static hosting, downloads to `~/.utilsim/runtime/<version>/`,
+  per platform, no runtime dependencies. The bootstrapper owns storage selection and setup/status presentation
+  before Python is available; a small per-user preference remembers the path. It reads a runtime manifest
+  (`runtime/<version>/manifest.json`: files, sizes, SHA-256, Ed25519 signature) from the portal's static hosting,
+  downloads to `<selected-store>/runtime/<version>/`,
   verifies, extracts, starts `utilsim worker --serve` from that runtime as a child process, opens the launcher page,
   and supervises (restart on crash, stop on quit). The runtime itself is Python (python-build-standalone) plus the
   `utilsim` wheel and its dependencies plus the Studio assets, built by a script `scripts/build_runtime.py` and
@@ -217,12 +233,15 @@ configuration revision received. Pairing does not start a simulation.
 
 **Contracts.** `runtime-manifest/1.0`: `{version, platform, files: [{name, bytes, sha256}], engineVersion,
 engineBuild, signature}`. `local-status/1.0` (what `/launcher` polls): `{paired, account, device, readiness,
-configurationRevision, engineVersion, lastContactAt, message}`.
+configurationRevision, engineVersion, lastContactAt, storage: {path, available, writable, freeBytes}, message}`.
+The storage path is local setup state and never contributes to a run key or travels inside a shared archive.
 
 **Tests.** `tests/test_worker_pairing.py` (agent against the in-process control plane: pair, heartbeat, config
 receipt, revoke, reconnect with stored credential), `tests/test_runtime_manifest.py` (verification refuses a wrong
 hash or signature; a resumed download completes). Launcher: Go unit tests for manifest verification and the
-supervisor state machine; a smoke run in CI on Linux with the fake runtime.
+supervisor state machine; a smoke run in CI on Linux with the fake runtime. Add storage tests for remembered roots,
+missing/read-only drives, failed or interrupted moves, unchanged run keys and opening a second library. Verify the
+drive-letter path behavior on a Windows runner, with all large writes confined to the selected root.
 
 **Out of scope.** Jobs. Auto-update beyond "download a newer runtime when the manifest says so".
 
@@ -289,6 +308,14 @@ queue, the library, progress and results; two runs can be compared; details are 
 - The Data tab in portal mode lists the tables from the manifest; a table not yet uploaded shows **Request details**,
   which creates a `detail` job and loads the table when it lands.
 - The Workspace in portal mode shows the month-end worklist snapshots read-only.
+- An existing local model opens its saved configuration and results without pairing or replaying. Switching model
+  or scenario uses the same paired computer; explicit Run creates a new archive and leaves previous results intact.
+- **Download copy** or local **Export copy** provides a complete bundle, including its matching snapshot and inputs.
+  Downloads use archive/object storage delivery rather than passing large payloads through the hosted Python
+  function. Offer a complete download only when every manifest file is available; otherwise direct the user to
+  export on the computer holding the details. **Import copy** verifies every listed file and installs the archive
+  in the selected library atomically; an existing verified run key is reused. NAS connectivity and model-sharing
+  codes are outside this milestone.
 - The Utility board (`#/utility`) renders from aggregates alone: towns (and, after milestone 6, regions) side by
   side with the summary KPIs, open cases, cost and carry, VEE precision and recall, collections phases; clicking a
   town opens its run. Until milestone 6 the board shows one town per run.
@@ -301,7 +328,8 @@ aggregates and requesting details; `focus-ui.js`, `app.js`, `index.html` for the
 
 **Tests.** `compare.test.mjs`, `runs-page.test.mjs`, `utility-board.test.mjs`; a Playwright flow against a fake
 control plane (a small Node server in `packages/town-viewer/tests/fixtures/`) covering queue → progress → open →
-compare → request details.
+compare → request details, reopening a model without replay, switching scenarios without re-pairing, and complete
+copy export/import. An interrupted download or import must not appear as a completed model in the library.
 
 **Out of scope.** Multi-town roll-ups (milestone 6), campaigns (7).
 
@@ -410,7 +438,7 @@ importable without scipy and shapely (`tests/test_hosted_deploy.py`).
 Settings documentation is generated: `uv run python scripts/gen_config_doc.py` after a config change.
 
 **Security.** Device credentials and pairing codes are stored hashed; codes are single-use and expire in ten
-minutes; every control-plane query is scoped to the authenticated account; signed URLs expire; the local API binds
+minutes; future control-plane queries must be scoped to their link workspace and device credentials; signed URLs expire; the local API binds
 to loopback; no secret in the repository (the release workflow holds the signing key). Treat run inputs from the
 browser as untrusted: validate with the pydantic models, cap sizes (`EPISODE_MAX`, action counts, spec sizes).
 
@@ -468,3 +496,11 @@ stays the single reference.
 - [ ] Vercel preview checked on desktop and phone for any Studio change.
 - [ ] PORTAL_ARCHITECTURE.md status table, RUN_BUNDLES.md, HANDOFF_ASTRA.md and README updated where they apply.
 - [ ] No change under `prototypes/town-lab`.
+
+## Conversational setup addition
+
+The wizard now offers a Claude setup guide with typed input, browser voice transcription, probing questions and
+reviewable proposals. `ANTHROPIC_API_KEY` is server-only; optional `ANTHROPIC_MODEL` defaults to `claude-sonnet-4-6`.
+The agent inspects current town/run/operations schemas and can propose generation settings, base settings and
+periods. Engine validation gates every proposal and its application. Details, limits and verification are in
+[SETUP_AGENT.md](SETUP_AGENT.md). This does not add authentication, shared metadata or an offline runner.
