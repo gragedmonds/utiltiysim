@@ -3,6 +3,10 @@
 *Architecture, October 2026. Companion to [DATA_FIRST.md](DATA_FIRST.md) (what gets generated) and [M2C.md](M2C.md)
 (what gets replayed).*
 
+**Implemented:** step 1 now has `utilsim export-run` and the Studio's Runs reader (no-map boot, Year, Data,
+month-end Workspace snapshots and VEE scorecard). See [RUN_BUNDLES.md](RUN_BUNDLES.md) for the exact contract,
+commands, verification and current limits. Queueing, worker mode and campaigns below are still planned.
+
 ## Principles
 
 1. **The portal never computes a run.** It composes inputs, tracks jobs, keeps small results and renders them.

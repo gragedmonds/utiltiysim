@@ -1,4 +1,4 @@
-"""utilsim command line: gen | render | schema | validate | serve | osm (fetch | add | list)."""
+"""utilsim command line: gen | render | schema | validate | pack | export-run | serve | osm."""
 
 from __future__ import annotations
 
@@ -96,6 +96,51 @@ def pack(presets: str = typer.Option(",".join(("whitby_small", "ayr", "elora", "
     for t in index["towns"]:
         typer.echo(f"{t['preset']:<14} {t['townId']}  {t['homes']:>6} homes  "
                    f"snapshot {t['files']['snapshot']['bytes'] / 1e6:.1f} MB  replay {t['files']['replay']['bytes'] / 1e6:.1f} MB")
+
+
+@app.command("export-run")
+def export_run_command(
+    town: str = typer.Option("ayr", help="Prebuilt pack preset or generated town reference."),
+    input_: Path = typer.Option(None, "--input", help="Studio Export run JSON (settings, episodes, actions, outages)."),
+    snapshot: Path = typer.Option(None, help="A snapshot.json or snapshot.json.gz instead of a pack town."),
+    as_of: str = typer.Option(None, help="Save results through this 2026 date (YYYY-MM-DD)."),
+    store: Path = typer.Option(Path("out/store"), help="Archive root; bundles go in runs/<runKey>/."),
+):
+    """Replay once and archive tables, month-end worklists, trends and scorecard for the offline Studio."""
+    import gzip
+
+    from fastapi import HTTPException
+
+    from utilsim.io.run_bundle import export_run
+
+    try:
+        request = orjson.loads(input_.read_bytes()) if input_ else {}
+        if not isinstance(request, dict):
+            raise ValueError("run input must be a JSON object")
+        ref = request.get("town") or request.get("townId") or town
+        if snapshot:
+            raw = snapshot.read_bytes()
+            snap = orjson.loads(gzip.decompress(raw) if snapshot.suffix == ".gz" else raw)
+            if request.get("townId") and request["townId"] != snap["id"]:
+                raise ValueError("the supplied snapshot belongs to a different town than the Studio run")
+        else:
+            from api import _towns  # noqa: F401 -- registers generated town references
+            from api._ops import load_snapshot
+
+            snap = load_snapshot(ref)
+            if request.get("townId") and request["townId"] != snap["id"]:
+                raise ValueError("the saved Studio run belongs to a different version of this town; supply --snapshot")
+        if as_of is not None:
+            request["asOf"] = as_of
+        directory, manifest, reused = export_run(snap, request, store)
+    except HTTPException as exc:
+        raise typer.BadParameter(str(exc.detail)) from exc
+    except (ValueError, OSError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    typer.echo(json.dumps({"runKey": manifest["runKey"], "directory": str(directory),
+                          "asOf": manifest["asOf"], "reused": reused,
+                          "files": len(manifest["files"]), "bytes": sum(f["bytes"] for f in manifest["files"]),
+                          "open": "Open runs.html in the Studio and choose this bundle folder."}, indent=2))
 
 
 osm_app = typer.Typer(add_completion=False, help="Freeze real places' streets from OpenStreetMap and make presets.")

@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Saved runs · Utility Studio</title>
+  <link rel="icon" type="image/svg+xml" href="brand/utility-studio-icon-color.svg">
+  <link rel="stylesheet" href="./style.css">
+  <link rel="stylesheet" href="./studio.css">
+  <link rel="stylesheet" href="./runs.css">
+</head>
+<body class="runs-shell">
+  <header class="runs-header">
+    <a href="./" aria-label="Live Utility Studio"><img src="brand/utility-studio-horizontal-color.svg" alt="Utility Studio" width="190" height="52"></a>
+    <nav class="studio-tabs" aria-label="Saved run views">
+      <a href="#/runs" data-tab="runs">Runs</a>
+      <a href="#/year" data-tab="year">Year</a>
+      <a href="#/data" data-tab="data">Data</a>
+      <a href="#/workspace" data-tab="workspace">Workspace</a>
+      <a href="#/scorecard" data-tab="scorecard">VEE scorecard</a>
+    </nav>
+    <span class="studio-pill">Saved results · read-only</span>
+  </header>
+  <div class="run-context" id="run-context" hidden></div>
+  <main>
+    <section id="runs-view" class="run-overview">
+      <span class="section-kicker">LOCAL ARCHIVE</span>
+      <h1>Saved runs</h1>
+      <p>Open a run to explore its results without a running engine. Everything shown was computed when the run was exported.</p>
+      <div class="run-open">
+        <div><h2>From your computer</h2><p>Choose the run folder that contains <code>manifest.json</code>. Files stay on your computer.</p><button id="run-folder" class="primary-btn" type="button">Open run folder</button><input id="run-files" type="file" webkitdirectory multiple hidden></div>
+        <form id="run-url-form"><h2>From a stored bundle</h2><label for="run-url">Bundle folder URL</label><input id="run-url" type="url" placeholder="https://…/runs/…/" required><button class="outline-btn" type="submit">Open stored run</button></form>
+      </div>
+      <p id="run-status" role="status" aria-live="polite"></p>
+      <div id="run-overview"></div>
+      <details class="run-help"><summary>Export a run from the local engine</summary><p>Export your settings and decisions with the live Studio's <strong>Export run</strong> button, then run:</p><pre>utilsim export-run --input your-run.json --store out/store</pre><p>For a prebuilt town:</p><pre>utilsim export-run --town ayr --as-of 2026-12-31 --store out/store</pre><p>Open the resulting <code>out/store/runs/&lt;runKey&gt;</code> folder here. Tables capture the export date. Workspace snapshots capture each month end, plus the export date. Changing a run requires a live engine and a new export.</p></details>
+    </section>
+    <section id="year-view" hidden><div id="year-root"></div></section>
+    <section id="data-view" hidden><div id="data-root"></div></section>
+    <section id="workspace-view" class="run-overview" hidden></section>
+    <section id="scorecard-view" class="run-overview" hidden></section>
+  </main>
+  <div id="toast" role="status" aria-live="polite"></div>
+  <script type="module" src="./runs.js"></script>
+</body>
+</html>
