@@ -413,3 +413,73 @@ def test_outages_from_operations_reach_meter_to_cash(ayr):
     assert [j["requestedAt"] for j in plain["jobs"]] == [j["requestedAt"] for j in linked["jobs"]]
     assert client.post("/api/m2c/summary", json={"town": "ayr", "outages": [{**outages[0], "end": -1}]}
                        ).status_code == 422
+
+
+def test_days_endpoint_replays_a_range_like_single_day_timelines(ayr):
+    """POST /api/sim/days (the viewer's +1 week / +1 month): each skipped day's interruptions are exactly what that
+    day's own timeline reports, with or without the meter-to-cash run linked, at the pace of a month a second."""
+    import time
+    from datetime import date, timedelta
+
+    from api.index import app
+
+    client = TestClient(app)
+    client.post("/api/sim/timeline", json={"town": "ayr", "commands": []})  # a warm instance
+    t0 = time.perf_counter()
+    r = client.post("/api/sim/days", json={"town": "ayr", "from": "2026-04-01", "to": "2026-04-30",
+                                           "m2c": {"seed": "storm", "actions": []}})
+    took = time.perf_counter() - t0
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["schemaVersion"] == "utility-days/1.0" and body["townId"] == ayr.id and body["seed"] == "storm"
+    assert (body["from"], body["to"], body["timezone"]) == ("2026-04-01", "2026-04-30", ayr.timezone)
+    days = body["days"]
+    assert [d["date"] for d in days] == [(date(2026, 4, 1) + timedelta(days=k)).isoformat() for k in range(30)]
+    busy = [d for d in days if d["incidents"]]
+    assert len(busy) >= 3 and {o["utility"] for d in busy for o in d["interruptions"]} >= {"gas", "water"}
+    for d in days:  # the same draws, worked the same way, as a single-day run with the same seed
+        tl = Run(ayr, [], day=d["date"], seed="storm").timeline()
+        assert d["interruptions"] == tl["interruptions"]
+        assert (d["incidents"], d["jobs"]) == (len(tl["incidents"]), len(tl["jobs"]))
+        assert d["jobs"] >= d["incidents"]
+    assert took < 10, f"a month took {took:.1f} s"  # 0.3 s locally; the hosted function allows 60
+    # Linked to the meter-to-cash run (its field orders and reading rounds have their own crews): still the same.
+    worst = max(busy, key=lambda d: len(d["interruptions"]))
+    tl = client.post("/api/sim/timeline", json={"town": "ayr", "date": worst["date"], "commands": [],
+                                                "m2c": {"seed": "storm", "actions": []}}).json()
+    assert tl["interruptions"] == worst["interruptions"] and len(tl["interruptions"]) > 50
+    # The top-level seed wins over the run's; without either, the town's own draws; the same request twice agrees.
+    top = client.post("/api/sim/days", json={"town": "ayr", "from": "2026-04-03", "to": "2026-04-03",
+                                             "seed": "storm", "m2c": {"seed": "other"}}).json()
+    assert top["days"][0]["interruptions"] == days[2]["interruptions"] and top["seed"] == "storm"
+    own = client.post("/api/sim/days", json={"town": "ayr", "from": "2026-04-03", "to": "2026-04-03"}).json()
+    assert own["seed"] is None and own["days"][0]["interruptions"] == Run(ayr, [], day="2026-04-03").interruptions()
+    assert client.post("/api/sim/days", json={"town": "ayr", "from": "2026-04-01", "to": "2026-04-30",
+                                              "m2c": {"seed": "storm"}}).json()["days"] == days
+
+
+def test_days_endpoint_limits_and_settings():
+    from api.index import app
+
+    client = TestClient(app)
+
+    def post(**b):
+        return client.post("/api/sim/days", json={"town": "ayr", **b})
+
+    assert len(post(**{"from": "2026-01-01", "to": "2026-03-03"}).json()["days"]) == 62  # the most per request
+    r = post(**{"from": "2026-01-01", "to": "2026-03-04"})
+    assert r.status_code == 422 and "62" in r.json()["detail"]
+    assert post(**{"from": "2026-05-02", "to": "2026-05-01"}).status_code == 422
+    assert post(**{"from": "2026-05-32", "to": "2026-06-01"}).status_code == 422
+    assert post(**{"from": "2026-05-01"}).status_code == 422
+    assert client.post("/api/sim/days", json={"town": "nowhere", "from": "2026-05-01", "to": "2026-05-02"}
+                       ).status_code == 404
+    one = post(**{"from": "2026-04-03", "to": "2026-04-03", "seed": "storm"}).json()["days"][0]
+    assert one["incidents"] == 1 and one["interruptions"]
+    quiet = post(**{"from": "2026-04-01", "to": "2026-04-30", "seed": "storm",
+                    "settings": {"randomIncidents": False}}).json()["days"]
+    assert all(d["incidents"] == 0 and d["interruptions"] == [] for d in quiet)
+    assert sum(d["jobs"] for d in quiet) > 0  # the reading rounds still run
+    none = post(**{"from": "2026-04-01", "to": "2026-04-30", "seed": "storm",
+                   "settings": {"randomIncidents": False, "meterReading": False}}).json()["days"]
+    assert all(d["jobs"] == 0 for d in none)

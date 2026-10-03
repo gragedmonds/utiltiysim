@@ -8,6 +8,13 @@ elevation/azimuth from the NOAA solar position at the town's origin, moon phase)
 lighting. Labels such as "nightly AMI collection" come from `ami.poll_start_hour`–`poll_end_hour` (local), not the
 word "night": the window can fall in daylight.
 
+The viewer's run day (`POST /api/sim/timeline`) plays through midnight without a pause: the next day's timeline is
+prefetched late in the day and applied at midnight, and its background incidents reach the meter-to-cash run as that
+day's outages. "+1 week" and "+1 month" replay the skipped days in one `POST /api/sim/days` (at most 62 days, each
+with no commands; `{date, interruptions, incidents, jobs}` per day, see CONTRACT.md) so their outages are recorded
+too, then load the last day. The hazard draws are per (town, seed, day), so a skipped day's incidents are exactly the
+ones you would have seen playing it.
+
 ## Field fleet (config group `operations`)
 
 All vehicles start at the depot and drive shortest paths on the road graph at class speeds. The engine emits
