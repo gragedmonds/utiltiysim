@@ -1,0 +1,7 @@
+import {SimulationLibrary} from './simulation-library.js';
+const id=typeof location==='undefined'?null:new URLSearchParams(location.search).get('simulation');
+let library=null;
+export let activeSimulation=null;
+if(id){library=new SimulationLibrary();activeSimulation=library.get(id);}
+export function simulationSaved(m){if(activeSimulation)activeSimulation=library.update(activeSimulation.id,{asOf:m.asOf,seed:m.seed,episodes:m.episodes});}
+export function simulationTown(ref,town){if(!activeSimulation)return;activeSimulation=library.update(activeSimulation.id,{townRef:ref,townId:town.id,townName:town.name||activeSimulation.townName,homes:town.homes||activeSimulation.homes});}

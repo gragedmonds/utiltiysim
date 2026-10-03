@@ -102,7 +102,7 @@ test('the graph request carries the month with the run body on its own channel',
 test('the vocabulary covers every edge type and domain, and the page says Activity Sequence and Initiating Event',()=>{
  assert.deepEqual(Object.keys(EDGES),['caused_by','triggered','resulted_in','blocked_by','resolved_by','escalated_to','required_for','compensated_by']);
  assert.deepEqual(Object.keys(DOMAINS),['ami','read','vee','wm','field','cx','billing','invoice','payment','collections']);
- const src=readFileSync(new URL('../dist/process.js',import.meta.url),'utf8'),html=readFileSync(new URL('../dist/index.html',import.meta.url),'utf8').match(/<section id="process-page"[\s\S]*?<\/section>/)[0];
+ const src=readFileSync(new URL('../dist/process.js',import.meta.url),'utf8'),html=readFileSync(new URL('../dist/studio.html',import.meta.url),'utf8').match(/<section id="process-page"[\s\S]*?<\/section>/)[0];
  for(const text of [src.replaceAll('variantId',''),html])assert.doesNotMatch(text,/variant|root.cause/i);
  assert.match(src,/Initiating Event/);assert.match(html,/Activity sequences/);
 });

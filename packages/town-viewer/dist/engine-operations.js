@@ -3,6 +3,7 @@
 // (append-only) and sends it whole to POST /api/sim/timeline; the engine replays it deterministically and returns
 // incidents, crew jobs with road routes and timestamps, events and state changes. Frames with the run's outages come
 // from POST /api/sim/frame. Nothing here decides protection, isolation, dispatch, routes or repair times.
+import {simulationKey} from './simulation-library.js';
 export async function probeEngine(api='/api'){
  try{const r=await fetch(api+'/health',{cache:'no-store'});if(!r.ok)return null;const h=await r.json();return h?.status==='ok'?h:null;}catch{return null;}
 }
@@ -19,15 +20,15 @@ export function toOpsSettings(overrides,schema){const out={},defs=schema?.$defs|
 export function opsFormValues(settings,schema){const out={},defs=schema?.$defs||{};for(const [g,g0] of Object.entries(schema?.properties||{})){const gs=g0?.$ref?{...defs[g0.$ref.split('/').pop()],...g0}:g0;out[g]={};for(const k of Object.keys(gs.properties||{})){const v=gs['x-flat']?settings?.[k]:settings?.[g]?.[k];if(v!==undefined)out[g][k]=v;}}return out;}
 export class EngineOperations{
  // `cycle(meterToCash, timeline)` may adjust the linked run's day for the map (the day's own outages; see m2c.js).
- constructor(town,{api='/api',townRef,date=null,onChange=()=>{},m2c=()=>null,cycle=null,storage=globalThis.localStorage}={}){
+ constructor(town,{api='/api',townRef,simulationId=null,date=null,onChange=()=>{},m2c=()=>null,cycle=null,storage=globalThis.localStorage}={}){
   this.engine=true;this.town=town;this.api=api;this.townRef=townRef||town.id;this.date=date;this.onChange=onChange;this.m2c=m2c;this.cycle=cycle;
   this.commands=[];this.jobs=[];this.incidents=[];this.events=[];this.reads=[];this.stateChanges=[];this.time=8*3600;this.sequence=0;this.request=0;this.applied=0;this.error=null;
   const depot=(town.facilities||[]).find(f=>f.kind==='depot');this.depot=depot?{x:depot.x,z:depot.z}:{x:0,z:0};
-  this.storage=storage;try{this.settings=JSON.parse(storage?.getItem(OPS_KEY+town.id)||'null');}catch{this.settings=null;}
+  this.storageKey=simulationKey(simulationId,town.id);this.storage=storage;try{this.settings=JSON.parse(storage?.getItem(OPS_KEY+this.storageKey)||'null');}catch{this.settings=null;}
  }
  // Operations settings from Configuration (crews, response times, back-feed limits); only what differs from the
  // engine defaults is sent, so the engine's defaults stay authoritative.
- setSettings(s){this.settings=s&&Object.keys(s).length?s:null;try{this.storage?.setItem(OPS_KEY+this.town.id,JSON.stringify(this.settings));}catch{}this.dropAhead();return this.refresh();}
+ setSettings(s){this.settings=s&&Object.keys(s).length?s:null;try{this.storage?.setItem(OPS_KEY+this.storageKey,JSON.stringify(this.settings));}catch{}this.dropAhead();return this.refresh();}
  // ?town= makes the defaults this town's own (its crews, incident rates).
  async schema(){if(!this._schema){const r=await fetch(this.api+'/sim/settings/schema?town='+encodeURIComponent(this.townRef));if(!r.ok)throw Error('Engine '+r.status);this._schema=await r.json();}return this._schema;}
  // The meter-to-cash run (settings, actions) rides along so the day's field orders arrive as crew jobs.

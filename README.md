@@ -25,7 +25,7 @@ uv run utilsim schema --all                            # regenerate schemas/conf
 uv run pytest -m "not slow"                            # acceptance gates, goldens, schemas, receiver conformance
 
 (cd packages/town-viewer && npm ci)                    # Astra's viewer (vendors three.js)
-node web/serve.mjs                                     # http://localhost:5175 — load a snapshot.json (gunzip the example), then replay-day.json
+node web/serve.mjs                                     # http://localhost:5175 — guided setup / saved simulations
 node scripts/viewer_conformance.mjs examples/whitby-480-seed42   # engine export vs the viewer's receiver
 ```
 
@@ -63,3 +63,15 @@ receiver; `web/` is a thin dev host for it (owned by Astra from `7dd7cc8`). `pro
 Road geometry under `data/osm/` is © OpenStreetMap contributors, ODbL 1.0
 (https://www.openstreetmap.org/copyright), fetched through Nominatim and Overpass. Buildings, addresses,
 customers and utility assets are synthetic and do not describe real properties or people.
+
+### Studio entry
+
+Open the site link to set up a simulation or choose one saved in this browser. No login is required. The wizard
+walks through name, town, starter/scenario and review, then opens **Year**. **Config** is a header tab. Four starters
+range from normal operations to organised chaos; inflicting a period runs analysis through its end. A floating
+monitor shows active/queued analysis and estimates based on completed requests.
+
+For local live analysis, run `utilsim serve --port 8010` and open
+`http://localhost:5175/?engine=http://127.0.0.1:8010`. Browser metadata, settings and analyst actions persist per
+simulation; the list is not shared between computers. Downloaded archives open through **Open downloaded results**.
+The executable, pairing and storage-folder selection are still planned.
