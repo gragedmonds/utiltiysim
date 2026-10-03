@@ -132,7 +132,7 @@ def test_every_library_scenario_parses_and_moves_something(base):
     for s in cat["scenarios"]:
         assert s["title"] and s["description"] and s["watch"] and s["episodes"], s["id"]
         parse_episodes(base.cfg, inflicted(s["id"]))  # every template is a valid episode on the base
-    assert {c["id"] for c in cat["coming"]} == {"storm_season", "water_loss"}
+    assert {c["id"] for c in cat["coming"]} == {"water_loss"}  # storm season is live (the year draws incidents)
     # The ones that must show on a small town do.
     for sid in ("no_analysts", "vee_tightened", "no_access_season", "data_quality_slip", "collections_lenient"):
         run = M2CRun(base.town, episodes=inflicted(sid))

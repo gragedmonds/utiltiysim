@@ -9,7 +9,8 @@ from __future__ import annotations
 
 SCENARIOS_VERSION = "m2c-scenarios/1.0"
 GROUPS = (("staffing", "Staffing"), ("reading", "Meter reading"), ("vee", "VEE"), ("billing", "Billing"),
-          ("collections", "Collections"), ("anomalies", "Meters & anomalies"), ("operations", "Operations"))
+          ("collections", "Collections"), ("anomalies", "Meters & anomalies"), ("contact", "Contact centre"),
+          ("operations", "Operations"))
 
 
 def _ep(title: str, settings: dict, *, start: int = 0, days: int | None = None, ramp: int = 0) -> dict:
@@ -115,11 +116,34 @@ SCENARIOS: tuple[dict, ...] = (
      "watch": "Winter holds, arrears carried through spring, and the release wave when it ends.",
      "tags": ["moratorium", "arrears"],
      "episodes": [_ep("Long moratorium", {"billing": {"moratorium_start": "10-15", "moratorium_end": "05-31"}})]},
+    {"id": "storm_season", "title": "Storm season", "group": "operations",
+     "description": "Three months with three times the storm days: more overhead line faults, longer outages, and the "
+                    "outage reports that come with them.",
+     "watch": "Outage contacts and the emergency line climb on storm days; with one agent the queue spills into "
+              "hang-ups and call backs (Year: contact charts; Data: Outages & leaks, Contacts). The year's reads do "
+              "not see these outages yet.",
+     "tags": ["outages", "contact centre"],
+     "episodes": [_ep("Storms ×3", {"outages": {"storm_factor": "*3"}}, days=92)]},
+    {"id": "phones_mornings_only", "title": "Lines open mornings only", "group": "contact",
+     "description": "For a month the agents cover the phones only until 1 pm; the rest of the day goes to the "
+                    "billing backlog.",
+     "watch": "Contacts squeeze into four hours: longer waits, more hang-ups and call backs, more callers who find "
+              "the lines closed and try again.",
+     "tags": ["contact centre", "abandonment"],
+     "episodes": [_ep("Phones until 1 pm", {"contact": {"close_hour": 13.0}}, days=30)]},
+    {"id": "ivr_down", "title": "IVR and website down", "group": "contact",
+     "description": "Self-service is out for ten days: every balance check, password reset and outage report needs "
+                    "an agent.",
+     "watch": "Contacts to agents roughly double; the service level drops and hang-ups rise until self-service is back.",
+     "tags": ["contact centre", "self-service"],
+     "episodes": [_ep("No self-service", {"contact": {"self_serve_factor": 0}}, days=10)]},
+    {"id": "second_agent", "title": "Hire a second agent", "group": "contact",
+     "description": "A second agent joins the phones from this day.",
+     "watch": "Waits, hang-ups and call backs fall; staffing cost and idle time rise. Compare with the busiest months.",
+     "tags": ["contact centre", "staffing"],
+     "episodes": [_ep("Second agent", {"contact": {"agents": "+1"}})]},
 )
 COMING: tuple[dict, ...] = (
-    {"id": "storm_season", "title": "Storm season", "group": "operations",
-     "description": "Months of storms: more line faults, outages and AMI last gasps feeding missed reads and estimates. "
-                    "Needs the engine to generate the year's operations itself (next step)."},
     {"id": "water_loss", "title": "Undetected water loss", "group": "operations",
      "description": "Non-revenue water rising towards 30% of supply with no alarm until the water balance is checked. "
                     "Needs the unbilled-loss physics and the water balance report (next step)."},
