@@ -28,7 +28,7 @@ test('old draft steps migrate without changing their configuration; new drafts g
  const old={step:2,name:'Existing',preset:'village',townOverrides:{housing:{pool_rate:.1}}};const next=wizardDraft(old,{});
  assert.equal(next.step,1);assert.equal(next.wizardVersion,2);assert.deepEqual(next.townOverrides,old.townOverrides);
  assert.equal(wizardDraft({...old,step:3},{}).step,2);assert.equal(wizardDraft({...next,step:2},{}).step,2);
- const fresh=wizardDraft({step:0},{towns:[{preset:'small_town',townId:'town-1',homes:1900}]});assert.equal(fresh.preset,'small_town');assert.equal(fresh.homes,1900);
+ const fresh=wizardDraft({step:0},{towns:[{preset:'small_town',townId:'town-1',homes:1900}]});assert.equal(fresh.preset,'small_town');assert.equal(fresh.homes,500);assert.equal(fresh.townOverrides.town.houses,500);
 });
 test('manual review strips derived identifiers and keeps the chosen scenario after validation',()=>{
  const draft={id:'one',status:'draft',name:'Utility',preset:'village',scenarioId:'baseline',scenarioTitle:'Normal operations',townOverrides:{town:{houses:200}},settings:{process:{analysts:4}},episodes:[]};

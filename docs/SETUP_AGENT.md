@@ -18,6 +18,11 @@ The manual wizard has three steps:
    and a separately labelled map-day operations section. Year field crews are expressed per 1,000 total premises.
 3. **Review & open**: the editable per-input summary, validation and links back to either setup stage.
 
+Town-size starters are **500, 5,000, 50,000 and 500,000 residential homes**. New drafts start at 500.
+The last two choices are visibly unavailable: the current hosted engine caps detailed towns at 6,000 homes
+(local default: 10,000), so large-city simulation requires further engine work. Advanced retains custom
+counts within the connected engine’s limit; existing saved sizes are preserved. Claude receives the same size catalogue.
+
 Basic and advanced controls edit the same values. Region changes preserve home count and utility settings;
 scenario changes replace dated periods while preserving the environment and operating baseline. Existing drafts
 migrate to the appropriate new step. Manual setup and revalidation do not need an Anthropic key.
