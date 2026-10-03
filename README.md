@@ -29,6 +29,11 @@ node web/serve.mjs                                     # http://localhost:5175 �
 node scripts/viewer_conformance.mjs examples/whitby-480-seed42   # engine export vs the viewer's receiver
 ```
 
+**Offline runs.** `uv run utilsim export-run --town ayr --as-of 2026-12-31 --store out/store` saves a complete
+meter-to-cash run. Open the Studio's **Runs** link and choose the resulting run folder to browse Year, Data,
+Workspace snapshots and the VEE scorecard without an engine connection. See [Saved runs](docs/RUN_BUNDLES.md)
+for carrying Studio inputs into an export, loading bundles by URL, and the archive contract.
+
 | Doc | What it covers |
 |---|---|
 | `docs/CONTRACT.md` | Engine → viewer contract: coordinates, identity, snapshot, topology, frames, time, endpoints, reads, events |
@@ -41,6 +46,8 @@ node scripts/viewer_conformance.mjs examples/whitby-480-seed42   # engine export
 | `docs/DATA_MODEL.md` | Customer, device and read model |
 | `docs/OPERATIONS.md` | Clock, fleet, incidents and meter-to-cash process design (M2/M3) |
 | `docs/ARCHITECTURE.md` · `docs/ROADMAP.md` | Layers, determinism rules, performance · milestones |
+| `docs/RUN_BUNDLES.md` · `docs/PORTAL_ARCHITECTURE.md` | Saved runs and the offline reader · portal/worker roadmap |
+| `docs/HANDOFF_BUILD.md` · `docs/DATA_FIRST.md` | Build instructions for the portal, worker, utilities and campaigns (milestones, contracts, done-when) · the data-first generation plan |
 
 **Hosting (Vercel).** `vercel.json` builds a static site: `npm ci --prefix packages/town-viewer` (vendors
 Three.js), then `node scripts/build_site.mjs` copies the viewer and the prebuilt town packs (`packs/`) into
