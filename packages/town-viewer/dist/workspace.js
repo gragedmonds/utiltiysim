@@ -143,10 +143,10 @@ const group=(title,body,extra='')=>`<fieldset class="gui-group ${extra}"><legend
 
 // Why the Workspace has no engine yet, and the way to one: the browser demo town, a connection in progress, or an
 // engine that is not answering (the map still works from the town pack).
-export function engineNotice({state='idle',towns=[]}={},where=globalThis.location){const link=t=>{const u=new URL(where?.href||'http://localhost/');u.searchParams.set('town',t.preset);u.hash='#/workspace';return `<a class="outline-btn" href="${e(u.pathname+u.search+u.hash)}">Open ${e(t.label)}</a>`;},local='<p class="small-note">Running locally? Start <code>uv run utilsim serve</code> and add <code>?engine=http://127.0.0.1:8010</code>.</p>';
+export function engineNotice({state='idle',towns=[]}={},where=globalThis.location,hash='#/workspace',page='Workspace'){const link=t=>{const u=new URL(where?.href||'http://localhost/');u.searchParams.set('town',t.preset);u.hash=hash;return `<a class="outline-btn" href="${e(u.pathname+u.search+u.hash)}">Open ${e(t.label)}</a>`;},local='<p class="small-note">Running locally? Start <code>uv run utilsim serve</code> and add <code>?engine=http://127.0.0.1:8010</code>.</p>';
  if(state==='probing')return '<h2>Connecting to the engine…</h2><p>The meter-to-cash run opens here as soon as the engine answers.</p>';
  if(state==='down')return `<h2>The engine isn't answering</h2><p>The engine at <code>/api</code> did not reply, so cases and billing can't load. The map still works from the town pack.</p><p><button class="outline-btn" data-ws="retry">Try again</button></p>${local}`;
- return `<h2>Workspace needs an engine town</h2><p>${state==='demo'?'This is the demo town drawn in your browser; it has no meter-to-cash run.':'No engine town is open.'} Open an engine town to work its cases, orders and billing.</p>${towns.length?`<p class="ws-towns">${towns.map(link).join(' ')}</p>`:''}${local}`;}
+ return `<h2>${e(page)} needs an engine town</h2><p>${state==='demo'?'This is the demo town drawn in your browser; it has no meter-to-cash run.':'No engine town is open.'} Open an engine town to work its cases, orders and billing.</p>${towns.length?`<p class="ws-towns">${towns.map(link).join(' ')}</p>`:''}${local}`;}
 export function installWorkspace({getClient,getEngineState=()=>({state:'idle',towns:[]}),toast=()=>{},onShowPremise=()=>{},onProcess=()=>{},onWatch=()=>{},onDate=null,root=document.getElementById('workspace-root')}){
  const client=()=>getClient();
  const ui={route:{tx:'exceptions'},category:'My Assigned Cases',status:'Open',query:'',sort:'age',compact:false,veeStatus:'open',veeUtility:'all',veeQuery:'',filters:false,selected:new Set(),historyOpen:false,queries:{installation:'',read:''},queryError:'',context:{installation:null,read:null},rows:[],veeRows:[],caseView:null,record:null,busy:0,message:'',order:null,orderReturn:null,vocab:null,readOrigin:null};
@@ -473,5 +473,7 @@ export function installWorkspace({getClient,getEngineState=()=>({state:'idle',to
    await recording(act,async()=>{try{await m.act(act,c.caseId,v,note?{note}:{});toast(`${c.caseId}: ${said} on ${m.asOf}.`+noticeText());await loadCase(c.caseId);loadCounts();}catch(err){toast('Not recorded. '+refusal(err));}});}
  });
  function exportCsv(rows){const head=['caseId','category','label','address','accountId','queue','assignee','ageDays','impact'],csv=[head.join(','),...rows.map(r=>head.map(k=>JSON.stringify(k==='category'?categoryOf(r):r[k]??'')).join(','))].join('\n'),a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download='clarification-cases.csv';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);}
- return {open,render,refresh(){if(/^#\/workspace/.test(location.hash)&&!client())render();},get state(){return ui;}};
+ // The Data pages open a record here: the query counts as executed (Display Billing / Display Meter Reading Results).
+ const openRecord=(kind,id)=>execute(kind==='read'?'read':'installation',String(id||''));
+ return {open,render,openRecord,refresh(){if(/^#\/workspace/.test(location.hash)&&!client())render();},get state(){return ui;}};
 }

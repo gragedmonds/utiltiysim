@@ -299,3 +299,19 @@ The map tab now draws your sprite sheets: `iso-scene.js` (Canvas 2D, same calls 
 (which sprite draws which engine object). `scripts/bake_iso_atlas.py` bakes `assets/town/isometric` into
 `dist/iso/atlas.webp`, so replacing a sheet and re-running the bake updates the map. Sizes, anchors, facing rules
 and what is not drawn yet are in [ISOMETRIC_MAP.md](ISOMETRIC_MAP.md). The 3D map stays behind `?map=3d`.
+
+## 12. The Data tab (tables and CSV)
+
+A third primary tab, **Data** (`#/data/<table>`, `data-page.js`), lists the town and its run as tables: customers
+(premises, business partners, accounts, contracts), meters and reading (service points, meters, registers,
+installations, MRUs, read schedules, every read, usage by month, device changes), billing and pricing (tariff versions,
+assignments, billing documents, invoices, payments, the ledger), collections (dunning events, every account in its
+collections phase, disconnections, arrangements and holds) and work (cases, field orders, interruptions). The engine
+builds, filters, sorts and pages each table (`GET /api/m2c/tables`, `POST /api/m2c/table`, `POST /api/m2c/table.csv`;
+`EngineM2C.tables/table/tableCsv`); the page only formats. Column headers sort, facet selects filter (the first six
+inline, the rest behind "More filters"), the search box looks in ids, names and addresses, a linked value opens its
+record (a premise on the map, an installation or read in the Workspace through `workspace.openRecord`, an account,
+case or order by hash), the Columns menu hides columns (remembered per table in this browser) and Download CSV fetches
+the whole filtered table in pages of 5,000. The run date is the Workspace's. On a phone the sidebar becomes a select.
+Pure helpers (`parseDataRoute`, `fmtCell`, `linkTarget`, `facetMarkup`, `stitchCsv`, …) are tested in
+`tests/data-page.test.mjs`; the engine side in `tests/test_m2c_tables.py` and [M2C.md](M2C.md) "Data tables".

@@ -21,9 +21,10 @@ const paths={
 const PAGES=[{id:'settings-page',re:/^#\/(?:settings|config)(?:\/(town|scenarios|data|m2c))?$/},{id:'worklists-page',re:/^#\/worklists(?:\/[A-Z_]+)?(?:\/case\/[\w.:-]+)?$/}];
 PAGES.push({id:'process-page',re:/^#\/process(?:\/(?:[1-9]|1[0-2])(?:\/[\w.:-]+)?)?$/}); // #/process[/MONTH[/EVENT]]: Activity sequences
 PAGES.push({id:'workspace-page',re:/^#\/workspace(?:\/[\w.:%-]+)*$/}); // #/workspace/<transaction>[/...]: Utility Studio SAP transactions
+PAGES.push({id:'data-page',re:/^#\/data(?:\/[\w-]+)?$/}); // #/data[/<table>]: tables of the town and its run
 // Utility Studio navigation: Map and Workspace are the primary destinations; Configuration is the cog.
-const NAV={'workspace-page':'nav-workspace','worklists-page':'nav-workspace','process-page':'nav-workspace'};
-export function installFocusUI({getContext,onSettings,onScenario,onWorklists=()=>{},onSettingsTab=()=>{},onProcess=()=>{},onWorkspace=()=>{}}){
+const NAV={'workspace-page':'nav-workspace','worklists-page':'nav-workspace','process-page':'nav-workspace','data-page':'nav-data'};
+export function installFocusUI({getContext,onSettings,onScenario,onWorklists=()=>{},onSettingsTab=()=>{},onProcess=()=>{},onWorkspace=()=>{},onData=()=>{}}){
  const $=id=>document.getElementById(id), pairs=[['layers-toggle','layers-drawer'],['scenario-toggle','scenario-popover'],['data-toggle','data-popover'],['search-toggle','search-popover']];
  document.querySelectorAll('[data-icon]').forEach(el=>{el.insertAdjacentHTML('afterbegin',`<svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[el.dataset.icon]||''}</svg>`);});
  function closeTools(){for(const [button,panel] of pairs){$(panel).hidden=true;$(button).setAttribute('aria-expanded','false');}}
@@ -58,6 +59,7 @@ export function installFocusUI({getContext,onSettings,onScenario,onWorklists=()=
   onWorklists(page==='worklists-page',hash);
   if(page==='process-page'){closeTools();$('performance-panel').open=false;if(was!==page)$('process-back').focus();}onProcess(page==='process-page',hash);
   if(page==='workspace-page'){closeTools();$('performance-panel').open=false;}onWorkspace(page==='workspace-page',hash);
+  if(page==='data-page'){closeTools();$('performance-panel').open=false;}onData(page==='data-page',hash);
  }
  function settings(tab='town'){window.location.hash='/config/'+tab;route();}
  function map(){const from=current;window.location.hash='/town';route();$(from==='settings-page'?'settings-toggle':'nav-map').focus();}

@@ -55,6 +55,11 @@ export class EngineM2C{
  installation(installationId){return this.post('/m2c/installation',{installationId},'record');}
  readDocument(readId){return this.post('/m2c/read-document',{readId},'record');}
  possibleEntries(kind,query='',page=1){return this.post('/m2c/possible-entries',{kind,query,page,pageSize:50},'f4');}
+ // Data pages: the table catalog, one page of a table (rows as arrays in column order) and one CSV page of it.
+ async tables(){if(!this._tables){const r=await this.fetch(this.api+'/m2c/tables');if(!r.ok)throw Error('Engine '+r.status);this._tables=await r.json();}return this._tables;}
+ table(params){return this.post('/m2c/table',params,'table');}
+ async tableCsv(params){const r=await this.fetch(this.api+'/m2c/table.csv',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(this.body(params))});
+  if(!r.ok){let d='';try{d=(await r.json()).detail;}catch{}const e=Error('Engine '+r.status+(d?': '+(typeof d==='string'?d:d.message||JSON.stringify(d)):''));e.status=r.status;throw e;}return r.text();}
  async vocabulary(){if(!this._vocab){const r=await this.fetch(this.api+'/m2c/vocabulary?town='+encodeURIComponent(this.townRef));if(!r.ok)throw Error('Engine '+r.status);this._vocab=await r.json();}return this._vocab;}
  async schema(){if(!this._schema){const r=await this.fetch(this.api+'/m2c/settings?town='+encodeURIComponent(this.townRef));if(!r.ok)throw Error('Engine '+r.status);this._schema=await r.json();}return this._schema;}
  lastActionDay(){return this.actions.at(-1)?.day||null;}

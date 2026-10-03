@@ -13,13 +13,14 @@ from typing import Any, Literal
 import numpy as np
 import orjson
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field, ValidationError
+from fastapi.responses import Response
+from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from api._ops import J, load_snapshot, town_key
 from utilsim.config.model import SimConfig
 from utilsim.m2c import catalog as cat
 from utilsim.m2c import collections as colls
-from utilsim.m2c import followup, lookups, views
+from utilsim.m2c import followup, lookups, tables, views
 from utilsim.m2c import orders as ords
 from utilsim.m2c.base import M2CTown, cached_m2c_town, m2c_town
 from utilsim.m2c.run import (
@@ -42,6 +43,8 @@ from utilsim.m2c.run import (
 router = APIRouter()
 _RUNS: OrderedDict[bytes, M2CRun] = OrderedDict()
 RUN_CACHE = 4
+_MASTER: OrderedDict[str, dict] = OrderedDict()  # the snapshot's customer and meter tables, per town (Data pages)
+MASTER_CACHE = 2
 
 
 class Action(BaseModel):
@@ -229,9 +232,49 @@ class EntriesRequest(RunRequest):
     pageSize: int = Field(20, ge=1, le=lookups.PAGE_MAX)
 
 
+class TableRequest(RunRequest):
+    table: str = Field(..., max_length=40, description="A table name from GET /api/m2c/tables.")
+    page: int = Field(1, ge=1)
+    pageSize: int = Field(100, ge=1, le=tables.PAGE_MAX)
+    sort: str | None = Field(None, max_length=40, description="A column key; rows with no value sort last.")
+    desc: bool = False
+    search: str | None = Field(None, max_length=80, description="Text found in the row's ids, names or address.")
+    filters: dict[str, str] | None = Field(
+        None, description="Column key → value: a facet value (or '' for blank), a date prefix (2026-06), a number "
+                          "range (100..250, ..50, 100..) or text contained in the column.")
+    columns: list[str] | None = Field(None, max_length=80, description="Only these columns, in this order.")
+
+    @field_validator("filters")
+    @classmethod
+    def _bounded(cls, v):
+        if v is not None and len(v) > 12:
+            raise ValueError("at most 12 filters")
+        if v is not None and any(len(k) > 40 or len(x) > 80 for k, x in v.items()):
+            raise ValueError("filter keys up to 40 characters, values up to 80")
+        return v
+
+
+class TableCsvRequest(TableRequest):
+    pageSize: int = Field(tables.CSV_MAX, ge=1, le=tables.CSV_MAX)
+
+
 def _town(ref: str) -> M2CTown:
     hit = cached_m2c_town(town_key(ref))
     return hit if hit is not None else m2c_town(load_snapshot(ref))
+
+
+def _master(ref: str) -> dict:
+    """The town snapshot's customer and meter tables (cached per town; the geometry is not kept)."""
+    key = town_key(ref)
+    hit = _MASTER.get(key)
+    if hit is not None:
+        _MASTER.move_to_end(key)
+        return hit
+    master = tables.master_data(load_snapshot(ref))
+    _MASTER[key] = master
+    while len(_MASTER) > MASTER_CACHE:
+        _MASTER.popitem(last=False)
+    return master
 
 
 def run_for(req: RunRequest, *, strict: bool = True) -> M2CRun:
@@ -396,6 +439,42 @@ def post_possible_entries(req: EntriesRequest):
     """``m2c-possible-entries/1.0`` (F4): installation, read, account or premise ids matching ``query``, paged."""
     return _view(lookups.possible_entries, run_for(req), req.kind, req.query, as_of=req.asOf, page=req.page,
                  page_size=req.pageSize)
+
+
+@router.get("/api/m2c/tables")
+def get_tables():
+    """``m2c-tables/1.0``: the Data pages' catalog: table groups (customers, meters & reading, billing & pricing,
+    collections, work), each table's source (town snapshot, run, or both), description and columns (key, label, kind,
+    facet, link), and the page limits."""
+    return J(tables.catalog())
+
+
+@router.post("/api/m2c/table")
+def post_table(req: TableRequest):
+    """``m2c-table/1.0``: one page of a table as of ``asOf``, filtered (``search``, ``filters``), sorted (``sort``,
+    ``desc``) and paged (``page``, ``pageSize`` ≤ 500). Rows are arrays in ``columns`` order; ``facets`` counts the
+    facet columns' values over the whole table, ``total`` the rows that match. 404 for an unknown table, 422 for an
+    unknown column."""
+    return _view(tables.page, run_for(req), _master(req.town), req.table, as_of=req.asOf, page=req.page,
+                 page_size=req.pageSize, sort=req.sort, desc=req.desc, search=req.search, filters=req.filters,
+                 columns=req.columns)
+
+
+@router.post("/api/m2c/table.csv")
+def post_table_csv(req: TableCsvRequest):
+    """One CSV page (``pageSize`` ≤ 5,000 rows, header on every page) of a table with the same selection as
+    POST /api/m2c/table; a client downloads a whole table page by page."""
+    try:
+        text = tables.csv_page(run_for(req), _master(req.town), req.table, as_of=req.asOf, page=req.page,
+                               page_size=req.pageSize, sort=req.sort, desc=req.desc, search=req.search,
+                               filters=req.filters, columns=req.columns)
+    except KeyError as exc:
+        raise HTTPException(404, f"not found: {exc.args[0]}") from exc
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    name = f"{town_key(req.town)}-{req.table}-{req.asOf or 'asof'}-p{req.page}.csv"
+    return Response(text, media_type="text/csv; charset=utf-8",
+                    headers={"Content-Disposition": f'inline; filename="{name}"'})
 
 
 @router.post("/api/process/graph")
