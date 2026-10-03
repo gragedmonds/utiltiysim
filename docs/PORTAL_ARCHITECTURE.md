@@ -97,9 +97,47 @@ Sizing from today's measurements: aggregates 20 to 100 KB per run; worklist snap
 10,000 accounts; tables 10 to 30 MB per 10,000 accounts compressed; a 100,000-account utility bundle 150 to 300 MB on
 disk and about 100 KB online by default.
 
+## Campaigns: month batches with a check-in
+
+A **campaign** is a job that runs the simulation in batches of at least one month and stops at each boundary for the
+portal to ask: *this month is done, change anything before the next?* It is how a run spans several years without
+either a 36-click chore or a blind three-year replay.
+
+- **Composer.** A campaign names its spec or town, a start month, a horizon (months or years), the batch length (one
+  month minimum, which matches the billing cycle and the read portions; a quarter or a year are the other sensible
+  sizes), and a pause policy: pause at every batch, pause only when a watch condition trips (open cases above N,
+  overdue above $X, estimated reads above Y%, a disconnection), or never pause. A timeout policy says what happens when
+  nobody answers (continue after 24 hours, or wait).
+- **The check-in.** When a batch ends the worker uploads that month's aggregates plus a check-in card: the month's
+  headline figures against the previous month and the baseline, the episodes in force, the watch conditions that
+  tripped, and the levers that move those figures (staffing, RPA coverage, VEE tolerances, dunning timings, the
+  moratorium). The Runs page shows the card and opens the Year calendar on the next month. A decision is any of: add,
+  edit or end episodes from the next batch's first day; change settings; take aggregate-level staffing decisions;
+  continue for one batch, for N batches, or to the end of the year; or change the pause policy. Every decision is
+  appended to the campaign's **decision log**, dated to the batch it applies from, in the same form as episodes today,
+  so the whole campaign stays a pure function of its inputs plus its log and can be replayed anywhere.
+- **Continuation.** The worker holds the state at the boundary. In the first version it continues by replaying from
+  the start with the extended log (deterministic, and seconds to a few minutes); checkpoints (the run serialised at
+  each month end, resumed instead of replayed) are an optimisation for large utilities and need the payments and
+  collections pass, which runs after the year today, to run inline day by day.
+- **Years.** At a December boundary the worker chains: the closing state (register values, ledgers and arrears, open
+  cases, device ages, consecutive-estimate streaks, arrangements and holds, the moratorium in force) becomes the next
+  year's opening state, the real prior year replaces the synthetic one in VEE's prior-year tests, the new tariff
+  version takes effect, and the weather year rolls. This is DATA_FIRST step E brought forward: the engine's calendar
+  generalises from 2026 to any year and the run gains an opening state.
+- **The Studio across years.** The Year tab becomes a strip of years, each its twelve months; episodes, decisions and
+  check-ins are marked on it; the trend charts run across the strip; the decision log is a page of its own, with who
+  changed what and from when.
+- **Notification.** A waiting check-in is a notification (email or push) with a link to the card; a campaign on
+  "never pause" just reports when it finishes.
+
+Contract: `campaign/1.0` = `{id, inputs (as a job), start, horizonMonths, batchMonths, pause: {policy, watch:
+[{metric, op, value}], timeoutHours}, log: [{at: YYYY-MM, decisions: [episode | setting | policy change]}],
+batches: [{month, status, aggregatesRef, checkIn}]}`.
+
 ## Contracts
 
-- `utility-spec/1.0`: [DATA_FIRST.md](DATA_FIRST.md).
+- `utility-spec/1.0`: [DATA_FIRST.md](DATA_FIRST.md); `campaign/1.0`: above.
 - `job/1.0`: `{id, kind: run | detail | generate, inputs: {spec | town, settings, episodes, actions, seed, asOf, outputs},
   runKey, status: queued | claimed | running | complete | failed, claimedBy, lease, progress: {towns done, of, message},
   result: {manifest, aggregates}, error}`.
@@ -135,6 +173,7 @@ and the roll-up in the aggregates rather than a server.
 | 4 | Runs page, "Queue a run" in Year and Configuration, the Utility board, comparisons | 4 to 5 days |
 | 5 | Packaged executable per platform | 2 to 3 days |
 | 6 | DATA_FIRST step A on the worker; roll-ups per region and utility in the aggregates | as planned |
+| 7 | Campaigns: the multi-year calendar and opening state in the engine (DATA_FIRST step E), batches, check-in cards, the decision log, pause and timeout policies, the Year strip across years | about 2 weeks |
 
 Step 1 is the foundation: the bundle is both the upload format and the local archive, and a Studio that reads it is
 the portal mode.
