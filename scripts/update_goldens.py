@@ -11,7 +11,7 @@ from utilsim.gen.pipeline import generate
 from utilsim.io.snapshot import build_snapshot
 from utilsim.version import GENERATOR_VERSION
 
-CASES = {"whitby-120-T120": ("whitby_small", "T120", 120), "synthetic-600-42": ("ontario_small", "42", 600)}
+CASES = {"village-120-T120": ("village", "T120", 120), "village-600-42": ("village", "42", 600)}
 SECTIONS = ["roads", "premises", "buildings", "parcels", "facilities", "networks", "accounts", "contracts", "meters",
             "registers", "mrus", "sampleReads"]
 

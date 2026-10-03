@@ -61,8 +61,9 @@ Premises also carry a content `uid`.
   (what the user asked for); `premiseCount` = `count` (kept for older readers). A "Homes" stat reads `homes`.
 * `detail`: `full` (everything) or `viewer` (no `sampleReads` and customer tables; ≈ 6 MB gz at 10,000 homes).
 * `stateFrame`: one complete frame at the configured scenario date/hour, so a viewer shows flows on load.
-* `source`: `type` (`osm`/`synthetic`), `label`, `path`, `sha256`, `snapshotDate`, `attribution`, `license`,
-  `expansion` (`none`/`grow`/`repeat`), `origin`, `utilityOffsets`. Show `attribution` for OSM towns (ODbL).
+* `source`: `type` (`synthetic`; every town is generic since generator 0.10), `label`, `attribution`, `license`,
+  `expansion` (`none`), `origin`, `utilityOffsets`. Snapshots from earlier generators may still carry `osm` with
+  `path`, `sha256` and `snapshotDate`.
 
 ### Render-relevant fields
 
@@ -150,8 +151,7 @@ net-exports at noon in July. M2 weather-driven profiles replace them.
 | `GET /api/schemas/{name}.json` | the published schemas above |
 | `GET /api/config/schema` | `SimConfig` JSON Schema with UI hints: `x-unit`, `x-advanced`, `x-effects`, `x-group`, `x-order`, `x-applies` (`town` regenerates, `run` applies to a run) |
 | `GET /api/config/presets` · `/presets/{name}` | town presets and scenario names · a preset's full config |
-| `GET /api/sources` | frozen street extracts (real places) with attribution, snapshot date, bbox, SHA-256 and the presets built on them |
-| `POST /api/towns` `{preset, seed?, houses?, scenario?, overrides?, config?}` | `{townId, status}`; ≤ 2,000 homes build synchronously (201), larger ones in the background (202, poll `GET /api/towns/{id}`); 501 on an engine without the generation stack. A ready town's id works as `town` in every operations and meter-to-cash request (`/api/sim/*`, `/api/m2c/*`, `/api/process/*`, `/api/vee/*`). Ayr's full config builds in about 4.5 s |
+| `POST /api/towns` `{preset, seed?, houses?, scenario?, overrides?, config?}` | `{townId, status}`; ≤ 2,000 homes build synchronously (201), larger ones in the background (202, poll `GET /api/towns/{id}`); 501 on an engine without the generation stack. A ready town's id works as `town` in every operations and meter-to-cash request (`/api/sim/*`, `/api/m2c/*`, `/api/process/*`, `/api/vee/*`). the small town's full config builds in about 9 s |
 | `GET /api/towns/{id}` | status, bounds, origin, source, layer and table names, stats |
 | `GET /api/towns/{id}/snapshot.json?profile=full\|viewer` (or `detail=`) | the snapshot (gzip) |
 | `GET /api/towns/{id}/state?hour=&date=&scenario=&target=&premises=` | one complete frame. Stateless and idempotent |
@@ -198,7 +198,7 @@ Vercel) for the prebuilt towns in `packs/`.
 | `POST /api/sim/days` | `{town, from, to, settings?, m2c?, seed?}` | `utility-days/1.0`: the run days `from`–`to` (inclusive, at most 62) each replayed with no commands (below) |
 | `POST /api/sim/frame` | `{town, date?, commands[], settings?, seed?, at, premises?}` | a complete `utility-state/1.0` frame with the run's switching, valves and leaks |
 
-`town` is a pack preset (`ayr`) or a town id. `at` and every time below are **seconds since local midnight of the
+`town` is a pack preset (`small_town`) or a town id. `at` and every time below are **seconds since local midnight of the
 run day** (default: the town's scenario date).
 
 Commands: `{id, at, type, payload}`.
@@ -247,8 +247,8 @@ Draws are counter-based hashes of (the town's `seeds.incidents`, the run `seed` 
 incidents never depend on other days or on commands. Each is worked exactly like a `break_asset` (detection,
 dispatch, isolation, repair, back-feed, relights, interruptions) with `source: "background"`, id `INC-BG-n` and
 `commandId: null`; a user's incidents keep `INC-n` and `source: "user"`. The timeline's `background` reports
-`{enabled, stormDay, stormWindow?, expected: {kind: count}, exposure, incidentIds}`. At the defaults Ayr expects about 15
-a year (2026 draws 9, so 356 days are quiet) and Cobourg about 40 (39, on 36 days). A collector outage changes no network: the collector goes
+`{enabled, stormDay, stormWindow?, expected: {kind: count}, exposure, incidentIds}`. At the defaults `small_town` expects
+about 24 a year (2026 draws 21, on 18 days, so 347 days are quiet) and `large_town` about 53 (57, on 48 days). A collector outage changes no network: the collector goes
 silent (`collector.offline`), the head end alarms after `detectSeconds.ami`, and a meter technician repairs it in the
 day shift (`shiftStartHour`–`shiftEndHour`; detected after hours, it waits for the morning). Its premises appear in
 `interruptions` as `{utility: "ami", start, end, premiseIds, collectorId, incidentId}`; sent to meter-to-cash as
@@ -264,7 +264,7 @@ date). Each day is replayed with no commands, so `interruptions` are its backgro
 item, the `interruptions` of that day's `POST /api/sim/timeline` with the same `settings` and seed; `incidents` and
 `jobs` are counts (its reading rounds included). The `m2c` run rides along only for its seed: its field orders and the
 reading rounds have their own crews, so they never change when an incident is worked or who it interrupts, and a month
-on Ayr answers in well under a second (a 62-day request on Cobourg's busiest window takes about 6 s).
+on `small_town` answers in well under a second (30 days of `large_town` take about 1 s).
 
 `GET /api/sim/settings` returns the operations defaults. `GET /api/sim/settings/schema` returns the same settings as
 JSON Schema, with titles, units, bounds and effects. Groups marked `x-flat` hold top-level keys (`crews`,

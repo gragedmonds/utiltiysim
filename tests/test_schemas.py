@@ -11,7 +11,7 @@ from utilsim.io.snapshot import build_snapshot
 from utilsim.process.fixtures import fixture, variant
 from utilsim.sim.state import FrameBuilder
 
-EXAMPLE = Path(__file__).resolve().parents[1] / "examples" / "whitby-480-seed42"
+EXAMPLE = Path(__file__).resolve().parents[1] / "examples" / "village-480-seed42"
 
 
 def _ok(name, doc):

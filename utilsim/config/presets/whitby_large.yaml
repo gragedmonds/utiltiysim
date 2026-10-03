@@ -1,6 +1,0 @@
-name: whitby_large
-description: Whitby core (OSM) grown outward with synthetic subdivisions to 10,000 homes.
-town:
-  houses: 10000
-  skeleton: osm
-  expansion: grow

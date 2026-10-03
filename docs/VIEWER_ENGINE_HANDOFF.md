@@ -1,6 +1,10 @@
 # Utility Sim — Viewer / Engine Handoff
 
-**Revision:** viewer-contract/1.0, 1 October 2026  
+**Revision:** viewer-contract/1.0, 1 October 2026
+
+> **Status (3 October 2026):** towns are generic. The engine no longer reads OpenStreetMap extracts, and the browser
+> demo lays out its town on the engine's generic small-town streets (`dist/demo-streets.json`) with no OpenStreetMap
+> import. Mentions of Whitby, OSM import and seed `WHITBY-042` below describe the state on 1 October.  
 **Audience:** Greg, Claude Fable (engine), Astra/Codex (viewer)  
 **Status:** implemented receiver contract; engine exporter adoption pending. This document reconciles Engine Plan rev 2 with the actual viewer. It does not claim the engine has already accepted or emitted these additions.
 

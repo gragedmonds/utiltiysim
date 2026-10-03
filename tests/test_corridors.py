@@ -259,7 +259,7 @@ def test_ties_stay_open_in_flows_and_backfeed_when_closed(town480):
 def test_routing_is_deterministic_and_metrics_compare_layouts(town120):
     from utilsim.gen.pipeline import generate
 
-    again = generate(load_preset("whitby_small", seed="T120", houses=120), with_customers=False)
+    again = generate(load_preset("village", seed="T120", houses=120), with_customers=False)
     a, b = town120.networks["electric"], again.networks["electric"]
     assert [(e.id, e.a, e.b, e.attrs.get("designRole")) for e in a.edges] == \
         [(e.id, e.a, e.b, e.attrs.get("designRole")) for e in b.edges]

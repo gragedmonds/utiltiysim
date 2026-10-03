@@ -24,7 +24,7 @@ def iso(day: int) -> str:
 
 
 def form(start: str, **kw) -> dict:
-    return {"orderType": "FS01 · Field service", "shortText": "Investigate high usage", "plant": "AY01 · Ayr",
+    return {"orderType": "FS01 · Field service", "shortText": "Investigate high usage", "plant": "SM01 · Small Town",
             "plannerGroup": "MR · Meter services", "workCenter": "METER-ELECTRIC", "activityType": "Meter investigation",
             "startDate": start, "finishDate": start, "priority": "2 · Normal", "longText": "Customer disputes the bill.",
             "operation": "Inspect the meter and its seals", "duration": 45, "accessNotes": "Side gate; dog in the yard",
@@ -36,12 +36,12 @@ SEAL = [{"description": "Meter seal", "quantity": 2, "unit": "EA"}]
 
 @pytest.fixture(scope="module")
 def town():
-    return _town("ayr")
+    return _town("small_town")
 
 
 @pytest.fixture(scope="module")
 def base(town) -> M2CRun:
-    return run_for(RunRequest(town="ayr", settings=SLOW))
+    return run_for(RunRequest(town="small_town", settings=SLOW))
 
 
 @pytest.fixture(scope="module")
@@ -73,7 +73,7 @@ def plan(source):
 
 @pytest.fixture(scope="module")
 def lifecycle(plan) -> M2CRun:
-    return run_for(RunRequest(town="ayr", settings=SLOW, actions=plan["actions"]))
+    return run_for(RunRequest(town="small_town", settings=SLOW, actions=plan["actions"]))
 
 
 # ---- the order form -------------------------------------------------------------------------------------------
@@ -92,12 +92,12 @@ def field_errors(town, actions: list[dict]) -> dict:
 def test_release_needs_every_required_field(town):
     assert set(field_errors(town, release_of(town, {}))) == set(ords.REQUIRED)
     assert len(ords.REQUIRED) == 13 and not {"responsible", "contactName", "contactPhone"} & set(ords.REQUIRED)
-    assert not ords.validate(form("2026-05-06"), SEAL, 123, ("AY01 · Ayr",))
+    assert not ords.validate(form("2026-05-06"), SEAL, 123, ("SM01 · Small Town",))
 
 
 @pytest.mark.parametrize(("change", "components", "field"), [
     ({"orderType": "ZZ01 · Mystery"}, None, "orderType"),
-    ({"plant": "WH01 · Whitby"}, None, "plant"),  # another town's planning plant
+    ({"plant": "VI01 · Village"}, None, "plant"),  # another town's planning plant
     ({"workCenter": "METER-STEAM"}, None, "workCenter"),
     ({"priority": "0 · Panic"}, None, "priority"),
     ({"startDate": "2026-05-01"}, None, "startDate"),  # before the action day
@@ -206,12 +206,12 @@ def test_reopening_returns_the_same_order_and_never_a_second(town, lifecycle, so
     for kw in ({"case_id": source.id}, {"read_id": read_id}, {"case_id": run.orders[oid].case.id}):
         assert views.order_view(run, as_of=iso(plan["start"]), **kw)["order"]["orderId"] == oid
     fresh = views.order_view(run, case_id=source.id, as_of=iso(plan["d0"] - 1))
-    assert fresh["order"] is None and fresh["proposal"]["plant"] == "AY01 · Ayr"
+    assert fresh["order"] is None and fresh["proposal"]["plant"] == "SM01 · Small Town"
     # Saving again from the same source edits the same draft; a second source path to the same read is refused.
     d0 = iso(plan["d0"])
     again = [plan["actions"][0], {"day": d0, "type": "order_save", "sourceCaseId": source.id,
                                   "fields": {"longText": "More detail"}}]
-    run2 = run_for(RunRequest(town="ayr", settings=SLOW, actions=again))
+    run2 = run_for(RunRequest(town="small_town", settings=SLOW, actions=again))
     assert list(run2.orders) == [oid] and run2.orders[oid].fields == {"shortText": "Check the meter",
                                                                        "longText": "More detail"}
     with pytest.raises(ActionError, match=f"already has field service order {oid}"):
@@ -228,14 +228,14 @@ def test_actions_stay_append_only(base, lifecycle, plan):
 def test_a_dispatched_order_is_an_operations_crew_job_on_its_start_date(plan, lifecycle):
     client = TestClient(app)
     oid, fw = plan["oid"], lifecycle.orders[plan["oid"]].case
-    tl = client.post("/api/sim/timeline", json={"town": "ayr", "date": iso(plan["start"]),
+    tl = client.post("/api/sim/timeline", json={"town": "small_town", "date": iso(plan["start"]),
                                                 "m2c": {"settings": SLOW, "actions": plan["actions"]}})
     assert tl.status_code == 200, tl.text
     job = next(j for j in tl.json()["jobs"] if j.get("orderId") == oid)
     assert job["kind"] == "field_order" and job["caseId"] == fw.id and job["activity"] == "meter_investigation"
     assert job["crewId"].startswith("FIELD") and job["requestedAt"] == pytest.approx(7 * 3600, abs=1)
     assert job["workSeconds"] == pytest.approx(45 * 60) and job["label"].startswith("Investigate high usage")
-    before = client.post("/api/sim/timeline", json={"town": "ayr", "date": iso(plan["d1"]),
+    before = client.post("/api/sim/timeline", json={"town": "small_town", "date": iso(plan["d1"]),
                                                     "m2c": {"settings": SLOW, "actions": plan["actions"]}}).json()
     assert not any(j.get("orderId") == oid for j in before["jobs"])  # not before its basic start
 
@@ -257,7 +257,7 @@ def test_invoice_hold_defers_invoices_and_blocks_the_outsort_release(town, base)
         M2CRun(town, SLOW, [hold, {**hold, "caseId": None, "accountId": acct}])
     actions = [hold, {"day": iso(h1), "type": "invoice_unhold", "accountId": acct, "note": "Dispute settled"},
                {"day": iso(h1), "type": "accept", "caseId": bc.id, "note": "Usage confirmed with the customer"}]
-    run = run_for(RunRequest(town="ayr", settings=SLOW, actions=actions))
+    run = run_for(RunRequest(town="small_town", settings=SLOW, actions=actions))
     assert not run.warnings
     hc = next(c for c in run.cases if c.work == "hold")
     assert hc.ref == acct and hc.source == bc.id and int(hc.resolved) == h1
@@ -353,11 +353,11 @@ def test_possible_entries_are_paged_and_bounded(base, source):
 # ---- hosted API ---------------------------------------------------------------------------------------------------
 def test_hosted_studio_api(source, plan):
     client = TestClient(app)
-    voc = client.get("/api/m2c/vocabulary", params={"town": "ayr"}).json()
-    assert voc["order"]["choices"]["plant"] == ["AY01 · Ayr"] and voc["order"]["components"]["units"] == ["EA", "M"]
+    voc = client.get("/api/m2c/vocabulary", params={"town": "small_town"}).json()
+    assert voc["order"]["choices"]["plant"] == ["SM01 · Small Town"] and voc["order"]["components"]["units"] == ["EA", "M"]
     assert set(voc["order"]["required"]) == set(ords.REQUIRED) and "Field Work" in voc["categories"]
     assert "order_release" in client.get("/api/m2c/settings").json()["actionTypes"]
-    body = {"town": "ayr", "settings": SLOW, "asOf": iso(plan["d1"])}
+    body = {"town": "small_town", "settings": SLOW, "asOf": iso(plan["d1"])}
     bad = [plan["actions"][0], {"day": iso(plan["d0"]), "type": "order_release", "orderId": plan["oid"]}]
     r = client.post("/api/m2c/summary", json={**body, "actions": bad})
     assert r.status_code == 422 and r.json()["detail"]["fieldErrors"]["plant"] == "Planning plant is required."
@@ -377,12 +377,12 @@ def test_hosted_studio_api(source, plan):
 
 def test_studio_responses_fit_the_hosted_limit_on_cobourg():
     client = TestClient(app)
-    town = _town("cobourg")
+    town = _town("large_town")
     read_id = town.read_id(0, 11)
     acct = next(iter(town.accounts))
     actions = [{"day": "2026-12-01", "type": "order_save", "readId": read_id, "fields": {"shortText": "Visit"}},
                {"day": "2026-12-01", "type": "invoice_hold", "accountId": acct, "note": "Disputed"}]
-    run = {"town": "cobourg", "asOf": "2026-12-01", "actions": actions}
+    run = {"town": "large_town", "asOf": "2026-12-01", "actions": actions}
     field = client.post("/api/process/queue", json={**run, "category": "Field Work", "search": "WO-261201-0001"})
     work = field.json()["rows"][0]
     assert work["orderId"] == "WO-261201-0001" and work["readId"] == read_id

@@ -38,7 +38,7 @@ SNAPSHOT_SOURCES.append(lambda tid: store.snapshot(tid) if store.status(tid) == 
 
 # ---- self-describing town references ---------------------------------------------------------------------------
 # A generated town is named by what it is: its preset plus the settings that differ from it, deflated and base64url
-# encoded (``ayr~eJyr…``). Generation is deterministic, so any engine instance (a cold serverless function, another
+# encoded (``small_town~eJyr…``). Generation is deterministic, so any engine instance (a cold serverless function, another
 # browser opening a shared link) rebuilds exactly the same town from the reference alone; nothing has to be stored.
 def _diff(base: dict, cfg: dict) -> dict:
     out = {}
@@ -159,7 +159,7 @@ def health(engine: str) -> dict:
 
 
 class TownRequest(BaseModel):
-    preset: str = Field("whitby_small", description="Base preset.")
+    preset: str = Field("village", description="Base preset.")
     seed: str | None = Field(None, description="Master seed override.")
     houses: int | None = Field(None, ge=20, le=10_000)
     scenario: str | None = None

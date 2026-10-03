@@ -1420,14 +1420,19 @@ class M2CRun:
         """The month of the last actual read that ``value`` (month ``m``'s register) is below, when it is not a
         plausible rollover; -1 when the register did not go backwards. A value below an earlier *estimate* only is a
         true-up, not a backwards register. After a device change (registered by ``t``) since that read, the floor is
-        the new register's initial read instead (``BELOW_DEVICE``)."""
+        the new register's initial read instead (``BELOW_DEVICE``).
+
+        A low value is a plausible rollover when the last actual read, or (with no device change) the previous
+        released value the read itself was compared with, sat near the top of the dial: with an estimate in between,
+        two periods of use can carry a register past its last digit from below 80 percent of the dial."""
         j = self.last_actual(r, m, t)
         x = self.change_between(r, float(self.read_t[r, j]) if j >= 0 else -INF, float(self.read_t[r, m]), t)
         floor = x.initial[r] if x is not None else float(self.released[r, j]) if j >= 0 else None
         if floor is None or not value < floor - 5e-4:
             return -1
         mod = 10.0 ** int(self.town.digits[r])
-        return -1 if floor > 0.8 * mod and value < 0.2 * mod else BELOW_DEVICE if x is not None else j
+        top = floor > 0.8 * mod or (x is None and float(self.prev_at_read[r, m]) > 0.8 * mod)
+        return -1 if top and value < 0.2 * mod else BELOW_DEVICE if x is not None else j
 
     def floor_text(self, r: int, m: int, j: int, t: float = INF) -> str:
         """What a backwards read (``backwards`` gave ``j``) is below, in words."""

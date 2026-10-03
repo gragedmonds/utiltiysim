@@ -28,4 +28,4 @@ jobs:
       - run: npm test
         working-directory: packages/town-viewer
       - name: Engine export conforms to the viewer receiver
-        run: node scripts/viewer_conformance.mjs examples/whitby-480-seed42
+        run: node scripts/viewer_conformance.mjs examples/village-480-seed42

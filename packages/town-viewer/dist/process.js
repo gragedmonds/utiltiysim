@@ -62,7 +62,7 @@ export function installProcess({getClient,toast=()=>{}}){
  $('wl-settings')?.insertAdjacentHTML('beforebegin','<a id="wl-process" class="small-link" href="#/process">Activity sequences</a>');
  function setStatus(text){$('pr-status').textContent=text||'';}
  async function load(){const m2c=client();
-  if(!m2c){busy++;graph=costs=loaded=null;$('pr-mix').innerHTML='';$('pr-feed-note').textContent='';$('pr-trace').innerHTML='';setStatus('');$('pr-feed').innerHTML=`<div class="wl-empty"><h2>Activity sequences need the engine</h2><p>Open an engine town (for example <code>?town=ayr</code> on the hosted site), or run <code>uv run utilsim serve</code> locally and add <code>?engine=http://127.0.0.1:8010</code>. The engine replays a year of reads, VEE and work queues for the town.</p></div>`;return;}
+  if(!m2c){busy++;graph=costs=loaded=null;$('pr-mix').innerHTML='';$('pr-feed-note').textContent='';$('pr-trace').innerHTML='';setStatus('');$('pr-feed').innerHTML=`<div class="wl-empty"><h2>Activity sequences need the engine</h2><p>Open an engine town (for example <code>?town=small_town</code> on the hosted site), or run <code>uv run utilsim serve</code> locally and add <code>?engine=http://127.0.0.1:8010</code>. The engine replays a year of reads, VEE and work queues for the town.</p></div>`;return;}
   const ticket=++busy;setStatus('Running the engine…');
   try{const pending=m2c.costs(),asOf=m2c.asOf||(await pending).asOf,m=route.month||Number(asOf.slice(5,7));$('pr-month').value=String(m);const [c,g]=await Promise.all([pending,m2c.graph(m)]);if(ticket!==busy)return;month=m;costs=c;graph=g;loaded={client:m2c,key:dataKey(m2c)};}
   catch(err){if(ticket===busy&&!err.superseded){setStatus(err.message);toast(err.message);}return;}

@@ -25,7 +25,7 @@ def _run(export_dir: Path) -> dict:
 
 
 def test_committed_example_conforms():
-    report = _run(ROOT / "examples" / "whitby-480-seed42")
+    report = _run(ROOT / "examples" / "village-480-seed42")
     assert report["passed"] >= 9
 
 

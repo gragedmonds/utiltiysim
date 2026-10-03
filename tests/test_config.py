@@ -33,10 +33,10 @@ def test_bounds_and_cross_field_validation():
 
 def test_presets_load_and_override():
     names = {p["name"] for p in list_presets()}
-    assert {"whitby_small", "whitby_town", "whitby_large", "ontario_small", "ontario_large", "us_midwest"} <= names
-    cfg = load_preset("whitby_small", seed="abc", houses=120, scenario="solar_noon")
+    assert {"village", "small_town", "town", "large_town", "city", "us_town"} == names
+    cfg = load_preset("village", seed="abc", houses=120, scenario="solar_noon")
     assert cfg.town.houses == 120 and cfg.seeds.master == "abc" and cfg.scenario.name == "solar_noon"
-    assert load_preset("us_midwest").electric.primary_kv == 12.47
+    assert load_preset("us_town").electric.primary_kv == 12.47
     with pytest.raises(KeyError):
         load_preset("nope")
 

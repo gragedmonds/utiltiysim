@@ -1,0 +1,4 @@
+name: village
+description: Generic village, 480 homes on a synthetic street grid. The default town.
+town:
+  houses: 480

@@ -2,7 +2,7 @@
 
 Engine axes: x east, y north, metres, in a local plane anchored at ``origin`` (lat, lon). The viewer/snapshot
 uses Astra's convention x east, **z south**; ``to_viewer`` flips y → -z. Projection is the same equirectangular
-formula model.js uses so OSM-derived coordinates match the prototype exactly.
+formula the Studio's model.js uses, so coordinates match the viewer exactly.
 """
 
 from __future__ import annotations

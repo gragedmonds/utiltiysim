@@ -28,12 +28,12 @@ QUIET = {"randomIncidents": False}
 @pytest.fixture(scope="module")
 def ayr_snapshot() -> dict:
     index = orjson.loads((ROOT / "packs" / "index.json").read_bytes())
-    entry = next(t for t in index["towns"] if t["preset"] == "ayr")
+    entry = next(t for t in index["towns"] if t["preset"] == "small_town")
     return orjson.loads(gzip.decompress((ROOT / "packs" / entry["files"]["snapshot"]["path"]).read_bytes()))
 
 
 @pytest.fixture(scope="module")
-def ayr(ayr_snapshot) -> OpsTown:
+def small_town(ayr_snapshot) -> OpsTown:
     return OpsTown(ayr_snapshot)
 
 
@@ -65,27 +65,27 @@ def test_snapshot_built_frames_match_the_town(town120):
         assert ops.frames.frame(when) == FrameBuilder(town120).frame(when)
 
 
-def test_routes_follow_roads_with_increasing_times(ayr):
-    o = ayr.ops
-    router = Router(ayr.roads, (o["speed_kmh_arterial"], o["speed_kmh_collector"], o["speed_kmh_local"]))
-    depot = access_point(ayr.roads, *ayr.depot["access"])
+def test_routes_follow_roads_with_increasing_times(small_town):
+    o = small_town.ops
+    router = Router(small_town.roads, (o["speed_kmh_arterial"], o["speed_kmh_collector"], o["speed_kmh_local"]))
+    depot = access_point(small_town.roads, *small_town.depot["access"])
     for pid in ("P-00001", "P-00900", "P-01800"):
-        i = ayr.premise_index[pid]
-        route = router.route(depot, access_point(ayr.roads, *ayr.premise_access[i]))
+        i = small_town.premise_index[pid]
+        route = router.route(depot, access_point(small_town.roads, *small_town.premise_access[i]))
         assert np.all(np.diff(route.times) > 0)
-        front = ayr.premises[i]["front"]
+        front = small_town.premises[i]["front"]
         assert np.hypot(*(route.points[-1] - (front["x"], front["z"]))) < 2.5  # lane offset from the frontage
         assert route.length_m > 0 and 2 < route.length_m / route.seconds < 15  # 7–54 km/h average
         back = route.reversed()
         assert np.all(np.diff(back.times) > 0) and back.seconds == pytest.approx(route.seconds)
 
 
-def test_broken_pole_trips_a_fuse_then_crew_isolates_and_restores(ayr, ayr_snapshot):
-    pole = fused_pole(ayr)
-    run = Run(ayr, [break_pole(pole, 8 * 3600)], settings=QUIET)
+def test_broken_pole_trips_a_fuse_then_crew_isolates_and_restores(small_town, ayr_snapshot):
+    pole = fused_pole(small_town)
+    run = Run(small_town, [break_pole(pole, 8 * 3600)], settings=QUIET)
     tl = run.timeline()
     inc = tl["incidents"][0]
-    assert inc["device"]["kind"] == "fuse" and 0 < inc["unsupplied"]["atFault"] < len(ayr.premises) / 2
+    assert inc["device"]["kind"] == "fuse" and 0 < inc["unsupplied"]["atFault"] < len(small_town.premises) / 2
     assert inc["unsupplied"]["afterIsolation"] <= inc["unsupplied"]["atFault"]
     job = next(j for j in tl["jobs"] if j["kind"] == "repair")
     assert job["incidentId"] == inc["id"] and job["crewId"].startswith("ELEC")
@@ -107,17 +107,17 @@ def test_broken_pole_trips_a_fuse_then_crew_isolates_and_restores(ayr, ayr_snaps
     assert all(during["premises"]["electric"][ids.index(p)] == 0 for p in list(dead)[:50])
 
 
-def test_trunk_fault_is_backfed_through_a_normally_open_tie(ayr, ayr_snapshot):
+def test_trunk_fault_is_backfed_through_a_normally_open_tie(small_town, ayr_snapshot):
     """Corridor routing gives the real-town packs separate feeders joined by normally-open ties: after a trunk fault
     is isolated, the crew closes a tie and the customers downstream of the fault are fed from the next feeder."""
-    net = ayr.nets["electric"]
+    net = small_town.nets["electric"]
     edges = ayr_snapshot["networks"]["electric"]["edges"]
     assert net.tie_edges and all(edges[k].get("normallyOpen") and not edges[k]["enabled"] for k in net.tie_edges)
     run = tl = None
     for q in net.equipment:  # the first trunk pole (id order) whose fault leaves customers cut off after isolation
         if q["kind"] != "pole" or edges[net.edge_index[q["edgeId"]]].get("designRole") != "trunk":
             continue
-        run = Run(ayr, [break_pole(q, 8 * 3600)], settings=QUIET)
+        run = Run(small_town, [break_pole(q, 8 * 3600)], settings=QUIET)
         tl = run.timeline()
         if tl["incidents"][0]["unsupplied"]["afterIsolation"] > 0:
             break
@@ -139,11 +139,13 @@ def test_trunk_fault_is_backfed_through_a_normally_open_tie(ayr, ayr_snapshot):
     assert not after["networks"]["electric"]["enabled"][k] and "unsupplied" not in after["premises"]
 
 
-def test_water_main_break_leaks_until_valves_isolate_it(ayr, ayr_snapshot):
-    net = ayr.nets["water"]
-    k = next(k for k in sorted(net.valve_edges) if net.kind[k] == "distribution")
+def test_water_main_break_leaks_until_valves_isolate_it(small_town, ayr_snapshot):
+    net = small_town.nets["water"]
+    # A street main (8" or less) away from the plant: a trunk beside the pump station barely moves pressure.
+    street = [k for k in sorted(net.valve_edges) if net.kind[k] == "distribution" and net.diameter_in[k] <= 8]
+    k = street[len(street) // 2]
     x, z = net.points[k][0]
-    run = Run(ayr, [{"id": "W", "at": 9 * 3600, "type": "break_asset",
+    run = Run(small_town, [{"id": "W", "at": 9 * 3600, "type": "break_asset",
                      "payload": {"id": net.edge_ids[k], "kind": "main", "utility": "water", "edgeId": net.edge_ids[k],
                                  "x": float(x), "z": float(z)}}], settings=QUIET)
     tl = run.timeline()
@@ -155,8 +157,8 @@ def test_water_main_break_leaks_until_valves_isolate_it(ayr, ayr_snapshot):
     from utilsim.sim.hydraulics import orifice_m3h
 
     q = next(e for e in tl["events"] if e["eventType"] == "leak.started")["payload"]["m3h"]
-    node = ayr.nearest_node("water", k, float(x), float(z))
-    at_rest = float(ayr.flow_model.flows(9.0, month=7).node_pressure["water"][node])
+    node = small_town.nearest_node("water", k, float(x), float(z))
+    at_rest = float(small_town.flow_model.flows(9.0, month=7).node_pressure["water"][node])
     assert 0.8 * orifice_m3h(at_rest, float(net.diameter_in[k]), 0.05) < q <= orifice_m3h(at_rest, float(net.diameter_in[k]), 0.05)
     assert leaking["networks"]["water"]["sourceFlow"] == pytest.approx(base["networks"]["water"]["sourceFlow"] + q, abs=0.01)
     press = [(a, b) for a, b in zip(base["premises"]["pressure"]["water"], leaking["premises"]["pressure"]["water"],
@@ -171,8 +173,8 @@ def test_water_main_break_leaks_until_valves_isolate_it(ayr, ayr_snapshot):
     assert "unsupplied" not in run.frame(inc["restoredAt"] + 60)["premises"]
 
 
-def test_field_visit_drives_out_and_takes_interim_reads(ayr):
-    tl = Run(ayr, [{"id": "V", "at": 10 * 3600, "type": "dispatch", "payload": {"targetId": "P-00042"}}],
+def test_field_visit_drives_out_and_takes_interim_reads(small_town):
+    tl = Run(small_town, [{"id": "V", "at": 10 * 3600, "type": "dispatch", "payload": {"targetId": "P-00042"}}],
              settings=QUIET).timeline()
     job = next(j for j in tl["jobs"] if j["kind"] == "field_visit")
     assert job["premiseId"] == "P-00042" and job["crewId"].startswith("TECH")
@@ -186,27 +188,27 @@ def test_field_visit_drives_out_and_takes_interim_reads(ayr):
     assert tl["incidents"] == [] and tl["stateChanges"] == []
 
 
-def test_appending_a_command_keeps_what_already_happened(ayr):
-    pole = fused_pole(ayr)
+def test_appending_a_command_keeps_what_already_happened(small_town):
+    pole = fused_pole(small_town)
     first = [break_pole(pole, 8 * 3600), {"id": "V", "at": 8 * 3600 + 60, "type": "dispatch",
                                           "payload": {"targetId": "P-00042"}}]
     later = {"id": "V2", "at": 8 * 3600 + 900, "type": "dispatch", "payload": {"targetId": "P-01000"}}
-    a, b = Run(ayr, first).timeline(), Run(ayr, [*first, later]).timeline()
+    a, b = Run(small_town, first).timeline(), Run(small_town, [*first, later]).timeline()
     before = [e for e in a["events"] if e["at"] < later["at"]]
     assert before and before == [e for e in b["events"] if e["at"] < later["at"]]
     assert a["jobs"] == b["jobs"][: len(a["jobs"])] and a["incidents"] == b["incidents"]
-    assert Run(ayr, first).timeline() == a  # deterministic
+    assert Run(small_town, first).timeline() == a  # deterministic
 
 
-def test_hosted_api(ayr):
+def test_hosted_api(small_town):
     from api.index import app
 
     client = TestClient(app)
     health = client.get("/api/health").json()
-    assert health["engine"] == "hosted" and "ayr" in health["towns"]
-    assert {t["preset"] for t in client.get("/api/packs").json()["towns"]} >= {"ayr"}
-    pole = fused_pole(ayr)
-    body = {"town": "ayr", "commands": [break_pole(pole, 8 * 3600)]}
+    assert health["engine"] == "hosted" and "small_town" in health["towns"]
+    assert {t["preset"] for t in client.get("/api/packs").json()["towns"]} >= {"small_town"}
+    pole = fused_pole(small_town)
+    body = {"town": "small_town", "commands": [break_pole(pole, 8 * 3600)]}
     tl = client.post("/api/sim/timeline", json=body)
     assert tl.status_code == 200 and tl.json()["schemaVersion"] == "utility-timeline/1.0"
     frame = client.post("/api/sim/frame", json={**body, "at": 8 * 3600 + 120}).json()
@@ -221,7 +223,7 @@ def test_hosted_api(ayr):
         assert client.post("/api/sim/timeline", json=body).status_code == 200 and calls == []
     finally:
         ops_api._pack_snapshot = real
-    bad = {"town": "ayr", "commands": [{"at": 1, "type": "explode", "payload": {}}]}
+    bad = {"town": "small_town", "commands": [{"at": 1, "type": "explode", "payload": {}}]}
     assert client.post("/api/sim/timeline", json=bad).status_code == 422
 
 
@@ -229,7 +231,7 @@ def test_hosted_engine_imports_without_the_generation_stack():
     code = ("import sys\nfor m in ('scipy','shapely','pyarrow','matplotlib','yaml'):\n    sys.modules[m]=None\n"
             "import api.index\nfrom fastapi.testclient import TestClient\nc = TestClient(api.index.app)\n"
             "print(c.get('/api/health').json()['capabilities']['generate'], "
-            "c.post('/api/towns', json={'preset': 'ayr'}).status_code)")
+            "c.post('/api/towns', json={'preset': 'small_town'}).status_code)")
     out = subprocess.run([sys.executable, "-c", code], cwd=ROOT, capture_output=True, text=True, timeout=120)
     # Without the stack the hosted engine says it cannot generate, and POST /api/towns answers 501.
     assert out.returncode == 0 and out.stdout.strip() == "False 501", out.stderr[-2000:]
@@ -238,15 +240,15 @@ def test_hosted_engine_imports_without_the_generation_stack():
     assert TestClient(app).get("/api/health").json()["capabilities"]["generate"] is True  # this env has the stack
 
 
-def test_reading_rounds_walk_the_route_in_order(ayr):
+def test_reading_rounds_walk_the_route_in_order(small_town):
     from utilsim.customers.calendar import scheduled_read_date
 
-    mru = next(m for m in ayr.mrus if m["technology"] == "MANUAL")
+    mru = next(m for m in small_town.mrus if m["technology"] == "MANUAL")
     day = scheduled_read_date(2026, 7, mru["portion"]).isoformat()
-    tl = Run(ayr, [], day=day, settings=QUIET).timeline()
+    tl = Run(small_town, [], day=day, settings=QUIET).timeline()
     job = next(j for j in tl["jobs"] if j["kind"] == "meter_reading" and j["mruId"] == mru["id"])
     assert job["mode"] == "walk" and job["crewId"] == mru["readerId"]
-    assert job["meters"] == sum(1 for p in ayr.premises if p.get("mruId") == mru["id"])
+    assert job["meters"] == sum(1 for p in small_town.premises if p.get("mruId") == mru["id"])
     assert len(job["walkRoute"]) == len(job["walkTimes"]) and np.all(np.diff(job["walkTimes"]) > 0)
     assert job["workSeconds"] == pytest.approx(job["walkTimes"][-1], abs=1e-3)
     assert job["startAt"] < job["arrivalAt"] < job["returnStartAt"] < job["endAt"]
@@ -254,7 +256,7 @@ def test_reading_rounds_walk_the_route_in_order(ayr):
     assert np.hypot(start["x"] - end["x"], start["z"] - end["z"]) < 5  # the reader walks back to the van
     kinds = [e["eventType"] for e in tl["events"]]
     assert "reading.started" in kinds and "reading.completed" in kinds
-    assert Run(ayr, [], day=day, settings={**QUIET, "meterReading": False}).timeline()["jobs"] == []
+    assert Run(small_town, [], day=day, settings={**QUIET, "meterReading": False}).timeline()["jobs"] == []
     # Each meter is read in sequence order while the walker is out.
     at = [s["at"] for s in job["stops"]]
     assert len(at) == job["meters"] and all(np.diff(at) >= 0)
@@ -262,19 +264,19 @@ def test_reading_rounds_walk_the_route_in_order(ayr):
     assert "outcome" not in job["stops"][0]  # without the meter-to-cash run, no outcomes
 
 
-def test_reading_rounds_show_the_meter_to_cash_outcome_of_each_read(ayr):
+def test_reading_rounds_show_the_meter_to_cash_outcome_of_each_read(small_town):
     from fastapi.testclient import TestClient
 
     from api._m2c import RunRequest, run_for
     from api.index import app
     from utilsim.m2c.base import date_of
 
-    run = run_for(RunRequest(town="ayr"))
+    run = run_for(RunRequest(town="small_town"))
     tw = run.town
     # A day with walked or drive-by reads where VEE flagged one or a reader missed one.
     day = next(d for d, (m, rows) in sorted(run.batches.items()) if any(
         tw.tech[r] != "AMI" and (np.isnan(run.obs[r, m]) or run.disp[r, m] > 0) for r in rows.tolist()))
-    tl = TestClient(app).post("/api/sim/timeline", json={"town": "ayr", "date": date_of(day).isoformat(),
+    tl = TestClient(app).post("/api/sim/timeline", json={"town": "small_town", "date": date_of(day).isoformat(),
                                                           "m2c": {}}).json()
     stops = [s for j in tl["jobs"] if j["kind"] == "meter_reading" for s in j["stops"]]
     seen = {s["outcome"] for s in stops}
@@ -293,7 +295,7 @@ def test_reading_rounds_show_the_meter_to_cash_outcome_of_each_read(ayr):
     ami_day = next(d for d, (_, rr) in sorted(run.batches.items()) if (tw.tech[rr] == "AMI").any())
     ma, ra = run.batches[ami_day]
     ami = ra[tw.tech[ra] == "AMI"]
-    got = TestClient(app).post("/api/sim/timeline", json={"town": "ayr", "date": date_of(ami_day).isoformat(),
+    got = TestClient(app).post("/api/sim/timeline", json={"town": "small_town", "date": date_of(ami_day).isoformat(),
                                                            "m2c": {}}).json()["meterToCash"]["ami"]
     assert got["at"] == 7200 and len(got["read"]) + len(got["missed"]) == len(set(tw.prem[ami].tolist()))
     assert set(got["missed"]) == {tw.premise_ids[tw.prem[r]] for r in ami if np.isnan(run.obs[r, ma])}
@@ -303,7 +305,7 @@ def test_reading_rounds_show_the_meter_to_cash_outcome_of_each_read(ayr):
     assert len(cyc.get("bills", {}).get("premiseIds", [])) == len({int(tw.prem[run.books.main[i]]) for i in billed})
 
 
-def test_m2c_field_orders_become_crew_jobs_and_field_visits_settle_cases(ayr):
+def test_m2c_field_orders_become_crew_jobs_and_field_visits_settle_cases(small_town):
     from fastapi.testclient import TestClient
 
     from api._m2c import RunRequest, run_for
@@ -311,32 +313,32 @@ def test_m2c_field_orders_become_crew_jobs_and_field_visits_settle_cases(ayr):
     from utilsim.m2c.base import date_of
 
     client = TestClient(app)
-    run = run_for(RunRequest(town="ayr"))
+    run = run_for(RunRequest(town="small_town"))
     case, t = next((c, e[0]) for c in run.cases for e in c.events if e[1] == "TRUCK_ROLL")
     day = date_of(int(t)).isoformat()
-    tl = client.post("/api/sim/timeline", json={"town": "ayr", "date": day, "m2c": {}}).json()
+    tl = client.post("/api/sim/timeline", json={"town": "small_town", "date": day, "m2c": {}}).json()
     job = next(j for j in tl["jobs"] if j["kind"] == "field_order" and j["caseId"] == case.id)
     assert job["crewId"].startswith("FIELD") and job["requestedAt"] == pytest.approx((t - int(t)) * 86400, abs=0.1)
     assert not any(j["kind"] == "field_order" for j in client.post(
-        "/api/sim/timeline", json={"town": "ayr", "date": day}).json()["jobs"])  # without the run, no field orders
+        "/api/sim/timeline", json={"town": "small_town", "date": day}).json()["jobs"])  # without the run, no field orders
     # A field visit on the map reads the meters and settles the premise's open read cases.
     slow = {"process": {"analysts": 0, "rpa_coverage": 0}}
-    base = run_for(RunRequest(town="ayr", settings=slow))
+    base = run_for(RunRequest(town="small_town", settings=slow))
     open_case = next(c for c in base.cases if c.doc < 0 and c.created < 200 and (c.resolved or 999) > c.created + 5)
     visit_day = date_of(int(open_case.created) + 2).isoformat()
     premise = base.town.premise_ids[base.town.prem[open_case.r]]
     action = {"day": visit_day, "type": "field_read", "premiseId": premise, "at": 11 * 3600}
-    after = run_for(RunRequest(town="ayr", settings=slow, actions=[action]))
+    after = run_for(RunRequest(town="small_town", settings=slow, actions=[action]))
     settled = after.case_index[open_case.id]
     assert settled.assignee == "you" and settled.resolved == pytest.approx(int(open_case.created) + 2 + 11 / 24, abs=0.01)
     assert any(e[1] in ("SPECIAL_READ", "METER_EXCHANGE") for e in settled.events)
-    summary = client.post("/api/m2c/summary", json={"town": "ayr", "settings": slow, "actions": [action],
+    summary = client.post("/api/m2c/summary", json={"town": "small_town", "settings": slow, "actions": [action],
                                                      "asOf": visit_day}).json()
     assert not summary["warnings"]
 
 
-def test_gas_main_break_relights_every_shut_premise(ayr, ayr_snapshot):
-    net = ayr.nets["gas"]
+def test_gas_main_break_relights_every_shut_premise(small_town, ayr_snapshot):
+    net = small_town.nets["gas"]
     run = tl = None
     for k in sorted(net.valve_edges):
         if net.kind[k] != "distribution":
@@ -345,7 +347,7 @@ def test_gas_main_break_relights_every_shut_premise(ayr, ayr_snapshot):
         cmd = {"id": "G", "at": 9 * 3600, "type": "break_asset",
                "payload": {"id": net.edge_ids[k], "kind": "main", "utility": "gas", "edgeId": net.edge_ids[k],
                            "x": float(x), "z": float(z)}}
-        run = Run(ayr, [cmd], settings=QUIET)
+        run = Run(small_town, [cmd], settings=QUIET)
         tl = run.timeline()
         if tl["incidents"] and tl["incidents"][0]["unsupplied"]["afterIsolation"] >= 3:
             break
@@ -365,7 +367,7 @@ def test_gas_main_break_relights_every_shut_premise(ayr, ayr_snapshot):
     assert any(e["eventType"] == "relight.completed" for e in tl["events"])
 
 
-def test_outages_from_operations_reach_meter_to_cash(ayr):
+def test_outages_from_operations_reach_meter_to_cash(small_town):
     """A broken pole's interruptions feed the meter-to-cash run: use stops, AMI meters without power miss their
     reads (a last gasp explains the comm fail), and the summary reports customer-minutes."""
     from fastapi.testclient import TestClient
@@ -376,22 +378,22 @@ def test_outages_from_operations_reach_meter_to_cash(ayr):
     from utilsim.m2c.base import date_of
     from utilsim.m2c.run import parse_day
 
-    pole = fused_pole(ayr)
-    base = run_for(RunRequest(town="ayr"))
+    pole = fused_pole(small_town)
+    base = run_for(RunRequest(town="small_town"))
     tw = base.town
-    probe = Run(ayr, [break_pole(pole, 3600)], settings=QUIET).timeline()
+    probe = Run(small_town, [break_pole(pole, 3600)], settings=QUIET).timeline()
     hit = {p for i in probe["interruptions"] for p in i["premiseIds"]}
     ami = next(r for r in range(tw.n_registers) if tw.premise_ids[tw.prem[r]] in hit and tw.tech[r] == "AMI"
                and tw.commodity[r] == "electric")
     day = date_of(int(tw.read_day[ami, 3])).isoformat()  # an AMI read night inside the outage (reads at 02:00)
-    tl = Run(ayr, [break_pole(pole, 3600)], day=day, settings=QUIET).timeline()
+    tl = Run(small_town, [break_pole(pole, 3600)], day=day, settings=QUIET).timeline()
     inc = tl["incidents"][0]
     assert {p for i in tl["interruptions"] for p in i["premiseIds"]} == hit
     assert sum(len(i["premiseIds"]) for i in tl["interruptions"]) == inc["unsupplied"]["atFault"]
     assert all(i["utility"] == "electric" and i["start"] == pytest.approx(inc["createdAt"], abs=1)
                and i["end"] <= inc["restoredAt"] + 1 for i in tl["interruptions"])
     outages = [{"day": day, **{k: i[k] for k in ("utility", "start", "end", "premiseIds")}} for i in tl["interruptions"]]
-    run = run_for(RunRequest(town="ayr", outages=outages))
+    run = run_for(RunRequest(town="small_town", outages=outages))
     before = tw.read_day[:, 1:] < parse_day(day, 0)  # nothing changes before the outage
     assert np.array_equal(np.where(before, run.truth[:, 1:], 0), np.where(before, base.truth[:, 1:], 0))
     p = tw.premise_index[tw.premise_ids[tw.prem[ami]]]
@@ -408,14 +410,14 @@ def test_outages_from_operations_reach_meter_to_cash(ayr):
     assert pv["outages"] and pv["outages"][0]["lastGasp"] and pv["outages"][0]["lost"] > 0
     # The morning's field orders never depend on that day's own outages.
     client = TestClient(app)
-    plain = client.post("/api/sim/timeline", json={"town": "ayr", "date": day, "m2c": {}}).json()
-    linked = client.post("/api/sim/timeline", json={"town": "ayr", "date": day, "m2c": {"outages": outages}}).json()
+    plain = client.post("/api/sim/timeline", json={"town": "small_town", "date": day, "m2c": {}}).json()
+    linked = client.post("/api/sim/timeline", json={"town": "small_town", "date": day, "m2c": {"outages": outages}}).json()
     assert [j["requestedAt"] for j in plain["jobs"]] == [j["requestedAt"] for j in linked["jobs"]]
-    assert client.post("/api/m2c/summary", json={"town": "ayr", "outages": [{**outages[0], "end": -1}]}
+    assert client.post("/api/m2c/summary", json={"town": "small_town", "outages": [{**outages[0], "end": -1}]}
                        ).status_code == 422
 
 
-def test_days_endpoint_replays_a_range_like_single_day_timelines(ayr):
+def test_days_endpoint_replays_a_range_like_single_day_timelines(small_town):
     """POST /api/sim/days (the viewer's +1 week / +1 month): each skipped day's interruptions are exactly what that
     day's own timeline reports, with or without the meter-to-cash run linked, at the pace of a month a second."""
     import time
@@ -424,38 +426,38 @@ def test_days_endpoint_replays_a_range_like_single_day_timelines(ayr):
     from api.index import app
 
     client = TestClient(app)
-    client.post("/api/sim/timeline", json={"town": "ayr", "commands": []})  # a warm instance
+    client.post("/api/sim/timeline", json={"town": "small_town", "commands": []})  # a warm instance
     t0 = time.perf_counter()
-    r = client.post("/api/sim/days", json={"town": "ayr", "from": "2026-04-01", "to": "2026-04-30",
-                                           "m2c": {"seed": "storm", "actions": []}})
+    r = client.post("/api/sim/days", json={"town": "small_town", "from": "2026-04-01", "to": "2026-04-30",
+                                           "m2c": {"seed": "gale", "actions": []}})
     took = time.perf_counter() - t0
     assert r.status_code == 200, r.text
     body = r.json()
-    assert body["schemaVersion"] == "utility-days/1.0" and body["townId"] == ayr.id and body["seed"] == "storm"
-    assert (body["from"], body["to"], body["timezone"]) == ("2026-04-01", "2026-04-30", ayr.timezone)
+    assert body["schemaVersion"] == "utility-days/1.0" and body["townId"] == small_town.id and body["seed"] == "gale"
+    assert (body["from"], body["to"], body["timezone"]) == ("2026-04-01", "2026-04-30", small_town.timezone)
     days = body["days"]
     assert [d["date"] for d in days] == [(date(2026, 4, 1) + timedelta(days=k)).isoformat() for k in range(30)]
     busy = [d for d in days if d["incidents"]]
     assert len(busy) >= 3 and {o["utility"] for d in busy for o in d["interruptions"]} >= {"gas", "water"}
     for d in days:  # the same draws, worked the same way, as a single-day run with the same seed
-        tl = Run(ayr, [], day=d["date"], seed="storm").timeline()
+        tl = Run(small_town, [], day=d["date"], seed="gale").timeline()
         assert d["interruptions"] == tl["interruptions"]
         assert (d["incidents"], d["jobs"]) == (len(tl["incidents"]), len(tl["jobs"]))
         assert d["jobs"] >= d["incidents"]
     assert took < 10, f"a month took {took:.1f} s"  # 0.3 s locally; the hosted function allows 60
     # Linked to the meter-to-cash run (its field orders and reading rounds have their own crews): still the same.
     worst = max(busy, key=lambda d: len(d["interruptions"]))
-    tl = client.post("/api/sim/timeline", json={"town": "ayr", "date": worst["date"], "commands": [],
-                                                "m2c": {"seed": "storm", "actions": []}}).json()
+    tl = client.post("/api/sim/timeline", json={"town": "small_town", "date": worst["date"], "commands": [],
+                                                "m2c": {"seed": "gale", "actions": []}}).json()
     assert tl["interruptions"] == worst["interruptions"] and len(tl["interruptions"]) > 50
     # The top-level seed wins over the run's; without either, the town's own draws; the same request twice agrees.
-    top = client.post("/api/sim/days", json={"town": "ayr", "from": "2026-04-03", "to": "2026-04-03",
-                                             "seed": "storm", "m2c": {"seed": "other"}}).json()
-    assert top["days"][0]["interruptions"] == days[2]["interruptions"] and top["seed"] == "storm"
-    own = client.post("/api/sim/days", json={"town": "ayr", "from": "2026-04-03", "to": "2026-04-03"}).json()
-    assert own["seed"] is None and own["days"][0]["interruptions"] == Run(ayr, [], day="2026-04-03").interruptions()
-    assert client.post("/api/sim/days", json={"town": "ayr", "from": "2026-04-01", "to": "2026-04-30",
-                                              "m2c": {"seed": "storm"}}).json()["days"] == days
+    top = client.post("/api/sim/days", json={"town": "small_town", "from": "2026-04-03", "to": "2026-04-03",
+                                             "seed": "gale", "m2c": {"seed": "other"}}).json()
+    assert top["days"][0]["interruptions"] == days[2]["interruptions"] and top["seed"] == "gale"
+    own = client.post("/api/sim/days", json={"town": "small_town", "from": "2026-04-03", "to": "2026-04-03"}).json()
+    assert own["seed"] is None and own["days"][0]["interruptions"] == Run(small_town, [], day="2026-04-03").interruptions()
+    assert client.post("/api/sim/days", json={"town": "small_town", "from": "2026-04-01", "to": "2026-04-30",
+                                              "m2c": {"seed": "gale"}}).json()["days"] == days
 
 
 def test_days_endpoint_limits_and_settings():
@@ -464,7 +466,7 @@ def test_days_endpoint_limits_and_settings():
     client = TestClient(app)
 
     def post(**b):
-        return client.post("/api/sim/days", json={"town": "ayr", **b})
+        return client.post("/api/sim/days", json={"town": "small_town", **b})
 
     assert len(post(**{"from": "2026-01-01", "to": "2026-03-03"}).json()["days"]) == 62  # the most per request
     r = post(**{"from": "2026-01-01", "to": "2026-03-04"})
@@ -474,12 +476,12 @@ def test_days_endpoint_limits_and_settings():
     assert post(**{"from": "2026-05-01"}).status_code == 422
     assert client.post("/api/sim/days", json={"town": "nowhere", "from": "2026-05-01", "to": "2026-05-02"}
                        ).status_code == 404
-    one = post(**{"from": "2026-04-03", "to": "2026-04-03", "seed": "storm"}).json()["days"][0]
+    one = post(**{"from": "2026-04-04", "to": "2026-04-04", "seed": "gale"}).json()["days"][0]
     assert one["incidents"] == 1 and one["interruptions"]
-    quiet = post(**{"from": "2026-04-01", "to": "2026-04-30", "seed": "storm",
+    quiet = post(**{"from": "2026-04-01", "to": "2026-04-30", "seed": "gale",
                     "settings": {"randomIncidents": False}}).json()["days"]
     assert all(d["incidents"] == 0 and d["interruptions"] == [] for d in quiet)
     assert sum(d["jobs"] for d in quiet) > 0  # the reading rounds still run
-    none = post(**{"from": "2026-04-01", "to": "2026-04-30", "seed": "storm",
+    none = post(**{"from": "2026-04-01", "to": "2026-04-30", "seed": "gale",
                    "settings": {"randomIncidents": False, "meterReading": False}}).json()["days"]
     assert all(d["jobs"] == 0 for d in none)

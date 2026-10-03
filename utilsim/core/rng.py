@@ -71,7 +71,7 @@ class Purpose(IntEnum):
 
 
 def normalize_seed(seed: int | str) -> int:
-    """Turn a user-facing seed (int or any string such as 'WHITBY-042') into a 64-bit unsigned integer."""
+    """Turn a user-facing seed (int or any string such as 'TOWN-042') into a 64-bit unsigned integer."""
     if isinstance(seed, str):
         return _normalize_str(seed)
     if isinstance(seed, bool):

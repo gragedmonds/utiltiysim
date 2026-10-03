@@ -1,7 +1,0 @@
-name: ontario_small
-description: Fully synthetic Southern Ontario town, 1,000 homes.
-seeds:
-  master: "42"
-town:
-  houses: 1000
-  skeleton: synthetic

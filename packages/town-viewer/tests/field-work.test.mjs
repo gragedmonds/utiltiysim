@@ -56,7 +56,7 @@ test('the device history lists the current device first, with install, removal a
 
 test('a recorded action keeps the engine\'s notices and tells listeners (the map refreshes its day)',async()=>{
  assert.deepEqual(noticesFor(['ACT-2 (notice): CASE-1 was completed while field service order WO-1 is still Dispatched; the order goes on','ACT-1 (notice): other','ACT-2: refused'],'ACT-2'),['CASE-1 was completed while field service order WO-1 is still Dispatched; the order goes on']);
- const heard=[],m=new EngineM2C({townRef:'ayr',townId:'t',storage:memory(),fetchImpl:async(url,opts)=>{const body=JSON.parse(opts.body);return {ok:true,json:async()=>({warnings:body.actions.length?[`ACT-${body.actions.length} (notice): CASE-9 was completed while field service order WO-9 is still En route; the order goes on`]:[]})};}});
+ const heard=[],m=new EngineM2C({townRef:'small_town',townId:'t',storage:memory(),fetchImpl:async(url,opts)=>{const body=JSON.parse(opts.body);return {ok:true,json:async()=>({warnings:body.actions.length?[`ACT-${body.actions.length} (notice): CASE-9 was completed while field service order WO-9 is still En route; the order goes on`]:[]})};}});
  m.onAct=a=>heard.push(a.type);m.setAsOf('2026-07-14');
  await m.act('estimate','CASE-9');
  assert.equal(m.actions.length,1,'a notice is not a refusal');assert.deepEqual(heard,['estimate']);

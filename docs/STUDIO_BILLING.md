@@ -52,7 +52,7 @@ Every page call is a `POST` with the run's identity in the body. `EngineM2C` (`p
 builds it:
 
 ```json
-{"town": "ayr", "asOf": "2026-07-16", "actions": [ ... ], "settings": { ... }, "outages": [ ... ]}
+{"town": "small_town", "asOf": "2026-07-16", "actions": [ ... ], "settings": { ... }, "outages": [ ... ]}
 ```
 
 `actions` is the analyst's append-only list, `settings` the run overrides (Config → Process & costs), and `outages`

@@ -34,7 +34,7 @@ def _cold() -> None:
 
 
 def _changed():
-    data = load_preset("whitby_small").model_dump(mode="json")
+    data = load_preset("village").model_dump(mode="json")
     data["seeds"]["master"] = "REF-TEST-1"
     data["operations"]["electric_crews"] = 5
     data["vee"]["accept_confidence"] = 0.9  # a run setting: it does not shape the town, so it is not in the name
@@ -42,8 +42,8 @@ def _changed():
 
 
 def test_an_unchanged_preset_is_named_by_the_preset():
-    assert town_ref(load_preset("ayr")) == "ayr"
-    assert town_ref(load_preset("whitby_small")) == "whitby_small"
+    assert town_ref(load_preset("small_town")) == "small_town"
+    assert town_ref(load_preset("village")) == "village"
 
 
 def test_a_reference_round_trips_to_the_same_town():
@@ -51,7 +51,7 @@ def test_a_reference_round_trips_to_the_same_town():
 
     cfg = SimConfig.model_validate(_changed())
     ref = town_ref(cfg)
-    assert ref.startswith("whitby_small" + REF_SEP) and len(ref) < 400
+    assert ref.startswith("village" + REF_SEP) and len(ref) < 400
     assert all(c.isalnum() or c in "_-~" for c in ref)  # safe in a URL path and query
     back = config_from_ref(ref)
     assert back.town_id() == cfg.town_id()
@@ -76,13 +76,13 @@ def test_a_cold_instance_builds_the_town_from_its_reference():
 
 def test_bad_references_and_oversized_towns_are_refused(monkeypatch):
     client = TestClient(hosted.app)
-    assert client.get("/api/towns/ayr~not-a-reference/snapshot.json").status_code == 404
+    assert client.get("/api/towns/small_town~not-a-reference/snapshot.json").status_code == 404
     assert client.post("/api/sim/timeline", json={"town": "nope~eJwDAAAAAAE", "date": "2026-07-15",
                                                   "commands": []}).status_code == 404
     import api._towns as towns
 
     monkeypatch.setattr(towns, "MAX_HOUSES", 100)
-    r = client.post("/api/towns", json={"preset": "whitby_small"})
+    r = client.post("/api/towns", json={"preset": "village"})
     assert r.status_code == 422 and "up to 100 houses" in r.json()["detail"]
 
 
@@ -92,7 +92,7 @@ def test_the_hosted_function_builds_a_town_without_tables_or_renders():
     code = ("import sys\nfor m in ('pyarrow','matplotlib'):\n    sys.modules[m]=None\n"
             "from fastapi.testclient import TestClient\nimport api.index as h\n"
             "c=TestClient(h.app)\n"
-            "r=c.post('/api/towns',json={'preset':'whitby_small','seed':'NO-TABLES-1'})\n"
+            "r=c.post('/api/towns',json={'preset':'village','seed':'NO-TABLES-1'})\n"
             "assert r.status_code==201,r.text\nref=r.json()['ref']\n"
             "s=c.get('/api/towns/'+ref+'/snapshot.json?detail=viewer')\nassert s.status_code==200,s.text\n"
             "print('ok')\n")

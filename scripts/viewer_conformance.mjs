@@ -7,7 +7,7 @@ import fs from 'node:fs'; import path from 'node:path'; import zlib from 'node:z
 import {inspectSnapshot, StateReceiver, traceConnection} from '../packages/town-viewer/dist/adapter.js';
 import {customerIndex, customerProfile} from '../packages/town-viewer/dist/customer.js';
 
-const dir = process.argv[2] || 'examples/whitby-480-seed42';
+const dir = process.argv[2] || 'examples/village-480-seed42';
 const readJson = p => JSON.parse(p.endsWith('.gz') ? zlib.gunzipSync(fs.readFileSync(p)) : fs.readFileSync(p, 'utf8'));
 const snapPath = fs.existsSync(path.join(dir, 'snapshot.json')) ? path.join(dir, 'snapshot.json') : path.join(dir, 'snapshot.json.gz');
 const snap = readJson(snapPath);

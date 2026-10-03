@@ -10,26 +10,26 @@ function fakeEngine(log,{refuse=false,delay=null}={}){return async(url,opts={})=
  return {ok:true,json:async()=>url.endsWith('/m2c/summary')?{schemaVersion:'m2c-summary/1.0',asOf:'2026-07-15',n:body.actions.length}:{rows:[],total:0,pageSize:25,echo:body}};};}
 
 test('requests carry town, settings, actions and the view date; replies are cached per body',async()=>{
- const log=[],m=new EngineM2C({api:'/api',townRef:'ayr',townId:'town-1',storage:memory(),fetchImpl:fakeEngine(log)});
+ const log=[],m=new EngineM2C({api:'/api',townRef:'small_town',townId:'town-1',storage:memory(),fetchImpl:fakeEngine(log)});
  m.setAsOf('2026-03-02');m.setSettings({process:{analysts:1}});
  await m.queue({queue:'VEE_REVIEW',page:2});await m.queue({queue:'VEE_REVIEW',page:2});
- assert.equal(log.length,1);assert.deepEqual(log[0].body,{town:'ayr',actions:[],queue:'VEE_REVIEW',page:2,settings:{process:{analysts:1}},asOf:'2026-03-02'});
+ assert.equal(log.length,1);assert.deepEqual(log[0].body,{town:'small_town',actions:[],queue:'VEE_REVIEW',page:2,settings:{process:{analysts:1}},asOf:'2026-03-02'});
  m.setSettings({});assert.equal(m.settings,null);
 });
 
 test('actions are append-only by date, persisted, and removed again when the engine refuses them',async()=>{
- const store=memory(),log=[],m=new EngineM2C({townRef:'ayr',townId:'town-1',storage:store,fetchImpl:fakeEngine(log)});
+ const store=memory(),log=[],m=new EngineM2C({townRef:'small_town',townId:'town-1',storage:store,fetchImpl:fakeEngine(log)});
  m.setAsOf('2026-04-10');await m.act('accept','CASE-1');await m.act('override','CASE-2',12.5);
  assert.deepEqual(m.actions.map(a=>[a.day,a.type,a.caseId,a.value]),[['2026-04-10','accept','CASE-1',undefined],['2026-04-10','override','CASE-2',12.5]]);
  m.setAsOf('2026-04-01');assert.equal(m.canAct(),false);await assert.rejects(()=>m.act('accept','CASE-3'),/append-only/);
- const again=new EngineM2C({townRef:'ayr',townId:'town-1',storage:store,fetchImpl:fakeEngine(log)});assert.equal(again.actions.length,2);assert.equal(again.asOf,'2026-04-01');
- const strict=new EngineM2C({townRef:'ayr',townId:'town-2',storage:memory(),fetchImpl:fakeEngine([],{refuse:true})});strict.setAsOf('2026-05-01');
+ const again=new EngineM2C({townRef:'small_town',townId:'town-1',storage:store,fetchImpl:fakeEngine(log)});assert.equal(again.actions.length,2);assert.equal(again.asOf,'2026-04-01');
+ const strict=new EngineM2C({townRef:'small_town',townId:'town-2',storage:memory(),fetchImpl:fakeEngine([],{refuse:true})});strict.setAsOf('2026-05-01');
  await assert.rejects(()=>strict.act('accept','CASE-9'),/422/);assert.equal(strict.actions.length,0);
 });
 
 test('a late reply on the same channel is superseded',async()=>{
  let release;const gate=new Promise(r=>release=r);
- const m=new EngineM2C({townRef:'ayr',storage:memory(),fetchImpl:fakeEngine([],{delay:async(url,body)=>{if(body.page===1)await gate;}})});
+ const m=new EngineM2C({townRef:'small_town',storage:memory(),fetchImpl:fakeEngine([],{delay:async(url,body)=>{if(body.page===1)await gate;}})});
  const first=m.queue({page:1}),second=await m.queue({page:2});release();
  assert.equal(second.echo.page,2);await assert.rejects(first,e=>e.superseded===true);
 });
@@ -57,7 +57,7 @@ test('settings form fields come from the engine schema and only changes are sent
 });
 
 test('outages from the map ride every request, per operations day, and replace that day when it reruns',async()=>{
- const store=memory(),log=[],m=new EngineM2C({townRef:'ayr',townId:'town-1',storage:store,fetchImpl:fakeEngine(log)});
+ const store=memory(),log=[],m=new EngineM2C({townRef:'small_town',townId:'town-1',storage:store,fetchImpl:fakeEngine(log)});
  const cut={utility:'electric',start:3600,end:12040.2,premiseIds:['P1','P2']};
  assert.equal(m.setOutages('2026-03-11',[cut,{utility:'gas',start:10,end:null,premiseIds:['P3']}]),true);
  assert.equal(m.setOutages('2026-03-11',[cut,{utility:'gas',start:10,end:null,premiseIds:['P3']}]),false);
@@ -67,8 +67,8 @@ test('outages from the map ride every request, per operations day, and replace t
   {day:'2026-03-11',...cut},{day:'2026-03-11',utility:'gas',start:10,end:86410,premiseIds:['P3']}]);
  assert.equal(m.context().outages.length,3);
  const k=m.outageKey();assert.equal(m.setOutages('2026-03-11',[]),true);assert.notEqual(m.outageKey(),k);
- assert.equal(new EngineM2C({townRef:'ayr',townId:'town-1',storage:store}).outageList().length,1);
- assert.equal(new EngineM2C({townRef:'ayr',townId:'town-9',storage:memory()}).context().outages,undefined);
+ assert.equal(new EngineM2C({townRef:'small_town',townId:'town-1',storage:store}).outageList().length,1);
+ assert.equal(new EngineM2C({townRef:'small_town',townId:'town-9',storage:memory()}).context().outages,undefined);
 });
 
 test('the VEE scorecard renders recall per anomaly and precision per exception',async()=>{
@@ -82,26 +82,26 @@ test('the VEE scorecard renders recall per anomaly and precision per exception',
 });
 
 test('the run seed rides every request, the cache key and the operations context, and is kept with the run',async()=>{
- const store=memory(),log=[],m=new EngineM2C({townRef:'ayr',townId:'town-1',storage:store,fetchImpl:fakeEngine(log)});
+ const store=memory(),log=[],m=new EngineM2C({townRef:'small_town',townId:'town-1',storage:store,fetchImpl:fakeEngine(log)});
  await m.summary();assert.equal('seed' in log[0].body,false);assert.equal('seed' in m.context(),false);
  assert.equal(m.setSeed('  RUN-7  '),true);assert.equal(m.seed,'RUN-7');assert.equal(m.setSeed('RUN-7'),false);
  await m.summary();assert.equal(log.length,2,'a new seed is a new run, not a cached reply');assert.equal(log[1].body.seed,'RUN-7');
  await m.summary();assert.equal(log.length,2);await m.queue({queue:'FIELD'});assert.equal(log[2].body.seed,'RUN-7');
  assert.equal(m.context().seed,'RUN-7');assert.equal(m.export().seed,'RUN-7');
- assert.equal(new EngineM2C({townRef:'ayr',townId:'town-1',storage:store}).seed,'RUN-7');
+ assert.equal(new EngineM2C({townRef:'small_town',townId:'town-1',storage:store}).seed,'RUN-7');
  m.setSeed('x'.repeat(80));assert.equal(m.seed.length,64);
  m.setSeed('');assert.equal(m.seed,null);assert.equal('seed' in m.body(),false);const n=log.length;await m.summary();assert.equal(log.length,n,'back on the town seed: the first run is still cached');
- await m.schema().catch(()=>{});assert.equal(log.at(-1).url,'/api/m2c/settings?town=ayr');
+ await m.schema().catch(()=>{});assert.equal(log.at(-1).url,'/api/m2c/settings?town=small_town');
 });
 
 test('background interruptions are recorded too; a worked day keeps its outages until worked again or reset',()=>{
- const store=memory(),m=new EngineM2C({townRef:'ayr',townId:'town-1',storage:store});
+ const store=memory(),m=new EngineM2C({townRef:'small_town',townId:'town-1',storage:store});
  const storm={utility:'electric',start:100,end:900,premiseIds:['P1']},cut={utility:'gas',start:2000,end:null,premiseIds:['P2']};
  assert.equal(m.recordDay('2026-05-01',[storm]),true,'no commands, but the day had an outage');assert.equal(m.outageSources['2026-05-01'],'background');
  assert.equal(m.recordDay('2026-05-02',[storm,cut],{commands:true}),true);
  // Replayed without its commands (after a reload) the day keeps what you caused.
  assert.equal(m.recordDay('2026-05-02',[storm]),false);assert.equal(m.outages['2026-05-02'].length,2);
- assert.equal(new EngineM2C({townRef:'ayr',townId:'town-1',storage:store}).outageSources['2026-05-02'],'commands');
+ assert.equal(new EngineM2C({townRef:'small_town',townId:'town-1',storage:store}).outageSources['2026-05-02'],'commands');
  // Reset keeps the day's background outage and drops yours.
  assert.equal(m.recordDay('2026-05-02',[storm],{reset:true}),true);assert.deepEqual(m.outages['2026-05-02'].map(o=>o.utility),['electric']);assert.equal(m.outageSources['2026-05-02'],'background');
  assert.equal(m.recordDay('2026-05-02',[],{reset:true}),true);assert.equal(m.outages['2026-05-02'],undefined);assert.equal(m.outageSources['2026-05-02'],undefined);

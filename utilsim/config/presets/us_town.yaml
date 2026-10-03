@@ -1,0 +1,14 @@
+name: us_town
+description: Generic US-style town, 3,500 homes, US units, 12.47 kV distribution and a medium-pressure gas grid.
+seeds:
+  master: "7"
+town:
+  houses: 3500
+  units: us
+  anchor_lat: 39.5
+  anchor_lon: -94.0
+  timezone: America/Chicago
+electric:
+  primary_kv: 12.47
+gas:
+  scheme: mp

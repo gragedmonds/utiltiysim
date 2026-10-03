@@ -1,5 +1,0 @@
-name: whitby_town
-description: Whitby street extract (OSM), 2,000 homes.
-town:
-  houses: 2000
-  skeleton: osm

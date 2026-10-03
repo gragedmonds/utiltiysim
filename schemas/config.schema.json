@@ -1807,7 +1807,7 @@
             "electric heat share",
             "winter electric peak"
           ],
-          "x-impact": "Share of districts without gas mains, counted in whole districts and never the core: those homes heat with electricity, mostly heat pumps. Gas accounts and usage fall, winter electric usage rises. One-district towns (Whitby, Ayr) have none whatever the share.",
+          "x-impact": "Share of districts without gas mains, counted in whole districts and never the core: those homes heat with electricity, mostly heat pumps. Gas accounts and usage fall, winter electric usage rises. One-district towns (village, small_town) have none whatever the share.",
           "x-reach": "town"
         },
         "base_pressure_kpa": {
@@ -3021,14 +3021,14 @@
           "x-reach": "town"
         },
         "master": {
-          "default": "WHITBY-042",
+          "default": "TOWN-042",
           "description": "Master seed. Any text or integer; same seed + config + generator version reproduces the same town byte for byte.",
           "title": "Master",
           "type": "string",
           "x-effects": [
             "everything"
           ],
-          "x-impact": "Re-rolls everything: streets on synthetic towns, households, weather, incidents and the year's draws. Use it to see how much results vary by chance alone.",
+          "x-impact": "Re-rolls everything: the streets, households, weather, incidents and the year's draws. Use it to see how much results vary by chance alone.",
           "x-reach": "town"
         },
         "town": {
@@ -3072,29 +3072,29 @@
     },
     "TownConfig": {
       "additionalProperties": false,
-      "description": "Size, road skeleton source, terrain and land use.",
+      "description": "Size, street grid, terrain and land use. Towns are generic: every street comes from these settings and the seed.",
       "properties": {
         "anchor_lat": {
           "default": 43.3,
-          "description": "Latitude of the local origin for synthetic towns.",
+          "description": "Latitude of the town (sun path, day length).",
           "maximum": 80,
           "minimum": -80,
           "title": "Anchor Lat",
           "type": "number",
           "x-advanced": true,
-          "x-impact": "Where a synthetic town sits on the globe: its latitude and the sun path in the map's day and night. Measured: no usage, network or year change.",
+          "x-impact": "Where the town sits on the globe: its latitude and the sun path in the map's day and night. Measured: no usage, network or year change.",
           "x-reach": "display",
           "x-unit": "deg"
         },
         "anchor_lon": {
           "default": -80.6,
-          "description": "Longitude of the local origin for synthetic towns.",
+          "description": "Longitude of the town.",
           "maximum": 180,
           "minimum": -180,
           "title": "Anchor Lon",
           "type": "number",
           "x-advanced": true,
-          "x-impact": "Where a synthetic town sits on the globe (its longitude). Measured: no usage, network or year change.",
+          "x-impact": "Where the town sits on the globe (its longitude). Measured: no usage, network or year change.",
           "x-reach": "display",
           "x-unit": "deg"
         },
@@ -3282,19 +3282,6 @@
           "x-impact": "How much newer the edge is than the centre. A wider span puts more homes in the modern era: better insulation, more solar, EVs, pools and irrigation.",
           "x-reach": "town"
         },
-        "expansion": {
-          "default": "grow",
-          "description": "When the OSM extract cannot hold the requested houses: grow synthetic districts outward, repeat the extract as tiles (prototype behaviour), or fail.",
-          "enum": [
-            "grow",
-            "repeat",
-            "none"
-          ],
-          "title": "Expansion",
-          "type": "string",
-          "x-impact": "Only when the extract cannot hold the homes asked for: grow adds synthetic (newer) districts around it, repeat tiles the extract, none stops with an error. New districts change the era mix.",
-          "x-reach": "town"
-        },
         "houses": {
           "default": 480,
           "description": "Number of residential premises to place.",
@@ -3304,13 +3291,13 @@
           "type": "integer",
           "x-effects": [
             "town extent",
-            "growth districts",
+            "era mix",
             "substations",
             "feeders",
             "pipe sizes",
             "MRUs"
           ],
-          "x-impact": "The number of homes. Accounts, reads, exceptions, bills and staffing load scale with it; past the extract's capacity the town grows new, more modern districts.",
+          "x-impact": "The number of homes. Accounts, reads, exceptions, bills and staffing load scale with it; a bigger town also spreads further, so its edge reaches newer eras.",
           "x-reach": "town"
         },
         "houses_per_school": {
@@ -3346,30 +3333,6 @@
           "x-reach": "shape",
           "x-unit": "m"
         },
-        "osm_sha256": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": "4c4bb0d8c88e4b53e89f5cfae2dc1778f1c446ba93b9b587ee423a91005706d8",
-          "description": "Expected SHA-256 of the OSM extract; generation fails if it differs.",
-          "title": "Osm Sha256",
-          "x-advanced": true,
-          "x-impact": "An integrity check on the street extract; generation stops if the file differs. It changes nothing by itself.",
-          "x-reach": "display"
-        },
-        "osm_source": {
-          "default": "data/osm/whitby-roads.json",
-          "description": "Path to an OSM API 0.6 / Overpass JSON extract.",
-          "title": "Osm Source",
-          "type": "string",
-          "x-impact": "Which real street extract to build on: its streets set the eras, lot sizes and shops, and so the population the year replays.",
-          "x-reach": "town"
-        },
         "park_share": {
           "default": 0.04,
           "description": "Share of blocks kept as parks.",
@@ -3380,18 +3343,6 @@
           "x-advanced": true,
           "x-impact": "Blocks kept as parks. Homes move to other blocks; the count stays the same.",
           "x-reach": "shape"
-        },
-        "skeleton": {
-          "default": "osm",
-          "description": "Road skeleton source: a frozen OpenStreetMap extract, or a fully synthetic warped section grid.",
-          "enum": [
-            "osm",
-            "synthetic"
-          ],
-          "title": "Skeleton",
-          "type": "string",
-          "x-impact": "Real streets or a synthetic grid: a different town altogether, with its own eras, lot sizes and commercial frontage, so every usage and bill total changes.",
-          "x-reach": "town"
         },
         "terrain_relief_m": {
           "default": 15.0,
@@ -4059,7 +4010,7 @@
   },
   "title": "SimConfig",
   "type": "object",
-  "x-generator-version": "0.9.1",
+  "x-generator-version": "0.10.0",
   "x-reaches": {
     "display": "Display only: labels, units, clocks or default dates. No result changes.",
     "operations": "The operations day on the map. Reaches the year only through interruptions you carry into a run.",

@@ -79,7 +79,7 @@ class M2CTown:
     account_profile: dict[str, str]
     temps: np.ndarray  # daily mean temperature, index 0 = 2025-12-01 (sim.weather)
     # Master data for the lookup screens (installation, contract, account, business partner).
-    name: str = ""  # place name (e.g. "Ayr"), for the planning plant of field service orders
+    name: str = ""  # town name (e.g. "Small Town"), for the planning plant of field service orders
     inst_index: dict[str, int] = field(default_factory=dict)
     inst_meta: list[dict] = field(default_factory=list)  # per installation row: premise, division, MRU, status...
     inst_contracts: list[list[dict]] = field(default_factory=list)  # per installation row: its contracts
@@ -236,10 +236,7 @@ PARTNER_FIELDS = ("name", "kind", "sapPartner", "since")
 
 
 def town_name(snap: dict) -> str:
-    """The place a town was built from ("Ayr" for a street snapshot of Ayr), else its preset name."""
-    label = str((snap.get("source") or {}).get("label") or "")
-    if label.endswith(" street snapshot"):
-        return label[: -len(" street snapshot")]
+    """The town's preset name for people ("Small Town" for ``small_town``), else "Utility"."""
     name = str((snap.get("config") or {}).get("name") or "")
     return name.replace("_", " ").title() if name and name != "custom" else "Utility"
 

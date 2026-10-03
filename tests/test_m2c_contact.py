@@ -15,7 +15,7 @@ from utilsim.m2c import contact, tables, trend, views
 from utilsim.m2c.base import date_of
 from utilsim.m2c.run import parse_day
 
-TOWN = "ayr"
+TOWN = "small_town"
 DAY = "2026-12-31"
 K = {k: i for i, k in enumerate(contact.KEYS)}
 CH = {k: i for i, k in enumerate(contact.CHANNELS)}
@@ -167,11 +167,11 @@ def test_without_networks_contacts_still_come_but_no_incidents():
 
 def test_endpoint_on_the_hosted_engine():
     client = TestClient(app)
-    res = client.post("/api/m2c/contact", json={"town": "whitby_small", "asOf": "2026-03-31"})
+    res = client.post("/api/m2c/contact", json={"town": "village", "asOf": "2026-03-31"})
     assert res.status_code == 200, res.text
     body = res.json()
     assert body["schemaVersion"] == contact.CONTACT_VERSION and body["kpis"]["contacts"] > 0
     assert [r["id"] for r in body["reasons"]] == list(contact.KEYS)
     assert date_of(parse_day(body["asOf"], 0)).isoformat() == "2026-03-31"
-    bad = client.post("/api/m2c/contact", json={"town": "whitby_small", "settings": {"contact": {"agents": -1}}})
+    bad = client.post("/api/m2c/contact", json={"town": "village", "settings": {"contact": {"agents": -1}}})
     assert bad.status_code == 422

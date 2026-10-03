@@ -42,9 +42,9 @@ def crop_network(net: RoadNetwork, keep: np.ndarray, bounds: tuple[float, float,
                 bp = bp[::-1]
             pieces = [(bp, ls.project(shapely.Point(bp[0])))]
         for bp, ds in pieces:
-            lines.append(RoadLine(bp, int(g.edge_class[e]), net.names[e], "osm", f"{e}"))
+            lines.append(RoadLine(bp, int(g.edge_class[e]), net.names[e], "fixed", f"{e}"))
             src_of_line.append((int(e), float(ds)))
-    # 'osm' origin keeps topology exactly (no re-noding, no snapping of distinct points).
+    # 'fixed' origin keeps topology exactly (no re-noding, no snapping of distinct points).
     new = planarize(lines, [], min_dangle=0.0, min_edge=0.0, merge_chains=False)
     new.origin = [net.origin[int(s)] for s in new.source_id]
     new_edge = -np.ones(g.n_edges, dtype=np.int64)

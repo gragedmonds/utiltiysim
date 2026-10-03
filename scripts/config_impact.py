@@ -6,8 +6,8 @@ What changed is recorded as hashes of the map geometry, the networks, the custom
 centre, plus annual usage, headline year figures and the contact centre's figures. Reseeding rows give the noise floor: on a 480-home town a re-drawn population moves
 usage by a few percent on its own.
 
-    uv run python scripts/config_impact.py run town whitby_small,ontario_small out/impact-town.jsonl 4
-    uv run python scripts/config_impact.py run run whitby_small out/impact-run.jsonl 4
+    uv run python scripts/config_impact.py run town village,small_town out/impact-town.jsonl 4
+    uv run python scripts/config_impact.py run run village out/impact-run.jsonl 4
     uv run python scripts/config_impact.py report out/impact-town.jsonl out/impact-run.jsonl > docs/CONFIG_IMPACT.md
 
 About 20 minutes on four cores. Not part of CI.
@@ -30,7 +30,7 @@ CUST = ("accounts", "businessPartners", "servicePoints", "meters", "registers", 
         "tariffAssignments", "tariffs", "mrus", "portions", "readSchedules")
 PREM_GEO = {"x", "y", "z", "angle", "front", "side", "t", "width", "depth", "height", "roof", "roofTone", "elevationM",
             "lotAreaM2", "parcelId", "buildingId", "roadId", "districtId", "street", "houseNumber", "address"}
-SKIP = {("town", "osm_source"), ("town", "osm_sha256")}
+SKIP: set[tuple[str, str]] = set()
 
 
 def _h(obj, tid) -> str:

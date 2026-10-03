@@ -10,12 +10,12 @@ npm start            # http://localhost:5175 — viewer at /, engine exports at 
 ```
 
 In the viewer, choose **Load engine snapshot** and pick an engine `snapshot.json` (gunzip
-`examples/whitby-480-seed42/snapshot.json.gz` first, or export one with `uv run utilsim gen …`), then
+`examples/village-480-seed42/snapshot.json.gz` first, or export one with `uv run utilsim gen …`), then
 **Load engine state / replay** with `replay-day.json` or a `state-*.json` from the same export.
 
 ```bash
-node smoke.mjs http://127.0.0.1:5175/ ../examples/whitby-480-seed42 viewer.png P-00042
-node ../scripts/viewer_conformance.mjs ../examples/whitby-480-seed42     # receiver checks without a browser
+node smoke.mjs http://127.0.0.1:5175/ ../examples/village-480-seed42 viewer.png P-00042
+node ../scripts/viewer_conformance.mjs ../examples/village-480-seed42     # receiver checks without a browser
 ```
 
 Ownership: `web/` and the production frontend pass to Astra at the bridge commit named in

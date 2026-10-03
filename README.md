@@ -7,8 +7,8 @@ Work is being developed in parallel. Keep changes on isolated branches and revie
 ## Engine (`utilsim`)
 
 The Python engine at the repository root is the single generation and simulation service behind the viewer. It
-produces seeded, byte-repeatable towns of 20–10,000 homes: streets from a frozen OpenStreetMap extract (Whitby by
-default, or any real place you fetch) or fully synthetic, grown with era-styled districts; parcels, houses and
+produces seeded, byte-repeatable generic towns of 20–10,000 homes: synthetic streets (warped section-grid arterials,
+collectors and era-styled local streets) built only from the town settings and the seed; parcels, houses and
 households; engineered electric, gas and water networks with their equipment; an SAP IS-U-shaped customer model
 with meter reading routes and baseline reads; the `utility-town/2.0` snapshot the 3D viewer renders; and complete
 state frames and replays with the sun and moon. Every assumption is a configurable, seeded setting. Later
@@ -16,20 +16,18 @@ milestones add the ticking clock and physics (M2), then operations and meter-to-
 
 ```bash
 uv sync --all-extras                                   # Python 3.11+, pinned deps into .venv
-uv run utilsim gen --preset whitby_small --seed WHITBY-042 --out out/whitby-480   # snapshot, frames, GeoJSON, tables, PNG
-uv run utilsim presets                                 # Whitby sizes, real towns (ayr, elora, cobourg, whitby_wide), synthetic
-uv run utilsim osm fetch --place "Ayr, Ontario" --radius-m 1500   # freeze a real place's streets + register a preset
-uv run utilsim osm list                                # frozen extracts and the presets built on them
+uv run utilsim gen --preset village --out out/village-480   # snapshot, frames, GeoJSON, tables, PNG
+uv run utilsim presets                                 # village, small_town, town, large_town, city, us_town
 uv run utilsim serve                                   # API on :8010, OpenAPI at /openapi.json
 uv run utilsim schema --all                            # regenerate schemas/config.schema.json and openapi.json
 uv run pytest -m "not slow"                            # acceptance gates, goldens, schemas, receiver conformance
 
 (cd packages/town-viewer && npm ci)                    # Astra's viewer (vendors three.js)
 node web/serve.mjs                                     # http://localhost:5175 — load a snapshot.json (gunzip the example), then replay-day.json
-node scripts/viewer_conformance.mjs examples/whitby-480-seed42   # engine export vs the viewer's receiver
+node scripts/viewer_conformance.mjs examples/village-480-seed42   # engine export vs the viewer's receiver
 ```
 
-**Offline runs.** `uv run utilsim export-run --town ayr --as-of 2026-12-31 --store out/store` saves a complete
+**Offline runs.** `uv run utilsim export-run --town small_town --as-of 2026-12-31 --store out/store` saves a complete
 meter-to-cash run. Open the Studio's **Runs** link and choose the resulting run folder to browse Year, Data,
 Workspace snapshots and the VEE scorecard without an engine connection. See [Saved runs](docs/RUN_BUNDLES.md)
 for carrying Studio inputs into an export, loading bundles by URL, and the archive contract.
@@ -51,15 +49,16 @@ for carrying Studio inputs into an export, loading bundles by URL, and the archi
 
 **Hosting (Vercel).** `vercel.json` builds a static site: `npm ci --prefix packages/town-viewer` (vendors
 Three.js), then `node scripts/build_site.mjs` copies the viewer and the prebuilt town packs (`packs/`) into
-`public/`. Open `/?town=ayr` (or pick from the Town files pop-out). After changing the generator or a preset, rebuild
+`public/`. Open `/?town=small_town` (or pick from the Town files pop-out). After changing the generator or a preset, rebuild
 the packs with `uv run utilsim pack` (a test fails while they are stale). The live engine for operations
 (`api/index.py`, a slim Python function) arrives with the operations work.
 
-`examples/whitby-480-seed42/` is a committed bundle (snapshot, replay, scenario frames, GeoJSON, parquet tables,
+`examples/village-480-seed42/` is a committed bundle (snapshot, replay, scenario frames, GeoJSON, parquet tables,
 PNG, VEE fixture) so frontend work never waits on the engine. `packages/town-viewer/` is Astra's viewer and
 receiver; `web/` is a thin dev host for it (owned by Astra from `7dd7cc8`). `prototypes/town-lab` (branch
 `codex/seeded-town-prototype`) is Astra's original prototype.
 
-Road geometry under `data/osm/` is © OpenStreetMap contributors, ODbL 1.0
-(https://www.openstreetmap.org/copyright), fetched through Nominatim and Overpass. Buildings, addresses,
-customers and utility assets are synthetic and do not describe real properties or people.
+**Towns are generic.** Every town is built from its settings and seed: the presets differ only in size (and, for
+`city` and `us_town`, terrain or regional settings). Nothing is fetched from or based on a real place, so the engine
+makes no external calls. Streets, buildings, addresses, customers and utility assets are synthetic and do not
+describe real properties or people.
