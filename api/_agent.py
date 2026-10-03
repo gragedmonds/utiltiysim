@@ -243,6 +243,10 @@ async def conversation(req: ChatRequest, key: str) -> dict:
                 if not isinstance(data, dict):
                     raise ValueError("Tool inputs must be an object.")
                 if call["name"] == "respond":
+                    candidate = data.get("proposal")
+                    if (req.mode == "setup" and isinstance(candidate, dict) and "goals" not in candidate
+                            and current.get("goals")):
+                        data = {**data, "proposal": {**candidate, "goals": current["goals"]}}
                     reply = (InflictReply if req.mode == "inflict" else AgentReply).model_validate(data)
                     proposal = None
                     if reply.proposal:
