@@ -54,8 +54,9 @@ IMPACT: dict[str, tuple[str, str]] = {
                                  "and tenancies. Streets stay put. Small towns move several percent on solar export."),
     "seeds.weather": ("town", "Re-rolls the daily temperatures: heating and cooling usage follow, and so do the cold "
                               "days that make AMI, AMR and walked reads miss more often."),
-    "seeds.incidents": ("operations", "Re-rolls the operations day's random leaks, breaks, faults and collector "
-                                      "outages. The year is unchanged."),
+    "seeds.incidents": ("town", "Re-rolls the random leaks, breaks, faults and collector outages, on "
+                                      "the operations day and across the year, so the outage and gas odour "
+                                      "contacts move too."),
     "seeds.anomalies": ("town", "Re-rolls the year's draws (missed reads, anomalies, analyst work, bill checks) on the "
                                 "same households. A run's own seed overrides it without building a new town."),
     # ---- town & geography ---------------------------------------------------------------------------------------------
@@ -290,26 +291,35 @@ IMPACT: dict[str, tuple[str, str]] = {
                              "and bills."),
     "weather.persistence": ("town", "How long warm or cold spells last: longer spells make monthly usage swing more "
                                     "from normal, which VEE's tolerances see."),
-    "weather.storm_days_per_year": ("operations", "Thunderstorm days: overhead faults and outages on the operations "
-                                                  "day. The year does not draw storms."),
+    "weather.storm_days_per_year": ("town", "Thunderstorm days: overhead faults and outages on the "
+                                                  "operations day and across the year, with the outage "
+                                                  "reports they bring to the contact centre."),
     "weather.heating_base_c": ("town", "Heating starts below this temperature: a higher base means more heating "
                                        "usage in spring and fall."),
     "weather.cooling_base_c": ("town", "Cooling starts above this temperature: a lower base means more cooling usage."),
     # ---- incidents ----------------------------------------------------------------------------------------------------
-    "incidents.gas_service_leaks_per_1000": ("operations", "Random service leaks on the operations day: crew calls and "
-                                                           "shut-offs."),
-    "incidents.gas_main_leaks_per_100km": ("operations", "Random gas main leaks on the operations day: crew "
-                                                         "calls and isolations."),
-    "incidents.water_main_breaks_per_100km": ("operations", "Random main breaks on the operations day: valve shut-offs "
-                                                            "and customers without water."),
-    "incidents.overhead_faults_per_km_storm_day": ("operations", "Storm faults on overhead lines: feeder outages on "
-                                                                 "storm days."),
-    "incidents.transformer_failures_per_1000": ("operations", "Transformer failures: small outages, three times as many "
-                                                              "where units are overloaded."),
-    "incidents.collector_outages_per_year": ("operations", "AMI collector outages: the meters behind it miss their "
-                                                           "nightly read that day."),
-    "incidents.manual_only": ("operations", "Turns random incidents off on the operations day; only the ones you inject "
-                                            "happen."),
+    "incidents.gas_service_leaks_per_1000": ("town", "Random service leaks on the operations day and "
+                                                           "across the year: gas odour calls and a household "
+                                                           "without gas until the repair."),
+    "incidents.gas_main_leaks_per_100km": ("town", "Random gas main leaks on the operations day and "
+                                                         "across the year: crew calls, isolations and gas "
+                                                         "odour calls from the neighbours."),
+    "incidents.water_main_breaks_per_100km": ("town", "Random main breaks on the operations day and "
+                                                            "across the year: customers without water and "
+                                                            "the outage reports they make."),
+    "incidents.overhead_faults_per_km_storm_day": ("town", "Storm faults on overhead lines: feeder "
+                                                                 "outages on storm days, on the operations "
+                                                                 "day and across the year, and the outage "
+                                                                 "reports."),
+    "incidents.transformer_failures_per_1000": ("town", "Transformer failures (three times as many "
+                                                              "where units are overloaded): small outages on "
+                                                              "the operations day and across the year."),
+    "incidents.collector_outages_per_year": ("operations", "AMI collector outages: the meters behind it "
+                                                           "miss their nightly read that day. Customers do "
+                                                           "not notice them."),
+    "incidents.manual_only": ("operations", "Turns random incidents off on the operations day; only the "
+                                            "ones you inject happen. The year draws them unless Outages & "
+                                            "leaks is off."),
     # ---- field operations ---------------------------------------------------------------------------------------------
     "operations.gas_crews": ("operations", "Gas crews: how fast leaks are made safe on the operations day."),
     "operations.electric_crews": ("operations", "Electric crews: how long outages last on the operations day."),
@@ -524,6 +534,70 @@ IMPACT: dict[str, tuple[str, str]] = {
                                              "owed, fewer notices."),
     "billing.budget_billing_offer_rate": ("year", "Overdue notices after which the customer moves to budget billing: "
                                                   "levelled later invoices."),
+
+    # ---- contact centre (run) ----------------------------------------------------------------------------------------
+    "contact.agents": ("year", "Agents answering during opening hours. Fewer: longer waits, more hang-ups, call backs "
+                               "and repeat calls; more: shorter waits but more idle time and staffing cost."),
+    "contact.open_hour": ("year", "When the lines open on business days. Later opening squeezes the same contacts "
+                                  "into fewer hours: longer waits at peaks."),
+    "contact.close_hour": ("year", "When the lines close. Earlier closing squeezes contacts into fewer hours; callers "
+                                   "who find the lines closed try again the next day."),
+    "contact.patience_s": ("year", "How long callers hold before hanging up. Less patience: more hang-ups and retries "
+                                   "at the same waits."),
+    "contact.retry_share": ("year", "Callers who hung up or found the lines closed and try again: retries add load "
+                                    "at busy times; the rest give up unanswered."),
+    "contact.repeat_share": ("year", "Customers whose problem was not resolved who contact again: repeat contacts, "
+                                     "and complaints after a second failure."),
+    "contact.callback": ("year", "Offer a call back instead of holding when the wait is long: fewer hang-ups, the "
+                                 "same agent time spread later in the day."),
+    "contact.callback_after_s": ("year", "Expected wait at which the call back is offered: lower offers it more often, "
+                                         "turning hang-ups into later calls."),
+    "contact.callback_take_share": ("year", "Callers who accept the call back offer."),
+    "contact.service_target_s": ("year", "The answer target the service level counts against. It changes the reported "
+                                         "service level, not who waits."),
+    "contact.volume_factor": ("year", "Multiplies every reason's rates: a quick way to test a busier or quieter year."),
+    "contact.handle_factor": ("year", "Multiplies every handling time: slower handling fills the agents' day, so waits "
+                                      "and hang-ups rise."),
+    "contact.self_serve_factor": ("year", "Multiplies the share the IVR and website handle; zero sends every contact to "
+                                          "an agent."),
+    "contact.agent_cost_per_hour": ("year", "Prices the agents' open hours in the contact cost. No contact changes."),
+    "contact.self_serve_cost": ("year", "Prices each self-served contact. No contact changes."),
+    "contact.abandon_cx_cost": ("year", "Prices the customer-experience cost of each hang-up. No contact changes."),
+    "contact.emergency_answer_s": ("year", "Answer time on the emergency line (gas odours, after-hours outages)."),
+    "contact.high_bill": ("year", "High-bill contacts: invoices at 1.5 times the expected amount. More estimates, "
+                                  "leaks, cold months and rate changes raise them."),
+    "contact.bill_question": ("year", "Questions about bills: more with estimated bills, first bills after a move-in "
+                                      "and bills just after a rate change."),
+    "contact.bill_wrong": ("year", "Disputes over bills that overcharge against the truth: VEE misses, rate-class "
+                                   "errors and misreads drive them."),
+    "contact.back_bill": ("year", "Contacts about catch-up bills: rebills, and the first actual bill after a run of "
+                                  "estimates (no-access and missed reads drive them)."),
+    "contact.balance": ("year", "Balance enquiries around due dates; the IVR answers most."),
+    "contact.password": ("year", "Online account help when bills arrive; most reset online."),
+    "contact.payment_arrangement": ("year", "Can't-pay contacts after reminders, overdue notices and disconnection "
+                                            "notices: collections settings and payer mix drive them."),
+    "contact.payment_problem": ("year", "Contacts after a returned pre-authorized debit (the PAD reject rate drives "
+                                        "them)."),
+    "contact.move_in": ("year", "Start-service contacts before each move-in: rentals and turnover drive them."),
+    "contact.move_out": ("year", "Stop-service contacts before each move-out."),
+    "contact.new_connection": ("year", "New-connection requests (background only)."),
+    "contact.outage": ("year", "Outage reports from customers who lose power or water in the year's incidents; the "
+                               "IVR's outage message answers most, after hours the emergency line."),
+    "contact.gas_odour": ("year", "Gas odour calls from neighbours of the year's gas leaks, on the emergency line."),
+    "contact.meter_access": ("year", "Contacts after no-access read cards and to book field visits: walked routes and "
+                                     "no-access rates drive them."),
+    "contact.disconnection": ("year", "Reconnection requests after disconnections you approve."),
+    "contact.complaint": ("year", "Complaints after a second unresolved contact or giving up on hold twice: long waits "
+                                  "and low first-contact resolution drive them."),
+    # ---- outages & leaks over the year (run) ------------------------------------------------------------------------
+    "outages.enabled": ("year", "Draw the operations day's incidents for every day of the year. Off: outage and gas "
+                                "odour contacts are background only."),
+    "outages.storm_factor": ("year", "Multiplies the chance of a storm day: more overhead line faults, outages and "
+                                     "outage reports, mostly May to September."),
+    "outages.incident_factor": ("year", "Multiplies every incident rate: more outages, main breaks and gas leaks, and "
+                                        "the contacts they bring."),
+    "outages.restore_factor": ("year", "Multiplies the time to restore service: longer outages bring twice the outage "
+                                       "reports past two hours."),
 }
 
 

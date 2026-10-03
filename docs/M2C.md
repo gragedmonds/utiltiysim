@@ -77,15 +77,16 @@ carry rates and read costs in the summary's cost figures.
 templates relative to the day they are inflicted (start offset, duration, ramp, settings) with what to watch:
 staffing (half staff, nobody on the queues, supervisor away, automation off), reading (no-access summer, AMI heat
 dropouts), meters (ERT/AMR fleet drift, anomaly wave), VEE (loosened, tightened), billing (master data slips, blocks
-wait for you) and collections (bank debit failures, lenient and aggressive dunning, a longer moratorium). Storm season
-and undetected water loss are listed as coming: they need the engine to generate the year's operations and the
-unbilled-loss physics. ``tests/test_m2c_episodes.py`` checks that every template parses and that the ones that must
-show on a small town do.
+wait for you), collections (bank debit failures, lenient and aggressive dunning, a longer moratorium), the contact
+centre (lines open mornings only, IVR and website down, a second agent) and operations (storm season, which triples
+the storm days the year draws). Undetected water loss is listed as coming: it needs the unbilled-loss physics.
+``tests/test_m2c_episodes.py`` checks that every template parses and that the ones that must show on a small town do.
 
 **The trend** (``POST /api/m2c/trend``, ``m2c-trend/1.0``) reports the year month by month as of the view date:
 reads scheduled, taken, missed, estimated and adjusted; cases opened and resolved, the backlog by queue at month end,
 escalations and field orders; labour, system and CX cost and carry; documents, blocked bills, billed, invoices,
-invoiced, collected, overdue and receivable; dunning events and every account's collections phase at month end. It
+invoiced, collected, overdue and receivable; dunning events and every account's collections phase at month end;
+and the contact centre (`contact`: contacts by group and reason, answered, hung up, service level, cost). It
 echoes the run's episodes so the Year page shades them behind the lines. Months after the view date are null; the
 month holding it is partial.
 
@@ -436,6 +437,101 @@ read worked`, `no read missed`). Filters: `utility`, `kind` (`last_gasp`, `lost_
 (`open`: an open missed-read case), `outageId`, `search`, paged. `outages` sums up each interruption (premises, last
 gasps, use lost, missed reads, open cases).
 
+## Outages and leaks over the year
+
+The year now draws the operations day's background incidents (`utilsim/ops/hazards.py`) for every date of 2026
+(`utilsim/m2c/incidents.py`), with the same seed as the map's day (the town's incident seed, plus the run seed when the
+run names one), so a date's storm, leak or failure is the same incident on the map and in the year. The run group
+**Outages & leaks over the year** (`outages`) scales them per day, and episodes can change it:
+
+| Setting | Effect |
+|---|---|
+| `enabled` | Off: the year draws no incidents (no outage or gas odour contacts beyond the background rate) |
+| `storm_factor` | Multiplies the chance of a storm day (the town's `weather.storm_days_per_year`); storms bring overhead line faults |
+| `incident_factor` | Multiplies every incident rate (the town's `incidents.*` settings: main breaks, leaks, transformer and line faults, collector outages) |
+| `restore_factor` | Multiplies the time to restore (detection, mobilising and driving, isolating, repair) |
+
+Who is affected, and for how long:
+- **Transformer failure:** every premise the transformer feeds, until it is replaced.
+- **Overhead line fault:** every premise downstream of the span. With tie back-feed on, premises more than 250 m from
+  the fault get power back once the section is isolated; the rest wait for the repair.
+- **Water main break:** premises with water within 150 m lose it until the repair.
+- **Gas main leak:** no outage; premises with gas within 80 m can smell it.
+- **Gas service leak:** the household with the leaking service loses gas until the repair; neighbours within 40 m can
+  smell it.
+- **AMI collector outage:** recorded; nobody loses service.
+
+This is a consequence model, not the operations day's crew dispatch: travel is a flat 20 minutes and crews are never
+busy elsewhere. The year's reads do not see these outages yet (the operations day's interruptions you carry into a run
+do). A run without a network (a town with no `ops` data) draws none and says so in the contact summary's `notes`.
+
+## Contact centre
+
+Customers get in touch for sixteen reasons, and most of them follow what happens to their account in the replayed
+year (`utilsim/m2c/contact.py`). Every reason is a run setting in the group **Contact centre** (`contact`) with five
+parts: `per_event` (the share of triggers that lead to a contact), `per_1000` (a background rate per 1,000 accounts a
+month), `self_serve` (the share the IVR, website or outage message settles), `handle_min` (an agent's minutes) and
+`resolved` (the share an agent settles first time).
+
+| Reason | Group | Triggered by |
+|---|---|---|
+| High bill | billing | an invoice at least 1.5 times the account's expected amount and $40 more |
+| Bill question | billing | any invoice; ×3 with an estimate, ×4 for a first invoice, ×2 in the 45 days after the rate change |
+| Bill wrong | billing | a bill that overcharges against the truth by $15 and 15 percent (undercharges at a sixth of the share) |
+| Back bill | billing | a rebill, or the first actual bill after estimates, that catches up $25 and half the expected amount |
+| Balance | billing | each invoice, in the days before it is due |
+| Online account | billing | each invoice, as customers log in to see it (forgotten passwords and lockouts) |
+| Can't pay | payments | reminders (a quarter of the share), overdue notices, disconnection notices (2.5 times) |
+| Payment problem | payments | a returned pre-authorized debit |
+| Disconnected | payments | a disconnection you approved |
+| Start service, Stop service | service | an account opening or closing in the year, 3 to 14 days before |
+| New connection | service | background only |
+| Meter access | service | a no-access read, and a field visit (twice the share) |
+| Outage | emergency | each premise that loses power or water in the year's incidents; twice the share past two hours |
+| Gas odour | emergency | premises near a gas leak; the household with a leaking service calls 9 times in 10 |
+| Complaint | complaints | a second unresolved contact about the same thing, or giving up on hold twice |
+
+How the lines answer them:
+1. **Self-service first.** A fresh contact is settled by self-service at the reason's `self_serve` share times
+   `self_serve_factor`. Gas odours always go to the emergency line (answered within `emergency_answer_s`, a crew
+   dispatched). Outage reports go there too when the lines are closed.
+2. **The queue.** The rest queue for `agents` between `open_hour` and `close_hour` on business days, first come first
+   served, each call taking the reason's `handle_min` times `handle_factor` (drawn around it).
+3. **Patience and call backs.** A caller hangs up after a patience drawn around `patience_s`. One who would wait longer
+   than `callback_after_s` takes a call back at `callback_take_share` when `callback` is on, served in turn without
+   hanging up.
+4. **Retries, repeats and complaints.** Callers who hung up, or called while the lines were closed, try again
+   (`retry_share`, at most three attempts); after the third they give up. An unresolved contact comes back within days
+   (`repeat_share`), and a second unresolved one can become a complaint.
+
+`volume_factor` scales every reason's shares. Costs are agents' paid hours (`agent_cost_per_hour`, whether busy or not),
+`self_serve_cost` per self-served contact, `abandon_cx_cost` per hang-up and the emergency line's handling time. Every
+draw is a counter-based hash of the run seed and the contact's identity, so one reason never moves another's draws,
+and episodes on `contact` or `outages` settings apply from their day. The contact settings never change the rest of
+the year: reads, cases, bills and collections are byte-identical (`tests/test_m2c_contact.py`).
+
+**Summary** (`POST /api/m2c/contact`, `m2c-contact/1.0`): as of `asOf`, the settings in force, `kpis` (contacts,
+self-served, to agents, answered, call backs, abandoned, closed, gave up, emergency, repeats, resolved first time,
+`abandonedPct`, `serviceLevelPct` (answered within `service_target_s`), `asaS` (average speed of answer),
+`avgHandleMin`, `occupancyPct`, `cost` {staff, selfServe, abandoned, dispatch, total}, `byGroup`, `byReason`),
+`reasons` (each with its figures and settings), `groups`, `daily` (the last 60 days), `incidents` (count, by kind,
+storm days, customers out) and `notes`. The trend's months carry the same figures under `contact`.
+
+Measured on the default settings, year to 31 December:
+
+| Town | Accounts | Contacts | To agents | Hung up | In target | ASA | Occupancy | Cost |
+|---|---|---|---|---|---|---|---|---|
+| Ayr | 2,341 | 2,890 | 1,547 | 4.9% | 97% | 5.4 s | 7.5% | $87k |
+| Cobourg | 6,993 | 8,848 | 4,671 | 13% | 90.5% | 16 s | 21% | $92k |
+
+Ayr draws 10 incidents in the year and Cobourg 39. One agent is the default: a town of a few thousand accounts keeps
+one person busy for a tenth of the day, and storm days or a week of disconnection notices still spill into hang-ups.
+The scenario library's **Contact centre** group tries the levers (lines open mornings only, IVR and website down, hire
+a second agent), and **Storm season** (operations) triples the storm days for three months.
+
+Not yet modelled: contacts do not open back-office cases (a bill-wrong call does not raise a billing exception), and
+the year's outages do not reach the reads.
+
 ## Run statistics for a period
 
 `POST /api/m2c/summary` with `since` (a date) adds `window`: the summary's measures counted between that day (00:00)
@@ -597,6 +693,7 @@ opening each case.
 | `GET /api/m2c/guide` | `engine-guide/1.0`: what the engine can do, the impact it can show, measured scale and limits, the gaps remaining, with the engine's live status (Configuration › Engine guide) |
 | `GET /api/m2c/scenarios` | `m2c-scenarios/1.0`: the scenario library (groups, episode templates, what to watch, coming) |
 | `POST /api/m2c/trend` | `m2c-trend/1.0`: the year month by month as of `asOf` (reads, cases and backlog, cost, billing, dunning, collections phases) with the run's `episodes` |
+| `POST /api/m2c/contact` | `m2c-contact/1.0`: the contact centre as of `asOf` (KPIs, reasons, groups, the last 60 days, the year's incidents, notes); see "Contact centre" |
 | `GET /api/m2c/tables` | `m2c-tables/1.0`: the Data pages' catalog: table groups, each table's source, description and columns (key, label, kind, facet, link), and the page limits (see "Data tables") |
 | `POST /api/m2c/table` | `m2c-table/1.0`: one page (≤ 500 rows) of a table as of `asOf`, filtered (`search`, `filters`), sorted (`sort`, `desc`) and paged; rows as arrays in `columns` order, `facets` over the whole table, `total` matching rows |
 | `POST /api/m2c/table.csv` | one CSV page (≤ 5,000 rows, header on every page) of the same selection; a client stitches the pages |
@@ -625,6 +722,7 @@ one column (missing values last either way) and takes one page. Built tables are
 | Billing & pricing | `billingDocuments`, `invoices`, `payments`, `ledger` (every posting with the running balance) | run | 42,896 · 15,625 · 14,315 · 33,708 |
 | Collections | `dunning` (reminders, notices, disconnection notices, winter holds, returned payments), `collectionsAccounts` (every account with an invoice in its phase: current, overdue, reminder, overdue notice, winter moratorium, dunning hold, payment arrangement, disconnection notice, disconnected), `disconnections`, `collectionsWork` (arrangements, budget plans, dunning holds, low-income referrals) | run | 2,560 · 2,166 · 203 · 487 |
 | Work | `cases`, `fieldOrders`, `interruptions` | run | 1,662 · your orders · the map's outages |
+| Contact centre | `contacts` (every contact: reason, channel, outcome, wait, handle time, attempt, what caused it), `contactDaily` (each day's contacts, answered, hung up, service level, agents, cost), `yearIncidents` (the year's outages and leaks: premises out, hours, who could smell gas, contacts) | run | 1,846 · 217 · 4 |
 
 `tests/test_m2c_tables.py` builds every table for Ayr, bounds the pages (JSON and CSV under the hosted 4.5 MB), and
 checks the counts against the run (reads taken, documents and invoices created by the date, usage against

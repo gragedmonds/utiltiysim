@@ -145,3 +145,14 @@ test('reviewed voice tweaks append periods, preserve user decisions and run thro
  assert.equal(m.episodes.length,2,'network failure restores episodes before retry');
  m.readOnly=true;await assert.rejects(inflictReviewedEpisodes(m,patch,async()=>null),/live simulation/);
 });
+
+test('the contact centre charts read the trend contact block',()=>{
+ const c=Object.fromEntries(CHARTS.map(x=>[x.id,x]));
+ assert.ok(c.contacts&&c.service&&c.contactCost);
+ const months=[{month:1,label:'Jan',start:'2026-01-01',end:'2026-01-31',complete:true,contact:{byGroup:{billing:120,payments:10,service:30,emergency:20,complaints:2},byReason:{balance:70,high_bill:12,outage:18},serviceLevelPct:0.95,abandonedPct:0.04,asaS:6.2,callbacks:3,occupancyPct:0.07,cost:{total:7200}}}];
+ const stack=chartModel(c.contacts,months);assert.deepEqual(stack.series.map(s=>s.values[0]),[120,10,30,20,2]);
+ assert.deepEqual(c.contacts.detail(months[0])[0],['Balance',70]);
+ const svc=chartModel(c.service,months);assert.deepEqual(svc.series.map(s=>s.values[0]),[0.95,0.04]);
+ assert.equal(chartModel(c.contactCost,months).series[0].values[0],7200);
+ const none=chartModel(c.contacts,[{month:1,label:'Jan',start:'2026-01-01',end:'2026-01-31',complete:true,contact:null}]);assert.equal(none.latest,-1);
+});

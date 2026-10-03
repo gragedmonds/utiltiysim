@@ -68,8 +68,9 @@ simulation. Validation itself does not generate a town or run an analysis. Base 
 operations settings pass into the existing per-simulation clients; saved user changes take precedence on reopening.
 
 Geographic context does not automatically recalibrate weather, tariffs, regulations or economics. Prepared towns
-and baseline assumptions are Ontario-based. The proposal carries that limitation. Map-day operations settings
-also do not imply a full year of automatically simulated storms/outages.
+and baseline assumptions are Ontario-based. The proposal carries that limitation. Map-day operations settings and Year annual incidents are separate. The live `contact` and `outages` groups
+can model contact staffing/automation and annual storm/leak pressure. Annual incidents feed contact demand,
+but do not automatically affect meter reads; recorded map-day interruptions use the existing pathway.
 
 ## Request limits and errors
 

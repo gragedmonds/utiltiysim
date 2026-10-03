@@ -41,7 +41,7 @@ from utilsim.m2c import vee as vee_mod
 from utilsim.m2c.base import M2CTown, date_of
 from utilsim.m2c.books import Books
 
-M2C_GROUPS = ("process", "anomalies", "reading", "vee", "billing")
+M2C_GROUPS = ("process", "anomalies", "reading", "vee", "billing", "contact", "outages")
 SUMMARY_VERSION = "m2c-summary/1.0"
 CASE_VERSION = "work-case/1.0"
 DECISION_VERSION = "vee-decision/1.0"
@@ -96,7 +96,17 @@ _NUMERIC = (int, float)
 
 def _episode_value(base, target, path: str):
     """An episode's target for a setting: a number or boolean as given, or an operator on the base value
-    (``"*0.5"``, ``"+2"``, ``"-1"``; numeric settings only)."""
+    (``"*0.5"``, ``"+2"``, ``"-1"``; numeric settings only). A setting made of parts (a contact reason) takes an
+    object of some of its parts, each a value or an operator; the parts not named keep their value."""
+    if hasattr(base, "model_dump"):
+        base = base.model_dump(mode="json")
+    if isinstance(base, dict):
+        if not isinstance(target, dict) or not target:
+            raise ValueError(f"episode setting {path}: expected an object of its parts ({', '.join(base)})")
+        unknown = [k for k in target if k not in base]
+        if unknown:
+            raise ValueError(f"episode setting {path}: unknown part(s) {', '.join(map(str, unknown))}")
+        return {**base, **{k: _episode_value(base[k], v, f"{path}.{k}") for k, v in target.items()}}
     if isinstance(target, str):
         s = target.strip()
         if not s or s[0] not in "*+-" or isinstance(base, bool) or not isinstance(base, _NUMERIC):

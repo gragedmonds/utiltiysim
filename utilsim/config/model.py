@@ -634,6 +634,104 @@ class ScenarioConfig(BaseModel):
     leak_m3h: float = F(0.65, "Leak rate added to the target premise's water demand.", unit="m3/h", ge=0, le=50)
 
 
+class ContactReason(BaseModel):
+    """One reason customers contact the utility: how often it happens and what handling it takes."""
+
+    model_config = ConfigDict(extra="forbid")
+    per_event: float = Field(0.0, ge=0, le=1, description="Share of triggering events that lead to a contact.")
+    per_1000: float = Field(0.0, ge=0, le=500, description="Background contacts per 1,000 accounts per month.")
+    self_serve: float = Field(0.0, ge=0, le=1, description="Share handled by the IVR or online, with no agent.")
+    handle_min: float = Field(6.0, ge=0.5, le=120, description="Agent minutes per contact (talk and wrap-up).")
+    resolved: float = Field(0.9, ge=0, le=1, description="Share resolved on the first contact.")
+
+
+def _reason(per_event: float, per_1000: float, self_serve: float, handle_min: float, resolved: float, text: str):
+    return F(ContactReason(per_event=per_event, per_1000=per_1000, self_serve=self_serve, handle_min=handle_min,
+                           resolved=resolved), text)
+
+
+class ContactConfig(BaseModel):
+    model_config = group("Contact centre", 17, "Why customers phone, write or use the IVR, and the agents, hours and "
+                         "self-service that answer them. Contacts follow the year: bills, errors, rebills, dunning, "
+                         "payments, move-ins and move-outs, missed reads and the year's outages and gas leaks.",
+                         applies="run")
+    agents: int = F(1, "Agents on the phones on a business day (a small utility often has one, shared with billing).",
+                    ge=0, le=500, effects=["wait", "abandonment"])
+    open_hour: float = F(8.0, "Lines open (local time, business days).", unit="h", ge=0, le=23)
+    close_hour: float = F(17.0, "Lines close (local time).", unit="h", ge=1, le=24)
+    patience_s: float = F(240.0, "Average time a caller waits before hanging up.", unit="s", title="Patience", ge=10,
+                          le=3600)
+    retry_share: float = F(0.6, "Callers who hung up or found the lines closed and try again.", ge=0, le=1)
+    repeat_share: float = F(0.5, "Callers whose problem was not resolved who contact again within days.", ge=0, le=1)
+    callback: bool = F(True, "Offer a call back instead of holding when the wait is long.")
+    callback_after_s: float = F(300.0, "Offer the call back when the expected wait exceeds this.", unit="s",
+                                title="Call back after", ge=0, le=3600, advanced=True)
+    callback_take_share: float = F(0.5, "Callers offered a call back who take it.", ge=0, le=1, advanced=True)
+    service_target_s: float = F(30.0, "Answer target for the service level (answered within it).", unit="s",
+                                title="Service target", ge=5, le=600)
+    volume_factor: float = F(1.0, "Multiplies every reason's contact rates.", ge=0, le=20)
+    handle_factor: float = F(1.0, "Multiplies every reason's handling time.", ge=0.1, le=10)
+    self_serve_factor: float = F(1.0, "Multiplies every reason's self-service share (0: IVR and web down).", ge=0,
+                                 le=3)
+    agent_cost_per_hour: float = F(38.0, "Loaded cost of an agent hour on the phones.", unit="$", ge=0, le=500,
+                                   advanced=True)
+    self_serve_cost: float = F(0.40, "Cost of a contact the IVR or website handles.", unit="$", ge=0, le=50,
+                               advanced=True)
+    abandon_cx_cost: float = F(6.0, "Customer-experience cost of a caller who hangs up.", unit="$", ge=0, le=200,
+                               advanced=True)
+    emergency_answer_s: float = F(15.0, "Answer time on the emergency line (gas odour, outages after hours).",
+                                  unit="s", title="Emergency answer", ge=1, le=600, advanced=True)
+    high_bill: ContactReason = _reason(0.25, 2.0, 0.1, 7.5, 0.85, "High bill: an invoice at least 1.5 times what "
+                                       "the account usually pays (and $40 more).")
+    bill_question: ContactReason = _reason(0.008, 1.5, 0.2, 6.0, 0.9, "Questions about a bill: any invoice, more for "
+                                           "estimated bills, first bills and bills after a rate change.")
+    bill_wrong: ContactReason = _reason(0.35, 0.3, 0.0, 11.0, 0.6, "Bill wrong: a bill that overcharges the "
+                                        "customer (customers rarely call about undercharges).")
+    back_bill: ContactReason = _reason(0.45, 0.0, 0.0, 12.0, 0.7, "Back bill: a rebill, or the first actual bill "
+                                       "after estimates, that catches up on under-billed use.")
+    balance: ContactReason = _reason(0.03, 4.0, 0.75, 3.0, 0.98, "What's my balance: around due dates; mostly the "
+                                     "IVR.")
+    payment_arrangement: ContactReason = _reason(0.12, 0.5, 0.1, 9.0, 0.8, "Can't pay: after overdue notices, more "
+                                                 "after disconnection notices.")
+    payment_problem: ContactReason = _reason(0.4, 0.4, 0.3, 6.0, 0.85, "Payment problem: a pre-authorized debit "
+                                             "returned.")
+    password: ContactReason = _reason(0.01, 3.0, 0.6, 4.0, 0.95, "Forgot password or online account help: when "
+                                      "bills arrive; most reset online.")
+    move_in: ContactReason = _reason(0.85, 0.0, 0.3, 10.0, 0.95, "Start service: a new account at a premise, days "
+                                     "before the move-in.")
+    move_out: ContactReason = _reason(0.85, 0.0, 0.3, 8.0, 0.95, "Stop service: days before an account closes.")
+    new_connection: ContactReason = _reason(0.0, 0.4, 0.1, 14.0, 0.7, "New connection: builders and owners asking "
+                                            "for a new service.")
+    outage: ContactReason = _reason(0.18, 0.2, 0.65, 3.5, 0.9, "Outage report: customers who lose power or water "
+                                    "(twice as many when it lasts over two hours); the IVR's outage message answers "
+                                    "most.")
+    gas_odour: ContactReason = _reason(0.06, 0.15, 0.0, 4.0, 1.0, "I smell gas: neighbours of a gas leak (the "
+                                       "household with a service leak calls 9 times in 10); emergency line.")
+    meter_access: ContactReason = _reason(0.08, 0.3, 0.2, 6.0, 0.85, "Meter access: after a no-access read card, "
+                                          "and to book field visits.")
+    disconnection: ContactReason = _reason(0.8, 0.0, 0.0, 9.0, 0.85, "Disconnected: customers asking to be "
+                                           "reconnected after a disconnection you approved.")
+    complaint: ContactReason = _reason(0.5, 0.2, 0.0, 14.0, 0.6, "Complaint: after a second unresolved contact "
+                                       "about the same thing, or after giving up on hold twice.")
+
+    @model_validator(mode="after")
+    def _hours(self) -> ContactConfig:
+        if self.close_hour <= self.open_hour:
+            raise ValueError("contact.close_hour must be after open_hour")
+        return self
+
+
+class OutagesConfig(BaseModel):
+    model_config = group("Outages & leaks over the year", 18, "The operations day's background incidents drawn for "
+                         "every day of the year (same storms and leaks the map shows on a date): who loses power or "
+                         "water, for how long, and where gas is smelled. The contact centre hears about them.",
+                         applies="run")
+    enabled: bool = F(True, "Draw outages and leaks across the year.")
+    storm_factor: float = F(1.0, "Multiplies the chance that a day is a storm day.", ge=0, le=30)
+    incident_factor: float = F(1.0, "Multiplies every incident rate (leaks, breaks, failures, faults).", ge=0, le=30)
+    restore_factor: float = F(1.0, "Multiplies the time to restore service.", ge=0.1, le=20)
+
+
 class SimConfig(BaseModel):
     """Complete simulator configuration. ``town_id`` is a pure function of this object and the generator version."""
 
@@ -657,6 +755,8 @@ class SimConfig(BaseModel):
     reading: ReadingConfig = Field(default_factory=ReadingConfig)
     vee: VeeConfig = Field(default_factory=VeeConfig)
     billing: BillingConfig = Field(default_factory=BillingConfig)
+    contact: ContactConfig = Field(default_factory=ContactConfig)
+    outages: OutagesConfig = Field(default_factory=OutagesConfig)
 
     @model_validator(mode="after")
     def _check(self) -> SimConfig:

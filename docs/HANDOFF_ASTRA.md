@@ -320,7 +320,7 @@ Pure helpers (`parseDataRoute`, `fmtCell`, `linkTarget`, `facetMarkup`, `stitchC
 
 A fourth primary tab, **Year** (`#/year`, `year-page.js`), shows the simulated year as a chronological calendar.
 Clicking a day opens the scenario library (`GET /api/m2c/scenarios`: staffing, meter reading, VEE, billing,
-collections, meters and anomalies; storm season and undetected water loss listed as coming) and "Inflict" turns the
+collections, meters and anomalies, the contact centre and storm season; undetected water loss listed as coming) and "Inflict" turns the
 scenario's episode templates into the run's **episodes** (`EngineM2C.addEpisode`): dated setting overrides from that
 day, optionally ramped, absolute or relative to the base (`"*0.5"`, `"+2"`). Episodes travel with every engine
 request like actions, so the engine replays the year with each day's settings and every page (Workspace, Worklists,
@@ -403,3 +403,31 @@ Nine settings were removed because nothing used them or they only labelled the m
 Configs and snapshots that still carry them load (the keys are dropped). Generator 0.9.1: town ids changed, the
 towns themselves did not (the golden digests of roads, premises, networks, accounts and meters are unchanged).
 Measurements: [CONFIG_IMPACT.md](CONFIG_IMPACT.md).
+
+## 17. The contact centre (Configuration, Data, Year)
+
+The engine now simulates why customers contact the utility and how the lines answer them (`utilsim/m2c/contact.py`,
+[M2C.md](M2C.md) "Contact centre"). Sixteen reasons follow the replayed year: high bill, bill question, bill wrong,
+back bill, balance, online account (passwords), can't pay, payment problem, disconnected, start service, stop
+service, new connection, meter access, outage report, gas odour and complaint. Outage and gas odour contacts come from
+the year's own outages and leaks (`utilsim/m2c/incidents.py`, the operations day's draws for every date).
+
+What the Studio shows:
+
+- **Configuration:** two run groups, **Contact centre** (`contact`: agents, opening hours, patience, retries, call backs,
+  service target, volume, handle and self-service factors, costs, and one object per reason with five parts:
+  `per_event`, `per_1000`, `self_serve`, `handle_min`, `resolved`) and **Outages & leaks over the year** (`outages`:
+  `enabled`, `storm_factor`, `incident_factor`, `restore_factor`). `schema-form.js` labels the reason parts
+  (`SUB_LABEL`). The town's incident rates and storm days now reach the year through these contacts (their chip reads
+  Town). Episodes may set one part of a reason (`contact.bill_wrong` `{"per_event": 1}`); the engine merges it.
+- **Year:** three trend charts (`year-page.js`): contacts by group (with the top reasons in the detail), service
+  (in target and hung up) and contact centre cost. The trend's months carry `contact`. The scenario library adds a
+  **Contact centre** group (lines open mornings only, IVR and website down, hire a second agent) and makes **Storm
+  season** live.
+- **Data:** a **Contact centre** group with `contacts` (every contact with reason, channel, outcome, wait, handle time,
+  attempt and what caused it, linking to the account and premise), `contactDaily` and `yearIncidents`.
+
+`POST /api/m2c/contact` (`m2c-contact/1.0`) returns the summary for a page of its own: KPIs (service level, average
+speed of answer, hung up, occupancy, cost), each reason's figures and settings, the last 60 days and the year's
+incidents. There is no contact centre page yet; the Year charts and the Data tables cover it. A Workspace queue of
+call backs, and contacts that open back-office cases, are the natural next steps.

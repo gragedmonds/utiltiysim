@@ -299,3 +299,16 @@ def test_invalid_tweak_tool_arguments_return_repair_feedback(monkeypatch):
                    "messages": [{"role": "user", "content": "Less staffing"}]})
     assert r.status_code == 200 and r.json()["proposal"] is None
     assert seen[1]["messages"][-1]["content"][0]["is_error"] is True
+
+
+def test_voice_tweaks_inspect_and_validate_live_contact_and_annual_outage_settings():
+    info = inspect_configuration('run', ['contact', 'outages'], 'whitby_small')
+    assert 'agents' in info['schema']['properties']['contact']['properties']
+    assert 'storm_factor' in info['schema']['properties']['outages']['properties']
+    p = tweak(episodes=[{'title': 'Storm pressure with another agent', 'from': '2026-06-01', 'to': '2026-08-31',
+                        'settings': {'contact': {'agents': '+1'}, 'outages': {'storm_factor': 3}}}])
+    with TestClient(app) as c:
+        r = c.post('/api/setup-agent/inflict/validate', json={'currentRun': run_context(), 'proposal': p})
+    assert r.status_code == 200, r.text
+    assert r.json()['proposal']['runTo'] == '2026-08-31'
+    assert any('do not automatically change meter reads' in note for note in r.json()['proposal']['limitations'])

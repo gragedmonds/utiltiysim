@@ -60,6 +60,9 @@ export const SERIES=['#2a78d6','#eb6834','#1baf7a','#eda100','#e87ba4','#008300'
 export const QUEUES={VEE_REVIEW:'VEE review',ESTIMATION:'Estimation',SUPERVISOR:'Supervisor',FIELD:'Field',BILLING:'Billing',COLLECTIONS:'Collections'};
 export const PHASES=['overdue','reminder','overdue notice','winter moratorium','dunning hold','payment arrangement','disconnection notice','disconnected']; // `current` accounts are not in collections: shown as a note, not stacked
 const queueLabel=q=>QUEUES[q]||prettyKey(String(q).toLowerCase());
+// The contact centre's reason groups and reasons (utilsim/m2c/contact.py), as the trend's byGroup and byReason keys.
+export const CONTACT_GROUPS={billing:'Billing',payments:'Payments & collections',service:'Service orders',emergency:'Outages & emergencies',complaints:'Complaints'};
+export const CONTACT_REASONS={high_bill:'High bill',bill_question:'Bill question',bill_wrong:'Bill wrong',back_bill:'Back bill',balance:'Balance',password:'Online account',payment_arrangement:"Can't pay",payment_problem:'Payment problem',disconnection:'Disconnected',move_in:'Start service',move_out:'Stop service',new_connection:'New connection',meter_access:'Meter access',outage:'Outage report',gas_odour:'Gas odour',complaint:'Complaint'};
 export const CHARTS=[
  {id:'backlog',title:'Case backlog',unit:'open cases at month end',kind:'line',fmt:'int',series:[{label:'Backlog',pick:m=>m.cases?.backlog}],detail:m=>Object.entries(m.cases?.byQueue||{}).map(([q,v])=>[queueLabel(q),v])},
  {id:'cases',title:'Cases opened and resolved',unit:'cases in the month',kind:'line',fmt:'int',series:[{label:'Opened',pick:m=>m.cases?.opened},{label:'Resolved',pick:m=>m.cases?.resolved}]},
@@ -70,6 +73,9 @@ export const CHARTS=[
  {id:'ar',title:'Receivable and overdue',unit:'dollars at month end',kind:'line',fmt:'money',series:[{label:'Receivable',pick:m=>m.billing?.receivable},{label:'Overdue',pick:m=>m.billing?.overdue}]},
  {id:'dunning',title:'Dunning',unit:'events in the month',kind:'stack',fmt:'int',series:[{label:'Reminders',pick:m=>m.collections?.reminders},{label:'Notices',pick:m=>m.collections?.notices},{label:'Disconnect notices',pick:m=>m.collections?.disconnectNotices},{label:'Disconnected',pick:m=>m.collections?.disconnected}]},
  {id:'phases',title:'Accounts in collections',unit:'accounts at month end, by phase',kind:'stack',fmt:'int',series:PHASES.map(p=>({label:prettyKey(p),pick:m=>m.collections?.phases?.[p]})),detail:m=>m.collections?.phases?.current==null?[]:[['Current (not in collections)',m.collections.phases.current]]},
+ {id:'contacts',title:'Contacts',unit:'contacts in the month, by reason group',kind:'stack',fmt:'int',series:Object.entries(CONTACT_GROUPS).map(([g,label])=>({label,pick:m=>m.contact?.byGroup?.[g]})),detail:m=>Object.entries(m.contact?.byReason||{}).filter(([,v])=>v).sort((a,b)=>b[1]-a[1]).slice(0,6).map(([k,v])=>[CONTACT_REASONS[k]||prettyKey(k),v])},
+ {id:'service',title:'Answered in target and hung up',unit:'share of calls that reached the agents',kind:'line',fmt:'pct',series:[{label:'In target',pick:m=>m.contact?.serviceLevelPct},{label:'Hung up',pick:m=>m.contact?.abandonedPct}],detail:m=>m.contact?[['Average wait (s)',m.contact.asaS??'—'],['Call backs',m.contact.callbacks],['Occupancy',m.contact.occupancyPct==null?'—':Math.round(m.contact.occupancyPct*100)+'%']]:[]},
+ {id:'contactCost',title:'Contact centre cost',unit:'dollars in the month (agents, self-service, hang-ups, dispatch)',kind:'line',fmt:'money',series:[{label:'Cost',pick:m=>m.contact?.cost?.total}]},
 ];
 // Clean axis ticks from 0 to a rounded maximum (1, 2, 2.5, 5 × 10^k steps, about four intervals).
 export function niceTicks(max,n=4){const m=Number(max)>0?Number(max):0;if(!m)return {max:1,ticks:[0,1]};const raw=m/n,p=10**Math.floor(Math.log10(raw)),step=[1,2,2.5,5,10].map(s=>s*p).find(s=>s>=raw*.8);

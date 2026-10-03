@@ -173,9 +173,10 @@ def validate_infliction(proposal: InflictProposal, context: RunContext) -> dict:
         supported_fields(ep["settings"], settings_schema())
     # Validate the combined timeline, including interactions with the current base and earlier episodes.
     resolve_episode_days(cfg, parse_episodes(cfg, existing + additions))
-    limits = list(proposal.limitations)[:18]
+    limits = list(proposal.limitations)[:17]
     for note in ("These tweaks add dated Year episodes; your town and base configuration stay the same.",
-                 "The engine models calendar year 2026 only; map-day incidents are not Year episode settings."):
+                 "The engine models calendar year 2026 only; direct map commands use the map controls.",
+                 "Annual outages/leaks feed contact demand; they do not automatically change meter reads."):
         if note not in limits:
             limits.append(note)
     return {**proposal.model_dump(by_alias=True), "limitations": limits,
@@ -290,14 +291,15 @@ def validate_proposal(proposal: Proposal) -> dict:
     if len(ref) > 4000:
         raise ValueError("Town changes are too large for a portable reference. Use fewer town overrides.")
     pack = next(t for t in presets() if t["preset"] == proposal.preset)
-    limits = list(proposal.limitations)[:16]
+    limits = list(proposal.limitations)[:15]
     for note in ("The engine models calendar year 2026 only.",
                  "Prepared towns and baseline assumptions are Ontario-based; regional calibration is not automatic.",
-                 "Homes are not the same count as customer accounts."):
+                 "Homes are not the same count as customer accounts.",
+                 "Annual outages/leaks feed contact demand; they do not automatically change meter reads."):
         if note not in limits:
             limits.append(note)
     if ops:
-        note = "Operations settings affect simulated map days; Year does not automatically simulate every operations day."
+        note = "Operations settings affect map days; Year annual incidents are configured separately through outages settings."
         if note not in limits:
             limits.append(note)
     return {**proposal.model_dump(by_alias=True), "episodes": episodes, "opsSettings": ops,

@@ -58,7 +58,7 @@ Master seed and optional per-subsystem re-rolls.
 | `town` | town | `None` |  |  | (advanced) Override seed for geography only (roads growth, parcels, buildings). | Re-rolls the geography (growth, lots, buildings). Households sit on lots, so they are drawn again too and usage totals shift by a few percent. |
 | `households` | town | `None` |  |  | (advanced) Override seed for household attributes (occupants, solar, EV, heating). | Re-rolls who lives where: occupants, solar, EVs, heating fuel, pools, payer profiles and tenancies. Streets stay put. Small towns move several percent on solar export. |
 | `weather` | town | `None` |  |  | (advanced) Override seed for weather series (re-roll storms, keep the town). | Re-rolls the daily temperatures: heating and cooling usage follow, and so do the cold days that make AMI, AMR and walked reads miss more often. |
-| `incidents` | operations | `None` |  |  | (advanced) Override seed for incident hazards. | Re-rolls the operations day's random leaks, breaks, faults and collector outages. The year is unchanged. |
+| `incidents` | town | `None` |  |  | (advanced) Override seed for incident hazards. | Re-rolls the random leaks, breaks, faults and collector outages, on the operations day and across the year, so the outage and gas odour contacts move too. |
 | `anomalies` | town | `None` |  |  | (advanced) Override seed for the meter-to-cash run (missed reads, anomalies, analyst work, bill checks); a request's run seed overrides it per run. | Re-rolls the year's draws (missed reads, anomalies, analyst work, bill checks) on the same households. A run's own seed overrides it without building a new town. |
 
 ## Town & geography
@@ -233,7 +233,7 @@ Seeded daily weather. Drives magnitudes and volumes, never process structure.
 | `summer` | town | `mean_c=21.5, sd_c=4.0, min_c=10.0, max_c=37.0` |  |  | Summer (Jun 21–Sep 20). | Summer temperatures: hotter summers raise cooling usage and bills on homes with air conditioning. |
 | `fall` | town | `mean_c=9.5, sd_c=6.5, min_c=-10.0, max_c=28.0` |  |  | Fall (Sep 21–Dec 20). | Fall temperatures: an early cold snap raises October and November heating usage and bills. |
 | `persistence` | town | `0.7` | 0–0.98 |  | (advanced) Day-to-day AR(1) persistence of temperature anomalies. | How long warm or cold spells last: longer spells make monthly usage swing more from normal, which VEE's tolerances see. |
-| `storm_days_per_year` | operations | `28.0` | 0–120 |  | Thunderstorm days per year (mostly May–Sep). *Affects: lightning outages, estimated reads.* *Default of the operations run setting `stormDaysPerYear`.* | Thunderstorm days: overhead faults and outages on the operations day. The year does not draw storms. |
+| `storm_days_per_year` | town | `28.0` | 0–120 |  | Thunderstorm days per year (mostly May–Sep). *Affects: lightning outages, estimated reads.* *Default of the operations run setting `stormDaysPerYear`.* | Thunderstorm days: overhead faults and outages on the operations day and across the year, with the outage reports they bring to the contact centre. |
 | `heating_base_c` | town | `15.0` | 5–22 | C | (advanced) Heating starts below this temperature. | Heating starts below this temperature: a higher base means more heating usage in spring and fall. |
 | `cooling_base_c` | town | `22.0` | 15–30 | C | (advanced) Cooling starts above this temperature. | Cooling starts above this temperature: a lower base means more cooling usage. |
 
@@ -243,13 +243,13 @@ What goes wrong, how often. Rates are per year. Each operations day draws its ba
 
 | Field | Reaches | Default | Range | Unit | Description | How it changes the results |
 |---|---|---|---|---|---|---|
-| `gas_service_leaks_per_1000` | operations | `1.2` | 0–50 |  | Leaks per 1,000 gas services per year. *Default of the operations run setting `gasServiceLeaksPer1000`.* | Random service leaks on the operations day: crew calls and shut-offs. |
-| `gas_main_leaks_per_100km` | operations | `8.0` | 0–200 |  | Leaks per 100 km of gas main per year. *Default of the operations run setting `gasMainLeaksPer100km`.* | Random gas main leaks on the operations day: crew calls and isolations. |
-| `water_main_breaks_per_100km` | operations | `14.0` | 0–200 |  | Main breaks per 100 km per year (×2 for cast iron). *Affects: water outages, crew workload.* *Default of the operations run setting `waterMainBreaksPer100km`.* | Random main breaks on the operations day: valve shut-offs and customers without water. |
-| `overhead_faults_per_km_storm_day` | operations | `0.015` | 0–1 |  | Overhead primary faults per km per storm day. *Affects: outages, SAIDI/SAIFI, zero-usage reads.* *Default of the operations run setting `overheadFaultsPerKmStormDay`.* | Storm faults on overhead lines: feeder outages on storm days. |
-| `transformer_failures_per_1000` | operations | `3.0` | 0–100 |  | Transformer failures per 1,000 units per year (×3 when overloaded). *Default of the operations run setting `transformerFailuresPer1000`.* | Transformer failures: small outages, three times as many where units are overloaded. |
-| `collector_outages_per_year` | operations | `2.0` | 0–50 |  | AMI collector outages per year (town-wide). *Default of the operations run setting `collectorOutagesPerYear`.* | AMI collector outages: the meters behind it miss their nightly read that day. |
-| `manual_only` | operations | `False` |  |  | Disable random hazards; only manually injected incidents occur (the run's "Random incidents" switch defaults to the opposite). *Affects: background incidents.* *Default of the operations run setting `randomIncidents`.* | Turns random incidents off on the operations day; only the ones you inject happen. |
+| `gas_service_leaks_per_1000` | town | `1.2` | 0–50 |  | Leaks per 1,000 gas services per year. *Default of the operations run setting `gasServiceLeaksPer1000`.* | Random service leaks on the operations day and across the year: gas odour calls and a household without gas until the repair. |
+| `gas_main_leaks_per_100km` | town | `8.0` | 0–200 |  | Leaks per 100 km of gas main per year. *Default of the operations run setting `gasMainLeaksPer100km`.* | Random gas main leaks on the operations day and across the year: crew calls, isolations and gas odour calls from the neighbours. |
+| `water_main_breaks_per_100km` | town | `14.0` | 0–200 |  | Main breaks per 100 km per year (×2 for cast iron). *Affects: water outages, crew workload.* *Default of the operations run setting `waterMainBreaksPer100km`.* | Random main breaks on the operations day and across the year: customers without water and the outage reports they make. |
+| `overhead_faults_per_km_storm_day` | town | `0.015` | 0–1 |  | Overhead primary faults per km per storm day. *Affects: outages, SAIDI/SAIFI, zero-usage reads.* *Default of the operations run setting `overheadFaultsPerKmStormDay`.* | Storm faults on overhead lines: feeder outages on storm days, on the operations day and across the year, and the outage reports. |
+| `transformer_failures_per_1000` | town | `3.0` | 0–100 |  | Transformer failures per 1,000 units per year (×3 when overloaded). *Default of the operations run setting `transformerFailuresPer1000`.* | Transformer failures (three times as many where units are overloaded): small outages on the operations day and across the year. |
+| `collector_outages_per_year` | operations | `2.0` | 0–50 |  | AMI collector outages per year (town-wide). *Default of the operations run setting `collectorOutagesPerYear`.* | AMI collector outages: the meters behind it miss their nightly read that day. Customers do not notice them. |
+| `manual_only` | operations | `False` |  |  | Disable random hazards; only manually injected incidents occur (the run's "Random incidents" switch defaults to the opposite). *Affects: background incidents.* *Default of the operations run setting `randomIncidents`.* | Turns random incidents off on the operations day; only the ones you inject happen. The year draws them unless Outages & leaks is off. |
 
 ## Field operations
 
@@ -419,3 +419,54 @@ Bill checks, tariff versions, invoicing, payments and dunning.
 | `low_income_approval_rate` | year | `0.7` | 0–1 |  | Referrals the agency approves with a grant. *Affects: collections, receivable.* | Referrals approved with a grant against arrears: less owed, fewer disconnections. |
 | `low_income_grant_max` | year | `500.0` | 0–5000 | $ | (advanced) Largest low-income grant credited to an account's arrears. | Largest low-income grant credited to an account's arrears: less owed, fewer notices. |
 | `budget_billing_offer_rate` | year | `0.08` | 0–1 |  | Overdue notices after which the call centre enrols the customer in budget billing (once a year per account); the plan levels later invoices. *Affects: Budget Bill Cases, collections.* | Overdue notices after which the customer moves to budget billing: levelled later invoices. |
+
+## Contact centre
+
+Why customers phone, write or use the IVR, and the agents, hours and self-service that answer them. Contacts follow the year: bills, errors, rebills, dunning, payments, move-ins and move-outs, missed reads and the year's outages and gas leaks.
+
+| Field | Reaches | Default | Range | Unit | Description | How it changes the results |
+|---|---|---|---|---|---|---|
+| `agents` | year | `1` | 0–500 |  | Agents on the phones on a business day (a small utility often has one, shared with billing). *Affects: wait, abandonment.* | Agents answering during opening hours. Fewer: longer waits, more hang-ups, call backs and repeat calls; more: shorter waits but more idle time and staffing cost. |
+| `open_hour` | year | `8.0` | 0–23 | h | Lines open (local time, business days). | When the lines open on business days. Later opening squeezes the same contacts into fewer hours: longer waits at peaks. |
+| `close_hour` | year | `17.0` | 1–24 | h | Lines close (local time). | When the lines close. Earlier closing squeezes contacts into fewer hours; callers who find the lines closed try again the next day. |
+| `patience_s` | year | `240.0` | 10–3600 | s | Average time a caller waits before hanging up. | How long callers hold before hanging up. Less patience: more hang-ups and retries at the same waits. |
+| `retry_share` | year | `0.6` | 0–1 |  | Callers who hung up or found the lines closed and try again. | Callers who hung up or found the lines closed and try again: retries add load at busy times; the rest give up unanswered. |
+| `repeat_share` | year | `0.5` | 0–1 |  | Callers whose problem was not resolved who contact again within days. | Customers whose problem was not resolved who contact again: repeat contacts, and complaints after a second failure. |
+| `callback` | year | `True` |  |  | Offer a call back instead of holding when the wait is long. | Offer a call back instead of holding when the wait is long: fewer hang-ups, the same agent time spread later in the day. |
+| `callback_after_s` | year | `300.0` | 0–3600 | s | (advanced) Offer the call back when the expected wait exceeds this. | Expected wait at which the call back is offered: lower offers it more often, turning hang-ups into later calls. |
+| `callback_take_share` | year | `0.5` | 0–1 |  | (advanced) Callers offered a call back who take it. | Callers who accept the call back offer. |
+| `service_target_s` | year | `30.0` | 5–600 | s | Answer target for the service level (answered within it). | The answer target the service level counts against. It changes the reported service level, not who waits. |
+| `volume_factor` | year | `1.0` | 0–20 |  | Multiplies every reason's contact rates. | Multiplies every reason's rates: a quick way to test a busier or quieter year. |
+| `handle_factor` | year | `1.0` | 0.1–10 |  | Multiplies every reason's handling time. | Multiplies every handling time: slower handling fills the agents' day, so waits and hang-ups rise. |
+| `self_serve_factor` | year | `1.0` | 0–3 |  | Multiplies every reason's self-service share (0: IVR and web down). | Multiplies the share the IVR and website handle; zero sends every contact to an agent. |
+| `agent_cost_per_hour` | year | `38.0` | 0–500 | $ | (advanced) Loaded cost of an agent hour on the phones. | Prices the agents' open hours in the contact cost. No contact changes. |
+| `self_serve_cost` | year | `0.4` | 0–50 | $ | (advanced) Cost of a contact the IVR or website handles. | Prices each self-served contact. No contact changes. |
+| `abandon_cx_cost` | year | `6.0` | 0–200 | $ | (advanced) Customer-experience cost of a caller who hangs up. | Prices the customer-experience cost of each hang-up. No contact changes. |
+| `emergency_answer_s` | year | `15.0` | 1–600 | s | (advanced) Answer time on the emergency line (gas odour, outages after hours). | Answer time on the emergency line (gas odours, after-hours outages). |
+| `high_bill` | year | `per_event=0.25, per_1000=2.0, self_serve=0.1, handle_min=7.5, resolved=0.85` |  |  | High bill: an invoice at least 1.5 times what the account usually pays (and $40 more). | High-bill contacts: invoices at 1.5 times the expected amount. More estimates, leaks, cold months and rate changes raise them. |
+| `bill_question` | year | `per_event=0.008, per_1000=1.5, self_serve=0.2, handle_min=6.0, resolved=0.9` |  |  | Questions about a bill: any invoice, more for estimated bills, first bills and bills after a rate change. | Questions about bills: more with estimated bills, first bills after a move-in and bills just after a rate change. |
+| `bill_wrong` | year | `per_event=0.35, per_1000=0.3, self_serve=0.0, handle_min=11.0, resolved=0.6` |  |  | Bill wrong: a bill that overcharges the customer (customers rarely call about undercharges). | Disputes over bills that overcharge against the truth: VEE misses, rate-class errors and misreads drive them. |
+| `back_bill` | year | `per_event=0.45, per_1000=0.0, self_serve=0.0, handle_min=12.0, resolved=0.7` |  |  | Back bill: a rebill, or the first actual bill after estimates, that catches up on under-billed use. | Contacts about catch-up bills: rebills, and the first actual bill after a run of estimates (no-access and missed reads drive them). |
+| `balance` | year | `per_event=0.03, per_1000=4.0, self_serve=0.75, handle_min=3.0, resolved=0.98` |  |  | What's my balance: around due dates; mostly the IVR. | Balance enquiries around due dates; the IVR answers most. |
+| `payment_arrangement` | year | `per_event=0.12, per_1000=0.5, self_serve=0.1, handle_min=9.0, resolved=0.8` |  |  | Can't pay: after overdue notices, more after disconnection notices. | Can't-pay contacts after reminders, overdue notices and disconnection notices: collections settings and payer mix drive them. |
+| `payment_problem` | year | `per_event=0.4, per_1000=0.4, self_serve=0.3, handle_min=6.0, resolved=0.85` |  |  | Payment problem: a pre-authorized debit returned. | Contacts after a returned pre-authorized debit (the PAD reject rate drives them). |
+| `password` | year | `per_event=0.01, per_1000=3.0, self_serve=0.6, handle_min=4.0, resolved=0.95` |  |  | Forgot password or online account help: when bills arrive; most reset online. | Online account help when bills arrive; most reset online. |
+| `move_in` | year | `per_event=0.85, per_1000=0.0, self_serve=0.3, handle_min=10.0, resolved=0.95` |  |  | Start service: a new account at a premise, days before the move-in. | Start-service contacts before each move-in: rentals and turnover drive them. |
+| `move_out` | year | `per_event=0.85, per_1000=0.0, self_serve=0.3, handle_min=8.0, resolved=0.95` |  |  | Stop service: days before an account closes. | Stop-service contacts before each move-out. |
+| `new_connection` | year | `per_event=0.0, per_1000=0.4, self_serve=0.1, handle_min=14.0, resolved=0.7` |  |  | New connection: builders and owners asking for a new service. | New-connection requests (background only). |
+| `outage` | year | `per_event=0.18, per_1000=0.2, self_serve=0.65, handle_min=3.5, resolved=0.9` |  |  | Outage report: customers who lose power or water (twice as many when it lasts over two hours); the IVR's outage message answers most. | Outage reports from customers who lose power or water in the year's incidents; the IVR's outage message answers most, after hours the emergency line. |
+| `gas_odour` | year | `per_event=0.06, per_1000=0.15, self_serve=0.0, handle_min=4.0, resolved=1.0` |  |  | I smell gas: neighbours of a gas leak (the household with a service leak calls 9 times in 10); emergency line. | Gas odour calls from neighbours of the year's gas leaks, on the emergency line. |
+| `meter_access` | year | `per_event=0.08, per_1000=0.3, self_serve=0.2, handle_min=6.0, resolved=0.85` |  |  | Meter access: after a no-access read card, and to book field visits. | Contacts after no-access read cards and to book field visits: walked routes and no-access rates drive them. |
+| `disconnection` | year | `per_event=0.8, per_1000=0.0, self_serve=0.0, handle_min=9.0, resolved=0.85` |  |  | Disconnected: customers asking to be reconnected after a disconnection you approved. | Reconnection requests after disconnections you approve. |
+| `complaint` | year | `per_event=0.5, per_1000=0.2, self_serve=0.0, handle_min=14.0, resolved=0.6` |  |  | Complaint: after a second unresolved contact about the same thing, or after giving up on hold twice. | Complaints after a second unresolved contact or giving up on hold twice: long waits and low first-contact resolution drive them. |
+
+## Outages & leaks over the year
+
+The operations day's background incidents drawn for every day of the year (same storms and leaks the map shows on a date): who loses power or water, for how long, and where gas is smelled. The contact centre hears about them.
+
+| Field | Reaches | Default | Range | Unit | Description | How it changes the results |
+|---|---|---|---|---|---|---|
+| `enabled` | year | `True` |  |  | Draw outages and leaks across the year. | Draw the operations day's incidents for every day of the year. Off: outage and gas odour contacts are background only. |
+| `storm_factor` | year | `1.0` | 0–30 |  | Multiplies the chance that a day is a storm day. | Multiplies the chance of a storm day: more overhead line faults, outages and outage reports, mostly May to September. |
+| `incident_factor` | year | `1.0` | 0–30 |  | Multiplies every incident rate (leaks, breaks, failures, faults). | Multiplies every incident rate: more outages, main breaks and gas leaks, and the contacts they bring. |
+| `restore_factor` | year | `1.0` | 0.1–20 |  | Multiplies the time to restore service. | Multiplies the time to restore service: longer outages bring twice the outage reports past two hours. |
