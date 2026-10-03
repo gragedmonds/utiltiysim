@@ -33,6 +33,14 @@ validating new and existing periods together without a provider call or town gen
 context freshness before appending episodes and restores episodes/date on analysis failure.
 
 `POST /api/setup-agent/validate` accepts a `Proposal` and returns `{schemaVersion, proposal}` without a model call.
+
+`GET /api/setup/configuration?preset=small_town` supplies the manual wizard's live `schemas` and `defaults` for
+`town`, `run` and grouped `operations`, the engine `homeLimit`, four illustrative `regions` with explicit generation
+overrides, and `regionalNote`. It accepts only published pack presets and does not generate a town or use a provider
+key. Environment and utility stages use the same proposal validation boundary and editable review as voice.
+`POST /api/setup/operation-defaults` accepts a `Proposal`, validates it and returns grouped map-day `defaults`
+derived from the edited town. The wizard loads these when opening map-day Advanced so regional storm rates and
+town crew defaults remain consistent with the environment; explicit map overrides are preserved.
 A proposal has name, purpose, region context, preset, seed, asOf, townOverrides, base M2C settings, grouped
 operations settings, dated episodes, summary, assumptions and limitations. The validated result additionally
 contains the portable townRef, townId, townName, homes, flattened opsSettings, assigned episode IDs, and changes

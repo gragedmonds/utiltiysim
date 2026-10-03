@@ -28,6 +28,7 @@ from api._agent_config import (
     validate_infliction,
     validate_proposal,
 )
+from api._setup import REGIONAL_NOTE, REGIONS, configuration, operation_defaults
 from api._towns import MAX_HOUSES
 from utilsim.m2c.scenarios import catalog
 
@@ -103,6 +104,9 @@ skipping details already supplied and adapting questions to the chosen utility:
 Usually spend several exchanges learning the baseline; do not jump from a location answer directly to a final proposal.
 Never ask every question in one message, repeat answered questions, or demand exact numbers. Offer a default for
 unknowns and honor a request to use defaults/skip ahead. Briefly recap the baseline before proposing disruptions.
+Follow the wizard: first environment (home count, region, weather and housing), then utility services, staffing
+and workflow. Regional starters are editable illustrative assumptions. Use their explicit overrides when the
+user chooses one, preserving later manual edits. Do not infer real local statistics from a place name.
 Geographic answers are context: explain when terrain/climate/tariffs cannot be calibrated by the engine.
 You may ask questions without tools. To send ANY reply, use respond with a plain-language message and either a
 complete proposal or null. Do not send an unfinished proposal. The user reviews and applies it before opening Year.
@@ -202,6 +206,7 @@ async def conversation(req: ChatRequest, key: str) -> dict:
     allowed = set(Proposal.model_fields)
     current = {k: v for k, v in req.draft.items() if k in allowed}
     context = {"homeLimit": MAX_HOUSES, "towns": presets(), "configurationGroups": group_index(),
+               "regionalStarters": REGIONS, "regionalNote": REGIONAL_NOTE,
                "scenarioLibrary": catalog(), "currentDraft": current}
     if req.mode == "inflict":
         assert req.currentRun is not None
@@ -270,6 +275,24 @@ def status():
     return {"schemaVersion": VERSION, "available": bool(os.environ.get("ANTHROPIC_API_KEY")), "provider": "Anthropic"}
 
 
+@router.get("/api/setup/configuration")
+def setup_configuration(preset: str = "small_town"):
+    """Live schemas, defaults and regional starters for the manual wizard; no API key required."""
+    try:
+        return configuration(preset)
+    except (ValueError, KeyError) as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
+@router.post("/api/setup/operation-defaults")
+def setup_operation_defaults(proposal: Proposal):
+    """Map-day defaults derived from the edited town, including regional weather and crew defaults."""
+    try:
+        return {"defaults": operation_defaults(proposal)}
+    except (ValueError, KeyError) as exc:
+        raise HTTPException(422, str(exc)[:3000]) from exc
+
+
 @router.post("/api/setup-agent/chat", response_model=ChatResponse)
 async def chat(req: ChatRequest, request: Request):
     global _ACTIVE
@@ -298,6 +321,10 @@ def validate(proposal: Proposal):
     """Revalidate a reviewed proposal before saving it; no API key or paid model call needed."""
     try:
         return {"schemaVersion": VERSION, "proposal": validate_proposal(proposal)}
+    except ValidationError as exc:
+        messages = [".".join(str(k) for k in error["loc"]) + (": " if error["loc"] else "")
+                    + error["msg"].removeprefix("Value error, ") for error in exc.errors()]
+        raise HTTPException(422, "; ".join(messages)[:3000]) from exc
     except (ValueError, KeyError) as exc:
         raise HTTPException(422, str(exc)[:3000]) from exc
     except Exception as exc:
