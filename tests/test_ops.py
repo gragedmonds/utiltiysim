@@ -404,8 +404,10 @@ def test_outages_from_operations_reach_meter_to_cash(small_town):
     assert gasps and all(c.type == "COMM_FAIL" and c.events[1][3] == 0 for c in gasps)
     assert all(run.reason[c.r, c.month] == "SIM_POWER_OUTAGE" for c in gasps)
     assert not any(c.events[0][1] == "AMI_LAST_GASP" for c in base.cases)
+    carried = [o for o in run.outage_log if "incident" not in o]  # the day carried in; the year's incidents too
+    assert {tw.premise_ids[q] for o in carried for q in o["prem"].tolist()} == hit
     rel = views.summary(run, "2026-12-31")["reliability"]["electric"]
-    assert rel["customersInterrupted"] == len(hit) and rel["customerMinutes"] > 0 and rel["lost"] > 0
+    assert rel["customersInterrupted"] >= len(hit) and rel["customerMinutes"] > 0 and rel["lost"] > 0
     assert rel["lastGasps"] > 0 and "reliability" in views.summary(base, "2026-12-31")
     pv = views.premise(run, tw.premise_ids[p], as_of="2026-12-31")
     assert pv["outages"] and pv["outages"][0]["lastGasp"] and pv["outages"][0]["lost"] > 0
