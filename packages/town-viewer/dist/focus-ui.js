@@ -53,7 +53,7 @@ export function installFocusUI({getContext,onSettings,onScenario,onWorklists=()=
   $(page?NAV[page]||'':'nav-map')?.setAttribute('aria-current','page');
   if(page==='settings-page')$('settings-toggle').setAttribute('aria-current','page');else $('settings-toggle').removeAttribute('aria-current');
   for(const id of ['search-toggle','data-toggle'])$(id).hidden=open;
-  if(page==='settings-page'){const tab=hash.match(PAGES[0].re)[1]||'town';closeTools();$('performance-panel').open=false;refresh();document.querySelectorAll('[data-settings-pane]').forEach(el=>el.hidden=el.dataset.settingsPane!==tab);document.querySelectorAll('[data-settings-tab]').forEach(el=>{if(el.dataset.settingsTab===tab)el.setAttribute('aria-current','page');else el.removeAttribute('aria-current');});onSettingsTab(tab);if(was!==page)$('settings-back').focus();}
+  if(page==='settings-page'){const tab=hash.match(PAGES[0].re)[1]||'town';closeTools();$('performance-panel').open=false;refresh();onSettingsTab(tab);if(was!==page)$('settings-back').focus();}
   if(page==='worklists-page'){closeTools();$('performance-panel').open=false;if(was!==page)$('worklists-back').focus();}
   onWorklists(page==='worklists-page',hash);
   if(page==='process-page'){closeTools();$('performance-panel').open=false;if(was!==page)$('process-back').focus();}onProcess(page==='process-page',hash);

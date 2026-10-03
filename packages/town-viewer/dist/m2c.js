@@ -23,6 +23,10 @@ export class EngineM2C{
  recordDay(day,list,{commands=false,reset=false}={}){if(!reset&&!commands&&this.outageSources[day]==='commands')return false;
   const changed=this.setOutages(day,list),src=commands&&this.outages[day]?'commands':this.outages[day]?'background':null;
   if((this.outageSources[day]||null)!==src){if(src)this.outageSources[day]=src;else delete this.outageSources[day];this.save();}return changed;}
+ // The days the map skipped over (POST /api/sim/days: [{date, interruptions}]), recorded as background days; how many changed.
+ recordDays(days,opts={}){let n=0;for(const d of days||[])if(d?.date&&this.recordDay(d.date,d.interruptions||[],opts))n++;return n;}
+ // Interruptions recorded for the run days from `a` to `b` inclusive.
+ outageCount(a,b){return Object.keys(this.outages).filter(d=>d>=a&&d<=b).reduce((n,d)=>n+this.outages[d].length,0);}
  // One request per channel is current; an older reply that lands late is dropped (error.superseded).
  async post(path,extra={},channel=path){
   const body=JSON.stringify(this.body(extra)),key=path+body;if(this.cache.has(key))return this.cache.get(key);

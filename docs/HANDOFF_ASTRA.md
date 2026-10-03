@@ -179,8 +179,12 @@ phone quality profiles and WebGL recovery.
     the simulation's truth.
   - A case whose field order the map has scheduled offers "Watch the truck roll". It opens the map on that day and
     follows the van from the depot.
-- Configuration has your tabs: Town & meters, Process & costs (the meter-to-cash schema), Scenario (operations
-  settings from `/api/sim/settings/schema?town=`) and Engine & data.
+- Configuration is one scrolling page (`config-page.js`) with four sections: Town & meters, Process & costs (the
+  meter-to-cash schema), Scenario (operations settings from `/api/sim/settings/schema?town=`) and Engine & data. A
+  sticky sidebar lists each section and its setting groups and scrolls to them; the old `#/config/<tab>` addresses
+  still open the page at that section. A setting is one compact row (short title, input, unit) in a two-column
+  group; its description, default, effects and path are behind an (i) button (`schema-form.js`). One search box
+  filters all three forms and one "Advanced settings" toggle serves them all.
   - Town & meters (engine towns, `town-config.js`): every town-scoped group of `/api/config/schema` in `x-order`,
     starting from the town's own config. Nested values render as sub-rows, lists as checked JSON, and `x-status:
     "not-modelled"` / `x-deprecated` fields stay disabled with the reason. Generate posts `{config}` to `POST

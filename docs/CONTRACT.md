@@ -165,7 +165,7 @@ net-exports at noon in July. M2 weather-driven profiles replace them.
 | `GET /api/towns/{id}/tables/{name}.{parquet\|csv\|json}` | flat tables |
 | `GET /api/towns/{id}/fixtures/vee.json` · `/fixtures/vee/{premiseId}/{commodity}.json?variant=actual\|stuck\|missing\|spike` | `vee-input-fixture/1.1` (`truth` stripped unless `include_truth=true`) |
 | `GET /api/towns/{id}/render.png` | static render |
-| `GET /api/packs` · `POST /api/sim/timeline` · `POST /api/sim/frame` | operations (below); also served by the hosted engine |
+| `GET /api/packs` · `POST /api/sim/timeline` · `POST /api/sim/days` · `POST /api/sim/frame` | operations (below); also served by the hosted engine |
 
 Scenarios: `normal`, `solar_noon`, `leak` (`target` = premise id; default the first premise), `substation_outage`.
 
@@ -191,6 +191,7 @@ Vercel) for the prebuilt towns in `packs/`.
 | `GET /api/sim/settings?town=` | – | the run settings' defaults (timings, crews, readers, shift, targets, voltage floor, incident rates); with `town`, that town's |
 | `GET /api/sim/settings/schema?town=` | – | `{schema, defaults, town}`: the settings as JSON Schema (see below) |
 | `POST /api/sim/timeline` | `{town, date?, commands[], settings?, m2c?, seed?}` | `utility-timeline/1.0` |
+| `POST /api/sim/days` | `{town, from, to, settings?, m2c?, seed?}` | `utility-days/1.0`: the run days `from`–`to` (inclusive, at most 62) each replayed with no commands (below) |
 | `POST /api/sim/frame` | `{town, date?, commands[], settings?, seed?, at, premises?}` | a complete `utility-state/1.0` frame with the run's switching, valves and leaks |
 
 `town` is a pack preset (`ayr`) or a town id. `at` and every time below are **seconds since local midnight of the
@@ -251,6 +252,15 @@ outages, their AMI meters miss the reads that fall inside it (see [M2C.md](M2C.m
 
 A request's `seed` (top level, else the `m2c` run's seed) re-rolls the background incidents and is part of the
 `simulationId`; none keeps the town's own draws.
+
+`utility-days/1.0` (`POST /api/sim/days`) is how the viewer's "+1 week" and "+1 month" make the skipped days happen:
+`{schemaVersion, townId, timezone, from, to, seed, days: [{date, interruptions, incidents, jobs}]}`, one entry per
+day from `from` to `to` (inclusive, `YYYY-MM-DD`, at most 62 days; 422 beyond that, for `to` before `from` or a bad
+date). Each day is replayed with no commands, so `interruptions` are its background incidents' and equal, item for
+item, the `interruptions` of that day's `POST /api/sim/timeline` with the same `settings` and seed; `incidents` and
+`jobs` are counts (its reading rounds included). The `m2c` run rides along only for its seed: its field orders and the
+reading rounds have their own crews, so they never change when an incident is worked or who it interrupts, and a month
+on Ayr answers in well under a second (a 62-day request on Cobourg's busiest window takes about 6 s).
 
 `GET /api/sim/settings` returns the operations defaults. `GET /api/sim/settings/schema` returns the same settings as
 JSON Schema, with titles, units, bounds and effects. Groups marked `x-flat` hold top-level keys (`crews`,

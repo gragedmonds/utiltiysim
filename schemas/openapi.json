@@ -830,6 +830,72 @@
         "title": "Command",
         "type": "object"
       },
+      "DaysRequest": {
+        "description": "A range of run days, each replayed without commands (the viewer's +1 week / +1 month).",
+        "properties": {
+          "from": {
+            "description": "First run day (YYYY-MM-DD, local).",
+            "title": "From",
+            "type": "string"
+          },
+          "m2c": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The meter-to-cash run; only its `seed` matters here (the days' background incidents never depend on its field orders).",
+            "title": "M2C"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Run seed, as for /api/sim/timeline.",
+            "title": "Seed"
+          },
+          "settings": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Overrides for the run settings, as for /api/sim/timeline.",
+            "title": "Settings"
+          },
+          "to": {
+            "description": "Last run day, inclusive; at most 62 days from the first.",
+            "title": "To",
+            "type": "string"
+          },
+          "town": {
+            "description": "Pack preset (e.g. 'ayr') or town id.",
+            "title": "Town",
+            "type": "string"
+          }
+        },
+        "required": [
+          "town",
+          "from",
+          "to"
+        ],
+        "title": "DaysRequest",
+        "type": "object"
+      },
       "DecisionRequest": {
         "properties": {
           "actions": {
@@ -3227,6 +3293,43 @@
           }
         },
         "summary": "Get Published Schema"
+      }
+    },
+    "/api/sim/days": {
+      "post": {
+        "description": "``utility-days/1.0``: the run days from ``from`` to ``to`` (inclusive, at most 62), each replayed with no\ncommands: per day its ``date``, ``interruptions`` (as the timeline reports them: the meter-to-cash run's\n``outages`` for the days the viewer skips over) and counts of ``incidents`` and ``jobs``. The days' background\nincidents are the same draws as a single-day timeline's, so the two always agree.",
+        "operationId": "post_days_api_sim_days_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DaysRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Days"
       }
     },
     "/api/sim/frame": {

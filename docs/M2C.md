@@ -623,3 +623,13 @@ The morning's field orders for a day never depend on that day's own outages, so 
 The day's read outcomes and its `meterToCash` cycle do include them: a pole broken at 01:40 shows on the card as
 missed AMI reads, and its comm-fail cases and held bills match the Workspace.
 A day's outages stay after you move the map to another day or reload; "Reset engine run" clears them.
+
+**Days pass on the map.** The map, the operations day and the Workspace's run date (`#ws-asof`) are one date. Playing
+past midnight starts the next day without a pause: once the clock passes about 22:00 (earlier at the fastest speeds)
+the viewer asks for tomorrow's timeline in the background (the same request as the day's, with no commands and the
+run's current context) and applies it at midnight at once, recording the new day's background interruptions as above;
+when that request has not landed yet, the day loads while the clock runs on from 00:00. The time bar's "+1 week" and
+"+1 month" (a calendar month, clamped to the month's length) make the skipped days happen too: one
+`POST /api/sim/days` (CONTRACT.md) replays them with no commands, each day's `interruptions` are recorded as that day's
+background outages (a day you worked keeps its own), the run date moves to the last day and its timeline loads as
+usual. The year ends on 31 December 2026.

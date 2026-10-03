@@ -1,10 +1,16 @@
 // Engine settings rendered from the engine's JSON Schema: groups (in x-order), defaults, bounds, units, effects and
-// advanced flags (x-unit, x-effects, x-advanced). Nested objects (a value per era, a season's temperatures) render as
+// advanced flags (x-unit, x-effects, x-advanced). A field is one compact row (short title, input, unit); its
+// description, default, effects and path sit behind an (i) button, and the fields of a group lay out in two columns. Nested objects (a value per era, a season's temperatures) render as
 // labelled sub-rows, lists as a checked JSON box, and settings the engine marks x-status "not-modelled" or
 // x-deprecated stay visible but disabled with the reason. The form reports only values that differ from a base (the
 // schema defaults, or a town's own configuration), so the engine stays authoritative.
 const SUB_LABEL={pre_1945:'Pre-1945',postwar:'Post-war',modern:'Modern',mean_c:'Mean',sd_c:'Std dev',min_c:'Min',max_c:'Max',up_to:'Up to',price:'Price'};
 export const prettyKey=k=>SUB_LABEL[k]||(s=>s.charAt(0).toUpperCase()+s.slice(1))(String(k).replaceAll('_',' '));
+// Field titles read as sentences: a generated Title Case title ("Analyst Queue Days Max") becomes "Analyst queue days
+// max", and the utility acronyms keep their capitals ("Rpa Coverage" → "RPA coverage"). A title someone wrote stays.
+const ACRONYMS=new Set(['AMI','AMR','VEE','RPA','OSM','PV','EV','HST','AC','DC','GJ','NSF','PAD','ANSI','CT','SAP','KV','KVA','KW','KWH','ID','IDS','API','CSV','JSON','YAML','UTC','GIS','HV','LV','MV','PRV','SAIDI','SAIFI','COM','RES','MRU','VPN','AMP']);
+export function sentenceTitle(title){const t=String(title||'');if(!/^[A-Z][a-z0-9]*( [A-Z0-9][a-z0-9]*)*$/.test(t))return t;
+ return t.split(' ').map((w,i)=>{const up=w.toUpperCase();if(ACRONYMS.has(up))return up;return i?w.toLowerCase():w;}).join(' ');}
 function scalarType(p){return p.enum?'enum':p.type==='boolean'?'boolean':p.type==='integer'?'integer':p.type==='number'?'number':'text';}
 function statusOf(p){const reason=p['x-status-reason']||p['x-reason']||p['x-note']||'';
  if(p['x-deprecated'])return {status:'deprecated',reason:typeof p['x-deprecated']==='string'?p['x-deprecated']:reason||'Deprecated.'};
@@ -81,6 +87,7 @@ const jsonText=v=>v==null?'null':Array.isArray(v)&&v.some(x=>x&&typeof x==='obje
 // (filter), showAdvanced, collapsible (cards fold; `open` lists the groups open at first), skip (paths rendered
 // elsewhere), decorate(field,row,input) and onChange(overrides, changes). Returns {fields, values, set, filter, changes}.
 export function renderSchemaForm(el,schema,{values={},base=null,groups=null,showAdvanced=false,collapsible=false,open=[],skip=[],decorate=null,baseLabel='',onChange=()=>{}}={}){
+ const info=(label,lines)=>{const text=lines.filter(Boolean);if(!text.length)return null;const b=mk('button','schema-info','i');b.type='button';b.setAttribute('aria-label','About '+label);b.setAttribute('aria-expanded','false');b.title=text[0];const pop=mk('div','schema-pop');pop.setAttribute('role','note');for(const t of text){pop.append(mk('p',null,t));}return [b,pop];};
  const fields=schemaFields(schema,{groups}),state=structuredClone(values||{}),byGroup=new Map(),rows=new Map(),badges=new Map(),mk=(tag,cls,text)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(text!=null)e.textContent=text;return e;};
  for(const f of fields){if(!byGroup.has(f.group))byGroup.set(f.group,[]);byGroup.get(f.group).push(f);}
  const changes=()=>changeList(fields,state,base),refLabel=baseLabel||(base?'This town':'Default');
@@ -89,10 +96,10 @@ export function renderSchemaForm(el,schema,{values={},base=null,groups=null,show
  function commit(f,value){(state[f.group]||={})[f.key]=value;mark(f);onChange(overridesFrom(fields,state,base),changes());}
  el.replaceChildren();
  for(const [group,list] of byGroup){
-  const card=mk(collapsible?'details':'section','settings-card schema-group'),h=mk('h3',null,list[0].groupTitle),intro=mk('p','small-note',list[0].groupDescription),badge=mk('span','schema-badge');card.dataset.group=group;badge.hidden=true;badges.set(group,badge);
-  if(collapsible){const sum=mk('summary','schema-summary'),count=mk('span','schema-count',`${list.filter(f=>!skip.includes(f.path)).length} settings`);card.open=open.includes(group);sum.append(h,badge,count);card.append(sum,intro);}else{h.append(badge);card.append(h,intro);}
+  const card=mk(collapsible?'details':'section','settings-card schema-group'),h=mk('h3',null,list[0].groupTitle),badge=mk('span','schema-badge'),ginfo=info(list[0].groupTitle,[list[0].groupDescription]),body=mk('div','schema-fields');card.dataset.group=group;badge.hidden=true;badges.set(group,badge);
+  const head=mk(collapsible?'summary':'div','schema-group-head'+(collapsible?' schema-summary':'')),count=mk('span','schema-count',`${list.filter(f=>!skip.includes(f.path)).length}`);head.append(h,badge,count);if(ginfo){head.classList.add('has-pop');head.append(...ginfo);}if(collapsible)card.open=open==='all'||open.includes(group);card.append(head,body);
   for(const f of list){if(skip.includes(f.path))continue;const hidden=f.advanced&&!showAdvanced;
-   const row=mk(f.type==='object'?'div':'label','schema-field'+(f.disabled?' is-disabled':'')),name=mk('span','schema-name',f.description||f.title),hint=mk('small','schema-hint'),err=mk('small','schema-error'),was=mk('small','schema-was');row.dataset.path=f.path;if(hidden)row.hidden=true;
+   const row=mk(f.type==='object'?'div':'label','schema-field'+(f.disabled?' is-disabled':'')),name=mk('span','schema-name',sentenceTitle(f.title)),err=mk('small','schema-error'),was=mk('small','schema-was');row.dataset.path=f.path;if(hidden)row.hidden=true;row.title=f.description||'';
    const current=state[f.group]?.[f.key]??f.default;let input,inputs=[];
    if(f.type==='boolean'){input=mk('input');input.type='checkbox';input.checked=!!current;}
    else if(f.type==='enum'){input=mk('select');for(const o of f.options){const opt=mk('option',null,String(o).replaceAll('_',' '));opt.value=o;input.append(opt);}input.value=current;}
@@ -101,14 +108,14 @@ export function renderSchemaForm(el,schema,{values={},base=null,groups=null,show
     for(const c of f.children){const lab=mk('label','schema-sub'),cap=mk('span',null,c.title),i=mk('input');i.type='number';i.step=c.type==='integer'?'1':'any';if(c.min!=null)i.min=c.min;if(c.max!=null)i.max=c.max;i.value=current?.[c.key]??'';i.dataset.key=c.key;i.name=f.path+'.'+c.key;i.disabled=f.disabled;lab.append(cap,i);input.append(lab);inputs.push(i);}row.classList.add('schema-wide');}
    else{input=mk('input');input.type=f.type==='text'?'text':'number';if(f.min!=null)input.min=f.min;if(f.max!=null)input.max=f.max;if(f.maxLength!=null)input.maxLength=f.maxLength;if(f.type!=='text')input.step=f.type==='integer'?'1':'any';input.value=current??'';if(f.nullable)input.placeholder='none';}
    if(f.type!=='object'){input.name=f.path;input.dataset.group=f.group;input.dataset.key=f.key;input.disabled=f.disabled;inputs=[input];}
-   hint.textContent=[f.unit&&`Unit: ${f.unit}`,f.default!==undefined&&`Default ${show(f.default)}`,f.effects.length&&`Affects ${f.effects.join(', ')}`,f.advanced&&'Advanced',base&&f.path].filter(Boolean).join(' · ');
+   const finfo=info(sentenceTitle(f.title),[f.description,f.status&&`${f.status==='deprecated'?'Deprecated':f.status==='not-modelled'?'Not modelled':'Unavailable'}: ${f.reason}`,[f.unit&&`Unit ${f.unit}`,f.default!==undefined&&`Default ${show(f.default)}`,f.advanced&&'Advanced'].filter(Boolean).join(' · '),f.effects.length&&`Affects ${f.effects.join(', ')}`,f.path]);if(finfo){row.classList.add('has-pop');name.append(finfo[0]);}
    err.setAttribute('role','alert');
    const read=()=>f.type==='boolean'?input.checked:f.type==='object'?Object.fromEntries(inputs.map(i=>[i.dataset.key,i.value])):input.value;
    const check=()=>{const res=parseField(f,read());for(const i of inputs)i.setAttribute('aria-invalid',String(!res.ok));err.textContent=res.ok?'':res.error;return res;};
    for(const i of inputs){i.onchange=()=>{const res=check();if(res.ok)commit(f,res.value);};if(f.type==='json')i.oninput=check;}
-   if(f.status){const st=mk('small','schema-status',`${f.status==='deprecated'?'Deprecated':f.status==='not-modelled'?'Not modelled':'Unavailable'} · ${f.reason}`);row.append(name,input,st,hint,was,err);}
-   else if(f.unit&&f.type!=='json'&&f.type!=='object'){row.append(name,input,mk('span','schema-unit',f.unit),hint,was,err);}else row.append(name,input,hint,was,err);
-   decorate?.(f,row,input);rows.set(f.path,{row,input,inputs,was,f});card.append(row);mark(f);}
+   const ctl=mk('span','schema-control');ctl.append(input);if(f.unit&&f.type!=='json'&&f.type!=='object')ctl.append(mk('span','schema-unit',f.unit));if(f.status)ctl.append(mk('span','schema-status',f.status==='deprecated'?'Deprecated':f.status==='not-modelled'?'Not modelled':'Unavailable'));
+   row.append(name,ctl,was,err);if(finfo)row.append(finfo[1]);
+   decorate?.(f,row,input);rows.set(f.path,{row,input,inputs,was,f});body.append(row);mark(f);}
   el.append(card);}
  // Sets a value from outside the form (a seed button, a reset), updating its inputs.
  function set(path,value,{silent=false}={}){const f=fields.find(x=>x.path===path);if(!f)return false;(state[f.group]||={})[f.key]=value;const r=rows.get(path);
@@ -116,6 +123,6 @@ export function renderSchemaForm(el,schema,{values={},base=null,groups=null,show
   mark(f);if(!silent)onChange(overridesFrom(fields,state,base),changes());return true;}
  // Shows only matching settings; cards with a match open while a search is active. Returns the number of matches.
  function filter(query){let n=0;for(const {row,f} of rows.values()){const hit=fieldMatches(f,query)&&(showAdvanced||!f.advanced||!!query);row.hidden=!hit;if(hit)n++;}
-  for(const card of el.querySelectorAll('.schema-group')){const any=[...card.querySelectorAll('.schema-field')].some(r=>!r.hidden);card.hidden=!any&&!!query;if(collapsible&&query&&any)card.open=true;}return n;}
+  for(const card of el.querySelectorAll('.schema-group')){const any=[...card.querySelectorAll('.schema-field')].some(r=>!r.hidden);card.hidden=!any&&!!query;if(collapsible&&query&&any)card.open=true;const c=card.querySelector('.schema-count');if(c)c.textContent=String([...card.querySelectorAll('.schema-field')].filter(r=>!r.hidden).length);}return n;}
  return {fields,values:state,set,filter,changes,invalid:()=>[...el.querySelectorAll('[aria-invalid="true"]')].length};
 }

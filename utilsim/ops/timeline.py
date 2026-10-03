@@ -53,6 +53,8 @@ from utilsim.sim.state import run_sequence
 from utilsim.version import EVENT_SCHEMA_VERSION, READ_SCHEMA_VERSION
 
 TIMELINE_VERSION = "utility-timeline/1.0"
+DAYS_VERSION = "utility-days/1.0"
+MAX_DAYS = 62  # run days per POST /api/sim/days request (two months)
 UTILITIES = ("electric", "water", "gas")
 BASE = {
     "autoDispatch": True,
@@ -976,11 +978,9 @@ class Run:
                             "entityType": entity_type, "entityId": entity_id, "payload": payload,
                             "_order": len(self.events)})
 
-    def timeline(self) -> dict:
-        def clean(d: dict) -> dict:
-            return {k: (None if isinstance(v, float) and not math.isfinite(v) else v) for k, v in d.items()
-                    if not k.startswith("_")}
-
+    def _changes(self) -> tuple[list[dict], list[dict]]:
+        """The timeline's ``stateChanges`` (when supply changes, with who is unsupplied, disabled edges and leaks per
+        utility) and its ``interruptions`` (who lost which service and when, grouped by identical spans)."""
         changes = []
         live: dict[str, dict[int, float]] = {u: {} for u in UTILITIES}  # premise without service -> since
         spans: dict[tuple, list[int]] = {}
@@ -1015,6 +1015,18 @@ class Run:
                            "premiseIds": i["premiseIds"], "collectorId": i["assetId"], "incidentId": i["id"]}
                           for i in self.incidents if i["kind"] == "collector_outage" and i["premiseIds"]]
         interruptions.sort(key=lambda x: (x["start"], math.inf if x["end"] is None else x["end"], x["utility"]))
+        return changes, interruptions
+
+    def interruptions(self) -> list[dict]:
+        """Who lost which service and when (the timeline's ``interruptions``), without the rest of the timeline."""
+        return self._changes()[1]
+
+    def timeline(self) -> dict:
+        def clean(d: dict) -> dict:
+            return {k: (None if isinstance(v, float) and not math.isfinite(v) else v) for k, v in d.items()
+                    if not k.startswith("_")}
+
+        changes, interruptions = self._changes()
         return {"schemaVersion": TIMELINE_VERSION, "townId": self.ops.id, "simulationId": self.simulation_id,
                 "topologyRevision": self.ops.context.topology, "indexRevision": self.ops.context.index,
                 "date": self.day, "timezone": self.ops.timezone, "seed": self.seed, "settings": self.settings,
@@ -1034,3 +1046,16 @@ class Run:
                                      include_premises=include_premises, disabled=disabled, injections=leaks,
                                      premises_off={u: m for u, m in off.items() if m.any()} or None,
                                      closed={u: m for u, m in closed.items() if m.any()} or None)
+
+
+def run_days(ops, days: list[date], *, settings: dict | None = None, seed: str | None = None) -> list[dict]:
+    """The run days the viewer skips over (``POST /api/sim/days``), each replayed with no commands: its ``date``, its
+    ``interruptions`` exactly as that day's timeline reports them, and how many ``incidents`` and ``jobs`` it had.
+    The meter-to-cash run's field orders are left out: they and the reading rounds have their own crews, so neither
+    can change when a background incident is worked or who it interrupts."""
+    out = []
+    for d in days:
+        run = Run(ops, [], day=d.isoformat(), settings=settings, seed=seed)
+        out.append({"date": run.day, "interruptions": run.interruptions(), "incidents": len(run.incidents),
+                    "jobs": len(run.jobs)})
+    return out
