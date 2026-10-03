@@ -4995,9 +4995,10 @@
                 "schema": {
                   "$ref": "#/components/schemas/ChatResponse"
                 }
-              }
+              },
+              "text/event-stream": {}
             },
-            "description": "Successful Response"
+            "description": "With Accept: text/event-stream, progress and reply-text events, then {type: done, ...ChatResponse} or {type: error, status, detail}."
           },
           "422": {
             "content": {

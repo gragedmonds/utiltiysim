@@ -355,3 +355,139 @@ def test_voice_proposal_preserves_selected_goals_when_provider_omits_them(monkey
                             draft={"goals": ["vee", "reading"]})
     reply = asyncio.run(agent.conversation(req, "test-key"))
     assert reply["proposal"]["goals"] == ["vee", "reading"]
+
+
+def sse_events(text):
+    return [json.loads(chunk[5:]) for chunk in text.split("\n\n") if chunk.startswith("data:")]
+
+
+def test_reply_tap_streams_only_the_top_level_message_and_holds_back_partial_escapes():
+    events = []
+    tap = agent.ReplyTap(events.append)
+    raw = json.dumps({"message": 'Got it — "Ontario".\nCafé next?',
+                      "proposal": {"name": "x", "message": "nested, never streamed"}}, ensure_ascii=True)
+    for end in range(1, len(raw) + 1):  # one character at a time, splitting every escape sequence
+        tap.feed(0, "respond", raw[:end])
+    text = "".join(e["text"] for e in events if e["type"] == "delta")
+    assert text == 'Got it — "Ontario".\nCafé next?'
+    assert [e for e in events if e["type"] == "progress"] == [{"type": "progress", "stage": "drafting"}]
+    other = agent.ReplyTap(events.append)
+    other.feed(1, "inspect_configuration", '{"message": "not a reply"}')
+    assert not other.streamed
+    late = []
+    tap = agent.ReplyTap(late.append)
+    tap.feed(0, "respond", '{"proposal": null, "message": "Which provi')
+    tap.feed(0, "respond", '{"proposal": null, "message": "Which province?"}')
+    assert [e["text"] for e in late] == ["Which provi", "nce?"]
+
+
+def test_streamed_chat_reports_progress_and_text_then_the_same_validated_reply(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test")
+    reply = {"message": "Here is a **recovery** setup to review.", "proposal": proposal()}
+    seen = []
+
+    async def fake_stream(payload, key, on_input):
+        seen.append(json.loads(json.dumps(payload)))
+        if len(seen) == 1:
+            return tool("inspect_configuration", {"scope": "run", "groups": ["process", "billing"], "preset": "village"})
+        raw = json.dumps(reply)
+        for end in range(0, len(raw), 40):
+            on_input(0, "respond", raw[:end + 40])
+        return tool("respond", reply)
+
+    async def fake_message(payload, key):
+        return tool("respond", reply)
+
+    monkeypatch.setattr(agent, "anthropic_stream", fake_stream)
+    monkeypatch.setattr(agent, "anthropic_message", fake_message)
+    body = {"messages": [{"role": "user", "content": "Half our team is away."}],
+            "draft": {"preset": "village", "goals": ["vee", "reading"]}}
+    with TestClient(app) as c:
+        r = c.post("/api/setup-agent/chat", json=body, headers={"Accept": "text/event-stream, application/json"})
+        plain = c.post("/api/setup-agent/chat", json=body)
+    assert r.status_code == 200 and r.headers["content-type"].startswith("text/event-stream")
+    events = sse_events(r.text)
+    stages = [e.get("stage") for e in events if e["type"] == "progress"]
+    assert stages == ["inspect", "drafting", "validate"]
+    assert events[0]["labels"] == ["Meter-to-cash process", "Billing & collections"]
+    assert "".join(e["text"] for e in events if e["type"] == "delta") == reply["message"]
+    done = events[-1]
+    assert done.pop("type") == "done" and done == plain.json()
+    assert done["proposal"]["episodes"][0]["id"] == "EP-1"
+    assert done["proposal"]["goals"] == ["vee", "reading"], "selected goals survive a streamed proposal that omits them"
+    respond = next(t for t in seen[0]["tools"] if t["name"] == "respond")
+    assert respond["eager_input_streaming"] is True
+    assert "eager_input_streaming" not in next(t for t in seen[0]["tools"] if t["name"] == "inspect_configuration")
+    assert agent._ACTIVE == 0
+
+
+def test_streamed_repairs_reset_the_text_and_failures_arrive_in_band(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test")
+    replies = [{"message": "Done", "proposal": proposal(settings={"process": {"analysts": -5}})},
+               {"message": "How many analysts are normally available?", "proposal": None}]
+
+    async def fake_stream(payload, key, on_input):
+        reply = replies.pop(0)
+        on_input(0, "respond", json.dumps(reply))
+        return tool("respond", reply)
+
+    monkeypatch.setattr(agent, "anthropic_stream", fake_stream)
+    headers = {"Accept": "text/event-stream"}
+    body = {"messages": [{"role": "user", "content": "Less staff"}]}
+    with TestClient(app) as c:
+        events = sse_events(c.post("/api/setup-agent/chat", json=body, headers=headers).text)
+        kinds = [e["type"] + ":" + e.get("stage", "") for e in events]
+        assert kinds.index("reset:") < kinds.index("progress:repair") < len(kinds) - 1
+        after_reset = events[kinds.index("reset:") + 1:]
+        assert "".join(e["text"] for e in after_reset if e["type"] == "delta") == "How many analysts are normally available?"
+        assert events[-1]["type"] == "done" and events[-1]["proposal"] is None
+
+        async def timeout(*args):
+            raise httpx.ReadTimeout("do not expose internal details")
+
+        monkeypatch.setattr(agent, "anthropic_stream", timeout)
+        r = c.post("/api/setup-agent/chat", json=body, headers=headers)
+        assert r.status_code == 200 and "internal" not in r.text
+        assert sse_events(r.text) == [{"type": "error", "status": 504,
+                                       "detail": "Claude took too long to reply. Try again; your setup is unchanged."}]
+        assert agent._ACTIVE == 0
+        monkeypatch.delenv("ANTHROPIC_API_KEY")
+        assert c.post("/api/setup-agent/chat", json=body, headers=headers).status_code == 503
+
+
+def test_provider_stream_assembles_tool_calls_and_maps_stream_errors(monkeypatch):
+    real_client = httpx.AsyncClient
+    bodies = []
+    stream = [
+        {"type": "message_start", "message": {"content": [], "stop_reason": None}},
+        {"type": "content_block_start", "index": 0, "content_block": {"type": "text", "text": ""}},
+        {"type": "content_block_stop", "index": 0},
+        {"type": "content_block_start", "index": 1, "content_block": {"type": "tool_use", "id": "t1", "name": "respond", "input": {}}},
+        {"type": "content_block_delta", "index": 1, "delta": {"type": "input_json_delta", "partial_json": '{"message": "Hel'}},
+        {"type": "ping"},
+        {"type": "content_block_delta", "index": 1, "delta": {"type": "input_json_delta", "partial_json": 'lo", "proposal": null}'}},
+        {"type": "content_block_stop", "index": 1},
+        {"type": "message_delta", "delta": {"stop_reason": "tool_use"}},
+        {"type": "message_stop"},
+    ]
+
+    def serve(events, status=200):
+        def handler(request):
+            bodies.append(json.loads(request.content))
+            text = "".join(f"event: {e['type']}\n" + agent.sse(e) for e in events)
+            return httpx.Response(status, text=text, headers={"content-type": "text/event-stream"})
+        monkeypatch.setattr(agent.httpx, "AsyncClient", lambda **kw: real_client(transport=httpx.MockTransport(handler)))
+
+    seen = []
+    serve(stream)
+    message = asyncio.run(agent.anthropic_stream({"model": "test"}, "key", lambda i, name, raw: seen.append((i, name, raw))))
+    assert bodies[-1]["stream"] is True
+    assert message == {"stop_reason": "tool_use", "content": [
+        {"type": "tool_use", "id": "t1", "name": "respond", "input": {"message": "Hello", "proposal": None}}]}
+    assert [raw for _, _, raw in seen] == ['{"message": "Hel', '{"message": "Hello", "proposal": null}']
+    for events, status, code in [(stream[:4] + [{"type": "error", "error": {"type": "overloaded_error", "message": "x"}}], 200, 429),
+                                 (stream[:-1], 200, 502), ([], 401, 503)]:
+        serve(events, status)
+        with pytest.raises(agent.HTTPException) as exc:
+            asyncio.run(agent.anthropic_stream({"model": "test"}, "private-key", lambda *a: None))
+        assert exc.value.status_code == code and "private-key" not in exc.value.detail

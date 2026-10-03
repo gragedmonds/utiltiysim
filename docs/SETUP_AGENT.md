@@ -60,6 +60,23 @@ Every town currently includes electricity and water. The service selector adds g
 all-electric heating through `gas.all_electric_district_share`; Advanced exposes the exact coverage share.
 Pool activity still follows the engine's May–September model even in the warm-region starter.
 
+## Chat
+
+The guide works like a messaging thread. Claude's messages sit on the left, yours on the right, and the thread
+keeps the newest message in view unless you scroll back. **Enter** sends and **Shift+Enter** starts a new line. Your
+message appears straight away, the box clears and keeps focus, and typing dots show until Claude answers. Replies
+stream in as they are written. While Claude reads settings or checks a proposal, short notes appear in the thread
+("Hey, I'll look into those knobs — meter reading and billing & collections…", then "Great — okay, here's what
+I'll tweak:" above the proposal card, and "Done — your settings are in." after applying). The wording varies by turn
+but is never random. Notes stay in the saved conversation and are never sent to Claude.
+
+Replies render bold, italics, inline code, lists and paragraphs; text is escaped first, so a reply cannot add markup.
+A failed reply shows as a small message with **Retry**; your message stays in the thread and is sent again.
+**Just use sensible defaults** (or **Skip ahead**, once you've answered something) asks Claude to fill the gaps and
+propose a baseline. Streaming needs the server-sent-events form of `POST /api/setup-agent/chat` (see
+`docs/CONTRACT.md`); a host that buffers the response shows the whole reply at once, and an older server's JSON
+reply still works.
+
 ## Editable input summary
 
 Both the proposal and final wizard review show **What your inputs change**. Each explicit town, baseline,
@@ -156,8 +173,11 @@ saved simulation unchanged. The manual wizard is independent of the provider.
 
 Automated API tests use a deterministic provider double and a mocked HTTP transport: schema inspection, probing
 questions, invalid-proposal repair, bounds/dependencies, dates, paths, timeout, unknown tools, call limits,
-credential isolation and missing-key behavior. Viewer tests cover draft application, handoff to both engine
-clients, reopening after edits, and voice detection/fallback.
+credential isolation and missing-key behavior. They also stream a reply through a mocked provider stream and check
+progress events, partial-escape handling, repair resets, in-band errors and that the final event matches the JSON
+reply. Viewer tests cover draft application, handoff to both engine clients, reopening after edits, voice
+detection/fallback, and the chat: Enter versus Shift+Enter, the immediate message and typing dots, streamed text
+and progress notes, retry, reading split event streams, and markdown that escapes HTML.
 
 Browser verification uses deterministic provider replies with the real validation and simulation APIs. A proposed
 staff reduction and recovery opened Year at May 12 with two episodes, a 5% AMI missed-read setting and three field

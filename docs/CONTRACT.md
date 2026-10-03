@@ -25,6 +25,13 @@ availability means a server key is configured, not that provider authentication 
 returns `{schemaVersion, message, proposal: null | validatedProposal}`. Only text history and configuration fields
 are forwarded. `proposal: null` is a follow-up question, not a failed configuration.
 
+With `Accept: text/event-stream` the same request streams server-sent events instead: `{type: "progress", stage:
+"inspect" | "drafting" | "validate" | "repair", labels?}` while Claude reads settings (with the inspected groups'
+titles) or a proposal is drafted and checked, `{type: "delta", text}` as the reply is written, `{type: "reset"}` when
+a rejected reply is about to be rewritten, then `{type: "done", ...ChatResponse}` or `{type: "error", status, detail}`.
+Errors found before streaming starts (missing key, rate limit, invalid request) keep their HTTP status. A host that
+buffers responses delivers the same events at once; without the header the reply is the JSON body above.
+
 In `inflict` mode, `currentRun` holds the current portable `townRef`, base settings, existing episodes (IDs/scenario
 included), `asOf`, selected `startDate`, and optional simulation name/region/purpose. Replies contain only new
 `InflictProposal` periods and a validated `runTo`, never replacement town/base inputs.
