@@ -813,3 +813,23 @@ details.schema-group>.schema-field:last-child{margin-bottom:10px}
 .schema-reach{display:inline-block;margin-left:6px;padding:0 5px;border-radius:4px;font-size:10px;line-height:16px;font-weight:600;letter-spacing:.2px;vertical-align:1px;white-space:nowrap}
 .reach-year{background:#e3f1ec;color:#1f6b52}.reach-town{background:#e6eef8;color:#2f5687}.reach-shape{background:#efeef2;color:#6b6780}
 .reach-operations{background:#fbf0de;color:#8a5a12}.reach-display{background:#f2f2f2;color:#7b7b7b}
+/* Locking a simulation's settings (simulation-lock.js). Before it starts: a lock-in bar at the top of Config and the
+   other tabs disabled. After: a banner, and Config shows the settings without editing controls. */
+.cfg-lock-bar{position:sticky;top:0;z-index:4;display:flex;align-items:center;gap:12px 20px;flex-wrap:wrap;margin:0 0 14px;padding:14px 18px;background:linear-gradient(120deg,#fff 30%,#f3effd);border:1px solid #d9d0f5;border-radius:12px;box-shadow:0 8px 24px #20183a14}
+.cfg-lock-text{flex:1 1 320px;min-width:0}.cfg-lock-text strong{font-size:14.5px;color:#2c2448}
+.cfg-lock-text p{margin:3px 0 0;font-size:12.5px;line-height:1.5;color:#5d5876}.cfg-lock-text .cfg-lock-note{font-size:11.5px;color:#8a849c}
+.cfg-lock-bar .primary-btn{width:auto;margin:0;padding:12px 20px;background:#7357d8;border-radius:8px;font-weight:650;box-shadow:0 4px 12px #7357d840}
+.cfg-lock-bar .primary-btn:hover{background:#5f45c4}.cfg-lock-bar .primary-btn:disabled{background:#b9b5c8;box-shadow:none;cursor:wait}
+.cfg-locked-banner{position:sticky;top:0;z-index:4;display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap;margin:0 0 14px;padding:10px 14px;background:#f6f4fb;border:1px solid #e1dced;border-radius:10px;box-shadow:0 4px 14px #20183a12;font-size:13px;color:#3c3752}
+#settings-page:has(#cfg-lock-bar:not([hidden])) .cfg-main :is(section,.schema-group){scroll-margin-top:120px}
+#settings-page.is-locked .cfg-main :is(section,.schema-group){scroll-margin-top:68px}
+.cfg-locked-banner p{flex:1 1 260px;margin:0;line-height:1.5}.cfg-locked-banner a{font-weight:650;color:#5d43b8;white-space:nowrap}
+.cfg-lock-glyph{position:relative;flex:0 0 auto;width:14px;height:16px}
+.cfg-lock-glyph::before{content:'';position:absolute;left:1px;bottom:0;width:12px;height:9px;border-radius:2px;background:#7357d8}
+.cfg-lock-glyph::after{content:'';position:absolute;left:3.5px;top:0;width:7px;height:8px;border:2px solid #7357d8;border-bottom:0;border-radius:4px 4px 0 0;box-sizing:border-box}
+#settings-page.is-locked :is(#town-config-reset,#town-new-seed,#m2c-new-seed,#m2c-seed-clear,#m2c-settings-reset,#reset-seed,#generate-btn,#import-btn,#settings-load-snapshot,#load-state-btn,#return-demo,#presets-card,#frequency-card),#settings-page.is-locked .town-config-bar,#settings-page.is-locked .settings-card:has(#generator-section){display:none!important}
+#settings-page.is-locked .cfg-main :is(input,select,textarea)[data-locked-input]{background:#f6f5f9;color:#2c2448;-webkit-text-fill-color:#2c2448;opacity:1;border-color:#eceaf2;cursor:default}
+#settings-page.is-locked .cfg-main input[type=checkbox][data-locked-input]{accent-color:#8f86b5}
+#settings-page.is-locked .cfg-main select[data-locked-input]{appearance:none;background-image:none}
+.studio-tabs a.is-disabled{color:#b3afc2;cursor:not-allowed}.studio-tabs a.is-disabled:hover{color:#b3afc2;background:none}
+@media (max-width:720px){.cfg-lock-bar{padding:10px 12px;gap:8px;top:0}.cfg-lock-text strong,.cfg-lock-text .cfg-lock-note{display:none}.cfg-lock-text p{margin:0}.cfg-lock-bar .primary-btn{flex:1 1 100%;padding:10px 14px}.cfg-locked-banner{top:0;padding:8px 12px;font-size:12px}#settings-page:has(#cfg-lock-bar:not([hidden])) .cfg-main :is(section,.schema-group){scroll-margin-top:112px}#settings-page.is-locked .cfg-main :is(section,.schema-group){scroll-margin-top:86px}}

@@ -2,11 +2,12 @@
 // dated), the episodes the Year tab inflicted (dated setting changes from the scenario library) and the service interruptions the map's operations days produced; the engine replays the year (POST /api/m2c/*, /api/process/*, /api/vee/*) and returns one bounded view at a
 // time. Nothing here decides VEE outcomes, queue order, costs or estimates.
 import {simulationKey} from './simulation-library.js';
+import {assertUnlocked} from './simulation-lock.js';
 const KEY='utility-town-m2c:';
 export const YEAR_END='2026-12-31';
 const addDays=(day,n)=>new Date(Date.parse(day+'T12:00:00Z')+n*86400000).toISOString().slice(0,10);
 export class EngineM2C{
- constructor({api='/api',townRef,townId,simulationId=null,initial={},onSave=null,onSaveError=null,storage=globalThis.localStorage,fetchImpl}={}){
+ constructor({api='/api',townRef,townId,simulationId=null,initial={},onSave=null,onSaveError=null,storage=globalThis.localStorage,fetchImpl,locked=false}={}){this.locked=!!locked;
   this.api=api;this.townRef=townRef;this.townId=townId||townRef;this.storage=storage;this.fetchImpl=fetchImpl;this.storageKey=simulationKey(simulationId,this.townId);this.onSave=onSave;this.onSaveError=onSaveError;this.initial=initial;this.tickets={};this.cache=new Map();
   const saved=this.load();this.settings=saved.settings||null;this.actions=Array.isArray(saved.actions)?saved.actions:[];this.asOf=saved.asOf||null;this.outages=saved.outages&&typeof saved.outages==='object'?saved.outages:{};
   this.outageSources=saved.outageSources&&typeof saved.outageSources==='object'?saved.outageSources:{};this.seed=typeof saved.seed==='string'&&saved.seed?saved.seed.slice(0,64):null;
@@ -101,9 +102,10 @@ export class EngineM2C{
   this.save();try{this.onAct?.(a);}catch{}return a;
  }
  setAsOf(day){this.asOf=day||null;this.save();}
- setSettings(overrides){this.settings=overrides&&Object.keys(overrides).length?overrides:null;this.save();}
+ // A locked simulation (simulation-lock.js) keeps its settings and seed; episodes and actions still apply.
+ setSettings(overrides){assertUnlocked(this);this.settings=overrides&&Object.keys(overrides).length?overrides:null;this.save();}
  // The run's seed (≤64 characters): reads, anomalies and estimates re-roll with it; blank uses the town's own seed.
- setSeed(seed){const s=String(seed??'').trim().slice(0,64)||null;if(s===this.seed)return false;this.seed=s;this.save();return true;}
+ setSeed(seed){const s=String(seed??'').trim().slice(0,64)||null;if(s===this.seed)return false;assertUnlocked(this);this.seed=s;this.save();return true;}
  reset(){this.actions=[];this.save();}
  // The run identity the operations timeline needs for this day's field orders.
  context(){const o=this.outageList();return {settings:this.settings||undefined,...(this.seed?{seed:this.seed}:{}),actions:this.actions,...(o.length?{outages:o}:{}),...(this.episodes.length?{episodes:this.episodes}:{})};}

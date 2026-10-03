@@ -4,7 +4,15 @@ Choose **Talk it through** at the start of the wizard or while choosing a scenar
 questions across location, service area, utility type/scale, metering, normal staffing/workflow, billing and
 starting pressures before shaping the experiment. It inspects the engine's current configuration definitions, and proposes a complete setup. The proposal
 shows its summary, dated episodes, assumptions, model limits and exact setting changes. **Use this setup** validates
-it again and fills in the draft; **Open simulation** opens Year with those settings. Manual starters remain available.
+it again and fills in the draft; **Continue to Config** opens the simulation's full Config page, unlocked. Manual starters remain available.
+
+**Lock in before the simulation starts.** A new simulation (record `locked: false`) opens on Config with every setting
+editable, the other Studio tabs disabled and a bar that says how many settings differ from the defaults. **Lock in
+settings and start simulation** saves the run settings, map-day settings and seed into the record with `locked: true`
+and `lockedAt`, and opens the Command Center (`#/year`), or the map for an operations-only experiment. From then on Config only displays the settings (inputs
+disabled, reset and generate controls hidden, a banner links to a new simulation) and the client stores refuse setting
+and seed changes (`simulation-lock.js`). Dated episodes from the Command Center remain allowed: they are run input,
+not base settings. A record saved before this flag existed counts as locked and opens as before.
 
 ## Environment and utility wizard
 
@@ -35,7 +43,7 @@ counts within the connected engine’s limit; existing saved sizes are preserved
 Focused setup shows relevant controls and Advanced groups. **Show all settings for this step** reveals the rest,
 without changing any values. Switching focus preserves hidden edits. Test everything exposes all groups.
 These are presentation profiles; generation and replay still include their full dependencies. Operations-only
-setups open the map and expose map-day controls first; other setups open Year. Claude receives the same goal
+setups open the map (after the lock-in page) and expose map-day controls first; other setups open the Command Center. Claude receives the same goal
 catalogue and focuses its interview on the chosen experiment. Existing drafts retain their stage and settings.
 
 Basic and advanced controls edit the same values. Region changes preserve home count and utility settings;
