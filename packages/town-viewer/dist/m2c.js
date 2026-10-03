@@ -1,17 +1,31 @@
 // Meter-to-cash client. The viewer keeps only the run's settings overrides, its seed (blank: the town's), the analyst's actions (append-only,
-// dated) and the service interruptions the map's operations days produced; the engine replays the year (POST /api/m2c/*, /api/process/*, /api/vee/*) and returns one bounded view at a
+// dated), the episodes the Year tab inflicted (dated setting changes from the scenario library) and the service interruptions the map's operations days produced; the engine replays the year (POST /api/m2c/*, /api/process/*, /api/vee/*) and returns one bounded view at a
 // time. Nothing here decides VEE outcomes, queue order, costs or estimates.
 const KEY='utility-town-m2c:';
+export const YEAR_END='2026-12-31';
+const addDays=(day,n)=>new Date(Date.parse(day+'T12:00:00Z')+n*86400000).toISOString().slice(0,10);
 export class EngineM2C{
  constructor({api='/api',townRef,townId,storage=globalThis.localStorage,fetchImpl}={}){
   this.api=api;this.townRef=townRef;this.townId=townId||townRef;this.storage=storage;this.fetchImpl=fetchImpl;this.tickets={};this.cache=new Map();
   const saved=this.load();this.settings=saved.settings||null;this.actions=Array.isArray(saved.actions)?saved.actions:[];this.asOf=saved.asOf||null;this.outages=saved.outages&&typeof saved.outages==='object'?saved.outages:{};
   this.outageSources=saved.outageSources&&typeof saved.outageSources==='object'?saved.outageSources:{};this.seed=typeof saved.seed==='string'&&saved.seed?saved.seed.slice(0,64):null;
+  this.episodes=Array.isArray(saved.episodes)?saved.episodes:[];
  }
  get fetch(){return this.fetchImpl||globalThis.fetch.bind(globalThis);}
  load(){try{return JSON.parse(this.storage?.getItem(KEY+this.townId)||'{}')||{};}catch{return {};}}
- save(){try{this.storage?.setItem(KEY+this.townId,JSON.stringify({settings:this.settings,seed:this.seed,actions:this.actions,asOf:this.asOf,outages:this.outages,outageSources:this.outageSources}));}catch{}}
- body(extra={}){const b={town:this.townRef,actions:this.actions,...extra};if(this.settings)b.settings=this.settings;if(this.seed)b.seed=this.seed;const o=this.outageList();if(o.length)b.outages=o;if(this.asOf)b.asOf=this.asOf;return b;}
+ save(){try{this.storage?.setItem(KEY+this.townId,JSON.stringify({settings:this.settings,seed:this.seed,actions:this.actions,episodes:this.episodes,asOf:this.asOf,outages:this.outages,outageSources:this.outageSources}));}catch{}}
+ body(extra={}){const b={town:this.townRef,actions:this.actions,...extra};if(this.settings)b.settings=this.settings;if(this.seed)b.seed=this.seed;const o=this.outageList();if(o.length)b.outages=o;if(this.episodes.length)b.episodes=this.episodes;if(this.asOf)b.asOf=this.asOf;return b;}
+ // Episodes (the Year tab): a scenario's setting changes from one day to another (`to` null: year end), at most 40, kept
+ // sorted by `from`. Ids are EP-n and never reused. The engine applies them when it replays the year; a bad one is a 422.
+ addEpisode(ep){const n=this.episodes.reduce((m,x)=>Math.max(m,Number(String(x.id||'').slice(3))||0),0)+1;const e={id:'EP-'+n,title:ep.title||ep.scenario||'Episode',scenario:ep.scenario||null,from:ep.from,to:ep.to??null,ramp:Number(ep.ramp)||0,settings:ep.settings||{}};
+  this.episodes.push(e);this.sortEpisodes();this.save();return e;}
+ updateEpisode(id,patch){const e=this.episodes.find(x=>x.id===id);if(!e)return null;Object.assign(e,patch,{id});this.sortEpisodes();this.save();return e;}
+ removeEpisode(id){const n=this.episodes.length;this.episodes=this.episodes.filter(x=>x.id!==id);if(this.episodes.length===n)return false;this.save();return true;}
+ clearEpisodes(){this.episodes=[];this.save();}
+ sortEpisodes(){this.episodes.sort((a,b)=>a.from<b.from?-1:a.from>b.from?1:(Number(a.id.slice(3))||0)-(Number(b.id.slice(3))||0));}
+ // The scenario library (GET, fetched once) and the month-by-month trend of this run.
+ async scenarios(){if(!this._scenarios){const r=await this.fetch(this.api+'/m2c/scenarios');if(!r.ok)throw Error('Engine '+r.status);this._scenarios=await r.json();}return this._scenarios;}
+ trend(){return this.post('/m2c/trend',{},'trend');}
  // Interruptions per operations day (a timeline's `interruptions`); one still open at the end of the day runs a day.
  outageList(){return Object.keys(this.outages).sort().flatMap(day=>this.outages[day].map(o=>({day,utility:o.utility,start:o.start,end:o.end??o.start+86400,premiseIds:o.premiseIds})));}
  outageKey(){return Object.keys(this.outages).sort().map(d=>d+':'+this.outages[d].map(o=>o.utility[0]+o.start+'-'+o.end+'x'+o.premiseIds.length).join(',')).join('|');}
@@ -91,9 +105,16 @@ export class EngineM2C{
  setSeed(seed){const s=String(seed??'').trim().slice(0,64)||null;if(s===this.seed)return false;this.seed=s;this.save();return true;}
  reset(){this.actions=[];this.save();}
  // The run identity the operations timeline needs for this day's field orders.
- context(){const o=this.outageList();return {settings:this.settings||undefined,...(this.seed?{seed:this.seed}:{}),actions:this.actions,...(o.length?{outages:o}:{})};}
- export(){return {schemaVersion:'viewer-m2c-run/1.0',townId:this.townId,town:this.townRef,settings:this.settings,seed:this.seed,actions:this.actions,outages:this.outageList(),asOf:this.asOf};}
+ context(){const o=this.outageList();return {settings:this.settings||undefined,...(this.seed?{seed:this.seed}:{}),actions:this.actions,...(o.length?{outages:o}:{}),...(this.episodes.length?{episodes:this.episodes}:{})};}
+ export(){return {schemaVersion:'viewer-m2c-run/1.0',townId:this.townId,town:this.townRef,settings:this.settings,seed:this.seed,actions:this.actions,episodes:this.episodes,outages:this.outageList(),asOf:this.asOf};}
 }
+
+// A library scenario's episode templates as concrete episodes for the day they are inflicted: `startOffset` days after
+// that day, `durationDays` null to the year end (to: null), else the inclusive end `durationDays - 1` days on, clamped at
+// 2026-12-31 (as is a start past it). The ramp and the settings are the template's; the engine interprets the operators.
+export function episodeDates(scenario,day){const clamp=d=>d>YEAR_END?YEAR_END:d;
+ return (scenario?.episodes||[]).map(t=>{const from=clamp(addDays(day,Number(t.startOffset)||0)),to=t.durationDays==null?null:clamp(addDays(from,Math.max(1,Number(t.durationDays))-1));
+  return {title:t.title||scenario.title,scenario:scenario.id,from,to,ramp:Number(t.ramp)||0,settings:JSON.parse(JSON.stringify(t.settings||{}))};});}
 
 // The engine's notices on one action ("ACT-3 (notice): CASE-… was completed while …"): recorded, but worth a warning.
 export function noticesFor(warnings,id){const p=id+' (notice):';return (warnings||[]).map(String).filter(w=>w.startsWith(p)).map(w=>w.slice(p.length).trim());}

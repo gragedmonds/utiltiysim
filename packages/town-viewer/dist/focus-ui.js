@@ -22,9 +22,10 @@ const PAGES=[{id:'settings-page',re:/^#\/(?:settings|config)(?:\/(town|scenarios
 PAGES.push({id:'process-page',re:/^#\/process(?:\/(?:[1-9]|1[0-2])(?:\/[\w.:-]+)?)?$/}); // #/process[/MONTH[/EVENT]]: Activity sequences
 PAGES.push({id:'workspace-page',re:/^#\/workspace(?:\/[\w.:%-]+)*$/}); // #/workspace/<transaction>[/...]: Utility Studio SAP transactions
 PAGES.push({id:'data-page',re:/^#\/data(?:\/[\w-]+)?$/}); // #/data[/<table>]: tables of the town and its run
+PAGES.push({id:'year-page',re:/^#\/year$/}); // #/year: the calendar of the run, its episodes and trends
 // Utility Studio navigation: Map and Workspace are the primary destinations; Configuration is the cog.
-const NAV={'workspace-page':'nav-workspace','worklists-page':'nav-workspace','process-page':'nav-workspace','data-page':'nav-data'};
-export function installFocusUI({getContext,onSettings,onScenario,onWorklists=()=>{},onSettingsTab=()=>{},onProcess=()=>{},onWorkspace=()=>{},onData=()=>{}}){
+const NAV={'workspace-page':'nav-workspace','worklists-page':'nav-workspace','process-page':'nav-workspace','data-page':'nav-data','year-page':'nav-year'};
+export function installFocusUI({getContext,onSettings,onScenario,onWorklists=()=>{},onSettingsTab=()=>{},onProcess=()=>{},onWorkspace=()=>{},onData=()=>{},onYear=()=>{}}){
  const $=id=>document.getElementById(id), pairs=[['layers-toggle','layers-drawer'],['scenario-toggle','scenario-popover'],['data-toggle','data-popover'],['search-toggle','search-popover']];
  document.querySelectorAll('[data-icon]').forEach(el=>{el.insertAdjacentHTML('afterbegin',`<svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[el.dataset.icon]||''}</svg>`);});
  function closeTools(){for(const [button,panel] of pairs){$(panel).hidden=true;$(button).setAttribute('aria-expanded','false');}}
@@ -60,6 +61,7 @@ export function installFocusUI({getContext,onSettings,onScenario,onWorklists=()=
   if(page==='process-page'){closeTools();$('performance-panel').open=false;if(was!==page)$('process-back').focus();}onProcess(page==='process-page',hash);
   if(page==='workspace-page'){closeTools();$('performance-panel').open=false;}onWorkspace(page==='workspace-page',hash);
   if(page==='data-page'){closeTools();$('performance-panel').open=false;}onData(page==='data-page',hash);
+  if(page==='year-page'){closeTools();$('performance-panel').open=false;}onYear(page==='year-page',hash);
  }
  function settings(tab='town'){window.location.hash='/config/'+tab;route();}
  function map(){const from=current;window.location.hash='/town';route();$(from==='settings-page'?'settings-toggle':'nav-map').focus();}

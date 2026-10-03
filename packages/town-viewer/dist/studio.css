@@ -631,3 +631,140 @@ details.schema-group>.schema-field:last-child{margin-bottom:10px}
  .data-columns-body{right:auto;left:0;grid-template-columns:1fr}
  .data-pager{justify-content:center}
 }
+/* Year: the calendar of the run, its episodes and the trend charts (year-page.js). Twelve month grids with episode
+   bars under them, a side panel to inflict or edit an episode, small-multiple SVG charts below. */
+#year-page{padding:0;background:#f7f7fa;overflow:auto;display:block}
+.year-root{min-height:100%}
+.year-layout{display:grid;grid-template-columns:minmax(0,1fr);align-items:start;min-height:100%}
+.year-layout.has-panel{grid-template-columns:minmax(0,1fr) 352px}
+.year-main{min-width:0;padding:16px 22px 32px}
+.year-head{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:flex-end;justify-content:space-between;margin-bottom:8px}
+.year-head h1{font-size:21px;margin:2px 0 0;display:flex;align-items:center;gap:8px;letter-spacing:-.3px}
+#year-page .has-pop{position:relative}
+.year-head .schema-pop{top:110%;max-width:440px}
+.year-tools{display:flex;gap:14px;align-items:center;flex-wrap:wrap;font-size:13px;color:#5d5870}
+.year-tools label{display:flex;gap:6px;align-items:center}
+.year-tools input[type=date]{font:inherit;font-size:13px;padding:5px 7px;border:1px solid #d7d4e3;border-radius:6px;background:#fff}
+.year-tools .small-link{font-size:12px;color:#5d43b8}
+.year-confirm{font-size:12px;color:#b3261e;display:flex;gap:8px;align-items:center}
+.year-status{font-size:12px;color:#737f94;margin:0 0 10px;min-height:16px}
+.year-error{color:#b3261e;font-size:12.5px;margin:0 0 10px}
+.year-calendar{background:#fff;border:1px solid #e4e2ee;border-radius:10px;padding:14px 16px 10px;margin-bottom:14px}
+.year-months{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px 16px}
+.year-month h2{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#5d5870;margin:0 0 4px;font-weight:700}
+.year-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:1px}
+.year-wd{font-size:9.5px;color:#b8b3c6;text-align:center;line-height:14px}
+.year-pad{display:block}
+.year-day{aspect-ratio:1;min-height:0;padding:0;border:0;border-radius:4px;background:#fff;font:inherit;font-size:11px;color:#3d3750;cursor:pointer;line-height:1;font-variant-numeric:tabular-nums}
+.year-day.is-weekend{color:#9a95ab}
+.year-day.is-past{background:#efedf5}
+.year-day.is-past.is-weekend{background:#f3f1f8}
+.year-day:hover{background:#efeafd;color:#5d43b8}
+.year-day.is-today{box-shadow:inset 0 0 0 2px #7357d8;font-weight:700;color:#5d43b8}
+.year-day.is-selected,.year-day.is-selected:hover{background:#7357d8;color:#fff}
+.year-day:focus-visible{outline:2px solid #7357d8;outline-offset:1px;z-index:1;position:relative}
+.year-strip{position:relative;margin-top:4px;min-height:8px}
+.year-bar{position:absolute;height:4px;min-width:3px;border:0;padding:0;border-radius:2px;cursor:pointer;min-height:0}
+.year-bar:not(.starts){border-top-left-radius:0;border-bottom-left-radius:0}
+.year-bar:not(.ends){border-top-right-radius:0;border-bottom-right-radius:0}
+.year-bar:hover,.year-bar:focus-visible{outline:2px solid #2d2840;outline-offset:1px}
+.year-legend{list-style:none;margin:12px 0 0;padding:10px 0 0;border-top:1px solid #efeef4;display:flex;flex-wrap:wrap;gap:6px 18px}
+.year-legend-empty{font-size:12px;color:#737f94;margin:12px 0 0;padding:10px 0 0;border-top:1px solid #efeef4}
+.year-leg{display:flex;align-items:center;gap:7px;border:0;background:none;padding:3px 4px;border-radius:6px;font:inherit;font-size:12px;color:#3d3750;cursor:pointer;min-height:0;text-align:left}
+.year-leg:hover{background:#f0ecfc}
+.year-leg i{width:12px;height:12px;border-radius:3px;flex:none}
+.year-leg strong{font-weight:650}
+.year-leg span{color:#8a8497}
+/* Trend charts: white cards, hairline grid, 2px lines, ≤24px columns, a readout on hover or focus and a table twin. */
+.year-trends{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;transition:opacity .2s}
+.year-trends.is-stale{opacity:.55}
+.yr-card{position:relative;background:#fff;border:1px solid #e4e2ee;border-radius:10px;padding:10px 12px 8px;min-width:0}
+.yr-card header{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:4px}
+.yr-card h3{margin:0;font-size:13.5px;font-weight:650;color:#2d2840}
+.yr-card header p{margin:1px 0 0;font-size:11.5px;color:#8a8497}
+.yr-latest{text-align:right;white-space:nowrap;font-size:11.5px;color:#8a8497}
+.yr-latest strong{display:block;font-size:17px;color:#2d2840;font-weight:650;letter-spacing:-.2px}
+.yr-svg{display:block;width:100%;height:auto;overflow:visible}
+.yr-grid{stroke:#ebe9f1;stroke-width:1}
+.yr-axis{stroke:#d7d4e3;stroke-width:1}
+.yr-tick{font-size:9.5px;fill:#8a8497;font-family:inherit;font-variant-numeric:tabular-nums}
+.yr-line{fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.yr-band{opacity:.13}
+.yr-run{stroke:#7357d8;stroke-width:1}
+.yr-hit{outline:none;cursor:crosshair}
+.yr-hit:hover,.yr-hit:focus-visible{fill:#7357d814}
+.yr-tip{position:absolute;top:44px;transform:translateX(-50%);z-index:3;background:#fff;border:1px solid #d9d6e8;border-radius:8px;box-shadow:0 8px 24px #20183a26;padding:7px 10px;font-size:11.5px;color:#3d3750;pointer-events:none;white-space:nowrap;min-width:120px}
+.yr-tip.is-left{transform:none}
+.yr-tip.is-right{transform:translateX(-100%)}
+.yr-tip strong{display:block;font-size:11px;color:#8a8497;font-weight:600;margin-bottom:3px}
+.yr-tip div{display:flex;align-items:center;gap:6px;line-height:1.5}
+.yr-tip i{width:10px;height:2px;border-radius:1px;flex:none}
+.yr-tip b{font-weight:650;color:#2d2840;font-variant-numeric:tabular-nums}
+.yr-tip .is-detail{padding-left:16px;color:#5d5870}
+.yr-legend{list-style:none;margin:4px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:3px 14px;font-size:11.5px;color:#5d5870}
+.yr-legend li{display:flex;align-items:center;gap:5px}
+.yr-legend i{width:10px;height:10px;border-radius:2px;flex:none}
+.yr-legend i.is-line{height:2px;border-radius:1px;width:12px}
+.yr-legend strong{color:#2d2840;font-weight:650;font-variant-numeric:tabular-nums}
+.yr-table{margin-top:6px;font-size:11.5px;color:#5d5870}
+.yr-table summary{cursor:pointer;width:max-content;padding:2px 0}
+.yr-table table{border-collapse:collapse;width:100%;margin-top:4px;font-variant-numeric:tabular-nums}
+.yr-table th,.yr-table td{text-align:right;padding:2px 6px;border-bottom:1px solid #f0eef5;white-space:nowrap}
+.yr-table th:first-child,.yr-table td:first-child{text-align:left}
+.yr-table th{color:#8a8497;font-weight:600}
+.yr-note{margin:4px 0 0;font-size:11px;color:#8a8497}
+.yr-empty{padding:32px;text-align:center;color:#737f94;background:#fff;border:1px solid #e4e2ee;border-radius:10px;grid-column:1/-1}
+/* The inflict / edit panel beside the calendar. */
+.year-panel{position:sticky;top:0;align-self:start;max-height:calc(100dvh - 62px);overflow:auto;background:#fff;border-left:1px solid #e4e2ee;padding:16px 18px 24px;min-width:0}
+.year-panel header{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:10px}
+.year-panel h2{font-size:17px;margin:2px 0 0;letter-spacing:-.2px}
+.year-panel h3{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#8a8497;margin:14px 0 4px;font-weight:700}
+.year-panel h3.year-sc-title{font-size:15px;letter-spacing:-.2px;text-transform:none;color:#2d2840;margin:8px 0 2px}
+.year-panel .close-btn{width:30px;height:30px;font-size:22px;flex:none}
+.year-panel-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+.year-panel .outline-btn{width:auto;margin:0;min-height:32px;padding:5px 12px;font-size:12.5px}
+.year-panel .small-link{font-size:12px;color:#5d43b8}
+.year-watch{font-size:12.5px;color:#3d3750;background:#f7f5fd;border-radius:7px;padding:8px 10px;margin:8px 0}
+.year-sc{border:1px solid #e4e2ee;border-radius:8px;padding:8px 10px;margin:0 0 6px;font-size:12.5px}
+.year-sc-pick{display:block;width:100%;text-align:left;border:0;background:none;padding:0;font:inherit;cursor:pointer;color:#2d2840;min-height:0}
+.year-sc-pick strong{display:block;font-weight:650}
+.year-sc-pick span,.year-sc.is-coming>span{display:block;color:#737f94;font-size:12px;margin-top:1px}
+.year-sc:hover:not(.is-coming){border-color:#7357d8;background:#faf8ff}
+.year-sc details{font-size:12px;color:#5d5870;margin-top:4px}
+.year-sc summary{cursor:pointer;color:#5d43b8;width:max-content}
+.year-sc details p{margin:4px 0 0}
+.year-tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+.year-tags em{font-style:normal;font-size:10.5px;background:#f0ecfc;color:#684bc5;border-radius:4px;padding:1px 6px}
+.year-sc.is-coming{color:#9a95ab;background:#fafafc}
+.year-sc.is-coming strong{font-weight:600;display:flex;gap:8px;align-items:center}
+.year-soon{font-style:normal;font-size:10.5px;background:#efeef4;color:#8a8497;border-radius:4px;padding:1px 6px}
+.year-ep{border:1px solid #e4e2ee;border-radius:8px;padding:8px 10px 10px;margin:10px 0 0;min-width:0}
+.year-ep legend{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#8a8497;font-weight:700;padding:0 4px}
+.year-f{display:flex;flex-direction:column;gap:3px;font-size:11.5px;color:#5d5870;min-width:0}
+.year-f input{font:inherit;font-size:12.5px;padding:5px 7px;border:1px solid #d7d4e3;border-radius:6px;background:#fff;min-width:0;width:100%}
+.year-f-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px}
+.year-f-row .year-f:last-child input{width:64px}
+.year-settings{width:100%;border-collapse:collapse;margin-top:8px;font-size:12px}
+.year-settings th{text-align:left;font-size:11px;color:#8a8497;font-weight:600;padding:2px 4px;border-bottom:1px solid #efeef4}
+.year-settings td{padding:4px;border-bottom:1px solid #f4f2f8;vertical-align:middle}
+.year-settings td span{display:block;color:#2d2840}
+.year-settings td code{font-size:10.5px;color:#8a8497}
+.year-settings td:last-child{width:120px}
+.year-settings input{font:inherit;font-size:12.5px;padding:4px 7px;border:1px solid #d7d4e3;border-radius:6px;background:#fff;width:100%;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.year-panel-foot{display:flex;gap:14px;align-items:center;margin-top:12px}
+.year-panel .primary-btn{width:auto;margin:0;padding:9px 18px;background:#7357d8;border-radius:7px;font-weight:650}
+.year-panel .primary-btn:hover{background:#5d43b8}
+#year-page .ws-empty{padding:40px}
+@media (max-width:1180px){.year-months{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media (max-width:760px){
+ .year-layout.has-panel{grid-template-columns:1fr}
+ .year-main{padding:10px 12px 24px}
+ .year-head h1{font-size:18px}
+ .year-head .schema-pop{left:auto;right:0}
+ .year-months{grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+ .year-calendar{padding:10px 10px 8px}
+ .year-trends{grid-template-columns:1fr}
+ .year-panel{position:fixed;left:0;right:0;bottom:0;top:auto;max-height:72dvh;border-left:0;border-top:1px solid #e4e2ee;border-radius:14px 14px 0 0;box-shadow:0 -10px 30px #20183a26;z-index:35;padding:12px 14px 20px}
+ .year-f-row{grid-template-columns:1fr 1fr}
+}
+@media (max-width:480px){.year-months{grid-template-columns:repeat(2,minmax(0,1fr))}.year-day{font-size:10px}}
