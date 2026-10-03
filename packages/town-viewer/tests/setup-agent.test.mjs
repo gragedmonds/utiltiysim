@@ -28,3 +28,13 @@ test('agent settings reach both engine clients and saved user changes win when r
 test('voice feature detection supports standard and prefixed browsers, with typing fallback',()=>{
  assert.equal(supportsVoice({}),false);assert.equal(supportsVoice({SpeechRecognition:class{}}),true);assert.equal(supportsVoice({webkitSpeechRecognition:class{}}),true);
 });
+
+test('Year context includes live settings and existing episodes while omitting conversation metadata',async()=>{
+ const {runInput,currentRunInput,inflictInput,BASELINE_TOPICS}=await import('../dist/setup-agent.js');
+ const m=new EngineM2C({townRef:'whitby_small',townId:'town-1',storage:memory(),initial:proposal});
+ m.setSettings({process:{analysts:5}});
+ const context=runInput({...currentRunInput(m,'2026-06-01'),agent:{messages:[{role:'user',content:'Private history'}]},actions:[{id:'ACT-1'}]});
+ assert.equal(context.settings.process.analysts,5);assert.equal(context.startDate,'2026-06-01');assert.equal(context.episodes[0].id,'EP-1');assert.equal(context.agent,undefined);assert.equal(context.actions,undefined);
+ const tweak=inflictInput({name:'Half staff',summary:'Six weeks',episodes:proposal.episodes,runTo:'2026-05-28',townOverrides:{bad:true}});
+ assert.equal(tweak.runTo,undefined);assert.equal(tweak.townOverrides,undefined);assert.equal(BASELINE_TOPICS.length,7);
+});

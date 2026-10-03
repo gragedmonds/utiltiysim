@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from api._ops import pack_index
-from api._towns import MAX_HOUSES, town_ref
+from api._towns import DEFAULT_BASE, MAX_HOUSES, config_from_ref, town_ref
 from utilsim.config.model import RUN_GROUPS, SimConfig, config_schema
 from utilsim.m2c.run import (
     parse_episodes,
@@ -97,6 +97,91 @@ class AgentReply(StrictModel):
     proposal: Proposal | None = None
 
 
+class ExistingEpisode(AgentEpisode):
+    id: str = Field(min_length=1, max_length=80)
+    scenario: str | None = None
+
+
+class RunContext(StrictModel):
+    name: str = Field(default="", max_length=100)
+    region: str = Field(default="", max_length=200)
+    purpose: str = Field(default="", max_length=500)
+    townRef: str = Field(min_length=1, max_length=4000)
+    settings: dict[str, dict[str, Any]] = Field(default_factory=dict)
+    episodes: list[ExistingEpisode] = Field(default_factory=list, max_length=40)
+    asOf: str = "2026-03-31"
+    startDate: str = "2026-03-31"
+
+    @field_validator("asOf", "startDate")
+    @classmethod
+    def dates(cls, value):
+        return year_day(value)
+
+
+class InflictProposal(StrictModel):
+    name: str = Field(min_length=1, max_length=100)
+    summary: str = Field(min_length=1, max_length=2000)
+    episodes: list[AgentEpisode] = Field(min_length=1, max_length=10)
+    assumptions: list[str] = Field(default_factory=list, max_length=12)
+    limitations: list[str] = Field(default_factory=list, max_length=20)
+
+    @field_validator("assumptions", "limitations")
+    @classmethod
+    def short_items(cls, value):
+        return Proposal.short_items(value)
+
+
+class ValidatedInflictProposal(InflictProposal):
+    runTo: str
+
+
+class InflictReply(StrictModel):
+    message: str = Field(min_length=1, max_length=4000)
+    proposal: InflictProposal | None = None
+
+
+def run_config(context: RunContext) -> SimConfig:
+    """Resolve a known town without generating it or reading supplied street paths."""
+    name = context.townRef.partition("~")[0]
+    if name == DEFAULT_BASE:
+        base = SimConfig()
+    else:
+        base = preset_config(name)
+    cfg = config_from_ref(context.townRef) if "~" in context.townRef else base
+    if (cfg.town.osm_source, cfg.town.osm_sha256) != (base.town.osm_source, base.town.osm_sha256):
+        raise ValueError("Street sources must come from a prepared town.")
+    supported_fields(context.settings, settings_schema())
+    return resolve_settings(cfg, context.settings)
+
+
+def validate_infliction(proposal: InflictProposal, context: RunContext) -> dict:
+    cfg = run_config(context)
+    if len(context.episodes) + len(proposal.episodes) > 40:
+        raise ValueError("At most 40 episodes in a year. Remove an existing episode before adding more.")
+    existing = [ep.model_dump(by_alias=True) for ep in context.episodes]
+    used = {ep["id"] for ep in existing}
+    additions = []
+    n = 1
+    for ep in proposal.episodes:
+        if not ep.settings or not any(ep.settings.values()):
+            raise ValueError("Each proposed episode must change at least one Year setting.")
+        while f"EP-{n}" in used:
+            n += 1
+        additions.append({**ep.model_dump(by_alias=True), "id": f"EP-{n}"})
+        used.add(f"EP-{n}")
+    for ep in existing + additions:
+        supported_fields(ep["settings"], settings_schema())
+    # Validate the combined timeline, including interactions with the current base and earlier episodes.
+    resolve_episode_days(cfg, parse_episodes(cfg, existing + additions))
+    limits = list(proposal.limitations)[:18]
+    for note in ("These tweaks add dated Year episodes; your town and base configuration stay the same.",
+                 "The engine models calendar year 2026 only; map-day incidents are not Year episode settings."):
+        if note not in limits:
+            limits.append(note)
+    return {**proposal.model_dump(by_alias=True), "limitations": limits,
+            "runTo": max(context.asOf, *(ep.to or "2026-12-31" for ep in proposal.episodes))}
+
+
 def presets() -> list[dict]:
     return [{"preset": t["preset"], "name": (t.get("place") or {}).get("name") or (t.get("source") or {}).get("label", t["preset"]).removesuffix(" street snapshot"),
              "homes": t["homes"], "townId": t["townId"]} for t in pack_index()["towns"]]
@@ -124,7 +209,7 @@ def group_index() -> dict:
 
 
 def inspect_configuration(scope: Literal["town", "run", "operations"], groups: list[str], preset: str) -> dict:
-    cfg = preset_config(preset)
+    cfg = SimConfig() if preset == DEFAULT_BASE else preset_config(preset)
     root = schemas()[scope]
     if not 1 <= len(groups) <= 6 or any(g not in root["properties"] for g in groups):
         raise ValueError("Choose one to six groups from the configuration index.")

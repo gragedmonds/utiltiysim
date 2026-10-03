@@ -568,6 +568,16 @@
       "ChatRequest": {
         "additionalProperties": false,
         "properties": {
+          "currentRun": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RunContext"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "draft": {
             "additionalProperties": true,
             "title": "Draft",
@@ -577,10 +587,19 @@
             "items": {
               "$ref": "#/components/schemas/Message"
             },
-            "maxItems": 24,
+            "maxItems": 48,
             "minItems": 1,
             "title": "Messages",
             "type": "array"
+          },
+          "mode": {
+            "default": "setup",
+            "enum": [
+              "setup",
+              "inflict"
+            ],
+            "title": "Mode",
+            "type": "string"
           },
           "schemaVersion": {
             "const": "setup-agent/1.0",
@@ -608,9 +627,13 @@
                 "$ref": "#/components/schemas/ValidatedProposal"
               },
               {
+                "$ref": "#/components/schemas/ValidatedInflictProposal"
+              },
+              {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Proposal"
           },
           "schemaVersion": {
             "const": "setup-agent/1.0",
@@ -1547,6 +1570,72 @@
         "title": "Episode",
         "type": "object"
       },
+      "ExistingEpisode": {
+        "additionalProperties": false,
+        "properties": {
+          "from": {
+            "title": "From",
+            "type": "string"
+          },
+          "id": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          },
+          "ramp": {
+            "default": 0,
+            "maximum": 365.0,
+            "minimum": 0.0,
+            "title": "Ramp",
+            "type": "integer"
+          },
+          "scenario": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scenario"
+          },
+          "settings": {
+            "additionalProperties": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Settings",
+            "type": "object"
+          },
+          "title": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          },
+          "to": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To"
+          }
+        },
+        "required": [
+          "title",
+          "from",
+          "settings",
+          "id"
+        ],
+        "title": "ExistingEpisode",
+        "type": "object"
+      },
       "FrameRequest": {
         "properties": {
           "at": {
@@ -1643,6 +1732,91 @@
           }
         },
         "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "InflictProposal": {
+        "additionalProperties": false,
+        "properties": {
+          "assumptions": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 12,
+            "title": "Assumptions",
+            "type": "array"
+          },
+          "episodes": {
+            "items": {
+              "$ref": "#/components/schemas/AgentEpisode"
+            },
+            "maxItems": 10,
+            "minItems": 1,
+            "title": "Episodes",
+            "type": "array"
+          },
+          "limitations": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "Limitations",
+            "type": "array"
+          },
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "summary": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Summary",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "summary",
+          "episodes"
+        ],
+        "title": "InflictProposal",
+        "type": "object"
+      },
+      "InflictResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "proposal": {
+            "$ref": "#/components/schemas/ValidatedInflictProposal"
+          },
+          "schemaVersion": {
+            "const": "setup-agent/1.0",
+            "default": "setup-agent/1.0",
+            "title": "Schemaversion",
+            "type": "string"
+          }
+        },
+        "required": [
+          "proposal"
+        ],
+        "title": "InflictResponse",
+        "type": "object"
+      },
+      "InflictValidationRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "currentRun": {
+            "$ref": "#/components/schemas/RunContext"
+          },
+          "proposal": {
+            "$ref": "#/components/schemas/InflictProposal"
+          }
+        },
+        "required": [
+          "currentRun",
+          "proposal"
+        ],
+        "title": "InflictValidationRequest",
         "type": "object"
       },
       "InstallationRequest": {
@@ -2729,6 +2903,66 @@
         "title": "ReadDocumentRequest",
         "type": "object"
       },
+      "RunContext": {
+        "additionalProperties": false,
+        "properties": {
+          "asOf": {
+            "default": "2026-03-31",
+            "title": "Asof",
+            "type": "string"
+          },
+          "episodes": {
+            "items": {
+              "$ref": "#/components/schemas/ExistingEpisode"
+            },
+            "maxItems": 40,
+            "title": "Episodes",
+            "type": "array"
+          },
+          "name": {
+            "default": "",
+            "maxLength": 100,
+            "title": "Name",
+            "type": "string"
+          },
+          "purpose": {
+            "default": "",
+            "maxLength": 500,
+            "title": "Purpose",
+            "type": "string"
+          },
+          "region": {
+            "default": "",
+            "maxLength": 200,
+            "title": "Region",
+            "type": "string"
+          },
+          "settings": {
+            "additionalProperties": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Settings",
+            "type": "object"
+          },
+          "startDate": {
+            "default": "2026-03-31",
+            "title": "Startdate",
+            "type": "string"
+          },
+          "townRef": {
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Townref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "townRef"
+        ],
+        "title": "RunContext",
+        "type": "object"
+      },
       "RunRequest": {
         "properties": {
           "actions": {
@@ -3400,6 +3634,60 @@
           }
         },
         "title": "TownRequest",
+        "type": "object"
+      },
+      "ValidatedInflictProposal": {
+        "additionalProperties": false,
+        "properties": {
+          "assumptions": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 12,
+            "title": "Assumptions",
+            "type": "array"
+          },
+          "episodes": {
+            "items": {
+              "$ref": "#/components/schemas/AgentEpisode"
+            },
+            "maxItems": 10,
+            "minItems": 1,
+            "title": "Episodes",
+            "type": "array"
+          },
+          "limitations": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "Limitations",
+            "type": "array"
+          },
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "runTo": {
+            "title": "Runto",
+            "type": "string"
+          },
+          "summary": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Summary",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "summary",
+          "episodes",
+          "runTo"
+        ],
+        "title": "ValidatedInflictProposal",
         "type": "object"
       },
       "ValidatedProposal": {
@@ -4533,6 +4821,45 @@
           }
         },
         "summary": "Chat"
+      }
+    },
+    "/api/setup-agent/inflict/validate": {
+      "post": {
+        "description": "Recheck proposed additions against the current Year immediately before applying them.",
+        "operationId": "validate_inflict_api_setup_agent_inflict_validate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InflictValidationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InflictResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Validate Inflict"
       }
     },
     "/api/setup-agent/status": {

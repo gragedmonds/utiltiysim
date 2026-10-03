@@ -170,6 +170,104 @@ def test_client_cannot_submit_system_messages_or_unbounded_conversations():
         assert c.post("/api/setup-agent/chat", json={"messages": [{"role": "user", "content": "x" * 4001}]}).status_code == 422
 
 
+def run_context(**changes):
+    return {"townRef": "whitby_small", "settings": {"process": {"analysts": 4}},
+            "episodes": [], "asOf": "2026-03-31", "startDate": "2026-04-01", **changes}
+
+
+def tweak(**changes):
+    return {"name": "Temporary staffing pressure", "summary": "Half the team for six weeks, then recover.",
+            "episodes": [{"title": "Half staff", "from": "2026-04-01", "to": "2026-05-12",
+                          "settings": {"process": {"analysts": "*0.5"}}}], **changes}
+
+
+def test_tweaks_revalidate_current_base_and_keep_existing_episodes():
+    existing = {"id": "EP-8", "title": "Earlier pressure", "scenario": "half_staff_billing",
+                "from": "2026-01-01", "to": "2026-02-28", "settings": {"process": {"analysts": 3}}}
+    context = run_context(episodes=[existing])
+    with TestClient(app) as c:
+        r = c.post("/api/setup-agent/inflict/validate", json={"currentRun": context, "proposal": tweak()})
+        assert r.status_code == 200, r.text
+        assert r.json()["proposal"]["runTo"] == "2026-05-12"
+        assert len(r.json()["proposal"]["episodes"]) == 1
+        assert context["episodes"] == [existing]
+        assert context["settings"]["process"]["analysts"] == 4
+        future = c.post("/api/setup-agent/inflict/validate", json={
+            "currentRun": run_context(asOf="2026-11-01"), "proposal": tweak()})
+        assert future.json()["proposal"]["runTo"] == "2026-11-01", "do not rewind a later analysis date"
+
+
+def test_overlapping_tweaks_are_validated_together_and_cannot_replace_base_or_town():
+    existing = {"id": "EP-1", "title": "Long queue", "from": "2026-04-01", "to": None,
+                "settings": {"process": {"analyst_queue_days_min": 20}}}
+    context = run_context(settings={"process": {"analyst_queue_days_max": 30}}, episodes=[existing])
+    patch = tweak(episodes=[{"title": "Short queue", "from": "2026-04-01", "to": "2026-04-30",
+                            "settings": {"process": {"analyst_queue_days_max": 10}}}])
+    with TestClient(app) as c:
+        r = c.post("/api/setup-agent/inflict/validate", json={"currentRun": context, "proposal": patch})
+        assert r.status_code == 422, r.text
+        assert c.post("/api/setup-agent/inflict/validate", json={"currentRun": run_context(),
+                      "proposal": tweak(townOverrides={"town": {"houses": 100}})}).status_code == 422
+        assert c.post("/api/setup-agent/inflict/validate", json={"currentRun": run_context(),
+                      "proposal": tweak(settings={"process": {"analysts": 0}})}).status_code == 422
+        for settings in ({"operations": {"fieldCrews": 3}}, {}, {"process": {"imaginary_staff": 2}}):
+            p = tweak(episodes=[{"title": "No", "from": "2026-04-01", "settings": settings}])
+            assert c.post("/api/setup-agent/inflict/validate", json={"currentRun": run_context(), "proposal": p}).status_code == 422
+
+
+def test_inflictions_check_episode_cap_dates_and_custom_town_without_generation():
+    from api._agent_config import InflictProposal, RunContext, validate_infliction
+
+    custom = validate_proposal(Proposal(**proposal(townOverrides={"town": {"houses": 240}})))
+    p = validate_infliction(InflictProposal(**tweak()), RunContext(**run_context(townRef=custom["townRef"])))
+    assert p["runTo"] == "2026-05-12"
+    with TestClient(app) as c:
+        existing = [{"id": f"EP-{i}", "title": "Normal", "from": "2026-01-01", "to": "2026-01-01",
+                     "settings": {"process": {"analysts": 4}}} for i in range(40)]
+        assert c.post("/api/setup-agent/inflict/validate", json={"currentRun": run_context(episodes=existing), "proposal": tweak()}).status_code == 422
+        assert c.post("/api/setup-agent/chat", json={"mode": "inflict", "messages": [{"role": "user", "content": "Help"}]}).status_code == 422
+        assert c.post("/api/setup-agent/inflict/validate", json={"currentRun": run_context(startDate="2027-01-01"), "proposal": tweak()}).status_code == 422
+
+
+def test_voice_tweak_provider_uses_live_base_and_separate_additions_schema(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test")
+    seen = []
+
+    async def fake(payload, key):
+        seen.append(json.loads(json.dumps(payload)))
+        if len(seen) == 1:
+            return tool("inspect_configuration", {"scope": "run", "groups": ["process"], "preset": "whitby_small"})
+        return tool("respond", {"message": "Review these temporary changes.", "proposal": tweak()})
+
+    monkeypatch.setattr(agent, "anthropic_message", fake)
+    with TestClient(app) as c:
+        r = c.post("/api/setup-agent/chat", json={"mode": "inflict", "currentRun": run_context(),
+                   "messages": [{"role": "user", "content": "Half the billing team for six weeks starting April 1."}]})
+    assert r.status_code == 200, r.text
+    assert r.json()["proposal"]["runTo"] == "2026-05-12"
+    assert "ONLY NEW dated Year episodes" in seen[0]["system"]
+    inspected = json.loads(seen[1]["messages"][-1]["content"][0]["content"])
+    assert inspected["defaults"]["process"]["analysts"] == 4
+    assert "townOverrides" not in json.dumps(seen[0]["tools"][-1]["input_schema"])
+
+
+def test_longer_baseline_interview_keeps_answers_and_asks_followups(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test")
+    seen = []
+
+    async def fake(payload, key):
+        seen.append(payload)
+        return tool("respond", {"message": "How many analysts are normally working, and which parts of billing are automated?", "proposal": None})
+
+    monkeypatch.setattr(agent, "anthropic_message", fake)
+    messages = [{"role": "user" if i % 2 == 0 else "assistant", "content": f"Baseline detail {i}"} for i in range(25)]
+    with TestClient(app) as c:
+        r = c.post("/api/setup-agent/chat", json={"messages": messages})
+    assert r.status_code == 200 and r.json()["proposal"] is None
+    assert seen[0]["messages"] == messages
+    assert "Build the BASELINE first" in seen[0]["system"]
+
+
 @pytest.mark.parametrize("response", [None, {"content": None}, {"content": ["bad"]},
                                       {"content": [{"type": "tool_use", "name": "respond"}]}])
 def test_malformed_provider_replies_have_a_controlled_error(monkeypatch, response):
@@ -183,3 +281,21 @@ def test_malformed_provider_replies_have_a_controlled_error(monkeypatch, respons
         r = c.post("/api/setup-agent/chat", json={"messages": [{"role": "user", "content": "Help"}]})
         assert r.status_code == 502
     assert agent._ACTIVE == 0
+
+
+def test_invalid_tweak_tool_arguments_return_repair_feedback(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test")
+    seen = []
+
+    async def fake(payload, key):
+        seen.append(json.loads(json.dumps(payload)))
+        if len(seen) == 1:
+            return tool("inspect_configuration", None)
+        return tool("respond", {"message": "When should the tweak start?", "proposal": None})
+
+    monkeypatch.setattr(agent, "anthropic_message", fake)
+    with TestClient(app) as c:
+        r = c.post("/api/setup-agent/chat", json={"mode": "inflict", "currentRun": run_context(),
+                   "messages": [{"role": "user", "content": "Less staffing"}]})
+    assert r.status_code == 200 and r.json()["proposal"] is None
+    assert seen[1]["messages"][-1]["content"][0]["is_error"] is True

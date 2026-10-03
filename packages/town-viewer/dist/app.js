@@ -265,7 +265,7 @@ function wire(){
  if(/^#\/workspace/.test(location.hash))workspace.open(location.hash);
  dataPage=installDataPage({getClient:()=>m2c,getEngineState:engineState,toast,onDate:day=>ops?.engine?setRunDay(day):Promise.resolve(false),onShowPremise:showPremise,onOpenRecord:(kind,id)=>workspace.openRecord(kind,id)});
  if(/^#\/data/.test(location.hash))dataPage.open(location.hash);
- yearPage=installYearPage({getClient:()=>m2c,getEngineState:engineState,toast,onDate:day=>ops?.engine?setRunDay(day):Promise.resolve(false)});
+ yearPage=installYearPage({getClient:()=>m2c,getSimulation:()=>activeSimulation,getEngineState:engineState,toast,onDate:day=>ops?.engine?setRunDay(day):Promise.resolve(false)});
  if(/^#\/year/.test(location.hash))yearPage.open(location.hash);
  worklists=installWorklists({getClient:()=>m2c,toast,onDate:setRunDay,onWatch:watchVisit,onSettings:()=>focusUI.settings('m2c'),onMarkers:s=>{m2cSummary=s;m2cPremise.clear();applyM2CMarkers();},onShowPremise:id=>{const h=town.premises.find(p=>p.id===id);focusUI.map();if(!h)return;selectHome(h,true);profileTab='billing';renderHome();}});
  if(/^#\/worklists/.test(location.hash))worklists.open(parseRoute(location.hash));

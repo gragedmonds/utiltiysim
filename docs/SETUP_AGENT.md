@@ -1,9 +1,25 @@
 # Conversational simulation setup
 
 Choose **Talk it through** at the start of the wizard or while choosing a scenario. Claude asks short follow-up
-questions, inspects the engine's current configuration definitions, and proposes a complete setup. The proposal
+questions across location, service area, utility type/scale, metering, normal staffing/workflow, billing and
+starting pressures before shaping the experiment. It inspects the engine's current configuration definitions, and proposes a complete setup. The proposal
 shows its summary, dated episodes, assumptions, model limits and exact setting changes. **Use this setup** validates
 it again and fills in the draft; **Open simulation** opens Year with those settings. Manual starters remain available.
+
+## Voice tweaks in Year
+
+Choose **Talk through a tweak** in the Year header, or choose a calendar day and **Describe a tweak by voice or text**.
+Describe changes such as reduced staffing, missed reads, changed automation or a recovery period. The guide asks
+about severity, start/end, ramps and recovery, using the live baseline and existing episodes rather than repeating
+setup questions. It can propose up to ten new periods per turn, within the engine's forty-episode total.
+
+The review shows the new periods, exact settings, assumptions and analysis date. **Inflict & run to period end**
+revalidates the combined timeline, appends the periods and runs through their last end date (December 31 for an
+open end). A later current analysis date stays later. Existing town, base settings, seed, analyst actions and
+recorded outages are preserved. Failed analysis restores the previous periods/date; retry cannot duplicate them.
+A proposal becomes stale if the current base or periods change before applying it; ask for a fresh proposal.
+Map incidents and operations-day settings still use their existing controls; voice tweaks here change Year settings.
+The conversation remains in memory while the Year guide is open; switching pages cancels its client request.
 
 ## Vercel environment
 
@@ -57,7 +73,7 @@ also do not imply a full year of automatically simulated storms/outages.
 
 ## Request limits and errors
 
-Each chat request accepts at most 24 messages of 4,000 characters, 24,000 characters total, and a bounded draft.
+Each chat request accepts at most 48 messages of 4,000 characters, 48,000 characters total, and a bounded draft.
 There are at most four provider turns and 4,096 output tokens per turn, within a 50-second overall deadline.
 Per warm server instance, the endpoint limits chat to two simultaneous requests and 12 requests per minute per
 reported client IP. These are best-effort request controls, **not** a distributed rate limit or project spending cap.
@@ -79,3 +95,10 @@ staff reduction and recovery opened Year at May 12 with two episodes, a 5% AMI m
 crews. Desktop/phone layouts and the missing-key state were checked. Live Claude response quality and physical
 microphone/speech-service behavior require a configured provider key and a supported device; test doubles do not
 establish those results.
+
+Additional verification covers the longer baseline interview, separate Year proposal schema, combined/overlapping
+period validation, custom-town context, preserved existing state and rollback on both validation/network failures.
+Browser checks use a provider double to exercise a multi-exchange baseline interview and a spoken/edited Year tweak;
+The same browser run preserved a pre-existing episode and baseline settings, rejected a stale proposal after a
+date change, verified the phone panel fits, and canceled the guide on navigation. Live provider question quality
+and physical microphone behavior still require the key and a supported device.
