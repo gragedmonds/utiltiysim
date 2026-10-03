@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from api._ops import pack_index
 from api._towns import DEFAULT_BASE, MAX_HOUSES, config_from_ref, town_ref
+from utilsim.config.goals import GOAL_IDS
 from utilsim.config.model import RUN_GROUPS, SimConfig, config_schema
 from utilsim.m2c.run import (
     parse_episodes,
@@ -46,6 +47,7 @@ class AgentEpisode(StrictModel):
 
 class Proposal(StrictModel):
     name: str = Field(min_length=1, max_length=100)
+    goals: list[str] = Field(default_factory=lambda: ["everything"], min_length=1, max_length=8)
     purpose: str = Field(default="", max_length=500)
     region: str = Field(default="", max_length=200)
     preset: str = Field(description="A preset from the supplied prepared-town catalogue.")
@@ -58,6 +60,15 @@ class Proposal(StrictModel):
     summary: str = Field(min_length=1, max_length=2000)
     assumptions: list[str] = Field(default_factory=list, max_length=12)
     limitations: list[str] = Field(default_factory=list, max_length=20)
+
+    @field_validator("goals")
+    @classmethod
+    def supported_goals(cls, value):
+        if len(set(value)) != len(value) or any(g not in GOAL_IDS for g in value):
+            raise ValueError("Choose supported test goals, without duplicates.")
+        if "everything" in value and len(value) != 1:
+            raise ValueError("Test everything already includes every goal.")
+        return value
 
     @field_validator("asOf")
     @classmethod

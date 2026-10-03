@@ -18,6 +18,7 @@ milestones add the ticking clock and physics (M2), then operations and meter-to-
 uv sync --all-extras                                   # Python 3.11+, pinned deps into .venv
 uv run utilsim gen --preset village --out out/village-480   # snapshot, frames, GeoJSON, tables, PNG
 uv run utilsim presets                                 # village, small_town, town, large_town, city, us_town
+# Large independent-district runs: see docs/RUN_BUNDLES.md for batch-run, pause/resume and ETA.
 uv run utilsim serve                                   # API on :8010, OpenAPI at /openapi.json
 uv run utilsim schema --all                            # regenerate schemas/config.schema.json and openapi.json
 uv run pytest -m "not slow"                            # acceptance gates, goldens, schemas, receiver conformance

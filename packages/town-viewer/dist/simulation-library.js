@@ -10,7 +10,7 @@ export class SimulationLibrary{
  get(id){const raw=this.storage.getItem(SIM_PREFIX+id);if(raw===null)return null;let s;try{s=JSON.parse(raw);}catch{throw Error('A saved simulation could not be read. Your browser data has been kept.');}if(!validSimulation(s))throw Error('This saved simulation needs a newer Studio version. Your browser data has been kept.');return s;}
  save(s){if(!validSimulation(s))throw Error('Invalid simulation metadata.');const next={...s,updatedAt:new Date().toISOString()};try{this.storage.setItem(SIM_PREFIX+s.id,JSON.stringify(next));}catch{throw Error('Simulation could not be saved. Browser storage may be full or blocked.');}return next;}
  update(id,patch){const s=this.get(id);if(!s)throw Error('This simulation is no longer in this browser.');return this.save({...s,...patch,id,schemaVersion:SIM_VERSION});}
- create(){return {schemaVersion:SIM_VERSION,id:crypto.randomUUID(),name:'',purpose:'',status:'draft',step:0,createdAt:new Date().toISOString(),preset:'',townRef:'',townId:'',townName:'',homes:0,scenarioId:'baseline',scenarioTitle:'Normal operations',episodes:[],asOf:'2026-03-31',seed:''};}
+ create(){return {schemaVersion:SIM_VERSION,id:crypto.randomUUID(),name:'',purpose:'',status:'draft',step:0,wizardVersion:3,goals:[],createdAt:new Date().toISOString(),preset:'',townRef:'',townId:'',townName:'',homes:0,scenarioId:'baseline',scenarioTitle:'Normal operations',episodes:[],asOf:'2026-03-31',seed:''};}
  // Adopt earlier town-keyed work without moving or deleting the original data.
  adoptPacks(packs){for(const t of packs?.towns||[]){const id='legacy-'+t.townId;if(this.get(id))continue;const raw=this.storage.getItem('utility-town-m2c:'+t.townId);if(!raw)continue;let saved;try{saved=JSON.parse(raw);}catch{continue;}if(!saved||typeof saved!=='object')continue;
    const name=t.place?.name||t.preset,scope=simulationKey(id,t.townId);
@@ -19,4 +19,4 @@ export class SimulationLibrary{
    this.save({...this.create(),id,name:name+' · previous work',status:'ready',step:3,preset:t.preset,townRef:t.preset,townId:t.townId,townName:name,homes:t.homes,asOf:saved.asOf||'2026-03-31',seed:saved.seed||'',scenarioTitle:'Previous work'});
   }}
 }
-export function studioURL(s,search=''){const q=new URLSearchParams(search);q.delete('town');q.delete('setup');q.delete('new');q.set('simulation',s.id);q.set('town',s.townRef);return './studio.html?'+q+'#/year';}
+export function studioURL(s,search=''){const q=new URLSearchParams(search);q.delete('town');q.delete('setup');q.delete('new');q.set('simulation',s.id);q.set('town',s.townRef);return './studio.html?'+q+(s.goals?.length===1&&s.goals[0]==='operations'?'#/map':'#/year');}

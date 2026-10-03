@@ -6,6 +6,7 @@ development container in October 2026 and are labelled as such.
 
 from __future__ import annotations
 
+from utilsim.config.goals import GOALS
 from utilsim.m2c import scenarios, tables
 from utilsim.m2c.run import EPISODE_MAX, YEAR_DAYS
 
@@ -153,8 +154,10 @@ LIMITS = (
              "linear in registers: the reads and VEE side is vectorised, the bills, invoices and collections side is "
              "per-invoice Python. The generator is built for towns up to 10,000 homes."},
     {"title": "Beyond one town",
-     "text": "A utility of 100,000 accounts is forty towns of 2,500 or ten of 10,000 run side by side with a roll-up, "
-             "which is not built yet (see Gaps)."},
+     "text": "The local batch-run command plans up to 500,000 homes as independent districts, processed sequentially "
+             "with saved archives, resume, measured ETA and additive billing/case totals. Each district has its own "
+             "teams and networks. A 5,000-home run has been verified; full 50,000/500,000 benchmarks and shared "
+             "utility-wide resources are still outstanding."},
     {"title": "Calendar",
      "text": f"One calendar year (2026, {YEAR_DAYS} days), twelve billing cycles, twenty-one portions. Multi-year "
              "needs chaining (see Gaps)."},
@@ -177,9 +180,10 @@ GAPS = (
      "report."},
     {"title": "Multiple years", "text": "One calendar year; nothing carries into a second.", "plan": "Chain years: "
      "year two starts from year one's balances, arrears, open cases, device ages and backlog."},
-    {"title": "A utility above the town", "text": "Every run, setting, episode and view keys on one town; no "
-     "cross-town staffing, no roll-ups, no per-state rules.", "plan": "A utility index of towns with per-town "
-     "presets, sharded runs and merged views."},
+    {"title": "A utility above the town", "text": "Independent district batches and additive archive totals are available locally. "
+     "There is no shared utility-wide workforce, connected cross-district network or live utility dashboard.",
+     "plan": "Coordinate work and staffing daily across districts; add boundary conditions for connected networks "
+     "and paged utility-wide archive views."},
     {"title": "Technology mix and rollouts", "text": "The AMI, AMR and manual mix is set per town at generation and "
      "applied per route; no street or district rules, no mid-year AMR-to-AMI rollout.", "plan": "Generator rules "
      "by street class, district and premise type; a rollout episode on the device-exchange machinery."},
@@ -206,7 +210,7 @@ def guide(health: dict | None = None) -> dict:
     """``engine-guide/1.0``: the guide with the engine's live status folded in."""
     h = health or {}
     return {"schemaVersion": GUIDE_VERSION, "title": "Engine guide", "summary": SUMMARY,
-            "capabilities": list(CAPABILITIES), "impacts": list(IMPACTS),
+            "testGoals": GOALS, "capabilities": list(CAPABILITIES), "impacts": list(IMPACTS),
             "scale": {"measuredOn": MEASURED_ON, "measured": list(MEASURED), "limits": list(LIMITS)},
             "gaps": list(GAPS),
             "status": {"engine": h.get("engine"), "generatorVersion": h.get("generatorVersion"),
