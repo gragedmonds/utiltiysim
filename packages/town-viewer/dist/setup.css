@@ -40,4 +40,12 @@
 .basic-heading{font-size:13px;font-weight:600;margin:30px 0 0;padding-top:24px;border-top:1px solid #e5e9e0;color:#18332e}
 .basic-field{min-width:0;display:flex;flex-direction:column}.basic-field>label{flex:1 0 auto;margin:16px 0 8px}
 .basic-hint{margin:7px 0 0;font-size:11.5px;line-height:1.5;color:#6f7d69;min-height:17px}.basic-hint .text-button{font-size:11.5px;font-weight:600;padding:0 2px}
+/* Library cards: a quiet bin in the top-right corner, and an inline confirm in place of the open button. */
+.card-top-end{display:flex;align-items:center;gap:4px}
+.card-delete{display:grid;place-items:center;width:28px;height:28px;margin:-6px -9px -6px 0;padding:0;border:0;border-radius:7px;background:none;color:#a7b0a2;transition:color .15s,background .15s}
+.card-delete:hover,.card-delete:focus-visible,.card-delete[aria-expanded=true]{color:#a43e2f;background:#fbeeea}.card-delete:focus-visible{outline:2px solid #a43e2f;outline-offset:1px}
+.simulation-card.is-confirming{border-color:#e9c9bf;box-shadow:0 0 0 1px #e9c9bf}
+.card-confirm{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:12px;border:1px solid #f0d6cf;border-radius:8px;background:#fdf5f2}
+.card-confirm p{flex:1 1 100%;margin:0;font-size:13px;font-weight:600;color:#7d2f22}.card-confirm>span{flex:1 1 100%;margin:-4px 0 4px;font-size:11.5px;line-height:1.5;color:#8d6b62}
+.danger{min-height:38px;padding:9px 16px;border:1px solid #a43e2f;border-radius:6px;background:#a43e2f;color:#fff;font-weight:600;font-size:13px}.danger:hover{background:#8a3125}.card-confirm .secondary{min-height:38px;padding:9px 16px}
 @media(max-width:600px){.service-cards{grid-template-columns:1fr;gap:8px}.service-card{grid-template-columns:auto minmax(0,1fr) auto;grid-template-areas:"icon text check";align-items:center;gap:12px;padding:12px}.service-icon{width:36px;height:36px;font-size:21px;border-radius:10px}.service-lock{margin-top:6px}}
