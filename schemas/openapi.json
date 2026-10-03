@@ -2349,6 +2349,314 @@
         "title": "SummaryRequest",
         "type": "object"
       },
+      "TableCsvRequest": {
+        "properties": {
+          "actions": {
+            "items": {
+              "$ref": "#/components/schemas/Action"
+            },
+            "maxItems": 2000,
+            "title": "Actions",
+            "type": "array"
+          },
+          "asOf": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "View date (YYYY-MM-DD); default: the town's scenario date.",
+            "title": "Asof"
+          },
+          "columns": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 80,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Only these columns, in this order.",
+            "title": "Columns"
+          },
+          "desc": {
+            "default": false,
+            "title": "Desc",
+            "type": "boolean"
+          },
+          "filters": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Column key → value: a facet value (or '' for blank), a date prefix (2026-06), a number range (100..250, ..50, 100..) or text contained in the column.",
+            "title": "Filters"
+          },
+          "outages": {
+            "description": "Service interruptions from the operations simulator (a timeline's ``interruptions``): consumption stops, AMI meters without power miss their reads, and VEE sees the outage.",
+            "items": {
+              "$ref": "#/components/schemas/Outage"
+            },
+            "maxItems": 500,
+            "title": "Outages",
+            "type": "array"
+          },
+          "page": {
+            "default": 1,
+            "minimum": 1.0,
+            "title": "Page",
+            "type": "integer"
+          },
+          "pageSize": {
+            "default": 5000,
+            "maximum": 5000.0,
+            "minimum": 1.0,
+            "title": "Pagesize",
+            "type": "integer"
+          },
+          "search": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Text found in the row's ids, names or address.",
+            "title": "Search"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Run seed: re-rolls the run's random draws (missed reads, anomalies, analyst work, bill checks) on the same town. Blank or null: the town's seed (GET /api/m2c/settings?town= shows it).",
+            "title": "Seed"
+          },
+          "settings": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing); see GET /api/m2c/settings.",
+            "title": "Settings"
+          },
+          "sort": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A column key; rows with no value sort last.",
+            "title": "Sort"
+          },
+          "table": {
+            "description": "A table name from GET /api/m2c/tables.",
+            "maxLength": 40,
+            "title": "Table",
+            "type": "string"
+          },
+          "town": {
+            "description": "Pack preset (e.g. 'ayr') or town id.",
+            "title": "Town",
+            "type": "string"
+          }
+        },
+        "required": [
+          "town",
+          "table"
+        ],
+        "title": "TableCsvRequest",
+        "type": "object"
+      },
+      "TableRequest": {
+        "properties": {
+          "actions": {
+            "items": {
+              "$ref": "#/components/schemas/Action"
+            },
+            "maxItems": 2000,
+            "title": "Actions",
+            "type": "array"
+          },
+          "asOf": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "View date (YYYY-MM-DD); default: the town's scenario date.",
+            "title": "Asof"
+          },
+          "columns": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 80,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Only these columns, in this order.",
+            "title": "Columns"
+          },
+          "desc": {
+            "default": false,
+            "title": "Desc",
+            "type": "boolean"
+          },
+          "filters": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Column key → value: a facet value (or '' for blank), a date prefix (2026-06), a number range (100..250, ..50, 100..) or text contained in the column.",
+            "title": "Filters"
+          },
+          "outages": {
+            "description": "Service interruptions from the operations simulator (a timeline's ``interruptions``): consumption stops, AMI meters without power miss their reads, and VEE sees the outage.",
+            "items": {
+              "$ref": "#/components/schemas/Outage"
+            },
+            "maxItems": 500,
+            "title": "Outages",
+            "type": "array"
+          },
+          "page": {
+            "default": 1,
+            "minimum": 1.0,
+            "title": "Page",
+            "type": "integer"
+          },
+          "pageSize": {
+            "default": 100,
+            "maximum": 500.0,
+            "minimum": 1.0,
+            "title": "Pagesize",
+            "type": "integer"
+          },
+          "search": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Text found in the row's ids, names or address.",
+            "title": "Search"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Run seed: re-rolls the run's random draws (missed reads, anomalies, analyst work, bill checks) on the same town. Blank or null: the town's seed (GET /api/m2c/settings?town= shows it).",
+            "title": "Seed"
+          },
+          "settings": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing); see GET /api/m2c/settings.",
+            "title": "Settings"
+          },
+          "sort": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A column key; rows with no value sort last.",
+            "title": "Sort"
+          },
+          "table": {
+            "description": "A table name from GET /api/m2c/tables.",
+            "maxLength": 40,
+            "title": "Table",
+            "type": "string"
+          },
+          "town": {
+            "description": "Pack preset (e.g. 'ayr') or town id.",
+            "title": "Town",
+            "type": "string"
+          }
+        },
+        "required": [
+          "town",
+          "table"
+        ],
+        "title": "TableRequest",
+        "type": "object"
+      },
       "TimelineRequest": {
         "properties": {
           "commands": {
@@ -3082,6 +3390,97 @@
           }
         },
         "summary": "Post Summary"
+      }
+    },
+    "/api/m2c/table": {
+      "post": {
+        "description": "``m2c-table/1.0``: one page of a table as of ``asOf``, filtered (``search``, ``filters``), sorted (``sort``,\n``desc``) and paged (``page``, ``pageSize`` ≤ 500). Rows are arrays in ``columns`` order; ``facets`` counts the\nfacet columns' values over the whole table, ``total`` the rows that match. 404 for an unknown table, 422 for an\nunknown column.",
+        "operationId": "post_table_api_m2c_table_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TableRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Table"
+      }
+    },
+    "/api/m2c/table.csv": {
+      "post": {
+        "description": "One CSV page (``pageSize`` ≤ 5,000 rows, header on every page) of a table with the same selection as\nPOST /api/m2c/table; a client downloads a whole table page by page.",
+        "operationId": "post_table_csv_api_m2c_table_csv_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TableCsvRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Table Csv"
+      }
+    },
+    "/api/m2c/tables": {
+      "get": {
+        "description": "``m2c-tables/1.0``: the Data pages' catalog: table groups (customers, meters & reading, billing & pricing,\ncollections, work), each table's source (town snapshot, run, or both), description and columns (key, label, kind,\nfacet, link), and the page limits.",
+        "operationId": "get_tables_api_m2c_tables_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Tables"
       }
     },
     "/api/m2c/vocabulary": {

@@ -556,8 +556,38 @@ opening each case.
 | `POST /api/vee/dispositions` | Import decisions from an external VEE engine (m2c.vee v5) by `readId`. Each becomes the equivalent append-only action on the case holding the read: accept → accept; reject or estimate → estimate; an edit → override; escalate and field order map directly; review keeps the case open. Unmatched decisions are returned with a reason. |
 | `POST /api/process/graph` | Activity Sequence nodes and edges for a month |
 | `POST /api/process/costs` | Cost, carry and days to release by exception type |
+| `GET /api/m2c/tables` | `m2c-tables/1.0`: the Data pages' catalog: table groups, each table's source, description and columns (key, label, kind, facet, link), and the page limits (see "Data tables") |
+| `POST /api/m2c/table` | `m2c-table/1.0`: one page (≤ 500 rows) of a table as of `asOf`, filtered (`search`, `filters`), sorted (`sort`, `desc`) and paged; rows as arrays in `columns` order, `facets` over the whole table, `total` matching rows |
+| `POST /api/m2c/table.csv` | one CSV page (≤ 5,000 rows, header on every page) of the same selection; a client stitches the pages |
 
 Every response stays under the hosted 4.5 MB limit; `tests/test_m2c.py` checks this.
+
+## Data tables
+
+The Studio's **Data** tab (`#/data/<table>`) lists the town and the run as flat tables, built by `utilsim/m2c/tables.py`
+and served by the three endpoints above (local and hosted). Master data comes from the town snapshot; run data from the
+run *as of* the view date, so nothing from after that date appears. Every table has typed columns (`text`, `id`, `int`,
+`num`, `money`, `pct`, `date`, `time`, `bool`), facet columns (distinct values with counts over the whole table) and
+link columns (the record a value opens: `premise`, `installation`, `read`, `account`, `invoice`, `case`, `order`).
+A request filters by facet value (`{"commodity": "water"}`, `""` for blank), by date prefix (`{"readDate": "2026-06"}`),
+by number range (`{"consumption": "1000.."}`) or by text in a column, searches the row's ids, names and address, sorts by
+one column (missing values last either way) and takes one page. Built tables are cached per run and view day.
+
+| Group | Table | Source | Rows (Ayr, 5 Aug) |
+|---|---|---|---|
+| Customers | `premises`, `businessPartners`, `contracts` | town | 2,110 · 2,341 · 6,705 |
+| Customers | `accounts` | both: master data plus balance, open and overdue invoices and the collections phase as of the date | 2,341 |
+| Meters & reading | `servicePoints`, `mrus`, `readSchedules` | town | 6,045 · 21 · 252 |
+| Meters & reading | `meters` (device on the slot, replacements), `registers` (reads to date), `installations` (rate billed now, bills to date) | both | 6,045 · 6,363 · 6,045 |
+| Meters & reading | `reads` (every periodic read: register, consumption, VEE status, release, bill status), `usage` (billed use per register and month, year to date), `deviceChanges` | run | 45,149 · 6,363 · 28 |
+| Billing & pricing | `tariffs` (one row per rate version: the run's rate change starts version 2), `tariffAssignments` | town/both | 12 · 6,705 |
+| Billing & pricing | `billingDocuments`, `invoices`, `payments`, `ledger` (every posting with the running balance) | run | 42,896 · 15,625 · 14,315 · 33,708 |
+| Collections | `dunning` (reminders, notices, disconnection notices, winter holds, returned payments), `collectionsAccounts` (every account with an invoice in its phase: current, overdue, reminder, overdue notice, winter moratorium, dunning hold, payment arrangement, disconnection notice, disconnected), `disconnections`, `collectionsWork` (arrangements, budget plans, dunning holds, low-income referrals) | run | 2,560 · 2,166 · 203 · 487 |
+| Work | `cases`, `fieldOrders`, `interruptions` | run | 1,662 · your orders · the map's outages |
+
+`tests/test_m2c_tables.py` builds every table for Ayr, bounds the pages (JSON and CSV under the hosted 4.5 MB), and
+checks the counts against the run (reads taken, documents and invoices created by the date, usage against
+`billed_use`, collections phases covering every account).
 
 ## In the simulator (operations day)
 
