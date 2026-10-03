@@ -16,7 +16,9 @@
             "manual reads",
             "estimates",
             "VEE comm-fail flags"
-          ]
+          ],
+          "x-impact": "Routes read by AMI. AMI reads are cheapest and miss least (1.2 percent); moving routes to AMR or walkers raises read cost, missed reads, estimates and the work they create.",
+          "x-reach": "town"
         },
         "amr_route_share": {
           "default": 0.25,
@@ -28,19 +30,9 @@
           "x-effects": [
             "van routes",
             "walker routes"
-          ]
-        },
-        "battery_life_years": {
-          "default": 15.0,
-          "description": "AMR/AMI endpoint battery life.",
-          "maximum": 30,
-          "minimum": 3,
-          "title": "Battery Life Years",
-          "type": "number",
-          "x-advanced": true,
-          "x-status": "not-modelled",
-          "x-status-reason": "Endpoint batteries never run down in the simulation; meters carry batteryInstallYear for reference.",
-          "x-unit": "yr"
+          ],
+          "x-impact": "Routes read by drive-by AMR vans: costlier than AMI and missed more often (3 percent), with their own anomaly factor. The rest are walked.",
+          "x-reach": "town"
         },
         "collector_radius_m": {
           "default": 900.0,
@@ -53,22 +45,9 @@
             "collector count",
             "comm-fail clusters"
           ],
+          "x-impact": "AMI collector reach: how many collectors, and how many meters go dark when one fails on the operations day.",
+          "x-reach": "operations",
           "x-unit": "m"
-        },
-        "comm_fail_rate": {
-          "default": 0.004,
-          "description": "Nightly probability an AMI meter fails to report.",
-          "maximum": 0.2,
-          "minimum": 0,
-          "title": "Comm Fail Rate",
-          "type": "number",
-          "x-deprecated": "reading.ami_missed_read",
-          "x-effects": [
-            "estimated reads",
-            "consecutive estimates"
-          ],
-          "x-status": "deprecated",
-          "x-status-reason": "Meter-to-cash misses AMI reads per billing read after the head end's retries (Meter reading › AMI missed read, a run setting); AMI collector outages add clustered misses."
         },
         "meter_digits_electric": {
           "default": 6,
@@ -77,7 +56,9 @@
           "minimum": 4,
           "title": "Meter Digits Electric",
           "type": "integer",
-          "x-advanced": true
+          "x-advanced": true,
+          "x-impact": "Register digits on electric meters: where registers roll over, and how far a transposed or misread digit throws a read.",
+          "x-reach": "town"
         },
         "meter_digits_gas": {
           "default": 5,
@@ -86,7 +67,9 @@
           "minimum": 4,
           "title": "Meter Digits Gas",
           "type": "integer",
-          "x-advanced": true
+          "x-advanced": true,
+          "x-impact": "Register digits on gas meters: rollover and digit-error size.",
+          "x-reach": "town"
         },
         "meter_digits_water": {
           "default": 6,
@@ -95,7 +78,9 @@
           "minimum": 4,
           "title": "Meter Digits Water",
           "type": "integer",
-          "x-advanced": true
+          "x-advanced": true,
+          "x-impact": "Register digits on water meters: rollover and digit-error size.",
+          "x-reach": "town"
         },
         "poll_end_hour": {
           "default": 4.0,
@@ -104,6 +89,8 @@
           "minimum": 0,
           "title": "Poll End Hour",
           "type": "number",
+          "x-impact": "When the nightly AMI poll ends: the latest time stamped on AMI reads. Results do not change.",
+          "x-reach": "display",
           "x-unit": "h"
         },
         "poll_start_hour": {
@@ -113,6 +100,8 @@
           "minimum": 0,
           "title": "Poll Start Hour",
           "type": "number",
+          "x-impact": "When the nightly AMI poll starts: the time stamped on AMI reads. Results do not change.",
+          "x-reach": "display",
           "x-unit": "h"
         }
       },
@@ -133,7 +122,9 @@
           "minimum": 0,
           "title": "Amr Factor",
           "type": "number",
-          "x-advanced": true
+          "x-advanced": true,
+          "x-impact": "Multiplies every anomaly rate on AMR meters: an ageing drive-by fleet misreads and under-registers more.",
+          "x-reach": "year"
         },
         "consecutive_estimates": {
           "default": 15.0,
@@ -141,13 +132,17 @@
           "maximum": 200,
           "minimum": 0,
           "title": "Consecutive Estimates",
-          "type": "number"
+          "type": "number",
+          "x-impact": "Runs of estimated periods (more on walked routes): estimate streaks that trigger field reads and true-ups.",
+          "x-reach": "year"
         },
         "enabled": {
           "default": true,
           "description": "Inject anomalies into observed reads (truth is always kept separately).",
           "title": "Enabled",
-          "type": "boolean"
+          "type": "boolean",
+          "x-impact": "Off: reads are clean apart from missed reads, so VEE flags only what usage swings and outages explain. Truth is always kept for scoring.",
+          "x-reach": "year"
         },
         "exchange_registration_failure": {
           "default": 2.0,
@@ -155,7 +150,9 @@
           "maximum": 100,
           "minimum": 0,
           "title": "Exchange Registration Failure",
-          "type": "number"
+          "type": "number",
+          "x-impact": "Meter exchanges whose new meter fails registration: zero use, blocked bills and analyst or field work.",
+          "x-reach": "year"
         },
         "leak": {
           "default": 8.0,
@@ -163,7 +160,9 @@
           "maximum": 200,
           "minimum": 0,
           "title": "Leak",
-          "type": "number"
+          "type": "number",
+          "x-impact": "Water leaks after the meter: high water reads, high-bill blocks and complaints.",
+          "x-reach": "year"
         },
         "manual_factor": {
           "default": 1.0,
@@ -172,7 +171,9 @@
           "minimum": 0,
           "title": "Manual Factor",
           "type": "number",
-          "x-advanced": true
+          "x-advanced": true,
+          "x-impact": "Multiplies every anomaly rate on walked meters: more misreads and faults on manual routes.",
+          "x-reach": "year"
         },
         "misread": {
           "default": 6.0,
@@ -180,7 +181,9 @@
           "maximum": 200,
           "minimum": 0,
           "title": "Misread",
-          "type": "number"
+          "type": "number",
+          "x-impact": "A high digit off by one: large spikes or negative use.",
+          "x-reach": "year"
         },
         "missing_read": {
           "default": 5.0,
@@ -188,7 +191,9 @@
           "maximum": 200,
           "minimum": 0,
           "title": "Missing Read",
-          "type": "number"
+          "type": "number",
+          "x-impact": "Periods with no read document: estimates and missing-read cases.",
+          "x-reach": "year"
         },
         "slow_meter": {
           "default": 4.0,
@@ -196,7 +201,9 @@
           "maximum": 200,
           "minimum": 0,
           "title": "Slow Meter",
-          "type": "number"
+          "type": "number",
+          "x-impact": "Meters under-registering 10 to 40 percent: lost revenue VEE catches only through the trend test.",
+          "x-reach": "year"
         },
         "stuck_meter": {
           "default": 5.0,
@@ -204,7 +211,9 @@
           "maximum": 200,
           "minimum": 0,
           "title": "Stuck Meter",
-          "type": "number"
+          "type": "number",
+          "x-impact": "Registers that stop: zero-use reads at occupied homes, field orders and exchanges, under-billing until fixed.",
+          "x-reach": "year"
         },
         "tamper": {
           "default": 1.0,
@@ -212,7 +221,9 @@
           "maximum": 50,
           "minimum": 0,
           "title": "Tamper",
-          "type": "number"
+          "type": "number",
+          "x-impact": "Bypasses that under-register 50 to 90 percent: lost revenue and investigations.",
+          "x-reach": "year"
         },
         "transposed_digits": {
           "default": 6.0,
@@ -220,7 +231,9 @@
           "maximum": 200,
           "minimum": 0,
           "title": "Transposed Digits",
-          "type": "number"
+          "type": "number",
+          "x-impact": "Two digits swapped in a read: wild spikes or drops VEE should reject.",
+          "x-reach": "year"
         },
         "vacant_consuming": {
           "default": 3.0,
@@ -228,7 +241,9 @@
           "maximum": 100,
           "minimum": 0,
           "title": "Vacant Consuming",
-          "type": "number"
+          "type": "number",
+          "x-impact": "Vacant homes that still use energy: unbilled consumption cases.",
+          "x-reach": "year"
         }
       },
       "title": "Meter & read anomalies",
@@ -251,7 +266,9 @@
           "x-advanced": true,
           "x-effects": [
             "collections"
-          ]
+          ],
+          "x-impact": "At-risk payers who break a payment arrangement after a few instalments; dunning resumes. Acts only on arrangements you set up in the Collections worklist.",
+          "x-reach": "year"
         },
         "billing_queue_worked_by": {
           "default": "analysts",
@@ -266,7 +283,9 @@
             "billing blocks",
             "days to invoice",
             "billing carry"
-          ]
+          ],
+          "x-impact": "Who works the Billing queue: analysts and RPA, or only you (cases wait for your decisions).",
+          "x-reach": "year"
         },
         "budget_billing_offer_rate": {
           "default": 0.08,
@@ -278,7 +297,9 @@
           "x-effects": [
             "Budget Bill Cases",
             "collections"
-          ]
+          ],
+          "x-impact": "Overdue notices after which the customer moves to budget billing: levelled later invoices.",
+          "x-reach": "year"
         },
         "credit_review": {
           "default": 75.0,
@@ -288,6 +309,8 @@
           "title": "Credit Review",
           "type": "number",
           "x-advanced": true,
+          "x-impact": "Block credit bills larger than this for review: lower means more credit outsorts.",
+          "x-reach": "year",
           "x-unit": "$"
         },
         "data_error_rate": {
@@ -299,7 +322,9 @@
           "type": "number",
           "x-effects": [
             "rate-class billing blocks"
-          ]
+          ],
+          "x-impact": "Wrong rate classes in billing master data: mis-billed accounts, rate-class blocks and rebills.",
+          "x-reach": "year"
         },
         "disconnect_days": {
           "default": 45,
@@ -311,6 +336,8 @@
           "x-effects": [
             "disconnection notices"
           ],
+          "x-impact": "Days after the due date for a disconnection notice: later notices, fewer disconnections in the year.",
+          "x-reach": "year",
           "x-unit": "d"
         },
         "disconnect_notice_days": {
@@ -323,6 +350,8 @@
           "x-effects": [
             "disconnections"
           ],
+          "x-impact": "Days from a disconnection notice to the earliest disconnection. Acts only on disconnections you approve: the engine never disconnects on its own.",
+          "x-reach": "year",
           "x-unit": "d"
         },
         "disconnect_payment_rate": {
@@ -336,7 +365,9 @@
           "x-effects": [
             "collections",
             "reconnections"
-          ]
+          ],
+          "x-impact": "Disconnected customers who pay within a week and are reconnected the next business day. Acts only on disconnections you approve in the Collections worklist.",
+          "x-reach": "year"
         },
         "first_bill_limit": {
           "default": 600.0,
@@ -346,6 +377,8 @@
           "title": "First Bill Limit",
           "type": "number",
           "x-advanced": true,
+          "x-impact": "Block first bills above this total when there is no expected use to compare with (vacant or new premises). Rare in small towns.",
+          "x-reach": "year",
           "x-unit": "$"
         },
         "high_bill_min": {
@@ -355,6 +388,8 @@
           "minimum": 0,
           "title": "High Bill Min",
           "type": "number",
+          "x-impact": "And at least this much above expected: filters small bills out of high-bill checks.",
+          "x-reach": "year",
           "x-unit": "$"
         },
         "high_bill_ratio": {
@@ -367,7 +402,9 @@
           "x-effects": [
             "billing blocks",
             "analyst workload"
-          ]
+          ],
+          "x-impact": "Block bills above this multiple of expected: lower means more billing outsorts for analysts or RPA.",
+          "x-reach": "year"
         },
         "late_fee_pct": {
           "default": 1.5,
@@ -376,6 +413,8 @@
           "minimum": 0,
           "title": "Late Fee Pct",
           "type": "number",
+          "x-impact": "Late charge on overdue amounts at each notice: higher balances and receivables.",
+          "x-reach": "year",
           "x-unit": "%"
         },
         "low_income_approval_rate": {
@@ -388,7 +427,9 @@
           "x-effects": [
             "collections",
             "receivable"
-          ]
+          ],
+          "x-impact": "Referrals approved with a grant against arrears: less owed, fewer disconnections.",
+          "x-reach": "year"
         },
         "low_income_grant_max": {
           "default": 500.0,
@@ -398,6 +439,8 @@
           "title": "Low Income Grant Max",
           "type": "number",
           "x-advanced": true,
+          "x-impact": "Largest low-income grant credited to an account's arrears: less owed, fewer notices.",
+          "x-reach": "year",
           "x-unit": "$"
         },
         "low_income_referral_rate": {
@@ -410,7 +453,9 @@
           "x-effects": [
             "Low Income Process cases",
             "disconnections"
-          ]
+          ],
+          "x-impact": "Notices and holds after which the customer is referred to a low-income programme; dunning waits.",
+          "x-reach": "year"
         },
         "low_income_review_days": {
           "default": 10,
@@ -420,6 +465,8 @@
           "title": "Low Income Review Days",
           "type": "integer",
           "x-advanced": true,
+          "x-impact": "Business days the agency takes to decide a referral; dunning waits meanwhile.",
+          "x-reach": "year",
           "x-unit": "d"
         },
         "moratorium_end": {
@@ -427,14 +474,18 @@
           "description": "Last day of the winter moratorium (MM-DD); held notices go out the day after.",
           "title": "Moratorium End",
           "type": "string",
-          "x-advanced": true
+          "x-advanced": true,
+          "x-impact": "Last day of the winter moratorium; held notices go out the next day.",
+          "x-reach": "year"
         },
         "moratorium_start": {
           "default": "11-15",
           "description": "First day of the winter moratorium (MM-DD).",
           "title": "Moratorium Start",
           "type": "string",
-          "x-advanced": true
+          "x-advanced": true,
+          "x-impact": "First day of the winter moratorium: an earlier start holds more autumn notices.",
+          "x-reach": "year"
         },
         "notice_days": {
           "default": 21,
@@ -443,6 +494,8 @@
           "minimum": 1,
           "title": "Notice Days",
           "type": "integer",
+          "x-impact": "Days after the due date for an overdue notice and late fee: when fees start to build.",
+          "x-reach": "year",
           "x-unit": "d"
         },
         "nsf_fee": {
@@ -453,6 +506,8 @@
           "title": "Nsf Fee",
           "type": "number",
           "x-advanced": true,
+          "x-impact": "Fee added to an account when a payment bounces: higher balances and more overdue amounts.",
+          "x-reach": "year",
           "x-unit": "$"
         },
         "outsort_auto_release_max": {
@@ -466,6 +521,8 @@
             "analyst workload",
             "billing errors"
           ],
+          "x-impact": "RPA may release outsorts up to this amount; larger ones wait for an analyst.",
+          "x-reach": "year",
           "x-unit": "$"
         },
         "pad_reject_rate": {
@@ -478,7 +535,9 @@
           "x-effects": [
             "payment rejections",
             "collections"
-          ]
+          ],
+          "x-impact": "Pre-authorized debits that bounce: payment-rejected cases, NSF fees and overdue balances.",
+          "x-reach": "year"
         },
         "print_lag_days": {
           "default": 1,
@@ -488,13 +547,17 @@
           "title": "Print Lag Days",
           "type": "integer",
           "x-advanced": true,
+          "x-impact": "Days from invoice to issue: due dates and receivable carry move with it.",
+          "x-reach": "year",
           "x-unit": "d"
         },
         "rate_change_date": {
           "default": "2026-11-01",
           "description": "Date a new tariff version takes effect (volumetric prices).",
           "title": "Rate Change Date",
-          "type": "string"
+          "type": "string",
+          "x-impact": "When the new tariff version starts: bills after it prorate across the change.",
+          "x-reach": "year"
         },
         "rate_change_pct": {
           "default": 3.5,
@@ -507,6 +570,8 @@
             "bills after the change",
             "proration"
           ],
+          "x-impact": "Price change in the new tariff version: bill amounts after the date.",
+          "x-reach": "year",
           "x-unit": "%"
         },
         "reminder_days": {
@@ -516,6 +581,8 @@
           "minimum": 1,
           "title": "Reminder Days",
           "type": "integer",
+          "x-impact": "Days after the due date for a reminder letter: when collections work starts.",
+          "x-reach": "year",
           "x-unit": "d"
         },
         "trueup_max_ratio": {
@@ -530,13 +597,17 @@
             "billing blocks",
             "billing errors"
           ],
+          "x-impact": "Block estimate true-ups (a negative period after an over-estimate) larger than this multiple of expected use. Rare unless estimates run high.",
+          "x-reach": "year",
           "x-unit": "×"
         },
         "winter_moratorium": {
           "default": true,
           "description": "No disconnection notices for electricity and water from Nov 15 to Apr 30 (Ontario); a notice held for the winter is issued on May 1 if the bill is still unpaid.",
           "title": "Winter Moratorium",
-          "type": "boolean"
+          "type": "boolean",
+          "x-impact": "No electric or water disconnection notices in winter; held notices go out after the end date. Shifts collections from winter to spring.",
+          "x-reach": "year"
         }
       },
       "title": "Billing & collections",
@@ -555,13 +626,17 @@
           "maximum": 31,
           "minimum": 1,
           "title": "Bill Cycles",
-          "type": "integer"
+          "type": "integer",
+          "x-impact": "Billing portions per month: how reads and bills spread across working days, so daily queue load and when bills go out.",
+          "x-reach": "town"
         },
         "currency": {
           "default": "CAD",
           "description": "Billing currency.",
           "title": "Currency",
-          "type": "string"
+          "type": "string",
+          "x-impact": "The currency label on bills. Amounts do not change.",
+          "x-reach": "display"
         },
         "due_days": {
           "default": 20,
@@ -569,7 +644,9 @@
           "maximum": 60,
           "minimum": 5,
           "title": "Due Days",
-          "type": "integer"
+          "type": "integer",
+          "x-impact": "Days from invoice to due date: when accounts go overdue, so receivable carry and the dunning calendar.",
+          "x-reach": "town"
         },
         "electric_blocks": {
           "default": [
@@ -588,6 +665,8 @@
           },
           "title": "Electric Blocks",
           "type": "array",
+          "x-impact": "Energy price blocks: bill amounts, high-bill checks and the cost of each billing error.",
+          "x-reach": "town",
           "x-unit": "$/kWh"
         },
         "electric_fixed_monthly": {
@@ -597,6 +676,8 @@
           "minimum": 0,
           "title": "Electric Fixed Monthly",
           "type": "number",
+          "x-impact": "Fixed electric charge: every electric bill moves by this, whatever the usage.",
+          "x-reach": "town",
           "x-unit": "$"
         },
         "electric_variable_delivery": {
@@ -606,6 +687,8 @@
           "minimum": 0,
           "title": "Electric Variable Delivery",
           "type": "number",
+          "x-impact": "Delivery charge per kWh: electric bills scale with usage.",
+          "x-reach": "town",
           "x-unit": "$/kWh"
         },
         "gas_fixed_monthly": {
@@ -615,6 +698,8 @@
           "minimum": 0,
           "title": "Gas Fixed Monthly",
           "type": "number",
+          "x-impact": "Fixed gas charge: every gas bill moves by this, whatever the usage.",
+          "x-reach": "town",
           "x-unit": "$"
         },
         "gas_price_m3": {
@@ -624,6 +709,8 @@
           "minimum": 0,
           "title": "Gas Price M3",
           "type": "number",
+          "x-impact": "Gas price per m³: winter gas bills scale with it.",
+          "x-reach": "town",
           "x-unit": "$/m3"
         },
         "late_payer_share": {
@@ -632,7 +719,9 @@
           "maximum": 1,
           "minimum": 0,
           "title": "Late Payer Share",
-          "type": "number"
+          "type": "number",
+          "x-impact": "Accounts that pay late; the rest are at-risk payers who may not pay at all. More late and at-risk payers drive dunning and disconnections.",
+          "x-reach": "town"
         },
         "mru_target_meters": {
           "default": 450,
@@ -644,7 +733,9 @@
           "x-effects": [
             "route count",
             "read workload per day"
-          ]
+          ],
+          "x-impact": "Premises per reading route. Every town gets at least one route per billing portion (21), so it only bites above about 9,500 premises; then smaller routes mean more of them and a different split of AMI, AMR and walked routes.",
+          "x-reach": "town"
         },
         "net_metering_credit": {
           "default": 0.098,
@@ -656,6 +747,8 @@
           "x-effects": [
             "solar customer bills"
           ],
+          "x-impact": "Credit per exported kWh: solar homes' summer bills and the large-credit checks.",
+          "x-reach": "town",
           "x-unit": "$/kWh"
         },
         "on_time_payer_share": {
@@ -669,7 +762,9 @@
             "dunning",
             "collections",
             "carrying cost"
-          ]
+          ],
+          "x-impact": "Accounts that pay on time. Fewer means more overdue balances, reminders, notices, late fees and collections work.",
+          "x-reach": "town"
         },
         "pre_authorized_share": {
           "default": 0.45,
@@ -678,7 +773,9 @@
           "minimum": 0,
           "title": "Pre Authorized Share",
           "type": "number",
-          "x-advanced": true
+          "x-advanced": true,
+          "x-impact": "Accounts on pre-authorized debit: they pay on the due date, but a share bounce, which opens payment-rejected cases and NSF fees.",
+          "x-reach": "town"
         },
         "tax_rate": {
           "default": 0.13,
@@ -686,7 +783,9 @@
           "maximum": 0.3,
           "minimum": 0,
           "title": "Tax Rate",
-          "type": "number"
+          "type": "number",
+          "x-impact": "Sales tax on every bill: invoice totals, receivables and late fees scale with it.",
+          "x-reach": "town"
         },
         "wastewater_ratio": {
           "default": 1.05,
@@ -694,7 +793,9 @@
           "maximum": 3,
           "minimum": 0,
           "title": "Wastewater Ratio",
-          "type": "number"
+          "type": "number",
+          "x-impact": "Wastewater as a multiple of the water price: water bills scale with it.",
+          "x-reach": "town"
         },
         "water_fixed_monthly": {
           "default": 18.0,
@@ -703,6 +804,8 @@
           "minimum": 0,
           "title": "Water Fixed Monthly",
           "type": "number",
+          "x-impact": "Fixed water charge: every water bill moves by this, whatever the usage.",
+          "x-reach": "town",
           "x-unit": "$"
         },
         "water_price_m3": {
@@ -712,6 +815,8 @@
           "minimum": 0,
           "title": "Water Price M3",
           "type": "number",
+          "x-impact": "Water price per m³: water bills scale with it, and wastewater follows it.",
+          "x-reach": "town",
           "x-unit": "$/m3"
         }
       },
@@ -735,7 +840,9 @@
           "x-advanced": true,
           "x-effects": [
             "every electric size"
-          ]
+          ],
+          "x-impact": "How much peaks overlap: larger floors size bigger transformers and feeders.",
+          "x-reach": "operations"
         },
         "conductor_planning_margin": {
           "default": 1.25,
@@ -748,7 +855,9 @@
           "x-effects": [
             "primary conductor sizes",
             "loading in power flow"
-          ]
+          ],
+          "x-impact": "Head-room in primary conductor sizing: thicker conductors, less loading on the map.",
+          "x-reach": "operations"
         },
         "feeder_design_mva": {
           "default": 6.0,
@@ -761,6 +870,8 @@
             "feeder count",
             "tie switches"
           ],
+          "x-impact": "Design peak per feeder: how many feeders, and so how many customers one feeder fault interrupts.",
+          "x-reach": "operations",
           "x-unit": "MVA"
         },
         "feeder_max_customers": {
@@ -774,7 +885,9 @@
             "feeder count",
             "feeder territories",
             "tie switches"
-          ]
+          ],
+          "x-impact": "Most customers on one feeder: the largest outage one breaker trip can cause.",
+          "x-reach": "operations"
         },
         "kva_ac": {
           "default": 3.5,
@@ -783,6 +896,8 @@
           "minimum": 0,
           "title": "Kva Ac",
           "type": "number",
+          "x-impact": "Design load added for air conditioning: equipment sizing on the map.",
+          "x-reach": "operations",
           "x-unit": "kVA"
         },
         "kva_electric_heat": {
@@ -792,6 +907,8 @@
           "minimum": 0,
           "title": "Kva Electric Heat",
           "type": "number",
+          "x-impact": "Design load added for electric heat: equipment sizing on the map.",
+          "x-reach": "operations",
           "x-unit": "kVA"
         },
         "kva_ev": {
@@ -801,6 +918,8 @@
           "minimum": 0,
           "title": "Kva Ev",
           "type": "number",
+          "x-impact": "Design load added for an EV charger: equipment sizing on the map.",
+          "x-reach": "operations",
           "x-unit": "kVA"
         },
         "kva_heat_pump": {
@@ -810,6 +929,8 @@
           "minimum": 0,
           "title": "Kva Heat Pump",
           "type": "number",
+          "x-impact": "Design load added for a heat pump: equipment sizing on the map.",
+          "x-reach": "operations",
           "x-unit": "kVA"
         },
         "kva_per_100m2": {
@@ -822,6 +943,8 @@
           "x-effects": [
             "transformer sizing"
           ],
+          "x-impact": "Design load per floor area: transformer and conductor sizes, so loading and overload failures on the operations day. Usage is not affected.",
+          "x-reach": "operations",
           "x-unit": "kVA"
         },
         "kva_pool": {
@@ -832,6 +955,8 @@
           "title": "Kva Pool",
           "type": "number",
           "x-advanced": true,
+          "x-impact": "Design load added for a pool: equipment sizing on the map.",
+          "x-reach": "operations",
           "x-unit": "kVA"
         },
         "max_houses_per_transformer_overhead": {
@@ -840,7 +965,9 @@
           "maximum": 20,
           "minimum": 1,
           "title": "Max Houses Per Transformer Overhead",
-          "type": "integer"
+          "type": "integer",
+          "x-impact": "Houses per pole transformer: how many customers lose power when one fails.",
+          "x-reach": "operations"
         },
         "max_houses_per_transformer_underground": {
           "default": 10,
@@ -848,7 +975,9 @@
           "maximum": 25,
           "minimum": 1,
           "title": "Max Houses Per Transformer Underground",
-          "type": "integer"
+          "type": "integer",
+          "x-impact": "Houses per pad transformer: how many customers lose power when one fails.",
+          "x-reach": "operations"
         },
         "min_feeders_per_substation": {
           "default": 2,
@@ -861,7 +990,9 @@
             "feeder count",
             "tie switches",
             "outage size"
-          ]
+          ],
+          "x-impact": "Feeders per substation, so ties can back-feed during an outage.",
+          "x-reach": "operations"
         },
         "overhead_before_year": {
           "default": 1978,
@@ -874,7 +1005,9 @@
             "poles",
             "lightning exposure",
             "storm outages"
-          ]
+          ],
+          "x-impact": "Districts built before this year are on poles: storm faults and pole transformers on the operations day.",
+          "x-reach": "operations"
         },
         "pole_spacing_m": {
           "default": 42.0,
@@ -884,6 +1017,8 @@
           "title": "Pole Spacing M",
           "type": "number",
           "x-advanced": true,
+          "x-impact": "Pole span on overhead lines: pole count, and where AMI collectors can mount.",
+          "x-reach": "operations",
           "x-unit": "m"
         },
         "primary_kv": {
@@ -897,6 +1032,8 @@
             "feeder capacity",
             "conductor sizing"
           ],
+          "x-impact": "Feeder voltage: voltage drop and loading in the operations day's power flow.",
+          "x-reach": "operations",
           "x-unit": "kV"
         },
         "route_corridor_change_penalty_m": {
@@ -911,6 +1048,8 @@
             "trunk continuity",
             "corridor changes"
           ],
+          "x-impact": "How much feeders avoid switching corridors: straighter feeders on the map.",
+          "x-reach": "operations",
           "x-unit": "m"
         },
         "route_hierarchy_penalty_m": {
@@ -924,6 +1063,8 @@
           "x-effects": [
             "trunks staying on main roads"
           ],
+          "x-impact": "How much feeders avoid stepping between road classes.",
+          "x-reach": "operations",
           "x-unit": "m"
         },
         "route_shared_trunk_factor": {
@@ -937,7 +1078,9 @@
           "x-effects": [
             "express sections",
             "feeder separation"
-          ]
+          ],
+          "x-impact": "How much feeders avoid running through each other's territory.",
+          "x-reach": "operations"
         },
         "route_turn_penalty_m": {
           "default": 60.0,
@@ -951,6 +1094,8 @@
             "trunk continuity",
             "severe turns"
           ],
+          "x-impact": "How much feeders avoid turns: straighter, longer trunks.",
+          "x-reach": "operations",
           "x-unit": "m"
         },
         "route_weight_arterial": {
@@ -964,7 +1109,9 @@
           "x-effects": [
             "trunk routes",
             "feeder territories"
-          ]
+          ],
+          "x-impact": "Feeder routing cost along arterials: where trunks run and which customers share them.",
+          "x-reach": "operations"
         },
         "route_weight_collector": {
           "default": 1.4,
@@ -976,7 +1123,9 @@
           "x-advanced": true,
           "x-effects": [
             "trunk routes"
-          ]
+          ],
+          "x-impact": "Feeder routing cost along collector roads: where trunks run on the map.",
+          "x-reach": "operations"
         },
         "route_weight_local": {
           "default": 2.0,
@@ -989,7 +1138,9 @@
           "x-effects": [
             "trunk routes",
             "lateral routes"
-          ]
+          ],
+          "x-impact": "Feeder routing cost along local streets: where trunks run on the map.",
+          "x-reach": "operations"
         },
         "secondary_v": {
           "default": 240.0,
@@ -999,6 +1150,8 @@
           "title": "Secondary V",
           "type": "number",
           "x-advanced": true,
+          "x-impact": "Service voltage for the power flow and the voltage readings on the map.",
+          "x-reach": "operations",
           "x-unit": "V"
         },
         "section_max_share": {
@@ -1012,7 +1165,9 @@
             "sectionalising switches",
             "tie switches",
             "outage size after isolation"
-          ]
+          ],
+          "x-impact": "Sectionalising switches: smaller sections mean a fault takes out fewer customers.",
+          "x-reach": "operations"
         },
         "section_min_customers": {
           "default": 100,
@@ -1025,17 +1180,9 @@
           "x-effects": [
             "sectionalising switches",
             "outage size after isolation"
-          ]
-        },
-        "severe_turn_deg": {
-          "default": 60.0,
-          "description": "A trunk turn at least this sharp counts as severe in the routing metrics.",
-          "maximum": 170,
-          "minimum": 20,
-          "title": "Severe Turn Deg",
-          "type": "number",
-          "x-advanced": true,
-          "x-unit": "deg"
+          ],
+          "x-impact": "Smallest section a feeder is cut into: how few customers one fault can take out.",
+          "x-reach": "operations"
         },
         "substation_mva": {
           "default": 25.0,
@@ -1047,6 +1194,8 @@
           "x-effects": [
             "substation count"
           ],
+          "x-impact": "Firm capacity per substation: big towns get a second substation.",
+          "x-reach": "operations",
           "x-unit": "MVA"
         },
         "tie_max_length_m": {
@@ -1061,6 +1210,8 @@
             "tie switches",
             "back-feed options"
           ],
+          "x-impact": "Longest line built for a tie: more ties, more restoration options.",
+          "x-reach": "operations",
           "x-unit": "m"
         },
         "ties_per_feeder_pair": {
@@ -1073,7 +1224,9 @@
           "x-effects": [
             "tie switches",
             "back-feed options"
-          ]
+          ],
+          "x-impact": "Normally-open ties: with ties, crews restore part of a faulted feeder from a neighbour, so outages are shorter on the operations day.",
+          "x-reach": "operations"
         },
         "transformer_kva_steps": {
           "default": [
@@ -1090,6 +1243,8 @@
           "title": "Transformer Kva Steps",
           "type": "array",
           "x-advanced": true,
+          "x-impact": "The transformer sizes available: groupings, loading and overloads on the map.",
+          "x-reach": "operations",
           "x-unit": "kVA"
         },
         "transformer_max_loading": {
@@ -1099,16 +1254,9 @@
           "minimum": 0.8,
           "title": "Transformer Max Loading",
           "type": "number",
-          "x-advanced": true
-        },
-        "transmission_kv": {
-          "default": 115.0,
-          "description": "Off-map transmission voltage into the substation.",
-          "maximum": 500,
-          "minimum": 34.5,
-          "title": "Transmission Kv",
-          "type": "number",
-          "x-unit": "kV"
+          "x-advanced": true,
+          "x-impact": "Allowed loading before a bigger transformer is chosen: overloaded units fail three times as often on the operations day.",
+          "x-reach": "operations"
         },
         "trunk_min_load_share": {
           "default": 0.04,
@@ -1121,7 +1269,9 @@
           "x-effects": [
             "trunk length",
             "three-phase backbone"
-          ]
+          ],
+          "x-impact": "How far a three-phase trunk extends before laterals take over.",
+          "x-reach": "operations"
         },
         "voltage_max_pu": {
           "default": 1.05,
@@ -1134,7 +1284,9 @@
           "x-effects": [
             "high-voltage premises",
             "voltage lens"
-          ]
+          ],
+          "x-impact": "High-voltage limit for the voltage readings on the map.",
+          "x-reach": "operations"
         },
         "voltage_min_pu": {
           "default": 0.95,
@@ -1149,6 +1301,8 @@
             "voltage lens",
             "back-feed voltage floor"
           ],
+          "x-impact": "Low-voltage limit for the voltage readings on the map.",
+          "x-reach": "operations",
           "x-run-setting": "tieMinVoltage"
         }
       },
@@ -1198,7 +1352,9 @@
             "gas services",
             "electric heat share",
             "winter electric peak"
-          ]
+          ],
+          "x-impact": "Share of districts without gas mains, counted in whole districts and never the core: those homes heat with electricity, mostly heat pumps. Gas accounts and usage fall, winter electric usage rises. One-district towns (Whitby, Ayr) have none whatever the share.",
+          "x-reach": "town"
         },
         "base_pressure_kpa": {
           "default": 101.559771,
@@ -1212,6 +1368,8 @@
             "gas main sizes",
             "gas pressures"
           ],
+          "x-impact": "Standard-volume base pressure in the gas flow equations.",
+          "x-reach": "operations",
           "x-unit": "kPa"
         },
         "base_temperature_c": {
@@ -1226,6 +1384,8 @@
             "gas main sizes",
             "gas pressures"
           ],
+          "x-impact": "Standard-volume base temperature in the gas flow equations.",
+          "x-reach": "operations",
           "x-unit": "C"
         },
         "calorific_mj_per_m3": {
@@ -1239,6 +1399,8 @@
             "gas bill energy",
             "therm/kWh conversion"
           ],
+          "x-impact": "Energy per cubic metre for showing gas in GJ or therms. Bills charge per m³, so no amount changes.",
+          "x-reach": "display",
           "x-unit": "MJ/m3"
         },
         "coincidence_floor": {
@@ -1248,7 +1410,9 @@
           "minimum": 0.1,
           "title": "Coincidence Floor",
           "type": "number",
-          "x-advanced": true
+          "x-advanced": true,
+          "x-impact": "How much gas peaks overlap: larger floors size bigger gas mains.",
+          "x-reach": "operations"
         },
         "design_m3h_base": {
           "default": 1.15,
@@ -1257,6 +1421,8 @@
           "minimum": 0,
           "title": "Design M3H Base",
           "type": "number",
+          "x-impact": "Design-hour demand per house: gas main sizes. Usage is not affected.",
+          "x-reach": "operations",
           "x-unit": "m3/h"
         },
         "design_m3h_per_m2": {
@@ -1266,6 +1432,8 @@
           "minimum": 0,
           "title": "Design M3H Per M2",
           "type": "number",
+          "x-impact": "Design-hour demand per floor area: gas main sizes.",
+          "x-reach": "operations",
           "x-unit": "m3/h"
         },
         "lp_core_before_year": {
@@ -1275,7 +1443,9 @@
           "minimum": 1850,
           "title": "Lp Core Before Year",
           "type": "integer",
-          "x-advanced": true
+          "x-advanced": true,
+          "x-impact": "Districts older than this sit on the low-pressure core.",
+          "x-reach": "operations"
         },
         "lp_kpa": {
           "default": 1.74,
@@ -1285,6 +1455,8 @@
           "title": "Lp Kpa",
           "type": "number",
           "x-advanced": true,
+          "x-impact": "Low-pressure core set point: gas pressures on the operations day.",
+          "x-reach": "operations",
           "x-unit": "kPa"
         },
         "min_main_mm": {
@@ -1294,6 +1466,8 @@
           "minimum": 25,
           "title": "Min Main Mm",
           "type": "integer",
+          "x-impact": "Smallest gas main: pipe sizes and pressures on the map. Usage is not affected.",
+          "x-reach": "operations",
           "x-unit": "mm"
         },
         "mp_kpa": {
@@ -1303,6 +1477,8 @@
           "minimum": 35,
           "title": "Mp Kpa",
           "type": "number",
+          "x-impact": "Medium-pressure set point: gas pressures on the operations day.",
+          "x-reach": "operations",
           "x-unit": "kPa"
         },
         "scheme": {
@@ -1313,7 +1489,9 @@
             "mp_with_lp_core"
           ],
           "title": "Scheme",
-          "type": "string"
+          "type": "string",
+          "x-impact": "Medium pressure everywhere or a legacy low-pressure core: regulators and pressures on the map.",
+          "x-reach": "operations"
         },
         "transmission_kpa": {
           "default": 3800.0,
@@ -1323,6 +1501,8 @@
           "title": "Transmission Kpa",
           "type": "number",
           "x-advanced": true,
+          "x-impact": "Pressure into the city gate: gas pressures on the operations day.",
+          "x-reach": "operations",
           "x-unit": "kPa"
         },
         "valve_spacing_m": {
@@ -1333,6 +1513,8 @@
           "title": "Valve Spacing M",
           "type": "number",
           "x-advanced": true,
+          "x-impact": "Valve spacing: how much main a leak repair isolates.",
+          "x-reach": "operations",
           "x-unit": "m"
         }
       },
@@ -1356,7 +1538,9 @@
           "x-effects": [
             "summer peak",
             "transformer sizing"
-          ]
+          ],
+          "x-impact": "Central air adds cooling load on hot days: higher July and August electric usage and bills, and summer high-bill checks.",
+          "x-reach": "town"
         },
         "electric_heat_rate": {
           "$ref": "#/$defs/EraValues",
@@ -1369,7 +1553,9 @@
           "x-effects": [
             "gas service count",
             "winter electric peak"
-          ]
+          ],
+          "x-impact": "Electric instead of gas heat: winter electric usage and bills rise, gas accounts and gas usage fall.",
+          "x-reach": "town"
         },
         "ev_rate": {
           "$ref": "#/$defs/EraValues",
@@ -1382,7 +1568,9 @@
           "x-effects": [
             "transformer loading",
             "evening peak"
-          ]
+          ],
+          "x-impact": "EV chargers add about 6.5 kWh a day per home, all year: higher electric usage and bills, and bigger transformers on the map.",
+          "x-reach": "town"
         },
         "heat_pump_share_of_electric": {
           "default": 0.55,
@@ -1391,7 +1579,9 @@
           "minimum": 0,
           "title": "Heat Pump Share Of Electric",
           "type": "number",
-          "x-advanced": true
+          "x-advanced": true,
+          "x-impact": "Heat pumps use far less than baseboard heat for the same warmth: lower winter electric usage and bills.",
+          "x-reach": "town"
         },
         "household_size_weights": {
           "default": [
@@ -1408,7 +1598,9 @@
           },
           "title": "Household Size Weights",
           "type": "array",
-          "x-advanced": true
+          "x-advanced": true,
+          "x-impact": "Bigger households use more water (people times litres per day) and more base electricity: higher water bills above all.",
+          "x-reach": "town"
         },
         "irrigation_rate": {
           "default": 0.3,
@@ -1419,7 +1611,9 @@
           "type": "number",
           "x-effects": [
             "summer water peak"
-          ]
+          ],
+          "x-impact": "Lawn watering adds summer water use (May to September, peaking in July): higher summer water bills and seasonal swings VEE must accept.",
+          "x-reach": "town"
         },
         "lot_depth_m": {
           "$ref": "#/$defs/EraValues",
@@ -1429,6 +1623,8 @@
             "pre_1945": 36.0
           },
           "description": "Mean lot depth by era.",
+          "x-impact": "Deeper lots are larger (pools need over 600 m²) and leave room for deeper houses on shallow streets. On synthetic towns it also reshapes blocks, which re-draws households, so totals move by about seed-sized noise.",
+          "x-reach": "town",
           "x-unit": "m"
         },
         "lot_frontage_m": {
@@ -1442,6 +1638,8 @@
           "x-effects": [
             "houses per km of street"
           ],
+          "x-impact": "Wider lots build wider houses (55 to 70 percent of the frontage, up to 15 m): more floor area, so more heating and base load. Fewer lots fit each street, so homes spread to other streets and eras. Pools need lots over 600 m².",
+          "x-reach": "town",
           "x-unit": "m"
         },
         "occupancy_rate": {
@@ -1455,7 +1653,9 @@
             "vacant consumption",
             "VEE vacancy signals",
             "move-ins"
-          ]
+          ],
+          "x-impact": "Vacant homes use almost nothing (12 percent of base load, 3 percent of water). Fewer occupied homes: lower usage, more zero-use reads for VEE, vacant-consuming cases and first bills at move-in.",
+          "x-reach": "town"
         },
         "pool_rate": {
           "default": 0.06,
@@ -1464,7 +1664,9 @@
           "minimum": 0,
           "title": "Pool Rate",
           "type": "number",
-          "x-advanced": true
+          "x-advanced": true,
+          "x-impact": "Pools (only on lots over 600 m², more in modern districts) run a pump and heater on electricity, about 7.5 kWh a day from May to September, and top up 0.15 m³ of water a day. Pools are not heated with gas in this engine.",
+          "x-reach": "town"
         },
         "pv_kw_max": {
           "default": 9.5,
@@ -1473,6 +1675,8 @@
           "minimum": 1,
           "title": "Pv Kw Max",
           "type": "number",
+          "x-impact": "Largest PV system: more export and larger summer credits per solar home.",
+          "x-reach": "town",
           "x-unit": "kW"
         },
         "pv_kw_min": {
@@ -1482,6 +1686,8 @@
           "minimum": 0.5,
           "title": "Pv Kw Min",
           "type": "number",
+          "x-impact": "Smallest PV system: more export and larger net-metering credits per solar home.",
+          "x-reach": "town",
           "x-unit": "kW"
         },
         "rental_share": {
@@ -1494,19 +1700,9 @@
           "x-effects": [
             "move-in/out frequency",
             "contract history"
-          ]
-        },
-        "semi_share": {
-          "$ref": "#/$defs/EraValues",
-          "default": {
-            "modern": 0.18,
-            "postwar": 0.08,
-            "pre_1945": 0.25
-          },
-          "description": "Share of lots built as semi-detached/townhouse pairs.",
-          "x-advanced": true,
-          "x-status": "not-modelled",
-          "x-status-reason": "Every residential lot is built as a detached house; semi-detached and townhouse pairs are not generated yet."
+          ],
+          "x-impact": "Rentals turn over: more move-ins and move-outs, so more first bills, final bills, short tenancies and contract changes for billing and collections.",
+          "x-reach": "town"
         },
         "setback_m": {
           "$ref": "#/$defs/EraValues",
@@ -1517,6 +1713,8 @@
           },
           "description": "Front setback by era.",
           "x-advanced": true,
+          "x-impact": "How far houses sit back from the street. On shallow lots a deep setback makes the house shallower, a fraction of a percent of usage.",
+          "x-reach": "shape",
           "x-unit": "m"
         },
         "solar_rate": {
@@ -1531,7 +1729,9 @@
             "export registers",
             "midday reverse flow",
             "net-metering credits"
-          ]
+          ],
+          "x-impact": "Homes with rooftop PV by era: export registers, net-metering credits on bills, and low or negative summer net use that VEE and billing must handle.",
+          "x-reach": "town"
         },
         "two_storey_share": {
           "$ref": "#/$defs/EraValues",
@@ -1540,7 +1740,9 @@
             "postwar": 0.25,
             "pre_1945": 0.7
           },
-          "description": "Share of two-storey houses by era."
+          "description": "Share of two-storey houses by era.",
+          "x-impact": "Two storeys double the floor area on the same footprint: more heating in winter, more cooling and base load, and higher bills.",
+          "x-reach": "town"
         }
       },
       "title": "Housing & households",
@@ -1560,6 +1762,8 @@
           "minimum": 0,
           "title": "Collector Outages Per Year",
           "type": "number",
+          "x-impact": "AMI collector outages: the meters behind it miss their nightly read that day.",
+          "x-reach": "operations",
           "x-run-setting": "collectorOutagesPerYear"
         },
         "gas_main_leaks_per_100km": {
@@ -1569,6 +1773,8 @@
           "minimum": 0,
           "title": "Gas Main Leaks Per 100Km",
           "type": "number",
+          "x-impact": "Random gas main leaks on the operations day: crew calls and isolations.",
+          "x-reach": "operations",
           "x-run-setting": "gasMainLeaksPer100km"
         },
         "gas_service_leaks_per_1000": {
@@ -1578,6 +1784,8 @@
           "minimum": 0,
           "title": "Gas Service Leaks Per 1000",
           "type": "number",
+          "x-impact": "Random service leaks on the operations day: crew calls and shut-offs.",
+          "x-reach": "operations",
           "x-run-setting": "gasServiceLeaksPer1000"
         },
         "manual_only": {
@@ -1588,6 +1796,8 @@
           "x-effects": [
             "background incidents"
           ],
+          "x-impact": "Turns random incidents off on the operations day; only the ones you inject happen.",
+          "x-reach": "operations",
           "x-run-setting": "randomIncidents"
         },
         "overhead_faults_per_km_storm_day": {
@@ -1602,6 +1812,8 @@
             "SAIDI/SAIFI",
             "zero-usage reads"
           ],
+          "x-impact": "Storm faults on overhead lines: feeder outages on storm days.",
+          "x-reach": "operations",
           "x-run-setting": "overheadFaultsPerKmStormDay"
         },
         "transformer_failures_per_1000": {
@@ -1611,6 +1823,8 @@
           "minimum": 0,
           "title": "Transformer Failures Per 1000",
           "type": "number",
+          "x-impact": "Transformer failures: small outages, three times as many where units are overloaded.",
+          "x-reach": "operations",
           "x-run-setting": "transformerFailuresPer1000"
         },
         "water_main_breaks_per_100km": {
@@ -1624,6 +1838,8 @@
             "water outages",
             "crew workload"
           ],
+          "x-impact": "Random main breaks on the operations day: valve shut-offs and customers without water.",
+          "x-reach": "operations",
           "x-run-setting": "waterMainBreaksPer100km"
         }
       },
@@ -1637,18 +1853,6 @@
       "additionalProperties": false,
       "description": "Fleet, shifts, response targets and vehicle movement. Crews, readers, the shift and the gas target are the defaults of the operations run settings (x-run-setting), so a run can change them without a new town.",
       "properties": {
-        "drive_by_radius_m": {
-          "default": 120.0,
-          "description": "AMR van reads meters within this distance.",
-          "maximum": 500,
-          "minimum": 20,
-          "title": "Drive By Radius M",
-          "type": "number",
-          "x-advanced": true,
-          "x-status": "not-modelled",
-          "x-status-reason": "Drive-by rounds pass the route's premises at the drive-by speed; radio range is not modelled.",
-          "x-unit": "m"
-        },
         "electric_crews": {
           "default": 3,
           "description": "Electric trouble crews.",
@@ -1660,6 +1864,8 @@
             "outage duration",
             "SAIDI"
           ],
+          "x-impact": "Electric crews: how long outages last on the operations day.",
+          "x-reach": "operations",
           "x-run-setting": "electricCrews"
         },
         "gas_crews": {
@@ -1672,6 +1878,8 @@
           "x-effects": [
             "leak response time"
           ],
+          "x-impact": "Gas crews: how fast leaks are made safe on the operations day.",
+          "x-reach": "operations",
           "x-run-setting": "gasCrews"
         },
         "gas_response_target_min": {
@@ -1681,6 +1889,8 @@
           "minimum": 10,
           "title": "Gas Response Target Min",
           "type": "number",
+          "x-impact": "The response target gas crews are measured against on the operations day.",
+          "x-reach": "operations",
           "x-run-setting": "gasResponseTargetMinutes",
           "x-unit": "min"
         },
@@ -1691,6 +1901,8 @@
           "minimum": 0,
           "title": "Meter Techs",
           "type": "integer",
+          "x-impact": "Meter technicians for exchanges and investigations on the operations day. The year's field capacity is Field orders per day.",
+          "x-reach": "operations",
           "x-run-setting": "meterTechs"
         },
         "meter_vans": {
@@ -1703,6 +1915,8 @@
           "x-effects": [
             "AMR read completion"
           ],
+          "x-impact": "AMR vans driving routes on the operations day; routes are shared among them.",
+          "x-reach": "operations",
           "x-run-setting": "meterVans"
         },
         "meter_walkers": {
@@ -1716,6 +1930,8 @@
             "manual read completion",
             "no-access"
           ],
+          "x-impact": "Walkers reading manual routes on the operations day.",
+          "x-reach": "operations",
           "x-run-setting": "meterWalkers"
         },
         "shift_end_hour": {
@@ -1728,6 +1944,8 @@
           "x-effects": [
             "collector outage length"
           ],
+          "x-impact": "When the day shift ends: non-emergency repairs left after it wait for the next morning.",
+          "x-reach": "operations",
           "x-run-setting": "shiftEndHour",
           "x-unit": "h"
         },
@@ -1741,6 +1959,8 @@
           "x-effects": [
             "collector outage length"
           ],
+          "x-impact": "When the day shift starts: non-emergency repairs wait for it.",
+          "x-reach": "operations",
           "x-run-setting": "shiftStartHour",
           "x-unit": "h"
         },
@@ -1752,6 +1972,8 @@
           "title": "Speed Kmh Arterial",
           "type": "number",
           "x-advanced": true,
+          "x-impact": "Driving speed on arterials: crew and van travel times.",
+          "x-reach": "operations",
           "x-unit": "km/h"
         },
         "speed_kmh_collector": {
@@ -1762,6 +1984,8 @@
           "title": "Speed Kmh Collector",
           "type": "number",
           "x-advanced": true,
+          "x-impact": "Driving speed on collector roads: crew and van travel times on the operations day.",
+          "x-reach": "operations",
           "x-unit": "km/h"
         },
         "speed_kmh_local": {
@@ -1772,19 +1996,9 @@
           "title": "Speed Kmh Local",
           "type": "number",
           "x-advanced": true,
+          "x-impact": "Driving speed on local streets: crew and van travel times on the operations day.",
+          "x-reach": "operations",
           "x-unit": "km/h"
-        },
-        "walker_meters_per_hour": {
-          "default": 45.0,
-          "description": "Manual reads per walker-hour.",
-          "maximum": 150,
-          "minimum": 5,
-          "title": "Walker Meters Per Hour",
-          "type": "number",
-          "x-advanced": true,
-          "x-deprecated": "walkKmh, meterDwellSeconds",
-          "x-status": "deprecated",
-          "x-status-reason": "A walked round's length follows its route at the run's walking speed and time at each meter (Operations › Reading rounds)."
         },
         "water_crews": {
           "default": 2,
@@ -1793,6 +2007,8 @@
           "minimum": 0,
           "title": "Water Crews",
           "type": "integer",
+          "x-impact": "Water crews: how long main breaks keep customers off.",
+          "x-reach": "operations",
           "x-run-setting": "waterCrews"
         }
       },
@@ -1817,7 +2033,9 @@
           "x-effects": [
             "billing errors",
             "wasted truck rolls"
-          ]
+          ],
+          "x-impact": "Reviews where the analyst finds the true cause. Lower: wrong dispositions, billing errors that surface later as rebills and complaints.",
+          "x-reach": "year"
         },
         "analyst_hours_per_day": {
           "default": 6.0,
@@ -1826,6 +2044,8 @@
           "minimum": 0.5,
           "title": "Analyst Hours Per Day",
           "type": "number",
+          "x-impact": "Queue hours per analyst per day: capacity, like the number of analysts.",
+          "x-reach": "year",
           "x-unit": "h"
         },
         "analyst_queue_days_max": {
@@ -1834,7 +2054,9 @@
           "maximum": 20,
           "minimum": 1,
           "title": "Analyst Queue Days Max",
-          "type": "integer"
+          "type": "integer",
+          "x-impact": "Longest first-look wait: the tail of slow cases, open-case counts and carry.",
+          "x-reach": "year"
         },
         "analyst_queue_days_min": {
           "default": 1,
@@ -1842,7 +2064,9 @@
           "maximum": 10,
           "minimum": 1,
           "title": "Analyst Queue Days Min",
-          "type": "integer"
+          "type": "integer",
+          "x-impact": "Shortest wait before an analyst first looks at a case: every human case takes at least this long, so carry and days to release rise.",
+          "x-reach": "year"
         },
         "analysts": {
           "default": 2,
@@ -1855,7 +2079,9 @@
             "queue backlog",
             "days to bill",
             "carrying cost"
-          ]
+          ],
+          "x-impact": "People working the queues. Fewer: backlog grows, cases age, estimates and blocked bills wait longer and carry builds; more: queues clear faster.",
+          "x-reach": "year"
         },
         "carry_rate_per_day": {
           "default": 1.25,
@@ -1864,6 +2090,8 @@
           "minimum": 0,
           "title": "Carry Rate Per Day",
           "type": "number",
+          "x-impact": "Cost of a day a bill is held back. Prices the carry; it does not change which cases happen.",
+          "x-reach": "year",
           "x-unit": "$"
         },
         "field_days_min": {
@@ -1874,6 +2102,8 @@
           "title": "Field Days Min",
           "type": "integer",
           "x-advanced": true,
+          "x-impact": "Earliest a field order is worked after it is raised.",
+          "x-reach": "year",
           "x-unit": "d"
         },
         "field_orders_per_day": {
@@ -1886,7 +2116,9 @@
           "x-effects": [
             "field order backlog",
             "estimates"
-          ]
+          ],
+          "x-impact": "Field orders worked per day (re-reads, checks, exchanges). Fewer: field backlog, longer estimate streaks, stuck and slow meters fixed later.",
+          "x-reach": "year"
         },
         "receivable_carry_ratio": {
           "default": 0.4,
@@ -1895,7 +2127,9 @@
           "minimum": 0,
           "title": "Receivable Carry Ratio",
           "type": "number",
-          "x-advanced": true
+          "x-advanced": true,
+          "x-impact": "Carry on unpaid invoices as a share of the billing carry rate. Prices receivable carry only.",
+          "x-reach": "year"
         },
         "review_minutes_max": {
           "default": 30.0,
@@ -1905,6 +2139,8 @@
           "title": "Review Minutes Max",
           "type": "number",
           "x-advanced": true,
+          "x-impact": "Longest review: capacity and labor cost per case.",
+          "x-reach": "year",
           "x-unit": "min"
         },
         "review_minutes_min": {
@@ -1915,6 +2151,8 @@
           "title": "Review Minutes Min",
           "type": "number",
           "x-advanced": true,
+          "x-impact": "Shortest review: longer reviews cut how many cases a day each analyst clears.",
+          "x-reach": "year",
           "x-unit": "min"
         },
         "rpa_coverage": {
@@ -1928,15 +2166,9 @@
             "analyst workload",
             "days to invoice",
             "carrying cost"
-          ]
-        },
-        "sequences": {
-          "default": "builtin",
-          "description": "Activity sequence library: 'builtin' or a path to a YAML file.",
-          "title": "Sequences",
-          "type": "string",
-          "x-status": "not-modelled",
-          "x-status-reason": "Only the built-in activity sequences exist; a YAML sequence library is not read yet."
+          ],
+          "x-impact": "Share of exception types automation resolves. More coverage: fewer cases for analysts, cheaper and faster resolution, less carry; uncovered types still queue for people.",
+          "x-reach": "year"
         },
         "supervisor_hours_per_day": {
           "default": 2.0,
@@ -1946,6 +2178,8 @@
           "title": "Supervisor Hours Per Day",
           "type": "number",
           "x-advanced": true,
+          "x-impact": "Supervisor time for escalations: how fast the Escalations queue clears.",
+          "x-reach": "year",
           "x-unit": "h"
         },
         "supervisor_minutes": {
@@ -1956,6 +2190,8 @@
           "title": "Supervisor Minutes",
           "type": "number",
           "x-advanced": true,
+          "x-impact": "Supervisor time per escalation: capacity and labor cost.",
+          "x-reach": "year",
           "x-unit": "min"
         },
         "supervisor_queue_days_max": {
@@ -1969,6 +2205,8 @@
             "escalation backlog",
             "days to bill"
           ],
+          "x-impact": "Longest wait before a supervisor picks up an escalation: the tail of held high-impact bills.",
+          "x-reach": "year",
           "x-unit": "d"
         },
         "supervisor_queue_days_min": {
@@ -1982,6 +2220,8 @@
             "escalation backlog",
             "days to bill"
           ],
+          "x-impact": "Shortest wait for a supervisor: escalated cases take at least this long.",
+          "x-reach": "year",
           "x-unit": "d"
         },
         "supervisors": {
@@ -1993,7 +2233,9 @@
           "type": "integer",
           "x-effects": [
             "escalation backlog"
-          ]
+          ],
+          "x-impact": "Supervisors approving escalations. Zero: escalated cases wait, high-impact bills stay held.",
+          "x-reach": "year"
         }
       },
       "title": "Meter-to-cash process",
@@ -2042,7 +2284,9 @@
           "x-effects": [
             "comm-fail exceptions",
             "estimates"
-          ]
+          ],
+          "x-impact": "AMI reads still missing after retries: estimates, missing-read cases and estimate streaks.",
+          "x-reach": "year"
         },
         "amr_missed_read": {
           "default": 0.03,
@@ -2050,7 +2294,9 @@
           "maximum": 0.5,
           "minimum": 0,
           "title": "Amr Missed Read",
-          "type": "number"
+          "type": "number",
+          "x-impact": "Drive-by reads missed: estimates and missing-read cases on AMR routes.",
+          "x-reach": "year"
         },
         "manual_no_access": {
           "default": 0.06,
@@ -2062,7 +2308,9 @@
           "x-effects": [
             "no-access exceptions",
             "consecutive estimates"
-          ]
+          ],
+          "x-impact": "Walked reads with no access: estimates, streaks and field reads.",
+          "x-reach": "year"
         },
         "no_access_repeat": {
           "default": 0.4,
@@ -2071,7 +2319,9 @@
           "minimum": 0,
           "title": "No Access Repeat",
           "type": "number",
-          "x-advanced": true
+          "x-advanced": true,
+          "x-impact": "Chance a no-access meter is missed again next month: longer estimate streaks and more field reads.",
+          "x-reach": "year"
         },
         "read_cost_ami": {
           "default": 0.1,
@@ -2081,6 +2331,8 @@
           "title": "Read Cost Ami",
           "type": "number",
           "x-advanced": true,
+          "x-impact": "Cost of one AMI read. Prices reading; no read changes.",
+          "x-reach": "year",
           "x-unit": "$"
         },
         "read_cost_amr": {
@@ -2091,6 +2343,8 @@
           "title": "Read Cost Amr",
           "type": "number",
           "x-advanced": true,
+          "x-impact": "Cost of one drive-by read. Prices reading in the cost totals; no read changes.",
+          "x-reach": "year",
           "x-unit": "$"
         },
         "read_cost_manual": {
@@ -2101,6 +2355,8 @@
           "title": "Read Cost Manual",
           "type": "number",
           "x-advanced": true,
+          "x-impact": "Cost of one walked read. Prices reading in the cost totals; no read changes.",
+          "x-reach": "year",
           "x-unit": "$"
         }
       },
@@ -2118,7 +2374,9 @@
           "default": "2026-07-15",
           "description": "Demonstration date (local).",
           "title": "Date",
-          "type": "string"
+          "type": "string",
+          "x-impact": "The day the map shows and the Studio opens on. The year's results are the same; only the default view date moves.",
+          "x-reach": "display"
         },
         "hour": {
           "default": 8.0,
@@ -2127,6 +2385,8 @@
           "minimum": 0,
           "title": "Hour",
           "type": "number",
+          "x-impact": "The hour the map's live clock starts at. The year is unchanged.",
+          "x-reach": "display",
           "x-unit": "h"
         },
         "leak_m3h": {
@@ -2136,6 +2396,8 @@
           "minimum": 0,
           "title": "Leak M3H",
           "type": "number",
+          "x-impact": "Leak size in the map's leak demonstration: flows and pressures that day.",
+          "x-reach": "operations",
           "x-unit": "m3/h"
         },
         "name": {
@@ -2148,7 +2410,9 @@
             "substation_outage"
           ],
           "title": "Name",
-          "type": "string"
+          "type": "string",
+          "x-impact": "The map's demonstration (normal, solar noon, leak, substation outage) on the live day. The year is unchanged.",
+          "x-reach": "operations"
         },
         "target_premise": {
           "anyOf": [
@@ -2161,16 +2425,9 @@
           ],
           "default": null,
           "description": "Premise targeted by the leak scenario (default: first premise).",
-          "title": "Target Premise"
-        },
-        "tick_minutes": {
-          "default": 5,
-          "description": "Live clock step.",
-          "maximum": 60,
-          "minimum": 1,
-          "title": "Tick Minutes",
-          "type": "integer",
-          "x-unit": "min"
+          "title": "Target Premise",
+          "x-impact": "The premise the map's leak demonstration targets.",
+          "x-reach": "operations"
         }
       },
       "title": "Scenario",
@@ -2224,7 +2481,9 @@
           "default": null,
           "description": "Override seed for the meter-to-cash run (missed reads, anomalies, analyst work, bill checks); a request's run seed overrides it per run.",
           "title": "Anomalies",
-          "x-advanced": true
+          "x-advanced": true,
+          "x-impact": "Re-rolls the year's draws (missed reads, anomalies, analyst work, bill checks) on the same households. A run's own seed overrides it without building a new town.",
+          "x-reach": "town"
         },
         "households": {
           "anyOf": [
@@ -2238,7 +2497,9 @@
           "default": null,
           "description": "Override seed for household attributes (occupants, solar, EV, heating).",
           "title": "Households",
-          "x-advanced": true
+          "x-advanced": true,
+          "x-impact": "Re-rolls who lives where: occupants, solar, EVs, heating fuel, pools, payer profiles and tenancies. Streets stay put. Small towns move several percent on solar export.",
+          "x-reach": "town"
         },
         "incidents": {
           "anyOf": [
@@ -2252,7 +2513,9 @@
           "default": null,
           "description": "Override seed for incident hazards.",
           "title": "Incidents",
-          "x-advanced": true
+          "x-advanced": true,
+          "x-impact": "Re-rolls the operations day's random leaks, breaks, faults and collector outages. The year is unchanged.",
+          "x-reach": "operations"
         },
         "master": {
           "default": "WHITBY-042",
@@ -2261,7 +2524,9 @@
           "type": "string",
           "x-effects": [
             "everything"
-          ]
+          ],
+          "x-impact": "Re-rolls everything: streets on synthetic towns, households, weather, incidents and the year's draws. Use it to see how much results vary by chance alone.",
+          "x-reach": "town"
         },
         "town": {
           "anyOf": [
@@ -2275,7 +2540,9 @@
           "default": null,
           "description": "Override seed for geography only (roads growth, parcels, buildings).",
           "title": "Town",
-          "x-advanced": true
+          "x-advanced": true,
+          "x-impact": "Re-rolls the geography (growth, lots, buildings). Households sit on lots, so they are drawn again too and usage totals shift by a few percent.",
+          "x-reach": "town"
         },
         "weather": {
           "anyOf": [
@@ -2289,7 +2556,9 @@
           "default": null,
           "description": "Override seed for weather series (re-roll storms, keep the town).",
           "title": "Weather",
-          "x-advanced": true
+          "x-advanced": true,
+          "x-impact": "Re-rolls the daily temperatures: heating and cooling usage follow, and so do the cold days that make AMI, AMR and walked reads miss more often.",
+          "x-reach": "town"
         }
       },
       "title": "Seeds",
@@ -2310,6 +2579,8 @@
           "title": "Anchor Lat",
           "type": "number",
           "x-advanced": true,
+          "x-impact": "Where a synthetic town sits on the globe: its latitude and the sun path in the map's day and night. Measured: no usage, network or year change.",
+          "x-reach": "display",
           "x-unit": "deg"
         },
         "anchor_lon": {
@@ -2320,6 +2591,8 @@
           "title": "Anchor Lon",
           "type": "number",
           "x-advanced": true,
+          "x-impact": "Where a synthetic town sits on the globe (its longitude). Measured: no usage, network or year change.",
+          "x-reach": "display",
           "x-unit": "deg"
         },
         "arterial_spacing_m": {
@@ -2330,6 +2603,8 @@
           "title": "Arterial Spacing M",
           "type": "number",
           "x-advanced": true,
+          "x-impact": "Synthetic towns and grown districts only: how far apart the main roads run, so block sizes and drive times. On a real-street town it does nothing.",
+          "x-reach": "shape",
           "x-unit": "m"
         },
         "arterial_warp_m": {
@@ -2340,6 +2615,8 @@
           "title": "Arterial Warp M",
           "type": "number",
           "x-advanced": true,
+          "x-impact": "Synthetic towns and grown districts only: how much the main roads bend.",
+          "x-reach": "shape",
           "x-unit": "m"
         },
         "collector_block_m": {
@@ -2350,6 +2627,8 @@
           "title": "Collector Block M",
           "type": "number",
           "x-advanced": true,
+          "x-impact": "Synthetic towns and grown districts only: superblocks larger than this get a collector road.",
+          "x-reach": "shape",
           "x-unit": "m"
         },
         "commercial_cluster_m": {
@@ -2363,6 +2642,8 @@
           "x-effects": [
             "where storefronts sit along main roads"
           ],
+          "x-impact": "How tightly shops cluster around main-road junctions and downtown. Which lots hold shops changes, not how many.",
+          "x-reach": "shape",
           "x-unit": "m"
         },
         "commercial_share_arterial": {
@@ -2378,7 +2659,9 @@
             "commercial hydrant spacing",
             "transformer pads",
             "commercial accounts"
-          ]
+          ],
+          "x-impact": "Share of arterial frontage that becomes shops: more commercial accounts (large, steady electric and gas loads) while homes stay at the count.",
+          "x-reach": "town"
         },
         "commercial_share_collector": {
           "default": 0.15,
@@ -2391,7 +2674,9 @@
             "commercial premises",
             "corner shops on collectors",
             "commercial accounts"
-          ]
+          ],
+          "x-impact": "Share of collector frontage that becomes shops: more commercial accounts.",
+          "x-reach": "town"
         },
         "commercial_share_local": {
           "default": 0.02,
@@ -2403,7 +2688,9 @@
           "x-effects": [
             "commercial premises",
             "homes pushed outward"
-          ]
+          ],
+          "x-impact": "Corner stores on local streets: a few more commercial accounts.",
+          "x-reach": "town"
         },
         "commercial_strip_m": {
           "default": 700.0,
@@ -2416,6 +2703,8 @@
             "downtown storefronts",
             "homes pushed outward"
           ],
+          "x-impact": "Length of the all-commercial main street downtown: more storefront accounts with commercial usage, tariffs and gas heat.",
+          "x-reach": "town",
           "x-unit": "m"
         },
         "corridor_max_deflection_deg": {
@@ -2431,6 +2720,8 @@
             "trunk routes",
             "corridor changes"
           ],
+          "x-impact": "How sharp a bend still counts as one road corridor: feeder routes follow corridors, so it can change which customers share a feeder (and an outage) on the operations day.",
+          "x-reach": "operations",
           "x-unit": "deg"
         },
         "corridor_name_bonus_deg": {
@@ -2444,6 +2735,8 @@
           "x-effects": [
             "corridors"
           ],
+          "x-impact": "Extra bend allowed when both roads share a name, for feeder corridors on the operations day.",
+          "x-reach": "operations",
           "x-unit": "deg"
         },
         "era_core_year": {
@@ -2460,7 +2753,9 @@
             "legacy gas district",
             "cast-iron water mains",
             "solar/EV uptake"
-          ]
+          ],
+          "x-impact": "When the centre was built; ages every home. Older homes leak more heat (more gas or electric heating), rent more, have less solar and EV, and sit on overhead lines and cast-iron mains.",
+          "x-reach": "town"
         },
         "era_noise_years": {
           "default": 8.0,
@@ -2470,6 +2765,8 @@
           "title": "Era Noise Years",
           "type": "number",
           "x-advanced": true,
+          "x-impact": "Scatter of construction years between districts: a few districts change era, which shifts their insulation, appliances and tenure.",
+          "x-reach": "town",
           "x-unit": "yr"
         },
         "era_span_years": {
@@ -2478,7 +2775,9 @@
           "maximum": 150,
           "minimum": 0,
           "title": "Era Span Years",
-          "type": "integer"
+          "type": "integer",
+          "x-impact": "How much newer the edge is than the centre. A wider span puts more homes in the modern era: better insulation, more solar, EVs, pools and irrigation.",
+          "x-reach": "town"
         },
         "expansion": {
           "default": "grow",
@@ -2489,7 +2788,9 @@
             "none"
           ],
           "title": "Expansion",
-          "type": "string"
+          "type": "string",
+          "x-impact": "Only when the extract cannot hold the homes asked for: grow adds synthetic (newer) districts around it, repeat tiles the extract, none stops with an error. New districts change the era mix.",
+          "x-reach": "town"
         },
         "houses": {
           "default": 480,
@@ -2505,7 +2806,9 @@
             "feeders",
             "pipe sizes",
             "MRUs"
-          ]
+          ],
+          "x-impact": "The number of homes. Accounts, reads, exceptions, bills and staffing load scale with it; past the extract's capacity the town grows new, more modern districts.",
+          "x-reach": "town"
         },
         "houses_per_school": {
           "default": 2500,
@@ -2514,7 +2817,9 @@
           "minimum": 500,
           "title": "Houses Per School",
           "type": "integer",
-          "x-advanced": true
+          "x-advanced": true,
+          "x-impact": "One school per this many homes, rounded (towns under about 1,250 homes have none). A school is an institutional account with a large floor area, heavy water use and gas heat.",
+          "x-reach": "town"
         },
         "industrial_lots": {
           "default": 2,
@@ -2522,7 +2827,9 @@
           "maximum": 10,
           "minimum": 0,
           "title": "Industrial Lots",
-          "type": "integer"
+          "type": "integer",
+          "x-impact": "Large industrial customers. Each is a very large electric, gas and water account; two of them are about a tenth of a small town's usage.",
+          "x-reach": "town"
         },
         "margin_m": {
           "default": 120.0,
@@ -2532,6 +2839,8 @@
           "title": "Margin M",
           "type": "number",
           "x-advanced": true,
+          "x-impact": "Empty land around the developed area, where utility sites sit. It moves things on the map only.",
+          "x-reach": "shape",
           "x-unit": "m"
         },
         "osm_sha256": {
@@ -2546,13 +2855,17 @@
           "default": "4c4bb0d8c88e4b53e89f5cfae2dc1778f1c446ba93b9b587ee423a91005706d8",
           "description": "Expected SHA-256 of the OSM extract; generation fails if it differs.",
           "title": "Osm Sha256",
-          "x-advanced": true
+          "x-advanced": true,
+          "x-impact": "An integrity check on the street extract; generation stops if the file differs. It changes nothing by itself.",
+          "x-reach": "display"
         },
         "osm_source": {
           "default": "data/osm/whitby-roads.json",
           "description": "Path to an OSM API 0.6 / Overpass JSON extract.",
           "title": "Osm Source",
-          "type": "string"
+          "type": "string",
+          "x-impact": "Which real street extract to build on: its streets set the eras, lot sizes and shops, and so the population the year replays.",
+          "x-reach": "town"
         },
         "park_share": {
           "default": 0.04,
@@ -2561,7 +2874,9 @@
           "minimum": 0,
           "title": "Park Share",
           "type": "number",
-          "x-advanced": true
+          "x-advanced": true,
+          "x-impact": "Blocks kept as parks. Homes move to other blocks; the count stays the same.",
+          "x-reach": "shape"
         },
         "skeleton": {
           "default": "osm",
@@ -2571,7 +2886,9 @@
             "synthetic"
           ],
           "title": "Skeleton",
-          "type": "string"
+          "type": "string",
+          "x-impact": "Real streets or a synthetic grid: a different town altogether, with its own eras, lot sizes and commercial frontage, so every usage and bill total changes.",
+          "x-reach": "town"
         },
         "terrain_relief_m": {
           "default": 15.0,
@@ -2585,6 +2902,8 @@
             "PRVs",
             "tank siting"
           ],
+          "x-impact": "Hillier towns get a second water pressure zone, another elevated tank and PRVs or boosters at zone boundaries: pressures on the operations day.",
+          "x-reach": "operations",
           "x-unit": "m"
         },
         "terrain_wavelength_m": {
@@ -2595,13 +2914,17 @@
           "title": "Terrain Wavelength M",
           "type": "number",
           "x-advanced": true,
+          "x-impact": "How quickly the ground rises and falls: elevations, water pressures and zone boundaries on the operations day.",
+          "x-reach": "operations",
           "x-unit": "m"
         },
         "timezone": {
           "default": "America/Toronto",
           "description": "IANA timezone of the town (read schedules, billing calendar, day/night).",
           "title": "Timezone",
-          "type": "string"
+          "type": "string",
+          "x-impact": "The local clock for timestamps, read schedules and business days. Measured: the year's figures do not change, only the times printed on records.",
+          "x-reach": "display"
         },
         "units": {
           "default": "ontario",
@@ -2612,7 +2935,9 @@
             "uk"
           ],
           "title": "Units",
-          "type": "string"
+          "type": "string",
+          "x-impact": "How values are labelled (Ontario, US or UK units). Stored values stay SI; no result changes.",
+          "x-reach": "display"
         }
       },
       "title": "Town & geography",
@@ -2635,7 +2960,9 @@
           "x-effects": [
             "auto-accept rate",
             "billing errors"
-          ]
+          ],
+          "x-impact": "Auto-accept at or above this confidence. Higher: fewer reads auto-accepted, more for review.",
+          "x-reach": "year"
         },
         "escalate_impact": {
           "default": 150.0,
@@ -2647,6 +2974,8 @@
           "x-effects": [
             "supervisor workload"
           ],
+          "x-impact": "Doubtful reads whose bill impact exceeds this go to a supervisor: lower means more escalations and supervisor load.",
+          "x-reach": "year",
           "x-unit": "$"
         },
         "estimation": {
@@ -2657,7 +2986,9 @@
             "recent_average"
           ],
           "title": "Estimation",
-          "type": "string"
+          "type": "string",
+          "x-impact": "How missing or rejected reads are estimated: prior year or average daily use. Changes estimated amounts and later true-ups.",
+          "x-reach": "year"
         },
         "high_ratio": {
           "default": 2.0,
@@ -2669,7 +3000,9 @@
           "x-effects": [
             "flagged reads",
             "analyst workload"
-          ]
+          ],
+          "x-impact": "Flag use above this multiple of expected. Lower: more high reads flagged (more cases, more real spikes caught, more false alarms).",
+          "x-reach": "year"
         },
         "history_noise": {
           "default": 0.1,
@@ -2678,7 +3011,9 @@
           "minimum": 0,
           "title": "History Noise",
           "type": "number",
-          "x-advanced": true
+          "x-advanced": true,
+          "x-impact": "How far last year's history strays from this year's normal use: more noise, more reads look odd against history.",
+          "x-reach": "year"
         },
         "low_ratio": {
           "default": 0.35,
@@ -2686,7 +3021,9 @@
           "maximum": 0.95,
           "minimum": 0,
           "title": "Low Ratio",
-          "type": "number"
+          "type": "number",
+          "x-impact": "Flag use below this share of expected. Higher: more low reads flagged, catching slow and stuck meters sooner at the cost of more cases.",
+          "x-reach": "year"
         },
         "max_consecutive_estimates": {
           "default": 2,
@@ -2697,7 +3034,9 @@
           "type": "integer",
           "x-effects": [
             "field orders"
-          ]
+          ],
+          "x-impact": "Estimates in a row before a field read is ordered: lower means more field orders, shorter streaks.",
+          "x-reach": "year"
         },
         "max_period_days": {
           "default": 38,
@@ -2707,6 +3046,8 @@
           "title": "Max Period Days",
           "type": "integer",
           "x-advanced": true,
+          "x-impact": "Longest plausible read period: longer periods fail the timing test and go to review.",
+          "x-reach": "year",
           "x-unit": "d"
         },
         "min_period_days": {
@@ -2717,6 +3058,8 @@
           "title": "Min Period Days",
           "type": "integer",
           "x-advanced": true,
+          "x-impact": "Shortest plausible read period: shorter periods fail the timing test.",
+          "x-reach": "year",
           "x-unit": "d"
         },
         "oms_events": {
@@ -2726,7 +3069,9 @@
           "type": "boolean",
           "x-effects": [
             "low-usage flags after outages"
-          ]
+          ],
+          "x-impact": "Use outage events: hours without service lower the expected use, so outage-explained low reads are accepted instead of flagged. Only matters when a run carries interruptions from an operations day.",
+          "x-reach": "year"
         },
         "reject_confidence": {
           "default": 0.35,
@@ -2734,7 +3079,9 @@
           "maximum": 1,
           "minimum": 0,
           "title": "Reject Confidence",
-          "type": "number"
+          "type": "number",
+          "x-impact": "Reject below this confidence (the read is replaced by an estimate).",
+          "x-reach": "year"
         },
         "trend_periods": {
           "default": 3,
@@ -2742,7 +3089,9 @@
           "maximum": 12,
           "minimum": 2,
           "title": "Trend Periods",
-          "type": "integer"
+          "type": "integer",
+          "x-impact": "Periods of low use before the trend flag: fewer means earlier detection, more cases.",
+          "x-reach": "year"
         },
         "trend_ratio": {
           "default": 0.8,
@@ -2753,13 +3102,17 @@
           "type": "number",
           "x-effects": [
             "slow and tampered meters found"
-          ]
+          ],
+          "x-impact": "Persistent low use below this share of expected is flagged: how slow meters and tamper are caught.",
+          "x-reach": "year"
         },
         "zero_at_occupied": {
           "default": true,
           "description": "Flag zero consumption at an occupied premise.",
           "title": "Zero At Occupied",
-          "type": "boolean"
+          "type": "boolean",
+          "x-impact": "Flag zero use at an occupied home: catches stuck meters and failed exchanges.",
+          "x-reach": "year"
         }
       },
       "title": "VEE rules",
@@ -2780,6 +3133,8 @@
           "title": "Arterial Main Mm",
           "type": "integer",
           "x-advanced": true,
+          "x-impact": "Smallest transmission main from the pump station.",
+          "x-reach": "operations",
           "x-unit": "mm"
         },
         "cast_iron_before_year": {
@@ -2793,7 +3148,9 @@
             "cast-iron mains",
             "main break rate (×2)",
             "head loss"
-          ]
+          ],
+          "x-impact": "Mains older than this are cast iron: rougher and break twice as often on the operations day.",
+          "x-reach": "operations"
         },
         "collector_main_mm": {
           "default": 300,
@@ -2803,6 +3160,8 @@
           "title": "Collector Main Mm",
           "type": "integer",
           "x-advanced": true,
+          "x-impact": "Smallest main on collector roads: pipe sizes and pressures on the map.",
+          "x-reach": "operations",
           "x-unit": "mm"
         },
         "fire_flow_commercial_lps": {
@@ -2813,6 +3172,8 @@
           "title": "Fire Flow Commercial Lps",
           "type": "number",
           "x-advanced": true,
+          "x-impact": "Fire flow that sizes commercial mains: pipe sizes and pressures on the map.",
+          "x-reach": "operations",
           "x-unit": "L/s"
         },
         "fire_flow_industrial_lps": {
@@ -2823,6 +3184,8 @@
           "title": "Fire Flow Industrial Lps",
           "type": "number",
           "x-advanced": true,
+          "x-impact": "Fire flow that sizes the industrial and supply mains.",
+          "x-reach": "operations",
           "x-unit": "L/s"
         },
         "fire_flow_residential_lps": {
@@ -2836,6 +3199,8 @@
             "minimum main size",
             "hydrants"
           ],
+          "x-impact": "Fire flow that sizes residential mains: bigger mains, lower velocities.",
+          "x-reach": "operations",
           "x-unit": "L/s"
         },
         "hw_c_new": {
@@ -2849,7 +3214,9 @@
           "x-effects": [
             "head loss",
             "service pressure"
-          ]
+          ],
+          "x-impact": "Pipe roughness of new mains: pressures on the operations day.",
+          "x-reach": "operations"
         },
         "hw_c_old": {
           "default": 100.0,
@@ -2862,7 +3229,9 @@
           "x-effects": [
             "head loss",
             "service pressure"
-          ]
+          ],
+          "x-impact": "Pipe roughness of old cast iron: more head loss, lower pressures.",
+          "x-reach": "operations"
         },
         "hydrant_spacing_commercial_m": {
           "default": 90.0,
@@ -2872,6 +3241,8 @@
           "title": "Hydrant Spacing Commercial M",
           "type": "number",
           "x-advanced": true,
+          "x-impact": "Hydrant spacing in commercial areas: hydrant count on the map.",
+          "x-reach": "operations",
           "x-unit": "m"
         },
         "hydrant_spacing_m": {
@@ -2881,6 +3252,8 @@
           "minimum": 50,
           "title": "Hydrant Spacing M",
           "type": "number",
+          "x-impact": "Hydrant spacing on residential mains: hydrant count on the map.",
+          "x-reach": "operations",
           "x-unit": "m"
         },
         "irrigation_m3_per_day": {
@@ -2890,6 +3263,8 @@
           "minimum": 0,
           "title": "Irrigation M3 Per Day",
           "type": "number",
+          "x-impact": "Summer watering per irrigating home: higher summer water usage and bills.",
+          "x-reach": "town",
           "x-unit": "m3"
         },
         "lpcd": {
@@ -2903,6 +3278,8 @@
             "water bills",
             "peak flow"
           ],
+          "x-impact": "Indoor water per person per day: every home's water usage and bill scales with it, and wastewater charges follow.",
+          "x-reach": "town",
           "x-unit": "L"
         },
         "max_day_factor": {
@@ -2912,7 +3289,9 @@
           "minimum": 1,
           "title": "Max Day Factor",
           "type": "number",
-          "x-advanced": true
+          "x-advanced": true,
+          "x-impact": "Max-day demand used to size mains and storage on the map.",
+          "x-reach": "operations"
         },
         "min_main_mm": {
           "default": 150,
@@ -2921,6 +3300,8 @@
           "minimum": 100,
           "title": "Min Main Mm",
           "type": "integer",
+          "x-impact": "Smallest main that carries hydrants: pipe sizes and pressures on the map.",
+          "x-reach": "operations",
           "x-unit": "mm"
         },
         "peak_hour_factor": {
@@ -2930,7 +3311,9 @@
           "minimum": 1,
           "title": "Peak Hour Factor",
           "type": "number",
-          "x-advanced": true
+          "x-advanced": true,
+          "x-impact": "Peak-hour demand used to size mains: pipe sizes and pressures on the map.",
+          "x-reach": "operations"
         },
         "pump_units": {
           "default": 3,
@@ -2939,7 +3322,9 @@
           "minimum": 1,
           "title": "Pump Units",
           "type": "integer",
-          "x-advanced": true
+          "x-advanced": true,
+          "x-impact": "Pumps at the station, one on standby: pumping capacity on the operations day.",
+          "x-reach": "operations"
         },
         "tank_overflow_above_ground_m": {
           "default": 42.0,
@@ -2951,6 +3336,8 @@
           "x-effects": [
             "service pressure"
           ],
+          "x-impact": "Elevated tank height: static pressure in its zone.",
+          "x-reach": "operations",
           "x-unit": "m"
         },
         "valve_spacing_m": {
@@ -2961,6 +3348,8 @@
           "title": "Valve Spacing M",
           "type": "number",
           "x-advanced": true,
+          "x-impact": "Valve spacing: how many customers a main break isolates.",
+          "x-reach": "operations",
           "x-unit": "m"
         },
         "zone_band_m": {
@@ -2971,6 +3360,8 @@
           "title": "Zone Band M",
           "type": "number",
           "x-advanced": true,
+          "x-impact": "Elevation band per pressure zone: how many zones a hilly town needs.",
+          "x-reach": "operations",
           "x-unit": "m"
         }
       },
@@ -2992,6 +3383,8 @@
           "title": "Cooling Base C",
           "type": "number",
           "x-advanced": true,
+          "x-impact": "Cooling starts above this temperature: a lower base means more cooling usage.",
+          "x-reach": "town",
           "x-unit": "C"
         },
         "fall": {
@@ -3002,7 +3395,9 @@
             "min_c": -10.0,
             "sd_c": 6.5
           },
-          "description": "Fall (Sep 21–Dec 20)."
+          "description": "Fall (Sep 21–Dec 20).",
+          "x-impact": "Fall temperatures: an early cold snap raises October and November heating usage and bills.",
+          "x-reach": "town"
         },
         "heating_base_c": {
           "default": 15.0,
@@ -3012,6 +3407,8 @@
           "title": "Heating Base C",
           "type": "number",
           "x-advanced": true,
+          "x-impact": "Heating starts below this temperature: a higher base means more heating usage in spring and fall.",
+          "x-reach": "town",
           "x-unit": "C"
         },
         "persistence": {
@@ -3021,7 +3418,9 @@
           "minimum": 0,
           "title": "Persistence",
           "type": "number",
-          "x-advanced": true
+          "x-advanced": true,
+          "x-impact": "How long warm or cold spells last: longer spells make monthly usage swing more from normal, which VEE's tolerances see.",
+          "x-reach": "town"
         },
         "spring": {
           "$ref": "#/$defs/SeasonTemp",
@@ -3031,7 +3430,9 @@
             "min_c": -8.0,
             "sd_c": 6.0
           },
-          "description": "Spring (Mar 21–Jun 20)."
+          "description": "Spring (Mar 21–Jun 20).",
+          "x-impact": "Spring temperatures: a cold spring keeps heating usage and bills up into April and May.",
+          "x-reach": "town"
         },
         "storm_days_per_year": {
           "default": 28.0,
@@ -3044,6 +3445,8 @@
             "lightning outages",
             "estimated reads"
           ],
+          "x-impact": "Thunderstorm days: overhead faults and outages on the operations day. The year does not draw storms.",
+          "x-reach": "operations",
           "x-run-setting": "stormDaysPerYear"
         },
         "summer": {
@@ -3054,7 +3457,9 @@
             "min_c": 10.0,
             "sd_c": 4.0
           },
-          "description": "Summer (Jun 21–Sep 20)."
+          "description": "Summer (Jun 21–Sep 20).",
+          "x-impact": "Summer temperatures: hotter summers raise cooling usage and bills on homes with air conditioning.",
+          "x-reach": "town"
         },
         "winter": {
           "$ref": "#/$defs/SeasonTemp",
@@ -3064,7 +3469,9 @@
             "min_c": -28.0,
             "sd_c": 6.5
           },
-          "description": "Winter (Dec 21–Mar 20)."
+          "description": "Winter (Dec 21–Mar 20).",
+          "x-impact": "Winter temperatures: colder winters raise heating usage (gas, or electricity for electric homes), winter bills, and the deep-cold days below -10 °C when reads miss more.",
+          "x-reach": "town"
         }
       },
       "title": "Weather",
@@ -3143,5 +3550,12 @@
   },
   "title": "SimConfig",
   "type": "object",
-  "x-generator-version": "0.9.0"
+  "x-generator-version": "0.9.1",
+  "x-reaches": {
+    "display": "Display only: labels, units, clocks or default dates. No result changes.",
+    "operations": "The operations day on the map. Reaches the year only through interruptions you carry into a run.",
+    "shape": "Map shape. Rearranges the town; the year moves only because homes are drawn again (seed-sized noise).",
+    "town": "Changes the customers, usage, routes or prices the year replays. Builds a new town.",
+    "year": "Changes the meter-to-cash year directly, on the same town."
+  }
 }

@@ -25,6 +25,7 @@ PTYPE = ("residential", "commercial", "institutional", "industrial", "utility")
 # Marker hints the viewer understands (render-only; ``kind`` stays authoritative).
 SUBKIND = {"elevated_tank": "tank", "district_regulator": "regulator"}
 EPOCH = "2026-07-15T04:00:00Z"
+TICK_SECONDS = 300  # the viewer's live clock step (five minutes)
 
 
 def _r(v, p=2):
@@ -241,7 +242,7 @@ def build_snapshot(town, *, include_reads: bool = True, units: str | None = None
         "amiNetwork": _ami(c.ami) if c else {},
         "sampleReads": c.sample_reads if (c and include_reads) else [],
         "billingDocuments": [], "invoices": [],
-        "simulation": {"timezone": cfg.town.timezone, "epoch": EPOCH, "tickSeconds": cfg.scenario.tick_minutes * 60,
+        "simulation": {"timezone": cfg.town.timezone, "epoch": EPOCH, "tickSeconds": TICK_SECONDS,
                        "demonstrationDate": cfg.scenario.date, "scenario": cfg.scenario.name,
                        "scenarios": ["normal", "solar_noon", "leak", "substation_outage"],
                        "leakM3h": cfg.scenario.leak_m3h, "demandModel": "prototype-shapes/v1",
@@ -306,7 +307,7 @@ def electric_routing(town) -> dict:
 
     t = town.cfg.town
     cor = extract_corridors(town.roads, t.corridor_max_deflection_deg, t.corridor_name_bonus_deg)
-    return routing_metrics(town.networks["electric"], town.roads, cor, town.cfg.electric.severe_turn_deg)
+    return routing_metrics(town.networks["electric"], town.roads, cor)
 
 
 def angle_note() -> str:

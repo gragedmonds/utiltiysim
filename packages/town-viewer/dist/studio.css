@@ -793,3 +793,8 @@ details.schema-group>.schema-field:last-child{margin-bottom:10px}
 .engine-guide .guide-status dt{color:#8a8497}
 .engine-guide .guide-status dd{margin:0;color:#2d2840}
 @media (max-width:600px){.engine-guide .guide-dl,.engine-guide .guide-status{grid-template-columns:1fr}.engine-guide .guide-table{display:block;overflow-x:auto}}
+
+/* Where a setting's effect reaches (x-reach): a small chip beside its name. */
+.schema-reach{display:inline-block;margin-left:6px;padding:0 5px;border-radius:4px;font-size:10px;line-height:16px;font-weight:600;letter-spacing:.2px;vertical-align:1px;white-space:nowrap}
+.reach-year{background:#e3f1ec;color:#1f6b52}.reach-town{background:#e6eef8;color:#2f5687}.reach-shape{background:#efeef2;color:#6b6780}
+.reach-operations{background:#fbf0de;color:#8a5a12}.reach-display{background:#f2f2f2;color:#7b7b7b}

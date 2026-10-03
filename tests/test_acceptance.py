@@ -12,6 +12,7 @@ from utilsim.config import SimConfig, load_preset
 from utilsim.gen.pipeline import generate
 from utilsim.gen.roads.osm import OsmError, parse_osm
 from utilsim.io.snapshot import build_snapshot
+from utilsim.net.electric import TRANSMISSION_KV
 from utilsim.sim.flows import FlowModel
 
 FIX = Path(__file__).parent / "fixtures"
@@ -112,7 +113,7 @@ def test_electric_voltage_stages(town480):
         if town480.prem.ptype[town480.prem.ids.index(pid)] != 0:
             continue
         path = _trace(net, f"electric-N-{pid}")
-        assert path[0].kind == "supply" and path[0].attrs["voltageKV"] == cfg.transmission_kv
+        assert path[0].kind == "supply" and path[0].attrs["voltageKV"] == TRANSMISSION_KV
         tx = [e for e in path if e.kind == "transformer"]
         assert len(tx) == 1 and tx[0].attrs["secondaryVoltageKV"] == pytest.approx(0.24)
         assert path[-1].kind == "service" and path[-1].attrs["voltageKV"] == pytest.approx(0.24)

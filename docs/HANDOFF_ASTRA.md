@@ -346,3 +346,24 @@ in the Studio, the utility spec and roll-ups, and campaigns. The instructions, m
 checks, contracts, tests and the rules every PR follows, are in [HANDOFF_BUILD.md](HANDOFF_BUILD.md). The
 architecture they implement is [PORTAL_ARCHITECTURE.md](PORTAL_ARCHITECTURE.md); step 1 (saved runs and the
 read-only Runs page) is done and described in [RUN_BUNDLES.md](RUN_BUNDLES.md).
+
+## 16. Settings say where they reach and how (Configuration)
+
+Every engine setting now carries two schema hints, in `GET /api/config/schema` and `GET /api/m2c/settings`:
+
+- `x-reach`: `year` (changes the meter-to-cash year on the same town), `town` (changes the customers, usage, routes
+  or prices the year replays; a new town), `shape` (map geometry; the year moves only because homes are drawn
+  again), `operations` (the operations day on the map), `display` (labels, units, clocks, default dates). The schema
+  root carries `x-reaches` with the sentence for each.
+- `x-impact`: one or two sentences on how the setting changes the results.
+
+`schema-form.js` shows a small chip after each setting's name (Year, Town, Map, Ops day, Display) and leads its (i)
+popover with "How it changes the results" and "Reaches". Searching "year" (or "ops day", "map") filters by reach.
+The text lives in `utilsim/config/impact.py`; `tests/test_config_impact.py` fails if a setting has none.
+
+Nine settings were removed because nothing used them or they only labelled the map: `housing.semi_share`,
+`electric.transmission_kv`, `electric.severe_turn_deg`, `ami.battery_life_years`, `ami.comm_fail_rate`,
+`operations.drive_by_radius_m`, `operations.walker_meters_per_hour`, `process.sequences`, `scenario.tick_minutes`.
+Configs and snapshots that still carry them load (the keys are dropped). Generator 0.9.1: town ids changed, the
+towns themselves did not (the golden digests of roads, premises, networks, accounts and meters are unchanged).
+Measurements: [CONFIG_IMPACT.md](CONFIG_IMPACT.md).

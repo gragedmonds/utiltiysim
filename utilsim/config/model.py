@@ -14,6 +14,7 @@ from typing import Any, Literal
 import orjson
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from utilsim.config.impact import IMPACT, REACHES, REMOVED
 from utilsim.version import GENERATOR_VERSION
 
 
@@ -35,6 +36,19 @@ def F(default: Any, description: str, *, unit: str | None = None, ge: float | No
     if deprecated:
         extra.update({"x-status": "deprecated", "x-deprecated": deprecated[0], "x-status-reason": deprecated[1]})
     return Field(default, description=description, ge=ge, le=le, json_schema_extra=extra or None, **kw)
+
+
+def _drop_removed(name: str):
+    """A before-validator for group ``name``: drop settings that were removed (``impact.REMOVED``), so configs, town
+    references and snapshots written before the removal still load."""
+    gone = REMOVED.get(name, ())
+
+    def drop(cls, data: Any) -> Any:
+        if gone and isinstance(data, dict) and any(k in data for k in gone):
+            return {k: v for k, v in data.items() if k not in gone}
+        return data
+
+    return model_validator(mode="before")(classmethod(drop))
 
 
 def group(title: str, order: int, description: str, applies: str = "town") -> ConfigDict:
@@ -145,6 +159,7 @@ class TownConfig(BaseModel):
 
 class HousingConfig(BaseModel):
     model_config = group("Housing & households", 2, "Lots, buildings and the people and appliances inside them.")
+    drop_removed_settings = _drop_removed("housing")
     lot_frontage_m: EraValues = F(EraValues(pre_1945=15, postwar=18.5, modern=16.5),
                                   "Mean lot frontage by era.", unit="m", effects=["houses per km of street"])
     lot_depth_m: EraValues = F(EraValues(pre_1945=36, postwar=35, modern=33), "Mean lot depth by era.", unit="m")
@@ -152,10 +167,6 @@ class HousingConfig(BaseModel):
                              advanced=True)
     two_storey_share: EraValues = F(EraValues(pre_1945=0.7, postwar=0.25, modern=0.75),
                                     "Share of two-storey houses by era.")
-    semi_share: EraValues = F(EraValues(pre_1945=0.25, postwar=0.08, modern=0.18),
-                              "Share of lots built as semi-detached/townhouse pairs.", advanced=True,
-                              not_modelled="Every residential lot is built as a detached house; semi-detached and "
-                                           "townhouse pairs are not generated yet.")
     occupancy_rate: float = F(0.955, "Share of premises occupied at simulation start.", ge=0.5, le=1.0,
                               effects=["vacant consumption", "VEE vacancy signals", "move-ins"])
     rental_share: float = F(0.28, "Share of premises that are rentals (more contract turnover).", ge=0, le=1,
@@ -184,8 +195,7 @@ class HousingConfig(BaseModel):
 
 class ElectricConfig(BaseModel):
     model_config = group("Electric distribution", 3, "Bulk supply, substations, feeders, transformers, services.")
-    transmission_kv: float = F(115.0, "Off-map transmission voltage into the substation.", unit="kV", ge=34.5,
-                               le=500)
+    drop_removed_settings = _drop_removed("electric")
     primary_kv: float = F(13.8, "Primary distribution line-to-line voltage (Ontario urban 13.8 kV; US 12.47 kV).",
                           unit="kV", ge=4.16, le=34.5, effects=["feeder capacity", "conductor sizing"])
     secondary_v: float = F(240.0, "Split-phase secondary voltage (120/240 V).", unit="V", ge=120, le=480,
@@ -241,8 +251,6 @@ class ElectricConfig(BaseModel):
     route_shared_trunk_factor: float = F(1.2, "Cost multiplier for running a feeder express through another "
                                          "feeder's territory or alongside its trunk.", ge=1.0, le=5.0,
                                          advanced=True, effects=["express sections", "feeder separation"])
-    severe_turn_deg: float = F(60.0, "A trunk turn at least this sharp counts as severe in the routing metrics.",
-                               unit="deg", ge=20, le=170, advanced=True)
     ties_per_feeder_pair: int = F(1, "Normally-open tie switches between each pair of neighbouring feeders (0: no "
                                   "ties at all, section ties included).", ge=0, le=4,
                                   effects=["tie switches", "back-feed options"])
@@ -341,6 +349,7 @@ class WaterConfig(BaseModel):
 
 class AmiConfig(BaseModel):
     model_config = group("Metering & AMI", 6, "Meter technology mix, AMI collectors and nightly collection.")
+    drop_removed_settings = _drop_removed("ami")
     ami_route_share: float = F(0.60, "Share of meter reading routes converted to AMI.", ge=0, le=1,
                                effects=["meter vans", "manual reads", "estimates", "VEE comm-fail flags"])
     amr_route_share: float = F(0.25, "Share of routes read by drive-by AMR vans (rest are walked manually).", ge=0,
@@ -353,15 +362,6 @@ class AmiConfig(BaseModel):
                                    advanced=True)
     meter_digits_water: int = F(6, "Register digits on water meters.", ge=4, le=9, advanced=True)
     meter_digits_gas: int = F(5, "Register digits on gas meters.", ge=4, le=9, advanced=True)
-    battery_life_years: float = F(15.0, "AMR/AMI endpoint battery life.", unit="yr", ge=3, le=30, advanced=True,
-                                  not_modelled="Endpoint batteries never run down in the simulation; meters carry "
-                                               "batteryInstallYear for reference.")
-    comm_fail_rate: float = F(0.004, "Nightly probability an AMI meter fails to report.", ge=0, le=0.2,
-                              effects=["estimated reads", "consecutive estimates"],
-                              deprecated=("reading.ami_missed_read",
-                                          "Meter-to-cash misses AMI reads per billing read after the head end's "
-                                          "retries (Meter reading › AMI missed read, a run setting); AMI collector "
-                                          "outages add clustered misses."))
 
 
 class SeasonTemp(BaseModel):
@@ -409,6 +409,7 @@ class OperationsConfig(BaseModel):
     model_config = group("Field operations", 9, "Fleet, shifts, response targets and vehicle movement. Crews, readers, "
                          "the shift and the gas target are the defaults of the operations run settings "
                          "(x-run-setting), so a run can change them without a new town.")
+    drop_removed_settings = _drop_removed("operations")
     gas_crews: int = F(2, "Gas emergency crews.", ge=0, le=20, effects=["leak response time"])
     electric_crews: int = F(3, "Electric trouble crews.", ge=0, le=30, effects=["outage duration", "SAIDI"])
     water_crews: int = F(2, "Water distribution crews.", ge=0, le=20)
@@ -423,14 +424,6 @@ class OperationsConfig(BaseModel):
     speed_kmh_arterial: float = F(50.0, "Driving speed on arterials.", unit="km/h", ge=10, le=100, advanced=True)
     speed_kmh_collector: float = F(40.0, "Driving speed on collectors.", unit="km/h", ge=10, le=80, advanced=True)
     speed_kmh_local: float = F(30.0, "Driving speed on local streets.", unit="km/h", ge=5, le=60, advanced=True)
-    drive_by_radius_m: float = F(120.0, "AMR van reads meters within this distance.", unit="m", ge=20, le=500,
-                                 advanced=True,
-                                 not_modelled="Drive-by rounds pass the route's premises at the drive-by speed; "
-                                              "radio range is not modelled.")
-    walker_meters_per_hour: float = F(45.0, "Manual reads per walker-hour.", ge=5, le=150, advanced=True,
-                                      deprecated=("walkKmh, meterDwellSeconds",
-                                                  "A walked round's length follows its route at the run's walking "
-                                                  "speed and time at each meter (Operations › Reading rounds)."))
 
 
 class RateBlock(BaseModel):
@@ -467,9 +460,7 @@ class CustomersBillingConfig(BaseModel):
 class ProcessConfig(BaseModel):
     model_config = group("Meter-to-cash process", 11, "Work queues, automation, workforce, costs and carrying cost.",
                          applies="run")
-    sequences: str = F("builtin", "Activity sequence library: 'builtin' or a path to a YAML file.",
-                       not_modelled="Only the built-in activity sequences exist; a YAML sequence library is not read "
-                                    "yet.")
+    drop_removed_settings = _drop_removed("process")
     rpa_coverage: float = F(0.35, "Share of exception types with an RPA/auto-resolve rule.", ge=0, le=1,
                             effects=["analyst workload", "days to invoice", "carrying cost"])
     analyst_queue_days_min: int = F(1, "Minimum queue wait before an analyst picks up an exception.", ge=1, le=10)
@@ -634,13 +625,13 @@ class BillingConfig(BaseModel):
 
 class ScenarioConfig(BaseModel):
     model_config = group("Scenario", 13, "Demonstration scenario on the live clock.", applies="run")
+    drop_removed_settings = _drop_removed("scenario")
     name: Literal["normal", "solar_noon", "leak", "substation_outage"] = F(
         "normal", "Live demonstration scenario.")
     date: str = F("2026-07-15", "Demonstration date (local).")
     hour: float = F(8.0, "Demonstration hour (local, decimal).", unit="h", ge=0, lt=24)
     target_premise: str | None = F(None, "Premise targeted by the leak scenario (default: first premise).")
     leak_m3h: float = F(0.65, "Leak rate added to the target premise's water demand.", unit="m3/h", ge=0, le=50)
-    tick_minutes: int = F(5, "Live clock step.", unit="min", ge=1, le=60)
 
 
 class SimConfig(BaseModel):
@@ -716,6 +707,16 @@ RUN_GROUPS = tuple(k for k, f in SimConfig.model_fields.items()
                    == "run")
 
 
+def annotate_group(name: str, group_schema: dict[str, Any]) -> dict[str, Any]:
+    """Add ``x-reach`` (where the setting's effect reaches) and ``x-impact`` (how it changes the results) to a group's
+    JSON Schema properties, from ``utilsim/config/impact.py``."""
+    for key, prop in group_schema.get("properties", {}).items():
+        hit = IMPACT.get(f"{name}.{key}")
+        if hit:
+            prop["x-reach"], prop["x-impact"] = hit
+    return group_schema
+
+
 def config_schema() -> dict[str, Any]:
     """JSON Schema with UI hints for the settings page. A town field that is the default of an operations run setting
     names it in ``x-run-setting`` (a key of ``GET /api/sim/settings/schema``): change it per run there, or here for a
@@ -724,7 +725,12 @@ def config_schema() -> dict[str, Any]:
 
     schema = SimConfig.model_json_schema()
     schema["x-generator-version"] = GENERATOR_VERSION
+    schema["x-reaches"] = REACHES
     defs = schema["$defs"]
+    for g, f in SimConfig.model_fields.items():
+        if not hasattr(f.annotation, "model_fields"):
+            continue
+        annotate_group(g, defs[f.annotation.__name__])
     for key, (path, _) in TOWN_SETTINGS.items():
         group, field = path.split(".")
         defs[SimConfig.model_fields[group].annotation.__name__]["properties"][field]["x-run-setting"] = key

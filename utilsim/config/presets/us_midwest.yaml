@@ -11,6 +11,5 @@ town:
   timezone: America/Chicago
 electric:
   primary_kv: 12.47
-  transmission_kv: 69
 gas:
   scheme: mp
