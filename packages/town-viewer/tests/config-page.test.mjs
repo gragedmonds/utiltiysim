@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {SECTIONS,sectionFor,hashFor,navModel,navMarkup} from '../dist/config-page.js';
 
 test('the old tab routes still name a section, and a section has one address',()=>{
- assert.deepEqual(SECTIONS.map(s=>s.id),['town','m2c','scenarios','data']);
+ assert.deepEqual(SECTIONS.map(s=>s.id),['town','m2c','scenarios','data','guide']);assert.equal(sectionFor('#/config/guide'),'guide');assert.equal(hashFor('guide'),'#/config/guide');
  assert.equal(sectionFor('#/config'),'town');assert.equal(sectionFor('#/config/m2c'),'m2c');assert.equal(sectionFor('#/settings/scenarios'),'scenarios');assert.equal(sectionFor('#/config/data'),'data');
  assert.equal(sectionFor('#/workspace'),'town','not a configuration route: the first section');
  assert.equal(hashFor('scenarios'),'#/config/scenarios');assert.equal(hashFor('nope'),'#/config/town');
@@ -13,14 +13,14 @@ test('the old tab routes still name a section, and a section has one address',()
 function fakePage(){
  const row=hidden=>({hidden});
  const card=(group,title,rows,changed='')=>({dataset:{group},hidden:false,id:'',querySelector:sel=>sel==='h3'?{textContent:title+(changed?' '+changed:''),firstChild:{textContent:title}}:sel==='.schema-badge'?{textContent:changed}:null,querySelectorAll:sel=>sel==='.schema-field'?rows:[]});
- const panes={town:{id:'',cards:[card('seeds','Seeds',[row(false),row(false)]),card('town','Town',[row(false),row(true),row(false)],'2 changed')]},m2c:{id:'cfg-m2c',cards:[card('vee','VEE',[row(false)])]},scenarios:{id:'',cards:[]},data:{id:'',cards:[]}};
+ const panes={town:{id:'',cards:[card('seeds','Seeds',[row(false),row(false)]),card('town','Town',[row(false),row(true),row(false)],'2 changed')]},m2c:{id:'cfg-m2c',cards:[card('vee','VEE',[row(false)])]},scenarios:{id:'',cards:[]},data:{id:'',cards:[]},guide:{id:'',cards:[card('gaps','Gaps still remaining',[])]}};
  for(const p of Object.values(panes))p.querySelectorAll=sel=>sel==='.schema-group'?p.cards:[];
  return {querySelector:sel=>{const m=sel.match(/data-settings-pane="(\w+)"/);return m?panes[m[1]]:null;},panes};
 }
 
 test('the sidebar model lists each section and its groups, with stable anchors and visible-field counts',()=>{
  const page=fakePage(),model=navModel(page);
- assert.deepEqual(model.map(s=>s.anchor),['cfg-town','cfg-m2c','cfg-scenarios','cfg-data']);
+ assert.deepEqual(model.map(s=>s.anchor),['cfg-town','cfg-m2c','cfg-scenarios','cfg-data','cfg-guide']);assert.deepEqual(model[4].groups.map(g=>g.id),['cfg-guide-gaps']);
  assert.equal(page.panes.town.id,'cfg-town','a pane without an id gets one');
  assert.deepEqual(model[0].groups,[{id:'cfg-town-seeds',title:'Seeds',count:2,changed:0},{id:'cfg-town-town',title:'Town',count:2,changed:2}]);
  assert.deepEqual(model[1].groups.map(g=>g.id),['cfg-m2c-vee']);assert.deepEqual(model[2].groups,[]);

@@ -330,3 +330,11 @@ by month (backlog by queue, cases opened and resolved, missed and estimated read
 invoiced and collected, overdue and receivable, dunning steps, accounts by collections phase) with the episodes shaded,
 so the before and after of a scenario is visible. The engine side (per-day configuration, the library, the trend) is
 described in [M2C.md](M2C.md) "Episodes"; the page's pure helpers are tested in `tests/year-page.test.mjs`.
+
+## 14. The engine guide (Configuration › Engine guide)
+
+The Configuration page's fifth section renders `GET /api/m2c/guide` (`guide.js`, `utilsim/m2c/guide.py`): a summary,
+what the engine can do (with where each capability shows in the Studio), the impact it can show, how far it scales
+(measured towns, the serverless and container limits, the request limits), the gaps still remaining with the next
+step for each, and the engine's live status. The text lives with the engine so it stays true to the build that serves
+it; the page adds nothing of its own. Tested in `tests/guide.test.mjs` and `tests/test_m2c_guide.py`.

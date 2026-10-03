@@ -18,7 +18,7 @@ const paths={
  cog:'<path d="m10 2-.7 2.8-2.1 1.2-2.8-.8-2 3.5 2.1 2v2.6l-2.1 2 2 3.5 2.8-.8 2.1 1.2.7 2.8h4l.7-2.8 2.1-1.2 2.8.8 2-3.5-2.1-2v-2.6l2.1-2-2-3.5-2.8.8L14.7 4.8 14 2ZM16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0"/>'
 };
 // Full-page views over the map, by hash: #/settings[/tab] and #/worklists[/QUEUE][/case/ID].
-const PAGES=[{id:'settings-page',re:/^#\/(?:settings|config)(?:\/(town|scenarios|data|m2c))?$/},{id:'worklists-page',re:/^#\/worklists(?:\/[A-Z_]+)?(?:\/case\/[\w.:-]+)?$/}];
+const PAGES=[{id:'settings-page',re:/^#\/(?:settings|config)(?:\/(town|scenarios|data|m2c|guide))?$/},{id:'worklists-page',re:/^#\/worklists(?:\/[A-Z_]+)?(?:\/case\/[\w.:-]+)?$/}];
 PAGES.push({id:'process-page',re:/^#\/process(?:\/(?:[1-9]|1[0-2])(?:\/[\w.:-]+)?)?$/}); // #/process[/MONTH[/EVENT]]: Activity sequences
 PAGES.push({id:'workspace-page',re:/^#\/workspace(?:\/[\w.:%-]+)*$/}); // #/workspace/<transaction>[/...]: Utility Studio SAP transactions
 PAGES.push({id:'data-page',re:/^#\/data(?:\/[\w-]+)?$/}); // #/data[/<table>]: tables of the town and its run

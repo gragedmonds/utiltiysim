@@ -594,6 +594,7 @@ opening each case.
 | `POST /api/vee/dispositions` | Import decisions from an external VEE engine (m2c.vee v5) by `readId`. Each becomes the equivalent append-only action on the case holding the read: accept → accept; reject or estimate → estimate; an edit → override; escalate and field order map directly; review keeps the case open. Unmatched decisions are returned with a reason. |
 | `POST /api/process/graph` | Activity Sequence nodes and edges for a month |
 | `POST /api/process/costs` | Cost, carry and days to release by exception type |
+| `GET /api/m2c/guide` | `engine-guide/1.0`: what the engine can do, the impact it can show, measured scale and limits, the gaps remaining, with the engine's live status (Configuration › Engine guide) |
 | `GET /api/m2c/scenarios` | `m2c-scenarios/1.0`: the scenario library (groups, episode templates, what to watch, coming) |
 | `POST /api/m2c/trend` | `m2c-trend/1.0`: the year month by month as of `asOf` (reads, cases and backlog, cost, billing, dunning, collections phases) with the run's `episodes` |
 | `GET /api/m2c/tables` | `m2c-tables/1.0`: the Data pages' catalog: table groups, each table's source, description and columns (key, label, kind, facet, link), and the page limits (see "Data tables") |

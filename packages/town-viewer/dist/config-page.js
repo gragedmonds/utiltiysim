@@ -2,8 +2,8 @@
 // on a single scrolling page, with a sidebar that lists each section and the setting groups inside it. A sidebar
 // entry scrolls to its target; the entry for whatever is on screen is marked as you scroll. The old tab routes
 // (#/config/town, /m2c, /scenarios, /data) still work: they open the page and scroll to that section.
-export const SECTIONS=[{id:'town',title:'Town & meters'},{id:'m2c',title:'Process & costs'},{id:'scenarios',title:'Scenario'},{id:'data',title:'Engine & data'}];
-export const ROUTE=/^#\/(?:settings|config)(?:\/(town|scenarios|data|m2c))?$/;
+export const SECTIONS=[{id:'town',title:'Town & meters'},{id:'m2c',title:'Process & costs'},{id:'scenarios',title:'Scenario'},{id:'data',title:'Engine & data'},{id:'guide',title:'Engine guide'}];
+export const ROUTE=/^#\/(?:settings|config)(?:\/(town|scenarios|data|m2c|guide))?$/;
 export const sectionFor=hash=>hash?.match(ROUTE)?.[1]||'town';
 export const hashFor=section=>'#/config/'+(SECTIONS.some(s=>s.id===section)?section:'town');
 const slug=s=>String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
