@@ -346,3 +346,16 @@ in the Studio, the utility spec and roll-ups, and campaigns. The instructions, m
 checks, contracts, tests and the rules every PR follows, are in [HANDOFF_BUILD.md](HANDOFF_BUILD.md). The
 architecture they implement is [PORTAL_ARCHITECTURE.md](PORTAL_ARCHITECTURE.md); step 1 (saved runs and the
 read-only Runs page) is done and described in [RUN_BUNDLES.md](RUN_BUNDLES.md).
+
+## 16. Runner product decisions to implement
+
+The login and pairing screens shown during design are mockups. The next implementation uses eight separate code
+boxes with a dash between the fourth and fifth characters (`K7M2-Q9RX`), supports full-code paste, and pairs the
+computer to the account once. Model/scenario selection happens afterward on the same connection.
+
+The runner must choose and remember a storage folder before downloading its runtime, including Windows paths such
+as `P:\UtilitySim\`. All large files belong there; show free space and a drive-unavailable state, and support moving
+or switching libraries. Returning users open saved models without another pairing code or an automatic replay.
+Users can keep complete downloaded archive copies locally; NAS integration is outside the current scope.
+The acceptance checks and planned contracts are incorporated into [HANDOFF_BUILD.md](HANDOFF_BUILD.md), milestones
+2, 3 and 5. Multi-year execution and checkpoint resume remain later engine work.

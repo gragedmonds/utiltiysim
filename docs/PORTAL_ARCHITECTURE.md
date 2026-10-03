@@ -12,12 +12,15 @@ milestone with done-when checks, contracts and tests, are in [HANDOFF_BUILD.md](
 ## The user flow: login, launch, pair
 
 1. **Log in to Sim online.** The account owns configurations, connected computers and saved run metadata.
-2. **Download and open a small launcher.** It starts a local server and opens a minimal pairing/status screen.
+2. **Download and open a small launcher.** Choose a storage folder, such as `P:\UtilitySim\`, before the runtime
+   download. It starts a local server and opens a minimal pairing/status screen.
    No Python installation, terminal command, copied server URL or hand-managed token is part of the user flow.
 3. **Configure online.** Town or utility specifications, seed, settings and scenarios are composed and saved in Sim.
    A configuration can be saved before a computer is connected; it has an immutable revision when submitted for a run.
-4. **Connect with an eight-character alphanumeric code.** The proposed direction is that Sim displays a code such as
-   `K7M2Q9RX`, and the launcher accepts it. Sim links that computer to the logged-in account and selected configuration.
+4. **Connect with an eight-character alphanumeric code.** Sim displays eight separate character boxes, grouped as
+   `K7M2-Q9RX` with a dash between the fourth and fifth. The launcher uses the same arrangement, accepts a full-code
+   paste and sends the eight characters without the display dash. Pairing links the computer to the account; the
+   initially selected configuration can be changed afterward without pairing again.
 5. **See the connection established.** Sim shows the computer's name, engine readiness and last contact. The local
    screen shows the linked account and configuration revision. Initial download or setup appears as **Preparing**;
    **Ready** means the engine is running and the configuration is available locally.
@@ -57,6 +60,29 @@ The device credential is kept in the platform credential store. Restarting the l
 Sim can disconnect a computer and revoke its credential. Expired codes can be regenerated. Unpairing stops account
 sync without deleting locally stored bundles. Changes to configuration are revisioned, and each run records the exact
 revision it uses so a later edit cannot change an in-progress run.
+
+### Storage folder and returning to a model
+
+The runner remembers a user-selected storage root across restarts. Models, downloaded copies, generated data, run
+archives, runtime caches and temporary downloads live beneath it. A small bootstrap preference records the path;
+credentials remain in the platform credential store. The setup screen shows the path and available space.
+On Windows, an existing writable drive such as `P:\UtilitySim\` is supported. If that drive is unavailable, show
+**Storage drive unavailable** and pause work that needs it; do not redirect large writes to another disk.
+
+Changing the folder offers **Move existing library** or **Open another library**. Moves run with jobs stopped,
+verify copied manifests and checksums before switching the saved root, and retain the source if interrupted. The
+selected storage path never becomes part of a model's or run's content identity.
+
+First setup selects storage, installs the runtime and pairs the computer. Returning users start the runner, reconnect
+with its stored credential, and select a model from the library. Opening a model loads its configuration and saved
+results without replaying it. Switching scenarios creates a new run on the same connected computer when the user
+chooses Run; previous runs remain available. Resuming mid-simulation requires future checkpoint support.
+
+People can export or download complete archive copies and import them into their selected local library. A full
+download is offered only when all manifest files are available; otherwise offer export from the computer holding
+them. Imports verify the complete bundle before publishing it in the library. A fresh computer pairs once for online
+work and obtains a copy of the model or regenerates it using the matching engine and inputs. NAS integration and
+archive-sharing codes are outside the current product scope; eight-character codes are for device pairing.
 
 ## Principles
 
@@ -161,9 +187,13 @@ store/runs/<runKey>/manifest.json, inputs.json, aggregates.json, trend.json, sco
 Online: `run:<key>` and `job:<id>` records, `runs/<key>/aggregates.json` (tens of kilobytes; a few per town more),
 `runs/<key>/details/<file>` on request (capped per run; aggregates are never evicted, details may be), `specs/<id>/<v>`.
 
-Sizing from today's measurements: aggregates 20 to 100 KB per run; worklist snapshots about 1 MB per month per
-10,000 accounts; tables 10 to 30 MB per 10,000 accounts compressed; a 100,000-account utility bundle 150 to 300 MB on
-disk and about 100 KB online by default.
+Measured archive reference: Whitby's 654 accounts and 1,832 registers through December 31, 2026 produce 3.61 MB
+of saved files (30.29 MB expanded JSON), including the town snapshot, 26 tables and 12 worklist snapshots. Linear
+scaling gives about 55 MB per 10,000-account year, or 110–275 MB compressed for two to five separately archived
+years (0.93–2.32 GB expanded). These are projections, not multi-year benchmarks; multi-year execution is still
+planned. Additional scenario archives multiply storage, and high-backlog scenarios can differ substantially.
+Detailed interval-meter histories and the runtime installation are not included in these archive estimates.
+This supersedes the earlier 150–300 MB estimate for a 100,000-account archive.
 
 ## Campaigns: month batches with a check-in
 
@@ -247,7 +277,7 @@ start, with runtime size measured separately from launcher size.
 |---|---|---|
 | 1 | Run bundle and aggregates (`utilsim export-run`); the Studio reads a bundle read-only (Year, Data, Workspace snapshots, scorecard) | Implemented |
 | 2 | Account login, online configuration revisions, eight-character pairing codes and device registry | Next connection milestone |
-| 3 | Small launcher, cached runtime, local server, heartbeat and configuration receipt; Sim shows Ready | Next connection milestone |
+| 3 | Small launcher, selectable storage, cached runtime, local server, reconnect and configuration receipt; Sim shows Ready | Next connection milestone |
 | 4 | Control-plane jobs/runs/specs and signed detail URLs; worker claim, replay, progress, upload and leases | After connection |
 | 5 | "Run on connected computer" in Year and Configuration, Runs queue, Utility board and comparisons | After worker execution |
 | 6 | DATA_FIRST step A on the worker; roll-ups per region and utility in the aggregates | as planned |
