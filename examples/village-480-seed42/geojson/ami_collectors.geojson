@@ -1,0 +1,1 @@
+{"type":"FeatureCollection","name":"ami_collectors","crs_note":"EPSG:4326","features":[{"type":"Feature","id":"COL-01","geometry":{"type":"Point","coordinates":[-80.6007133,43.3004463]},"properties":{"id":"COL-01","mountedOn":"transformer_pad","mountId":"electric-TX-00158","coverageRadiusM":900.0}}]}

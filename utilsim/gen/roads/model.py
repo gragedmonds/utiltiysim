@@ -1,8 +1,8 @@
-"""Road model shared by all skeleton sources."""
+"""Road model: lines before planarization and the planar road network."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import numpy as np
 
@@ -13,8 +13,8 @@ CLASS_NAMES = ("arterial", "collector", "local")
 # Right-of-way and pavement widths by class (m).
 ROW_WIDTH = np.array([30.0, 22.0, 18.0])
 PAVEMENT_WIDTH = np.array([14.0, 10.0, 8.0])
-# Astra/OSM highway tags the viewer understands, per class (for the 1.0-compatible ``class`` field).
-OSM_TAG_FOR_CLASS = ("primary", "tertiary", "residential")
+# Highway tags the viewer understands, per class (for the 1.0-compatible ``class`` field).
+ROAD_TAG_FOR_CLASS = ("primary", "tertiary", "residential")
 
 
 @dataclass
@@ -24,7 +24,7 @@ class RoadLine:
     points: np.ndarray
     cls: int
     name: str = ""
-    origin: str = "synthetic"  # "osm" | "synthetic" | "connector"
+    origin: str = "synthetic"  # "synthetic" | "connector" | "fixed" (kept exactly: no re-noding or snapping)
     source_id: str = ""
     bulb_at_end: bool = False  # cul-de-sac bulb at the last point
     bulb_at_start: bool = False
@@ -37,7 +37,6 @@ class RoadNetwork:
     origin: list[str]
     source_id: list[str]
     bulb_radius: np.ndarray  # per node, 0 if none
-    osm_tag: list[str] = field(default_factory=list)
     dropped_edges: int = 0
 
     @property

@@ -9,7 +9,7 @@ Differences:
 
 | Area | 1.0 (prototype) | 2.0 (engine) |
 |---|---|---|
-| Road geometry | OSM roads scaled to fit the home count | real metres, never scaled; a real place's preset is sized by its own streets (`expansion: none`); extra homes come from synthetic districts grown around the OSM core (`expansion: grow`) or tiles (`repeat`) |
+| Road geometry | OSM roads scaled to fit the home count | real metres, never scaled; a synthetic street grid sized for the home count (towns are generic: no real place's streets) |
 | Identity | `id` | `id`, `topologyRevision`, `indexRevision` (shared with every state frame) |
 | Counts | `count` = homes | `count` = `premises.length`; `homes` = residential |
 | Topology | strict tree, parent chain = route | construction forest plus loop edges; `enabled` on every edge; `sourceIds` |

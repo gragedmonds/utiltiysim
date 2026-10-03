@@ -1,5 +1,5 @@
 // Utility Town v1.0.0: deterministic geography, utility graphs and simulation fixtures.
-// All units are explicit. OSM streets are geography only; utility assets are synthetic.
+// All units are explicit. Streets are generic (the engine's synthetic small town); utility assets are synthetic.
 import {prepareDemoNetwork} from './roads.js';
 export const VERSION = '1.1.0';
 export const UTILS = ['electric','water','gas'];
@@ -14,25 +14,26 @@ const lerp=(a,b,t)=>({x:a.x+(b.x-a.x)*t,z:a.z+(b.z-a.z)*t});
 function polyLength(ps){let l=0;for(let i=1;i<ps.length;i++)l+=distance(ps[i-1],ps[i]);return l;}
 export function onPath(ps,t){let target=Math.max(0,Math.min(1,t))*polyLength(ps);for(let i=1;i<ps.length;i++){let len=distance(ps[i-1],ps[i]);if(target<=len||i===ps.length-1){let p=lerp(ps[i-1],ps[i],len?target/len:0);return {...p,angle:Math.atan2(ps[i].z-ps[i-1].z,ps[i].x-ps[i-1].x)};}target-=len;}return {...ps[0],angle:0};}
 function slicePath(ps,a,b){let len=polyLength(ps),travel=0;const out=[onPath(ps,a)];for(let i=1;i<ps.length;i++){travel+=distance(ps[i-1],ps[i]);if(travel>len*a+0.001&&travel<len*b-0.001)out.push(ps[i]);}out.push(onPath(ps,b));return out.map(({x,z})=>({x:round(x),z:round(z)}));}
-export function parseOSM(raw){
- if(!raw||!Array.isArray(raw.elements))throw Error('Choose an OSM / Overpass JSON file containing elements, nodes and road ways.');
- if(raw.elements.length>100000)throw Error('This prototype accepts up to 100,000 OSM elements. Export a smaller area.');
+// A street graph as nodes (lat/lon) and ways (highway class, name): demo-streets.json, written by the engine.
+export function parseStreets(raw){
+ if(!raw||!Array.isArray(raw.elements))throw Error('The street file needs elements: nodes and road ways.');
+ if(raw.elements.length>100000)throw Error('The street file has more than 100,000 elements.');
  const coord=new Map(),ways=[];for(const e of raw.elements){if(e.type==='node'&&Number.isFinite(e.lat)&&Number.isFinite(e.lon))coord.set(String(e.id),{lat:e.lat,lon:e.lon});}
  for(const e of raw.elements){if(e.type!=='way'||!['primary','secondary','tertiary','residential','unclassified','living_street','service'].includes(e.tags?.highway))continue;let ids=e.nodes?.map(String);if(e.geometry){ids=e.geometry.map((p,i)=>String(e.nodes?.[i]??`${p.lat},${p.lon}`));e.geometry.forEach((p,i)=>{if(p&&Number.isFinite(p.lat)&&Number.isFinite(p.lon))coord.set(ids[i],p);});}if(ids?.length>1&&ids.every(id=>coord.has(id))){let runs=[[]];for(const id of ids){const p=coord.get(id),b=raw.bbox;const inside=!b||(p.lon>=b[0]&&p.lat>=b[1]&&p.lon<=b[2]&&p.lat<=b[3]);if(inside)runs.at(-1).push(id);else if(runs.at(-1).length)runs.push([]);}runs.filter(r=>r.length>1).forEach((run,i)=>ways.push({id:String(e.id)+'-'+i,ids:run,name:e.tags.name||'Local road',class:e.tags.highway}));}}
- if(!ways.length)throw Error('No supported roads with complete geometry were found. Use Overpass “out geom” or include referenced nodes.');
+ if(!ways.length)throw Error('No supported roads with complete geometry were found.');
  const used=new Set(ways.flatMap(w=>w.ids)),values=[...used].map(id=>coord.get(id));
  const lat=values.reduce((a,b)=>a+b.lat,0)/values.length,lon=values.reduce((a,b)=>a+b.lon,0)/values.length;
  const points=new Map([...used].map(id=>{const p=coord.get(id);return[id,{id,x:(p.lon-lon)*111320*Math.cos(lat*Math.PI/180),z:-(p.lat-lat)*111320}];}));
  const adj=new Map([...used].map(id=>[id,[]])),segments=[];
  const duplicate=new Set();
- for(const w of ways)for(let i=1;i<w.ids.length;i++){const a=w.ids[i-1],b=w.ids[i],key=[a,b].sort().join(':');if(a===b||duplicate.has(key)||distance(points.get(a),points.get(b))<0.01)continue;duplicate.add(key);const s={id:`osm-${w.id}-${i}`,a,b,name:w.name,class:w.class};segments.push(s);adj.get(a).push(s);adj.get(b).push(s);}
+ for(const w of ways)for(let i=1;i<w.ids.length;i++){const a=w.ids[i-1],b=w.ids[i],key=[a,b].sort().join(':');if(a===b||duplicate.has(key)||distance(points.get(a),points.get(b))<0.01)continue;duplicate.add(key);const s={id:`road-${w.id}-${i}`,a,b,name:w.name,class:w.class};segments.push(s);adj.get(a).push(s);adj.get(b).push(s);}
  // Isolated fragments at snapshot boundary must not silently become disconnected services.
  let seen=new Set(),largest=[];for(const id of used){if(seen.has(id))continue;let comp=[id];seen.add(id);for(let i=0;i<comp.length;i++)for(const e of adj.get(comp[i])||[]){let v=e.a===comp[i]?e.b:e.a;if(!seen.has(v)){seen.add(v);comp.push(v);}}if(comp.length>largest.length)largest=comp;}
  const connected=new Set(largest),keep=new Set(largest.filter(id=>adj.get(id).length!==2));if(!keep.size)keep.add(largest[0]);
  const consumed=new Set(),roads=[];
  for(const start of [...keep].sort())for(const first of adj.get(start)||[]){if(consumed.has(first.id))continue;let next=first.a===start?first.b:first.a;let ps=[points.get(start),points.get(next)],e=first;consumed.add(e.id);while(!keep.has(next)){let following=adj.get(next).find(s=>s.id!==e.id);if(!following||consumed.has(following.id))break;consumed.add(following.id);e=following;next=e.a===next?e.b:e.a;ps.push(points.get(next));}if(start!==next)roads.push({id:`r-${roads.length}`,a:start,b:next,points:ps,name:first.name,class:first.class,length:polyLength(ps)});}
  const nodeIds=new Set(roads.flatMap(r=>[r.a,r.b]));
- return {nodes:[...nodeIds].sort().map(id=>points.get(id)),roads,origin:{lat,lon},omittedNodes:used.size-connected.size,sourceHash:hash(JSON.stringify(raw)).toString(16),label:raw.source==='OpenStreetMap API 0.6'?'Whitby street snapshot':'Imported OSM streets',snapshotDate:raw.snapshot_date||'user supplied'};
+ return {nodes:[...nodeIds].sort().map(id=>points.get(id)),roads,origin:{lat,lon},omittedNodes:used.size-connected.size,sourceHash:hash(JSON.stringify(raw)).toString(16),label:raw.label||'Generic streets',snapshotDate:raw.generatorVersion?`generator ${raw.generatorVersion}`:'generated'};
 }
 function roadTree(geo){
  const adj=new Map(geo.nodes.map(n=>[n.id,[]]));for(const r of geo.roads){adj.get(r.a).push(r);adj.get(r.b).push(r);}
@@ -57,7 +58,7 @@ function expandDistricts(source,count){
  for(let k=1;k<tiles;k++){let previous=k%cols?k-1:k-cols;let aa,bb,best=Infinity;for(const a of tileNodes[previous])for(const b of tileNodes[k]){let dist=distance(a,b);if(dist<best){aa=a;bb=b;best=dist;}}roads.push({id:`connector-${k}`,a:aa.id,b:bb.id,points:[aa,bb],length:best,name:'District Link',class:'tertiary'});}
  return {...source,nodes,roads,districtTiles:tiles};
 }
-export function createTown(source,{seed='WHITBY-042',count=480}={}){
+export function createTown(source,{seed='TOWN-042',count=480}={}){
  seed=String(seed).trim().slice(0,64);count=Number(count);if(!seed)throw Error('Enter a seed.');if(!Number.isInteger(count)||count<20||count>10000)throw Error('Choose between 20 and 10,000 homes.');
  const baseSource=source;source=expandDistricts(source,count);
  const original=source.roads.reduce((s,r)=>s+r.length,0);
@@ -68,7 +69,7 @@ export function createTown(source,{seed='WHITBY-042',count=480}={}){
  const roadMap=new Map(geo.roads.map(r=>[r.id,r]));
  const homes=lots.slice(0,count).map((p,i)=>{const hid=`P-${String(i+1).padStart(5,'0')}`,random=rng(`${seed}:home:${hid}`);return{id:hid,buildingId:`B-${hid}`,accountId:`CA-${hid}`,address:`${i+1} ${roadMap.get(p.roadId).name}`,x:round(p.x),z:round(p.z),angle:p.angle,side:p.side,roadId:p.roadId,t:p.t,front:p.front,width:8+random()*3,depth:10+random()*4,height:random()<.65?6.3:3.7,occupants:1+Math.floor(random()*5),occupied:random()>.045,solar:random()<.24,solarKW:round(4+random()*6,1),electricHeat:random()<.23,dailyKWh:round(15+random()*20,2),dailyWaterM3:round(.2+random()*.65),dailyGasM3:round(1.2+random()*4.8),roofTone:random(),billingCycle:1+Math.floor(random()*4),services:{}};});
  // Every premise has water and electricity; gas is absent on all-electric homes.
- const town={sourceSnapshot:baseSource,schemaVersion:'utility-town/1.0',generatorVersion:VERSION,id,seed,count,source:{...source,roads:undefined,nodes:undefined,scale:round(scale,6),syntheticUtilities:true,syntheticBuildings:true,coordinateSystem:'local metres; x east, z south',attribution:'© OpenStreetMap contributors',license:'https://opendatacommons.org/licenses/odbl/1-0/'},roads:geo.roads,premises:homes,networks:{},buildings:[],servicePoints:[],meters:[],registers:[],installations:[],accounts:[],contracts:[],tariffAssignments:[],bounds:{minX:Math.min(...geo.nodes.map(n=>n.x))-130,maxX:Math.max(...geo.nodes.map(n=>n.x))+110,minZ:Math.min(...geo.nodes.map(n=>n.z))-100,maxZ:Math.max(...geo.nodes.map(n=>n.z))+100}};
+ const town={sourceSnapshot:baseSource,schemaVersion:'utility-town/1.0',generatorVersion:VERSION,id,seed,count,source:{...source,roads:undefined,nodes:undefined,scale:round(scale,6),syntheticUtilities:true,syntheticBuildings:true,coordinateSystem:'local metres; x east, z south',attribution:'Synthetic geography',license:'generated'},roads:geo.roads,premises:homes,networks:{},buildings:[],servicePoints:[],meters:[],registers:[],installations:[],accounts:[],contracts:[],tariffAssignments:[],bounds:{minX:Math.min(...geo.nodes.map(n=>n.x))-130,maxX:Math.max(...geo.nodes.map(n=>n.x))+110,minZ:Math.min(...geo.nodes.map(n=>n.z))-100,maxZ:Math.max(...geo.nodes.map(n=>n.z))+100}};
  const validFrom='2026-01-01T00:00:00Z';
  for(const h of homes){town.buildings.push({id:h.buildingId,premiseIds:[h.id],footprint:{widthM:h.width,depthM:h.depth},heightM:h.height});town.accounts.push({id:h.accountId,businessPartnerId:`BP-${h.id}`,currency:'CAD'});for(const u of UTILS){if(u==='gas'&&h.electricHeat)continue;const sp=`SP-${h.id}-${u}`,meter=`M-${h.id}-${u}`,installation=`IN-${h.id}-${u}`,contract=`C-${h.id}-${u}`;h.services[u]=sp;town.servicePoints.push({id:sp,premiseId:h.id,commodity:u,meterId:meter,installationId:installation,status:'active',validFrom,validTo:null});town.meters.push({id:meter,servicePointId:sp,technology:'AMI',manufacturer:'Synthetic',registerIds:[`${meter}-import`,...(u==='electric'&&h.solar?[`${meter}-export`]:[])],multiplier:1,registerDigits:8,installedAt:validFrom,removedAt:null});town.registers.push({id:`${meter}-import`,meterId:meter,direction:'import',unit:u==='electric'?'kWh':'m3',precision:3},...(u==='electric'&&h.solar?[{id:`${meter}-export`,meterId:meter,direction:'export',unit:'kWh',precision:3}]:[]));town.installations.push({id:installation,servicePointId:sp,premiseId:h.id,division:u,timezone:'America/Toronto',readCycle:h.billingCycle});town.contracts.push({id:contract,installationId:installation,accountId:h.accountId,validFrom,validTo:null,status:'active'});town.tariffAssignments.push({contractId:contract,tariffId:`DEMO-${u.toUpperCase()}`,validFrom,validTo:null,rates:null,status:'unconfigured'});}}
  for(const [ui,u] of UTILS.entries()){

@@ -58,9 +58,9 @@ round to another part of the same feeder (`docs/NETWORK_RULES.md`). When a pole 
    (`afterBackfeed`).
 4. The faulted section itself waits for the repair; then the ties open, the switches close and everyone is back.
 
-On the packs at the scenario day's 08:00, no trunk break leaves more than 15 % of a feeder out after back-feed on
-Ayr or Cobourg (before: one tie per feeder pair, and a break on Ayr's second feeder kept up to all of it out until
-the repair).
+On the October 2026 packs at the scenario day's 08:00, no trunk break left more than 15 % of a feeder out after
+back-feed on the 1,861- or 5,500-home towns (before: one tie per feeder pair, and a break on the smaller town's second
+feeder kept up to all of it out until the repair).
 
 Hazard rates are per asset per year; overhead faults happen on storm days (`weather.storm_days_per_year`) and a
 transformer loaded above its rating fails three times as often. `manual_only` disables random hazards for scripted

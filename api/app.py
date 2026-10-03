@@ -60,14 +60,6 @@ def get_published_schema(name: str):
     return J(load(name))
 
 
-@app.get("/api/sources")
-def get_sources():
-    """Frozen street extracts (real places) with attribution and the presets built on them."""
-    from utilsim.gen.sources import list_sources
-
-    return J({"sources": list_sources()})
-
-
 @app.get("/api/towns/{tid}/layers/{name}.geojson")
 def get_layer(tid: str, name: str, crs: Literal["wgs84", "local"] = "wgs84"):
     town = _town(tid)

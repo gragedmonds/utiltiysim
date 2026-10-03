@@ -9,7 +9,7 @@ content-addressed archive, and inspect saved results without an engine. The **Ru
 From a checkout with the Python dependencies installed (`uv sync --all-extras`):
 
 ```bash
-uv run utilsim export-run --town ayr --as-of 2026-12-31 --store out/store
+uv run utilsim export-run --town small_town --as-of 2026-12-31 --store out/store
 ```
 
 The command prints the run key, bundle directory, date, file count and compressed size. The directory is
@@ -30,7 +30,7 @@ uv run utilsim export-run --input your-run.json --snapshot snapshot.json.gz --st
 ```
 
 The town identity is checked: a run from a different town or a stale pack requires its original snapshot. Prebuilt
-packs and saved snapshots need no network access. Fetching a new OSM extract remains a separate online operation.
+packs and saved snapshots need no network access, and nothing in the engine fetches outside data.
 
 ## Read
 

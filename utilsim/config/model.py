@@ -73,7 +73,7 @@ class EraValues(BaseModel):
 
 class SeedsConfig(BaseModel):
     model_config = group("Seeds", 0, "Master seed and optional per-subsystem re-rolls.")
-    master: str = F("WHITBY-042", "Master seed. Any text or integer; same seed + config + generator version "
+    master: str = F("TOWN-042", "Master seed. Any text or integer; same seed + config + generator version "
                     "reproduces the same town byte for byte.", effects=["everything"])
     town: str | None = F(None, "Override seed for geography only (roads growth, parcels, buildings).", advanced=True)
     households: str | None = F(None, "Override seed for household attributes (occupants, solar, EV, heating).",
@@ -89,21 +89,15 @@ class SeedsConfig(BaseModel):
 
 
 class TownConfig(BaseModel):
-    model_config = group("Town & geography", 1, "Size, road skeleton source, terrain and land use.")
+    model_config = group("Town & geography", 1, "Size, street grid, terrain and land use. Towns are generic: "
+                         "every street comes from these settings and the seed.")
+    drop_removed_settings = _drop_removed("town")
     houses: int = F(480, "Number of residential premises to place.", ge=20, le=10_000,
-                    effects=["town extent", "growth districts", "substations", "feeders", "pipe sizes", "MRUs"])
-    skeleton: Literal["osm", "synthetic"] = F("osm", "Road skeleton source: a frozen OpenStreetMap extract, or a "
-                                              "fully synthetic warped section grid.")
-    osm_source: str = F("data/osm/whitby-roads.json", "Path to an OSM API 0.6 / Overpass JSON extract.")
-    osm_sha256: str | None = F("4c4bb0d8c88e4b53e89f5cfae2dc1778f1c446ba93b9b587ee423a91005706d8",
-                               "Expected SHA-256 of the OSM extract; generation fails if it differs.", advanced=True)
-    expansion: Literal["grow", "repeat", "none"] = F("grow", "When the OSM extract cannot hold the requested houses: "
-                                                     "grow synthetic districts outward, repeat the extract as tiles "
-                                                     "(prototype behaviour), or fail.")
+                    effects=["town extent", "era mix", "substations", "feeders", "pipe sizes", "MRUs"])
     units: Literal["ontario", "us", "uk"] = F("ontario", "Display unit profile (stored values are always SI).")
-    anchor_lat: float = F(43.30, "Latitude of the local origin for synthetic towns.", unit="deg", ge=-80, le=80,
+    anchor_lat: float = F(43.30, "Latitude of the town (sun path, day length).", unit="deg", ge=-80, le=80,
                           advanced=True)
-    anchor_lon: float = F(-80.60, "Longitude of the local origin for synthetic towns.", unit="deg", ge=-180, le=180,
+    anchor_lon: float = F(-80.60, "Longitude of the town.", unit="deg", ge=-180, le=180,
                           advanced=True)
     timezone: str = F("America/Toronto", "IANA timezone of the town (read schedules, billing calendar, day/night).")
     terrain_relief_m: float = F(15.0, "Peak-to-trough terrain relief.", unit="m", ge=0, le=120,

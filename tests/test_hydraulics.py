@@ -26,12 +26,12 @@ ROOT = Path(__file__).resolve().parents[1]
 @pytest.fixture(scope="module")
 def ayr_snapshot() -> dict:
     index = orjson.loads((ROOT / "packs" / "index.json").read_bytes())
-    entry = next(t for t in index["towns"] if t["preset"] == "ayr")
+    entry = next(t for t in index["towns"] if t["preset"] == "small_town")
     return orjson.loads(gzip.decompress((ROOT / "packs" / entry["files"]["snapshot"]["path"]).read_bytes()))
 
 
 @pytest.fixture(scope="module")
-def ayr(ayr_snapshot) -> OpsTown:
+def small_town(ayr_snapshot) -> OpsTown:
     return OpsTown(ayr_snapshot)
 
 
@@ -71,7 +71,7 @@ def test_old_streets_get_cast_iron_mains(town120):
     water = town120.networks["water"].edges
     ci = [e for e in water if e.attrs.get("material") == "cast iron"]
     assert ci and all(e.kind == "distribution" and e.attrs["nominalLabel"].endswith('" cast iron') for e in ci)
-    new = generate(load_preset("whitby_small", seed="T120", houses=120,
+    new = generate(load_preset("village", seed="T120", houses=120,
                                overrides={"water": {"cast_iron_before_year": 1850}}))
     assert not any(e.attrs.get("material") == "cast iron" for e in new.networks["water"].edges)
     assert [e.size_mm for e in new.networks["water"].edges] == [e.size_mm for e in water]  # sizing is unchanged
@@ -80,66 +80,66 @@ def test_old_streets_get_cast_iron_mains(town120):
     assert np.nanmean(old_p) < np.nanmean(new_p) and np.mean(old_p <= new_p + 1e-6) > 0.8  # loops shift a few
 
 
-def test_water_pressure_follows_elevation_and_demand(ayr, ayr_snapshot):
-    res = ayr.flow_model.flows(7.5, month=7)  # the morning peak
+def test_water_pressure_follows_elevation_and_demand(small_town, ayr_snapshot):
+    res = small_town.flow_model.flows(7.5, month=7)  # the morning peak
     p = res.pressure["water"]
     assert not np.isnan(p).any() and WATER_MIN_KPA <= p.min() and p.max() < 700
     nodes = ayr_snapshot["networks"]["water"]["nodes"]
     elev = np.full(len(p), np.nan)
     for nd in nodes:
         if nd["kind"] == "meter":
-            elev[ayr.premise_index[nd["premiseId"]]] = nd["elevationM"]
+            elev[small_town.premise_index[nd["premiseId"]]] = nd["elevationM"]
     assert np.corrcoef(elev, p)[0, 1] < -0.9  # higher ground, lower pressure
     # More flow through the same pipes means more head loss everywhere downstream.
-    net = ayr.flow_inputs.nets["water"]
-    f = ayr.flow_model.forest("water")
+    net = small_town.flow_inputs.nets["water"]
+    f = small_town.flow_model.forest("water")
     q = np.zeros(net.n_nodes)
     q[net.meter >= 0] = 1.0
     for lvl in reversed(f.levels[1:]):
         np.add.at(q, f.parent[lvl], q[lvl])
-    hp = ayr.flow_inputs.hyd["water"]
+    hp = small_town.flow_inputs.hyd["water"]
     low, high = solve(hp, f, q, net.meter, len(p)), solve(hp, f, q * 20, net.meter, len(p))
     assert (high <= low + 1e-9).all() and (high < low).any()
 
 
-def test_gas_pressure_by_tier(ayr, ayr_snapshot):
+def test_gas_pressure_by_tier(small_town, ayr_snapshot):
     edges = ayr_snapshot["networks"]["gas"]["edges"]
     nodes = {n["id"]: n for n in ayr_snapshot["networks"]["gas"]["nodes"]}
     tier = {}
     for e in edges:
         if e["kind"] == "service":
-            tier[ayr.premise_index[nodes[e["to"]]["premiseId"]]] = e.get("pressureTier", "mp")
-    peak = ayr.flow_model.flows(18.5, month=1).pressure["gas"]
-    night = ayr.flow_model.flows(3.0, month=7).pressure["gas"]
+            tier[small_town.premise_index[nodes[e["to"]]["premiseId"]]] = e.get("pressureTier", "mp")
+    peak = small_town.flow_model.flows(18.5, month=1).pressure["gas"]
+    night = small_town.flow_model.flows(3.0, month=7).pressure["gas"]
     lp = np.array([i for i, t in tier.items() if t == "lp"])
     mp = np.array([i for i, t in tier.items() if t == "mp"])
     assert len(lp) and len(mp)
     assert (peak[lp] >= 1.0).all() and (peak[lp] <= 1.74 + 1e-9).all() and peak[lp].min() < night[lp].min()
     assert (peak[mp] > 300).all() and (peak[mp] <= 414 + 1e-9).all()
-    no_gas = ~ayr.flow_inputs.has_gas
+    no_gas = ~small_town.flow_inputs.has_gas
     assert np.isnan(peak[no_gas]).all()
 
 
-def test_frames_carry_service_pressure(ayr, ayr_snapshot):
-    frame = ayr.frames.frame(datetime(2026, 7, 15, 7, 30, tzinfo=ZoneInfo(ayr.timezone)))
+def test_frames_carry_service_pressure(small_town, ayr_snapshot):
+    frame = small_town.frames.frame(datetime(2026, 7, 15, 7, 30, tzinfo=ZoneInfo(small_town.timezone)))
     validate_frame(ayr_snapshot, frame)
     pr = frame["premises"]["pressure"]
-    assert set(pr) == {"water", "gas"} and len(pr["water"]) == len(ayr.premise_ids)
+    assert set(pr) == {"water", "gas"} and len(pr["water"]) == len(small_town.premise_ids)
     gas = [x for x in pr["gas"] if x is not None]
-    assert len(gas) == int(ayr.flow_inputs.has_gas.sum()) and all(x > 0 for x in gas)
+    assert len(gas) == int(small_town.flow_inputs.has_gas.sum()) and all(x > 0 for x in gas)
 
 
-def test_elevated_tank_carries_the_town_when_the_pump_station_is_cut_off(ayr):
-    net = ayr.nets["water"]
+def test_elevated_tank_carries_the_town_when_the_pump_station_is_cut_off(small_town):
+    net = small_town.nets["water"]
     trunk = next(k for k, kind in enumerate(net.kind) if kind == "trunk")  # pump station → town
     cut = np.zeros(len(net.a), dtype=bool)
     cut[trunk] = True
-    assert len(ayr.unsupplied("water", cut)) < 0.05 * len(ayr.premise_ids)  # the tank floats on the system
-    normal = ayr.flow_model.flows(7.5, month=7)
+    assert len(small_town.unsupplied("water", cut)) < 0.05 * len(small_town.premise_ids)  # the tank floats on the system
+    normal = small_town.flow_model.flows(7.5, month=7)
     tank = next(i for i, kind in enumerate(net.node_kind) if kind == "elevated_tank")
     riser = int(np.flatnonzero((net.a == tank) | (net.b == tank))[0])
     assert normal.edge_flows["water"][riser] == 0.0  # in normal operation the supply feeds everyone
-    fed = ayr.flow_model.flows(7.5, month=7, disabled={"water": cut})
+    fed = small_town.flow_model.flows(7.5, month=7, disabled={"water": cut})
     assert abs(fed.edge_flows["water"][riser]) > 0 and np.nanmin(fed.pressure["water"]) > 0
     # Pump station and tank both feed: the path between them is a pseudo-loop, solved with the loops.
     assert fed.loops["water"]["converged"] and not np.isnan(fed.edge_flows["water"]).any()
@@ -175,15 +175,15 @@ def test_dense_solve_matches_numpy():
     assert np.allclose(dense_solve(jac, rhs[:, 0]), np.linalg.solve(jac, rhs[:, 0]), rtol=1e-9, atol=1e-12)
 
 
-def _radial(monkeypatch, ayr, *args, **kw):
+def _radial(monkeypatch, small_town, *args, **kw):
     with monkeypatch.context() as m:
         m.setattr(flows_module, "looped", lambda *a, **k: None)
-        return ayr.flow_model.flows(*args, **kw)
+        return small_town.flow_model.flows(*args, **kw)
 
 
-def test_water_loops_balance_flow_and_head(ayr, monkeypatch):
-    res = ayr.flow_model.flows(7.5, month=7)  # the morning peak
-    net, hp = ayr.flow_inputs.nets["water"], ayr.flow_inputs.hyd["water"]
+def test_water_loops_balance_flow_and_head(small_town, monkeypatch):
+    res = small_town.flow_model.flows(7.5, month=7)  # the morning peak
+    net, hp = small_town.flow_inputs.nets["water"], small_town.flow_inputs.hyd["water"]
     loops = net.loop & net.enabled
     assert res.loops["water"]["converged"] and res.loops["water"]["chords"] == loops.sum() > 0
     q = res.edge_flows["water"]
@@ -206,16 +206,16 @@ def test_water_loops_balance_flow_and_head(ayr, monkeypatch):
     assert pipe[loops].all() and np.abs(err[pipe]).max() < 1e-3
     # Against the radial model: the worst-served premise is no worse off, and the demand-weighted pressure is higher
     # (the loops lower the energy the network dissipates). A premise on the high side of a loop can lose a little.
-    rad = _radial(monkeypatch, ayr, 7.5, month=7)
+    rad = _radial(monkeypatch, small_town, 7.5, month=7)
     assert rad.loops is None and np.isnan(rad.edge_flows["water"][loops]).all()
     p, p0, w = res.pressure["water"], rad.pressure["water"], res.homes["water"]
     assert p.min() >= p0.min() - 1e-9
     assert np.average(p, weights=w) > np.average(p0, weights=w)
 
 
-def test_gas_loops_balance_flow_and_pressure(ayr):
-    res = ayr.flow_model.flows(18.5, month=1)  # a January evening
-    net, hp = ayr.flow_inputs.nets["gas"], ayr.flow_inputs.hyd["gas"]
+def test_gas_loops_balance_flow_and_pressure(small_town):
+    res = small_town.flow_model.flows(18.5, month=1)  # a January evening
+    net, hp = small_town.flow_inputs.nets["gas"], small_town.flow_inputs.hyd["gas"]
     loops = net.loop & net.enabled
     q = res.edge_flows["gas"]
     assert res.loops["gas"]["converged"] and not np.isnan(q[loops]).any()
@@ -237,21 +237,21 @@ def test_gas_loops_balance_flow_and_pressure(ayr):
         assert pipe[loops].any() and np.abs(pot[net.a] - pot[net.b] - drop)[pipe].max() < tol
 
 
-def test_unconverged_loops_fall_back_to_radial(ayr, monkeypatch):
+def test_unconverged_loops_fall_back_to_radial(small_town, monkeypatch):
     def stalled(*args, **kw):
         return solve_loops(*args, **{**kw, "max_iter": 0})
 
-    rad = _radial(monkeypatch, ayr, 7.5, month=7)
+    rad = _radial(monkeypatch, small_town, 7.5, month=7)
     monkeypatch.setattr(hydraulics, "solve_loops", stalled)
     with pytest.warns(RuntimeWarning, match="did not converge"):
-        res = ayr.flow_model.flows(7.5, month=7)
+        res = small_town.flow_model.flows(7.5, month=7)
     assert not res.loops["water"]["converged"]
     assert np.array_equal(res.edge_flows["water"], rad.edge_flows["water"], equal_nan=True)
     assert np.array_equal(res.pressure["water"], rad.pressure["water"], equal_nan=True)
 
 
-def test_frames_carry_loop_flows(ayr, ayr_snapshot):
-    frame = ayr.frames.frame(datetime(2026, 7, 15, 7, 30, tzinfo=ZoneInfo(ayr.timezone)))
+def test_frames_carry_loop_flows(small_town, ayr_snapshot):
+    frame = small_town.frames.frame(datetime(2026, 7, 15, 7, 30, tzinfo=ZoneInfo(small_town.timezone)))
     validate_frame(ayr_snapshot, frame)
     loops = {e["id"] for e in ayr_snapshot["networks"]["water"]["edges"] if e.get("loop") and e["enabled"]}
     water = frame["networks"]["water"]

@@ -43,9 +43,9 @@ Configs that still carry them load; the keys are ignored.
 | `town.terrain_relief_m` ↑ | Second pressure zone, second elevated tank, PRV/booster equipment at zone boundaries |
 | `ami.ami_route_share` ↓ | More AMR van and manual walker routes; more estimated reads (M3) |
 | `customers_billing.mru_target_meters` ↓ | More, smaller meter reading routes |
-| `town.houses` ↑ beyond the OSM extract | Synthetic districts grown around the Whitby core; second substation; more feeders |
+| `town.houses` ↑ | A wider town whose edge reaches newer eras; a second substation; more feeders, routes and accounts |
 | `town.commercial_share_arterial` / `_collector` / `_local` ↑ | More storefronts on that class of street, clustered at main-road intersections and towards downtown; homes pushed outward (still exactly `houses`); more 3φ pads, commercial accounts and closer hydrant spacing |
-| A real-place preset (`ayr`, `elora`, `cobourg`, `whitby_wide`) | The place's own streets at their natural size; set `expansion: grow` and more `houses` to add synthetic districts around it |
+| A preset (`village`, `small_town`, `town`, `large_town`, `city`, `us_town`) | A generic town of that size; every street comes from the settings and the seed, never from a real place |
 
 
 ## Seeds
@@ -54,7 +54,7 @@ Master seed and optional per-subsystem re-rolls.
 
 | Field | Reaches | Default | Range | Unit | Description | How it changes the results |
 |---|---|---|---|---|---|---|
-| `master` | town | `WHITBY-042` |  |  | Master seed. Any text or integer; same seed + config + generator version reproduces the same town byte for byte. *Affects: everything.* | Re-rolls everything: streets on synthetic towns, households, weather, incidents and the year's draws. Use it to see how much results vary by chance alone. |
+| `master` | town | `TOWN-042` |  |  | Master seed. Any text or integer; same seed + config + generator version reproduces the same town byte for byte. *Affects: everything.* | Re-rolls everything: the streets, households, weather, incidents and the year's draws. Use it to see how much results vary by chance alone. |
 | `town` | town | `None` |  |  | (advanced) Override seed for geography only (roads growth, parcels, buildings). | Re-rolls the geography (growth, lots, buildings). Households sit on lots, so they are drawn again too and usage totals shift by a few percent. |
 | `households` | town | `None` |  |  | (advanced) Override seed for household attributes (occupants, solar, EV, heating). | Re-rolls who lives where: occupants, solar, EVs, heating fuel, pools, payer profiles and tenancies. Streets stay put. Small towns move several percent on solar export. |
 | `weather` | town | `None` |  |  | (advanced) Override seed for weather series (re-roll storms, keep the town). | Re-rolls the daily temperatures: heating and cooling usage follow, and so do the cold days that make AMI, AMR and walked reads miss more often. |
@@ -63,18 +63,14 @@ Master seed and optional per-subsystem re-rolls.
 
 ## Town & geography
 
-Size, road skeleton source, terrain and land use.
+Size, street grid, terrain and land use. Towns are generic: every street comes from these settings and the seed.
 
 | Field | Reaches | Default | Range | Unit | Description | How it changes the results |
 |---|---|---|---|---|---|---|
-| `houses` | town | `480` | 20–10000 |  | Number of residential premises to place. *Affects: town extent, growth districts, substations, feeders, pipe sizes, MRUs.* | The number of homes. Accounts, reads, exceptions, bills and staffing load scale with it; past the extract's capacity the town grows new, more modern districts. |
-| `skeleton` | town | `osm` |  |  | Road skeleton source: a frozen OpenStreetMap extract, or a fully synthetic warped section grid. | Real streets or a synthetic grid: a different town altogether, with its own eras, lot sizes and commercial frontage, so every usage and bill total changes. |
-| `osm_source` | town | `data/osm/whitby-roads.json` |  |  | Path to an OSM API 0.6 / Overpass JSON extract. | Which real street extract to build on: its streets set the eras, lot sizes and shops, and so the population the year replays. |
-| `osm_sha256` | display | `4c4bb0d8c88e4b53e89f5cfae2dc1778f1c446ba93b9b587ee423a91005706d8` |  |  | (advanced) Expected SHA-256 of the OSM extract; generation fails if it differs. | An integrity check on the street extract; generation stops if the file differs. It changes nothing by itself. |
-| `expansion` | town | `grow` |  |  | When the OSM extract cannot hold the requested houses: grow synthetic districts outward, repeat the extract as tiles (prototype behaviour), or fail. | Only when the extract cannot hold the homes asked for: grow adds synthetic (newer) districts around it, repeat tiles the extract, none stops with an error. New districts change the era mix. |
+| `houses` | town | `480` | 20–10000 |  | Number of residential premises to place. *Affects: town extent, era mix, substations, feeders, pipe sizes, MRUs.* | The number of homes. Accounts, reads, exceptions, bills and staffing load scale with it; a bigger town also spreads further, so its edge reaches newer eras. |
 | `units` | display | `ontario` |  |  | Display unit profile (stored values are always SI). | How values are labelled (Ontario, US or UK units). Stored values stay SI; no result changes. |
-| `anchor_lat` | display | `43.3` | -80–80 | deg | (advanced) Latitude of the local origin for synthetic towns. | Where a synthetic town sits on the globe: its latitude and the sun path in the map's day and night. Measured: no usage, network or year change. |
-| `anchor_lon` | display | `-80.6` | -180–180 | deg | (advanced) Longitude of the local origin for synthetic towns. | Where a synthetic town sits on the globe (its longitude). Measured: no usage, network or year change. |
+| `anchor_lat` | display | `43.3` | -80–80 | deg | (advanced) Latitude of the town (sun path, day length). | Where the town sits on the globe: its latitude and the sun path in the map's day and night. Measured: no usage, network or year change. |
+| `anchor_lon` | display | `-80.6` | -180–180 | deg | (advanced) Longitude of the town. | Where the town sits on the globe (its longitude). Measured: no usage, network or year change. |
 | `timezone` | display | `America/Toronto` |  |  | IANA timezone of the town (read schedules, billing calendar, day/night). | The local clock for timestamps, read schedules and business days. Measured: the year's figures do not change, only the times printed on records. |
 | `terrain_relief_m` | operations | `15.0` | 0–120 | m | Peak-to-trough terrain relief. *Affects: water pressure zones, PRVs, tank siting.* | Hillier towns get a second water pressure zone, another elevated tank and PRVs or boosters at zone boundaries: pressures on the operations day. |
 | `terrain_wavelength_m` | operations | `900.0` | 100–5000 | m | (advanced) Dominant wavelength of terrain undulation. | How quickly the ground rises and falls: elevations, water pressures and zone boundaries on the operations day. |
@@ -166,7 +162,7 @@ City gate, mains, regulators and services.
 
 | Field | Reaches | Default | Range | Unit | Description | How it changes the results |
 |---|---|---|---|---|---|---|
-| `all_electric_district_share` | town | `0.15` | 0–1 |  | Share of districts with no gas mains (all-electric). *Affects: gas services, electric heat share, winter electric peak.* | Share of districts without gas mains, counted in whole districts and never the core: those homes heat with electricity, mostly heat pumps. Gas accounts and usage fall, winter electric usage rises. One-district towns (Whitby, Ayr) have none whatever the share. |
+| `all_electric_district_share` | town | `0.15` | 0–1 |  | Share of districts with no gas mains (all-electric). *Affects: gas services, electric heat share, winter electric peak.* | Share of districts without gas mains, counted in whole districts and never the core: those homes heat with electricity, mostly heat pumps. Gas accounts and usage fall, winter electric usage rises. One-district towns (village, small_town) have none whatever the share. |
 | `scheme` | operations | `mp_with_lp_core` |  |  | Medium-pressure PE everywhere with a regulator at every meter, optionally with a legacy low-pressure core fed by district regulators. | Medium pressure everywhere or a legacy low-pressure core: regulators and pressures on the map. |
 | `transmission_kpa` | operations | `3800.0` | 700–10000 | kPa | (advanced) Off-map transmission pressure at the city gate inlet. | Pressure into the city gate: gas pressures on the operations day. |
 | `mp_kpa` | operations | `414.0` | 35–700 | kPa | Medium-pressure distribution set point (60 psig). | Medium-pressure set point: gas pressures on the operations day. |

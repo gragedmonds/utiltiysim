@@ -42,11 +42,13 @@ REMOVED: dict[str, tuple[str, ...]] = {
     "operations": ("drive_by_radius_m", "walker_meters_per_hour"),
     "process": ("sequences",),
     "scenario": ("tick_minutes",),
+    # Towns are generic: streets come from the settings and the seed, never from a real place's street extract.
+    "town": ("skeleton", "osm_source", "osm_sha256", "expansion"),
 }
 
 IMPACT: dict[str, tuple[str, str]] = {
     # ---- seeds ------------------------------------------------------------------------------------------------------
-    "seeds.master": ("town", "Re-rolls everything: streets on synthetic towns, households, weather, incidents and the "
+    "seeds.master": ("town", "Re-rolls everything: the streets, households, weather, incidents and the "
                              "year's draws. Use it to see how much results vary by chance alone."),
     "seeds.town": ("town", "Re-rolls the geography (growth, lots, buildings). Households sit on lots, so they are drawn "
                            "again too and usage totals shift by a few percent."),
@@ -61,21 +63,12 @@ IMPACT: dict[str, tuple[str, str]] = {
                                 "same households. A run's own seed overrides it without building a new town."),
     # ---- town & geography ---------------------------------------------------------------------------------------------
     "town.houses": ("town", "The number of homes. Accounts, reads, exceptions, bills and staffing load scale with it; "
-                            "past the extract's capacity the town grows new, more modern districts."),
-    "town.skeleton": ("town", "Real streets or a synthetic grid: a different town altogether, with its own eras, lot "
-                              "sizes and commercial frontage, so every usage and bill total changes."),
-    "town.osm_source": ("town", "Which real street extract to build on: its streets set the eras, lot sizes and shops, "
-                                "and so the population the year replays."),
-    "town.osm_sha256": ("display", "An integrity check on the street extract; generation stops if the file differs. "
-                                   "It changes nothing by itself."),
-    "town.expansion": ("town", "Only when the extract cannot hold the homes asked for: grow adds synthetic "
-                               "(newer) districts around it, repeat tiles the extract, none stops with an "
-                               "error. New districts change the era mix."),
+                            "a bigger town also spreads further, so its edge reaches newer eras."),
     "town.units": ("display", "How values are labelled (Ontario, US or UK units). Stored values stay SI; no result "
                               "changes."),
-    "town.anchor_lat": ("display", "Where a synthetic town sits on the globe: its latitude and the sun path "
+    "town.anchor_lat": ("display", "Where the town sits on the globe: its latitude and the sun path "
                                    "in the map's day and night. Measured: no usage, network or year change."),
-    "town.anchor_lon": ("display", "Where a synthetic town sits on the globe (its longitude). Measured: no "
+    "town.anchor_lon": ("display", "Where the town sits on the globe (its longitude). Measured: no "
                                    "usage, network or year change."),
     "town.timezone": ("display", "The local clock for timestamps, read schedules and business days. Measured: the "
                                  "year's figures do not change, only the times printed on records."),
@@ -216,7 +209,7 @@ IMPACT: dict[str, tuple[str, str]] = {
                                                 "districts and never the core: those homes heat with "
                                                 "electricity, mostly heat pumps. Gas accounts and usage "
                                                 "fall, winter electric usage rises. One-district towns "
-                                                "(Whitby, Ayr) have none whatever the share."),
+                                                "(village, small_town) have none whatever the share."),
     "gas.scheme": ("operations", "Medium pressure everywhere or a legacy low-pressure core: regulators and pressures "
                                  "on the map."),
     "gas.transmission_kpa": ("operations", "Pressure into the city gate: gas pressures on the operations day."),

@@ -1,5 +1,5 @@
 """The Data pages' flat tables (utilsim/m2c/tables.py) and their endpoints on the hosted runtime: every table builds
-for Ayr as of a date, pages stay small, filters, search, sorting and paging agree with the run, CSV pages stitch."""
+for the small town as of a date, pages stay small, filters, search, sorting and paging agree with the run, CSV pages stitch."""
 
 from __future__ import annotations
 
@@ -24,12 +24,12 @@ RUN_TABLES = [s.name for s in T.SPECS if s.source == "run" and s.name not in ("f
 
 @pytest.fixture(scope="module")
 def run():
-    return run_for(RunRequest(town="ayr"))
+    return run_for(RunRequest(town="small_town"))
 
 
 @pytest.fixture(scope="module")
 def master():
-    return _master("ayr")
+    return _master("small_town")
 
 
 def test_catalog_lists_every_table_once_with_well_formed_columns():
@@ -132,11 +132,13 @@ def test_filters_search_sort_and_paging(run, master):
             break
         page += 1
     assert len(seen) == overdue["total"] == len(set(seen))
-    # Search by address, a date prefix on a date column and a number range.
-    reads = T.page(run, master, "reads", as_of=DAY, search="piper street", filters={"readDate": "2026-06"},
+    # Search by address (a street of this town, lower case), a date prefix on a date column and a number range.
+    first = T.page(run, master, "reads", as_of=DAY, filters={"readDate": "2026-06"}, page_size=1)
+    rk = [c["key"] for c in first["columns"]]
+    street = first["rows"][0][rk.index("address")].split(" ", 1)[1]  # "12 Maple Street" → "Maple Street"
+    reads = T.page(run, master, "reads", as_of=DAY, search=street.lower(), filters={"readDate": "2026-06"},
                    page_size=200)
-    rk = [c["key"] for c in reads["columns"]]
-    assert reads["total"] > 0 and all("Piper Street" in r[rk.index("address")] and r[rk.index("readDate")][:7] ==
+    assert reads["total"] > 0 and all(street in r[rk.index("address")] and r[rk.index("readDate")][:7] ==
                                       "2026-06" for r in reads["rows"])
     big = T.page(run, master, "reads", as_of=DAY, filters={"consumption": "1000.."}, page_size=200)
     assert big["total"] > 0 and all(r[rk.index("consumption")] >= 1000 for r in big["rows"])
@@ -195,24 +197,24 @@ def test_endpoints_on_the_hosted_app():
     cat = client.get("/api/m2c/tables")
     assert cat.status_code == 200 and cat.json()["schemaVersion"] == T.CATALOG_VERSION
     assert cat.json()["pageMax"] == T.PAGE_MAX and len(cat.json()["groups"]) == len(T.GROUPS)
-    res = client.post("/api/m2c/table", json={"town": "ayr", "table": "accounts", "asOf": DAY, "pageSize": 5,
+    res = client.post("/api/m2c/table", json={"town": "small_town", "table": "accounts", "asOf": DAY, "pageSize": 5,
                                               "sort": "balance", "desc": True})
     assert res.status_code == 200
     body = res.json()
     assert body["table"] == "accounts" and len(body["rows"]) == 5 and body["total"] > 5
     k = [c["key"] for c in body["columns"]].index("balance")
     assert [r[k] for r in body["rows"]] == sorted((r[k] for r in body["rows"]), reverse=True)
-    too_big = client.post("/api/m2c/table", json={"town": "ayr", "table": "reads", "pageSize": T.PAGE_MAX + 1})
+    too_big = client.post("/api/m2c/table", json={"town": "small_town", "table": "reads", "pageSize": T.PAGE_MAX + 1})
     assert too_big.status_code == 422
-    assert client.post("/api/m2c/table", json={"town": "ayr", "table": "nope"}).status_code == 404
-    assert client.post("/api/m2c/table", json={"town": "ayr", "table": "reads", "sort": "nope"}).status_code == 422
-    csv_res = client.post("/api/m2c/table.csv", json={"town": "ayr", "table": "tariffs", "asOf": DAY})
+    assert client.post("/api/m2c/table", json={"town": "small_town", "table": "nope"}).status_code == 404
+    assert client.post("/api/m2c/table", json={"town": "small_town", "table": "reads", "sort": "nope"}).status_code == 422
+    csv_res = client.post("/api/m2c/table.csv", json={"town": "small_town", "table": "tariffs", "asOf": DAY})
     assert csv_res.status_code == 200 and csv_res.headers["content-type"].startswith("text/csv")
     lines = csv_res.text.strip().splitlines()
-    assert lines[0].split(",")[0] == "tariffId" and len(lines) == 1 + len(T.page(run_for(RunRequest(town="ayr")),
-                                                                                  _master("ayr"), "tariffs",
+    assert lines[0].split(",")[0] == "tariffId" and len(lines) == 1 + len(T.page(run_for(RunRequest(town="small_town")),
+                                                                                  _master("small_town"), "tariffs",
                                                                                   as_of=DAY)["rows"])
-    assert client.post("/api/m2c/table.csv", json={"town": "ayr", "table": "reads", "pageSize": T.CSV_MAX + 1}
+    assert client.post("/api/m2c/table.csv", json={"town": "small_town", "table": "reads", "pageSize": T.CSV_MAX + 1}
                        ).status_code == 422
 
 

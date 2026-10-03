@@ -101,22 +101,22 @@ test('the client keeps episodes with the run: sorted, ided, persisted, sent on e
  const fetchImpl=async(url,opts={})=>{const body=opts.body?JSON.parse(opts.body):null;log.push({url,body});
   if(url.endsWith('/m2c/scenarios'))return {ok:true,json:async()=>LIBRARY};
   return {ok:true,json:async()=>({schemaVersion:'m2c-trend/1.0',asOf:body.asOf,months:[],echo:body})};};
- const m=new EngineM2C({api:'/api',townRef:'ayr',townId:'town-1',storage:store,fetchImpl});m.setAsOf('2026-07-15');
+ const m=new EngineM2C({api:'/api',townRef:'small_town',townId:'town-1',storage:store,fetchImpl});m.setAsOf('2026-07-15');
  assert.deepEqual(m.episodes,[]);assert.equal('episodes' in m.body(),false);assert.equal('episodes' in m.context(),false);
  const b=m.addEpisode({title:'Later',scenario:'s',from:'2026-05-01',to:'2026-05-31',ramp:0,settings:{vee:{high_ratio:3}}});
  const a=m.addEpisode({title:'Half the analysts',scenario:'half_staff_billing',from:'2026-03-01',to:null,ramp:0,settings:{process:{analysts:'*0.5'}}});
  assert.equal(b.id,'EP-1');assert.equal(a.id,'EP-2');assert.deepEqual(m.episodes.map(x=>x.id),['EP-2','EP-1'],'sorted by from');
  assert.deepEqual(m.episodes[0],{id:'EP-2',title:'Half the analysts',scenario:'half_staff_billing',from:'2026-03-01',to:null,ramp:0,settings:{process:{analysts:'*0.5'}}});
  assert.deepEqual(m.body().episodes,m.episodes);assert.deepEqual(m.context().episodes,m.episodes);assert.deepEqual(m.export().episodes,m.episodes);
- const t=await m.trend();assert.equal(log.at(-1).url,'/api/m2c/trend');assert.deepEqual(log.at(-1).body,{town:'ayr',actions:[],episodes:m.episodes,asOf:'2026-07-15'});assert.equal(t.schemaVersion,'m2c-trend/1.0');
+ const t=await m.trend();assert.equal(log.at(-1).url,'/api/m2c/trend');assert.deepEqual(log.at(-1).body,{town:'small_town',actions:[],episodes:m.episodes,asOf:'2026-07-15'});assert.equal(t.schemaVersion,'m2c-trend/1.0');
  await m.trend();assert.equal(log.length,1,'the same run is cached');
  assert.equal(m.updateEpisode('EP-1',{from:'2026-02-01',ramp:4}).ramp,4);assert.deepEqual(m.episodes.map(x=>x.id),['EP-1','EP-2'],'re-sorted after an edit');assert.equal(m.updateEpisode('EP-9',{}),null);
  await m.trend();assert.equal(log.length,2,'a changed episode is a new run');
- const again=new EngineM2C({api:'/api',townRef:'ayr',townId:'town-1',storage:store,fetchImpl});assert.equal(again.episodes.length,2);assert.equal(again.episodes[0].from,'2026-02-01');
+ const again=new EngineM2C({api:'/api',townRef:'small_town',townId:'town-1',storage:store,fetchImpl});assert.equal(again.episodes.length,2);assert.equal(again.episodes[0].from,'2026-02-01');
  assert.equal(m.removeEpisode('EP-1'),true);assert.equal(m.removeEpisode('EP-1'),false);assert.deepEqual(m.episodes.map(x=>x.id),['EP-2']);
  assert.equal(m.addEpisode({from:'2026-09-01',settings:{a:{b:1}}}).id,'EP-3','ids are never reused');assert.equal(m.episodes[1].title,'Episode');
  const lib=await m.scenarios();await m.scenarios();assert.equal(lib.scenarios[0].id,'half_staff_billing');assert.equal(log.filter(x=>x.url.endsWith('/m2c/scenarios')).length,1,'the library is fetched once');
- m.clearEpisodes();assert.deepEqual(m.episodes,[]);assert.equal('episodes' in m.body(),false);assert.equal(new EngineM2C({townRef:'ayr',townId:'town-1',storage:store}).episodes.length,0);
+ m.clearEpisodes();assert.deepEqual(m.episodes,[]);assert.equal('episodes' in m.body(),false);assert.equal(new EngineM2C({townRef:'small_town',townId:'town-1',storage:store}).episodes.length,0);
  m.reset();assert.deepEqual(m.actions,[]);
 });
 

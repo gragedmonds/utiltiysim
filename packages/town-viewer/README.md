@@ -30,7 +30,7 @@ Run the tests without installing Three.js if testing only the DOM-free adapter: 
 
 The viewer loads the engine's native 2.0 example and matching state, with live API integration still pending. It does not claim Python/JS generation parity, pressure/voltage solves, live engine API integration, Arrow decoding, production crew dispatch or processed billing data. Browser visual QA and 10k FPS remain unmeasured. The code rejects unsupported state revisions and nulls remain unknown.
 
-Road data: © OpenStreetMap contributors, ODbL. Utilities, buildings and all fixture values are synthetic. Three.js: MIT.
+Streets, utilities, buildings and all fixture values are synthetic: the browser demo's streets (`dist/demo-streets.json`) are the engine's generic small town, written by `scripts/build_demo_streets.py`. Three.js: MIT.
 
 
 ## Performance and house detail
@@ -43,7 +43,7 @@ The map fills the screen. Open utility layers using the left Layers icon, custom
 
 Four roof models and bounded facade detail are complemented by sparse low-poly trees, traffic lights, stop signs, apartments, a school and a church. Civic demo landmarks are visual placeholders, explicitly separated from authoritative customer/meter records. The Layers drawer lets you locate landmarks or hide scenery. `dist/lowpoly.js` contains shared geometry, `town-dressing.js` handles deterministic placement/instancing, and `focus-ui.js` owns drawers/settings navigation.
 
-At seed WHITBY-042 and 10,000 homes, properties + scenery + maximum nearby detail total 586,738 triangles; roads, terrain and networks are additional. This is a geometry count, not measured browser FPS. See [the corridor handoff](../../docs/CORRIDOR_ROUTING_REQUIREMENTS.md) for the engine's continuous-backbone routing requirements. Road width now reflects hierarchy; actual utility routing has not been rewritten in the viewer.
+At 10,000 homes (measured on the earlier street fixture, seed WHITBY-042), properties + scenery + maximum nearby detail total 586,738 triangles; roads, terrain and networks are additional. This is a geometry count, not measured browser FPS. See [the corridor handoff](../../docs/CORRIDOR_ROUTING_REQUIREMENTS.md) for the engine's continuous-backbone routing requirements. Road width now reflects hierarchy; actual utility routing has not been rewritten in the viewer.
 
 ## Interactive streets (0.5)
 

@@ -33,7 +33,7 @@ test('linked cells open the record behind them',()=>{
 test('CSV pages stitch into one file with one header; names and page counts',()=>{
  assert.equal(stitchCsv(['a,b\n1,2\n3,4\n','a,b\n5,6\n']),'a,b\n1,2\n3,4\n5,6\n');assert.equal(stitchCsv(['a,b\n']),'a,b\n');assert.equal(stitchCsv([]),'');
  assert.equal(pageCount(45149,CSV_PAGE),10);assert.equal(pageCount(0,100),1);assert.equal(pageCount(100,100),1);assert.equal(pageCount(101,100),2);
- assert.equal(csvName('ayr','reads','2026-08-05'),'ayr-reads-2026-08-05.csv');assert.equal(csvName('town-348655bc6c071aad','invoices',null),'town-348655bc6c071aad-invoices-run.csv');
+ assert.equal(csvName('small_town','reads','2026-08-05'),'small_town-reads-2026-08-05.csv');assert.equal(csvName('town-348655bc6c071aad','invoices',null),'town-348655bc6c071aad-invoices-run.csv');
 });
 
 test('hidden columns are remembered per table and cleared when none are hidden',()=>{
@@ -63,10 +63,10 @@ test('the client asks the engine for a table page with the run context, and for 
   if(url.endsWith('/m2c/tables'))return {ok:true,json:async()=>({schemaVersion:'m2c-tables/1.0',groups:[]})};
   if(url.endsWith('/m2c/table.csv'))return {ok:true,text:async()=>'a,b\n1,2\n'};
   return {ok:true,json:async()=>({schemaVersion:'m2c-table/1.0',table:body.table,rows:[],total:0,echo:body})};};
- const m=new EngineM2C({api:'/api',townRef:'ayr',townId:'town-1',storage:memory(),fetchImpl});m.setAsOf('2026-08-05');m.setSettings({process:{analysts:2}});
+ const m=new EngineM2C({api:'/api',townRef:'small_town',townId:'town-1',storage:memory(),fetchImpl});m.setAsOf('2026-08-05');m.setSettings({process:{analysts:2}});
  const cat=await m.tables();await m.tables();assert.equal(cat.schemaVersion,'m2c-tables/1.0');assert.equal(log.filter(x=>x.url.endsWith('/m2c/tables')).length,1,'the catalog is fetched once');
  const page=await m.table({table:'reads',page:2,pageSize:100,sort:'consumption',desc:true,filters:{commodity:'water'},search:'piper'});
- assert.deepEqual(log.at(-1).body,{town:'ayr',actions:[],table:'reads',page:2,pageSize:100,sort:'consumption',desc:true,filters:{commodity:'water'},search:'piper',settings:{process:{analysts:2}},asOf:'2026-08-05'});
+ assert.deepEqual(log.at(-1).body,{town:'small_town',actions:[],table:'reads',page:2,pageSize:100,sort:'consumption',desc:true,filters:{commodity:'water'},search:'piper',settings:{process:{analysts:2}},asOf:'2026-08-05'});
  assert.equal(page.table,'reads');
  const csv=await m.tableCsv({table:'reads',page:1,pageSize:5000});assert.equal(csv,'a,b\n1,2\n');assert.equal(log.at(-1).body.pageSize,5000);assert.equal(log.at(-1).body.asOf,'2026-08-05');
 });

@@ -49,9 +49,9 @@ Configs that still carry them load; the keys are ignored.
 | `town.terrain_relief_m` ↑ | Second pressure zone, second elevated tank, PRV/booster equipment at zone boundaries |
 | `ami.ami_route_share` ↓ | More AMR van and manual walker routes; more estimated reads (M3) |
 | `customers_billing.mru_target_meters` ↓ | More, smaller meter reading routes |
-| `town.houses` ↑ beyond the OSM extract | Synthetic districts grown around the Whitby core; second substation; more feeders |
+| `town.houses` ↑ | A wider town whose edge reaches newer eras; a second substation; more feeders, routes and accounts |
 | `town.commercial_share_arterial` / `_collector` / `_local` ↑ | More storefronts on that class of street, clustered at main-road intersections and towards downtown; homes pushed outward (still exactly `houses`); more 3φ pads, commercial accounts and closer hydrant spacing |
-| A real-place preset (`ayr`, `elora`, `cobourg`, `whitby_wide`) | The place's own streets at their natural size; set `expansion: grow` and more `houses` to add synthetic districts around it |
+| A preset (`village`, `small_town`, `town`, `large_town`, `city`, `us_town`) | A generic town of that size; every street comes from the settings and the seed, never from a real place |
 
 """
 

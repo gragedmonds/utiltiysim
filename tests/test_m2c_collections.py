@@ -26,7 +26,7 @@ def iso(day: int) -> str:
 
 @pytest.fixture(scope="module")
 def base() -> M2CRun:
-    return run_for(RunRequest(town="ayr"))
+    return run_for(RunRequest(town="small_town"))
 
 
 def _rows(run, kind, **kw):
@@ -100,7 +100,7 @@ def plan(base) -> dict:
 
 @pytest.fixture(scope="module")
 def worked(plan) -> M2CRun:
-    run = run_for(RunRequest(town="ayr", actions=plan["actions"]))
+    run = run_for(RunRequest(town="small_town", actions=plan["actions"]))
     assert not run.warnings
     return run
 
@@ -170,7 +170,7 @@ def test_low_income_and_budget_categories_fill_at_the_run_rates(base):
     assert c["studioActions"] == [] and c["readHistory"] == [] and c["history"] == []
     open_ = views.worklist(base, None, as_of=DAY, category="Low Income Process")
     assert all(r["status"] != "resolved" for r in open_["rows"])
-    off = run_for(RunRequest(town="ayr", settings={"billing": {"low_income_referral_rate": 0,
+    off = run_for(RunRequest(town="small_town", settings={"billing": {"low_income_referral_rate": 0,
                                                                 "budget_billing_offer_rate": 0}}))
     for k in ("Low Income Process", "Budget Bill Cases"):
         assert views.worklist(off, None, as_of="2026-12-31", status="all", category=k)["total"] == 0
@@ -311,7 +311,7 @@ def outages(base):
     out = [{"day": iso(d1), "utility": "electric", "start": 1800, "end": 4 * 3600, "premiseIds": power},
            {"day": iso(d2), "utility": "ami", "start": 3600, "end": 6 * 3600, "premiseIds": sorted(by_col[col])}]
     return {"d1": d1, "d2": d2, "power": power, "col": col, "silent": sorted(by_col[col]),
-            "run": run_for(RunRequest(town="ayr", outages=out))}
+            "run": run_for(RunRequest(town="small_town", outages=out))}
 
 
 def test_outage_followup_lists_last_gasps_lost_use_and_missed_reads(outages):
@@ -388,8 +388,8 @@ def test_run_statistics_for_a_period(base):
 # ---- the API --------------------------------------------------------------------------------------------------------
 def test_collections_api(plan):
     client = TestClient(app)
-    body = {"town": "ayr", "asOf": DAY}
-    vocab = client.get("/api/m2c/vocabulary", params={"town": "ayr"}).json()
+    body = {"town": "small_town", "asOf": DAY}
+    vocab = client.get("/api/m2c/vocabulary", params={"town": "small_town"}).json()
     assert vocab["actions"]["collections"] == list(colls.ACTIONS) and vocab["collections"]["lists"] == list(colls.LISTS)
     assert "Low Income Process" in vocab["categories"] and "Low Income Process" not in vocab["emptyCategories"]
     schema = client.get("/api/m2c/settings").json()["schema"]

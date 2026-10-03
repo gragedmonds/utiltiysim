@@ -1,0 +1,4 @@
+name: small_town
+description: Generic small town, 1,900 homes on a synthetic street grid.
+town:
+  houses: 1900

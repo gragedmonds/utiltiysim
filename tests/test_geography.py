@@ -12,10 +12,10 @@ def _check_planar_synthetic(roads):
     g = roads.graph
     lines = [shapely.LineString(p) for p in g.geometry]
     tree = shapely.STRtree(lines)
-    synth = [e for e in range(g.n_edges) if roads.origin[e] != "osm"]
+    synth = [e for e in range(g.n_edges) if roads.origin[e] != "fixed"]
     for e in synth:
         for o in tree.query(lines[e], predicate="crosses"):
-            assert roads.origin[o] == "osm", f"synthetic edge {e} crosses {o}"
+            assert roads.origin[o] == "fixed", f"synthetic edge {e} crosses {o}"
 
 
 def test_road_networks_connected(town480, synth):
@@ -73,15 +73,28 @@ def test_main_roads_lean_commercial_local_streets_stay_homes(town480):
     main, local = _shop_share(cls, shop, (ARTERIAL, COLLECTOR)), _shop_share(cls, shop, (LOCAL,))
     assert p.residential.sum() == 480
     assert local <= 0.05 and main >= 0.4 and main > 10 * local, (main, local)
-    assert local < _shop_share(cls, shop, (COLLECTOR,)) < _shop_share(cls, shop, (ARTERIAL,))
     # Shops come in runs (corners, strips, downtown), not one lot here and another there.
     xy = p.row_xy[p.ptype == 1]
     d, _ = cKDTree(xy).query(xy, k=2)
     assert (d[:, 1] < 30.0).mean() > 0.75
 
 
+def test_collectors_sit_between_local_streets_and_arterials():
+    """A village has no collectors (it is smaller than one superblock); a small town does, and its shops lean
+    arterial first, then collector, then local."""
+    cfg = load_preset("small_town")
+    lu = plan_land_use(build_geography(cfg), cfg)
+    g = lu.roads.graph
+    homes, shops = g.edge_class[lu.houses.edge], g.edge_class[lu.commercial.edge]
+
+    def share(c: int) -> float:
+        return float((shops == c).sum() / max(1, (shops == c).sum() + (homes == c).sum()))
+
+    assert (homes == COLLECTOR).any() and share(LOCAL) < share(COLLECTOR) < share(ARTERIAL)
+
+
 def _land_use(**town):
-    cfg = load_preset("whitby_small", seed="WHITBY-042", houses=480, overrides={"town": town})
+    cfg = load_preset("village", seed="TOWN-042", houses=480, overrides={"town": town})
     geo = build_geography(cfg)
     return cfg, geo, plan_land_use(geo, cfg)
 

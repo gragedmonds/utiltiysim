@@ -64,8 +64,8 @@ test('screen projection round-trips, and every camera looks across the town from
 
 test('a real town pack picks a sprite for every premise and facility',()=>{
  const index=JSON.parse(readFileSync(new URL('../../../packs/index.json',import.meta.url)));
- const ayr=index.towns.find(t=>t.preset==='ayr');if(!ayr)return;
- const snap=JSON.parse(gunzipSync(readFileSync(new URL(`../../../packs/${ayr.files.snapshot.path}`,import.meta.url))));
+ const pack=index.towns.find(t=>t.preset==='small_town');if(!pack)return;
+ const snap=JSON.parse(gunzipSync(readFileSync(new URL(`../../../packs/${pack.files.snapshot.path}`,import.meta.url))));
  const families=new Set();for(const h of snap.premises){const f=premiseArt(h);families.add(f);for(const v of ALL_VIEWS)assert.ok(atlas.sprites[spriteName(f,v,facingOf(h))],h.id);}
  for(const f of snap.facilities)if(!f.premiseId)assert.ok(facilityArt(f.kind),f.kind);
  assert.ok(families.size>=8,`a town mixes its styles (${[...families]})`);

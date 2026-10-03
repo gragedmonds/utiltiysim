@@ -83,13 +83,13 @@ test('statistics for a period show the engine window; the year shows its collect
 });
 
 test('the client posts collections requests with the run identity',async()=>{
- const log=[],m=new EngineM2C({api:'/api',townRef:'ayr',townId:'town-1',storage:memory(),fetchImpl:fakeEngine(log)});
+ const log=[],m=new EngineM2C({api:'/api',townRef:'small_town',townId:'town-1',storage:memory(),fetchImpl:fakeEngine(log)});
  m.setAsOf('2026-08-05');
  await m.collections({list:'overdue',sort:'amount',page:2,pageSize:50});
  await m.collectionsAccount('CA-1');await m.outageFollowup({kind:'last_gasp'});await m.collectorGroups({collector:'COL-04',status:'all'});
  await m.summary('2026-07-07');await m.summary();
  assert.deepEqual(log.map(x=>x.url),['/api/m2c/collections','/api/m2c/collections/account','/api/m2c/outage-followup','/api/m2c/collector-groups','/api/m2c/summary','/api/m2c/summary']);
- assert.deepEqual(log[0].body,{town:'ayr',actions:[],list:'overdue',sort:'amount',page:2,pageSize:50,asOf:'2026-08-05'});
+ assert.deepEqual(log[0].body,{town:'small_town',actions:[],list:'overdue',sort:'amount',page:2,pageSize:50,asOf:'2026-08-05'});
  assert.equal(log[1].body.accountId,'CA-1');assert.equal(log[4].body.since,'2026-07-07');assert.equal(log[5].body.since,undefined);
  assert.equal(m.firstActionDay(),null);
  await m.act('dunning_hold',null,null,{accountId:'CA-1',days:30,note:'Dispute'});

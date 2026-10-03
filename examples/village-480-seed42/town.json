@@ -1,0 +1,141 @@
+{
+  "schemaVersion": "utility-town/2.0",
+  "generatorVersion": "0.10.0",
+  "id": "town-ab2b8b3609f83517",
+  "seed": "TOWN-042",
+  "count": 570,
+  "premiseCount": 570,
+  "bounds": {
+    "minX": -675.93,
+    "maxX": 799.89,
+    "minZ": -651.47,
+    "maxZ": 870.08
+  },
+  "source": {
+    "type": "synthetic",
+    "label": "Synthetic town",
+    "expansion": "none",
+    "coordinateSystem": "local metres; x east, z south",
+    "origin": {
+      "lat": 43.3,
+      "lon": -80.6
+    },
+    "scale": 1.0,
+    "districtTiles": 1,
+    "syntheticUtilities": true,
+    "syntheticBuildings": true,
+    "utilityOffsets": "geometry",
+    "attribution": "Synthetic geography",
+    "license": "generated"
+  },
+  "stats": {
+    "houses": 480,
+    "premises": 570,
+    "commercial": 86,
+    "solarHomes": 55,
+    "evHomes": 42,
+    "gasServices": 503,
+    "vacant": 7,
+    "roadKm": 11.501,
+    "mainsKm": {
+      "electric": 8.545,
+      "water": 7.919,
+      "gas": 7.45
+    },
+    "transformers": 171,
+    "feeders": 2,
+    "substations": 1,
+    "hydrants": 45,
+    "poles": 494,
+    "ties": 3,
+    "districtRegulators": 1,
+    "waterZones": 1,
+    "mrus": 21,
+    "amiCollectors": 1,
+    "electricRouting": {
+      "basis": "designRole",
+      "severeTurnDeg": 60.0,
+      "trunk": {
+        "km": 2.285,
+        "kmByClass": {
+          "arterial": 2.285,
+          "collector": 0.0,
+          "local": 0.0
+        },
+        "corridorShare": 1.0,
+        "turns": 2,
+        "severeTurns": 1,
+        "severeTurnsPerKm": 0.438,
+        "corridorChanges": 1,
+        "corridorChangesPerKm": 0.438,
+        "branches": 1,
+        "transitions": {
+          "hierarchyDown": 0,
+          "hierarchyUp": 0,
+          "construction": 1
+        }
+      },
+      "primary": {
+        "km": 7.845,
+        "kmByClass": {
+          "arterial": 2.667,
+          "collector": 0.0,
+          "local": 5.178
+        },
+        "corridorShare": 0.34,
+        "turns": 2,
+        "severeTurns": 1,
+        "severeTurnsPerKm": 0.127,
+        "corridorChanges": 1,
+        "corridorChangesPerKm": 0.127,
+        "branches": 25,
+        "transitions": {
+          "hierarchyDown": 0,
+          "hierarchyUp": 0,
+          "construction": 6
+        }
+      },
+      "feeders": 2,
+      "ties": 3,
+      "expressKm": 0.466,
+      "corridors": 2,
+      "corridorKm": 2.334,
+      "corridorComponents": 1,
+      "disconnectedCorridorComponents": 0,
+      "exceptions": 0
+    },
+    "timingsS": {
+      "roads": 0.054,
+      "land_use": 1.632,
+      "buildings": 0.362,
+      "electric": 0.199,
+      "water": 0.289,
+      "gas": 0.157,
+      "customers": 0.338,
+      "total": 3.031
+    }
+  },
+  "validation": {
+    "valid": true,
+    "errors": [],
+    "errorCount": 0,
+    "connectedServices": 1643,
+    "networkEdges": 3182,
+    "checks": [
+      "Unique identifiers",
+      "Valid edge endpoints",
+      "Construction forest (one parent edge per non-source node)",
+      "Loop edges join existing nodes and are never parent edges",
+      "Every node reachable from a source",
+      "Every active service reachable through enabled edges",
+      "Meters resolve by premiseId or servicePointId",
+      "Sizes non-increasing away from source",
+      "Capacity covers design load",
+      "Electric voltage stages",
+      "Electric radial: no cycles through energized edges; feeder ties explicit and normally open",
+      "No gas service without gas mains in the district",
+      "Referential integrity"
+    ]
+  },
+  "configHash": "2cabaebff827733b97d83da2cf1ba3a1ba87f659f700cb552aacdad2f37eb0e5"
+}

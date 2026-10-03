@@ -13,14 +13,15 @@ export async function fetchGzipJSON(url){
  const stream=new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
  return JSON.parse(await new Response(stream).text());
 }
-// The engine town a bare address opens (Ayr, the town the Studio is tested on), else the index's first.
-export const DEFAULT_TOWN='ayr';
+// The engine town a bare address opens (the small town, the one the Studio is tested on), else the index's first.
+export const DEFAULT_TOWN='small_town';
 export function defaultPack(packs){const list=packs?.towns||[];return list.find(t=>t.preset===DEFAULT_TOWN)||list[0]||null;}
-export function packLabel(t){return t.place?.name||(t.source?.label||'').replace(/ street snapshot$/i,'')||t.preset.replaceAll('_',' ');}
+// Packs are generic towns named by their preset: small_town → Small town.
+export function packLabel(t){const s=String(t.preset||'').replaceAll('_',' ');return s.charAt(0).toUpperCase()+s.slice(1);}
 // ?town=<ref>: a prebuilt pack (by preset or its town id), else a town the engine generated (its town id; the
 // snapshot then comes from the engine, which is also its live connection).
 export function townRoute(ref,packs){if(!ref)return null;const t=packs?.towns?.find(t=>t.preset===ref||t.townId===ref);if(t)return {pack:t};return /^town-[0-9a-f]{8,64}$/i.test(ref)||isTownRef(ref)?{townId:ref}:null;}
-// A generated town's self-describing name: its preset plus the settings that differ, e.g. ayr~eJyr… (any engine rebuilds it).
+// A generated town's self-describing name: its preset plus the settings that differ, e.g. small_town~eJyr… (any engine rebuilds it).
 export function isTownRef(ref){return /^[a-z0-9_]+~[A-Za-z0-9_-]{4,4000}$/.test(String(ref||''));}
 export function engineSnapshotUrl(api,tid){return `${api}/towns/${encodeURIComponent(tid)}/snapshot.json?detail=viewer&profile=viewer`;}
-export function packCaption(t){return `${Number(t.homes).toLocaleString('en-CA')} homes · ${t.source?.type==='osm'?'real streets':'synthetic streets'}`;}
+export function packCaption(t){return `${Number(t.homes).toLocaleString('en-CA')} homes`;}

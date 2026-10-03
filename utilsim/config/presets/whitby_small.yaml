@@ -1,5 +1,0 @@
-name: whitby_small
-description: Whitby street extract (OSM), 480 homes. Matches the prototype's default town size.
-town:
-  houses: 480
-  skeleton: osm

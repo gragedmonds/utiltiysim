@@ -2,7 +2,7 @@
 
 ```
 L0 Config & seeds   SimConfig (Pydantic) · stage RNG streams · counter-based hash_u01 per entity
-L1 Physical         terrain → roads (OSM / synthetic / growth) → land use → parcels → buildings → households → addresses
+L1 Physical         terrain → roads (synthetic skeleton) → land use → parcels → buildings → households → addresses
 L2 Networks         split street graph at taps → class-weighted forest from sources → prune → aggregate → size → equipment
 L3 Customers        business partners, accounts, contracts (history), installations, meters, registers, routes, AMI
 L4 Time & flow      (M2) clock, astronomy, weather, consumption, power flow / hydraulics, nightly AMI collection
@@ -31,9 +31,9 @@ Code map: `utilsim/config` (L0), `utilsim/gen` (L1), `utilsim/net` (L2), `utilsi
 
 | Preset | Homes | Generate | Snapshot (gz, full / viewer) |
 |---|---|---|---|
-| `whitby_small` | 480 | ~2.3 s | 0.6 MB |
-| `whitby_town` | 2,000 | ~7 s | ~2.2 MB |
-| `whitby_large` | 10,000 | ~27 s | 10.3 / 6.3 MB |
+| `village` | 480 | ~3 s | 0.7 MB |
+| `small_town` | 1,900 | ~9 s | 2.3 MB |
+| `city` | 10,000 | see the engine guide | |
 
 Hot paths are vectorised (lot clipping, ray-cast depth limits, elevations, tree aggregation). The remaining cost is
 per-lot de-overlap and per-piece offset geometry; both parallelise by district if needed.

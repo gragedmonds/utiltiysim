@@ -1,8 +1,8 @@
 """Turn road lines into a clean planar graph deterministically.
 
-Recipe: quantize to 1 cm → node synthetic linework with GEOS (OSM lines keep their own topology) → merge endpoints
+Recipe: quantize to 1 cm → node synthetic linework with GEOS (fixed lines keep their own topology) → merge endpoints
 within ``snap_tol`` using union-find in lexicographic order → drop zero-length/duplicate segments → merge degree-2
-chains of equal class/name → drop short dangles (except cul-de-sac bulbs and OSM dead ends) → canonical ordering.
+chains of equal class/name → drop short dangles (except cul-de-sac bulbs and fixed dead ends) → canonical ordering.
 """
 
 from __future__ import annotations
@@ -58,10 +58,10 @@ class _UF:
                 self.p[ra] = rb
 
 
-def planarize(osm_lines: list[RoadLine], synth_lines: list[RoadLine], *, snap_tol: float = 1.5,
+def planarize(fixed_lines: list[RoadLine], synth_lines: list[RoadLine], *, snap_tol: float = 1.5,
               min_dangle: float = 30.0, min_edge: float = 3.0, bulbs: np.ndarray | None = None,
               bulb_radius: float = 13.0, merge_chains: bool = True) -> RoadNetwork:
-    pieces = list(osm_lines) + _node_lines(synth_lines)
+    pieces = list(fixed_lines) + _node_lines(synth_lines)
     # Endpoint table.
     ends = np.array([[p.points[0], p.points[-1]] for p in pieces]).reshape(-1, 2)
     ends = quantize(ends)
@@ -69,19 +69,19 @@ def planarize(osm_lines: list[RoadLine], synth_lines: list[RoadLine], *, snap_to
     uf = _UF(len(ends))
     from scipy.spatial import cKDTree
 
-    is_osm_end = np.array([pieces[i // 2].origin == "osm" for i in range(len(ends))])
+    is_fixed_end = np.array([pieces[i // 2].origin == "fixed" for i in range(len(ends))])
     kd = cKDTree(ends)
     for i, j in sorted(kd.query_pairs(snap_tol)):
-        # OSM topology is authoritative: two OSM endpoints merge only if they are the same point.
-        if is_osm_end[i] and is_osm_end[j] and np.any(ends[i] != ends[j]):
+        # Fixed topology is authoritative: two fixed endpoints merge only if they are the same point.
+        if is_fixed_end[i] and is_fixed_end[j] and np.any(ends[i] != ends[j]):
             continue
         uf.union(int(i), int(j))
     roots = np.array([uf.find(i) for i in range(len(ends))])
-    # Representative per cluster: first OSM endpoint in (x, y) order if any (OSM never moves), else first endpoint.
+    # Representative per cluster: first fixed endpoint in (x, y) order if any (fixed lines never move), else the first.
     rep: dict[int, int] = {}
     for i in order:
         r = roots[i]
-        if r not in rep or (is_osm_end[i] and not is_osm_end[rep[r]]):
+        if r not in rep or (is_fixed_end[i] and not is_fixed_end[rep[r]]):
             rep[r] = i
     clusters = sorted(set(rep.values()), key=lambda i: (ends[i, 0], ends[i, 1]))
     node_of_rep = {r: k for k, r in enumerate(clusters)}
@@ -149,10 +149,10 @@ def _simplify(xy, uv, elist, min_dangle, min_edge, bulb_set, merge_chains=True):
             a, b = uv[i]
             length = polyline_length(ln.points)
             dangling = (deg[a] == 1 and not is_bulb[a]) or (deg[b] == 1 and not is_bulb[b])
-            if ln.origin != "osm" and dangling and length < min_dangle:
+            if ln.origin != "fixed" and dangling and length < min_dangle:
                 keep[i] = False
                 changed = True
-            elif length < min_edge and ln.origin != "osm":
+            elif length < min_edge and ln.origin != "fixed":
                 keep[i] = False
                 changed = True
         uv, elist = uv[keep], [e for e, k in zip(elist, keep) if k]
@@ -197,7 +197,7 @@ def _merge_chains(xy, uv, elist):
         if i == j:
             continue
         ei, ej = elist[i], elist[j]
-        if ei.cls != ej.cls or ei.name != ej.name or (ei.origin == "osm") != (ej.origin == "osm"):
+        if ei.cls != ej.cls or ei.name != ej.name or (ei.origin == "fixed") != (ej.origin == "fixed"):
             continue
         # Orient i to end at v and j to start at v.
         pi = pts_of[i] if ends[i][1] == v else pts_of[i][::-1]

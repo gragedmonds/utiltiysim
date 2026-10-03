@@ -50,7 +50,8 @@ A run is stateless and deterministic: `(town, settings, actions, outages, seed)`
 - Views read the finished year *as of* a date (`asOf`, default: the town's scenario date).
 
 The engine (`utilsim/m2c/`, numpy only) runs locally (`utilsim serve`) and on the hosted Vercel function. A
-Cobourg-sized town (16k registers) replays its year in about 2 s, and warm instances keep the last four runs.
+5,500-home town (16k registers) replays its year, every bill and collection included, in about 15 s on one core,
+and warm instances keep the last four runs.
 
 ## Episodes: a scenario inflicted from a day
 
@@ -521,10 +522,13 @@ Measured on the default settings, year to 31 December:
 
 | Town | Accounts | Contacts | To agents | Hung up | In target | ASA | Occupancy | Cost |
 |---|---|---|---|---|---|---|---|---|
-| Ayr | 2,341 | 2,890 | 1,547 | 4.9% | 97% | 5.4 s | 7.5% | $87k |
-| Cobourg | 6,993 | 8,848 | 4,671 | 13% | 90.5% | 16 s | 21% | $92k |
+| `village` | 635 | 798 | 458 | 1.5% | 99% | 2.7 s | 2.3% | $86k |
+| `small_town` | 2,368 | 2,634 | 1,476 | 4.5% | 97% | 3.9 s | 6.9% | $87k |
+| `town` | 3,969 | 4,706 | 2,542 | 7.4% | 95% | 8.5 s | 12% | $88k |
+| `large_town` | 6,598 | 8,227 | 4,258 | 12% | 91% | 14 s | 19% | $91k |
 
-Ayr draws 10 incidents in the year and Cobourg 39. One agent is the default: a town of a few thousand accounts keeps
+The year draws 10 incidents on the village, 21 on the small town, 32 on the town and 57 on the large town. One
+agent is the default: a town of a few thousand accounts keeps
 one person busy for a tenth of the day, and storm days or a week of disconnection notices still spill into hang-ups.
 The scenario library's **Contact centre** group tries the levers (lines open mornings only, IVR and website down, hire
 a second agent), and **Storm season** (operations) triples the storm days for three months.
@@ -565,7 +569,7 @@ data):
 - required: order type, order description, planning plant, planner group, main work center, activity type, basic
   start and finish, priority, notification long text, operation, estimated duration, access / dispatch instructions
   (person responsible, contact name and telephone, downtime and components are optional);
-- choices: order type, planning plant (the town's, e.g. `AY01 · Ayr`), planner group, work center, activity type and
+- choices: order type, planning plant (the town's, e.g. `SM01 · Small Town`), planner group, work center, activity type and
   priority must be one of the vocabulary's values;
 - dates are `YYYY-MM-DD`: start on or after the action's day and in 2026, finish on or after start;
 - duration is a positive number of minutes (at most 1,440);
@@ -711,20 +715,20 @@ A request filters by facet value (`{"commodity": "water"}`, `""` for blank), by 
 by number range (`{"consumption": "1000.."}`) or by text in a column, searches the row's ids, names and address, sorts by
 one column (missing values last either way) and takes one page. Built tables are cached per run and view day.
 
-| Group | Table | Source | Rows (Ayr, 5 Aug) |
+| Group | Table | Source | Rows (small town, 5 Aug) |
 |---|---|---|---|
-| Customers | `premises`, `businessPartners`, `contracts` | town | 2,110 · 2,341 · 6,705 |
-| Customers | `accounts` | both: master data plus balance, open and overdue invoices and the collections phase as of the date | 2,341 |
-| Meters & reading | `servicePoints`, `mrus`, `readSchedules` | town | 6,045 · 21 · 252 |
-| Meters & reading | `meters` (device on the slot, replacements), `registers` (reads to date), `installations` (rate billed now, bills to date) | both | 6,045 · 6,363 · 6,045 |
-| Meters & reading | `reads` (every periodic read: register, consumption, VEE status, release, bill status), `usage` (billed use per register and month, year to date), `deviceChanges` | run | 45,149 · 6,363 · 28 |
-| Billing & pricing | `tariffs` (one row per rate version: the run's rate change starts version 2), `tariffAssignments` | town/both | 12 · 6,705 |
-| Billing & pricing | `billingDocuments`, `invoices`, `payments`, `ledger` (every posting with the running balance) | run | 42,896 · 15,625 · 14,315 · 33,708 |
-| Collections | `dunning` (reminders, notices, disconnection notices, winter holds, returned payments), `collectionsAccounts` (every account with an invoice in its phase: current, overdue, reminder, overdue notice, winter moratorium, dunning hold, payment arrangement, disconnection notice, disconnected), `disconnections`, `collectionsWork` (arrangements, budget plans, dunning holds, low-income referrals) | run | 2,560 · 2,166 · 203 · 487 |
-| Work | `cases`, `fieldOrders`, `interruptions` | run | 1,662 · your orders · the map's outages |
-| Contact centre | `contacts` (every contact: reason, channel, outcome, wait, handle time, attempt, what caused it), `contactDaily` (each day's contacts, answered, hung up, service level, agents, cost), `yearIncidents` (the year's outages and leaks: premises out, hours, who could smell gas, contacts) | run | 1,846 · 217 · 4 |
+| Customers | `premises`, `businessPartners`, `contracts` | town | 2,103 · 2,368 · 6,851 |
+| Customers | `accounts` | both: master data plus balance, open and overdue invoices and the collections phase as of the date | 2,368 |
+| Meters & reading | `servicePoints`, `mrus`, `readSchedules` | town | 6,085 · 21 · 252 |
+| Meters & reading | `meters` (device on the slot, replacements), `registers` (reads to date), `installations` (rate billed now, bills to date) | both | 6,085 · 6,350 · 6,085 |
+| Meters & reading | `reads` (every periodic read: register, consumption, VEE status, release, bill status), `usage` (billed use per register and month, year to date), `deviceChanges` | run | 45,054 · 6,350 · 25 |
+| Billing & pricing | `tariffs` (one row per rate version: the run's rate change starts version 2), `tariffAssignments` | town/both | 12 · 6,851 |
+| Billing & pricing | `billingDocuments`, `invoices`, `payments`, `ledger` (every posting with the running balance) | run | 43,184 · 15,491 · 14,199 · 33,369 |
+| Collections | `dunning` (reminders, notices, disconnection notices, winter holds, returned payments), `collectionsAccounts` (every account with an invoice in its phase: current, overdue, reminder, overdue notice, winter moratorium, dunning hold, payment arrangement, disconnection notice, disconnected), `disconnections`, `collectionsWork` (arrangements, budget plans, dunning holds, low-income referrals) | run | 2,392 · 2,175 · 145 · 468 |
+| Work | `cases`, `fieldOrders`, `interruptions` | run | 1,398 · your orders · the map's outages |
+| Contact centre | `contacts` (every contact: reason, channel, outcome, wait, handle time, attempt, what caused it), `contactDaily` (each day's contacts, answered, hung up, service level, agents, cost), `yearIncidents` (the year's outages and leaks: premises out, hours, who could smell gas, contacts) | run | 1,630 · 217 · 17 |
 
-`tests/test_m2c_tables.py` builds every table for Ayr, bounds the pages (JSON and CSV under the hosted 4.5 MB), and
+`tests/test_m2c_tables.py` builds every table for the small town, bounds the pages (JSON and CSV under the hosted 4.5 MB), and
 checks the counts against the run (reads taken, documents and invoices created by the date, usage against
 `billed_use`, collections phases covering every account).
 

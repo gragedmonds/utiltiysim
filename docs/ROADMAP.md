@@ -2,7 +2,7 @@
 
 ## M1: town, networks, customers (done)
 
-Seeded towns, configurable, built from OSM or synthetic skeletons with growth:
+Seeded towns, configurable, built from generic synthetic skeletons (OpenStreetMap extracts until October 2026):
 - parcels, buildings, households and addresses;
 - engineered electric, gas and water networks with equipment;
 - IS-U-shaped customers, routes, schedules, AMI and baseline reads.
@@ -11,7 +11,7 @@ Outputs and tooling:
 - the `utility-town/2.0` snapshot, GeoJSON, parquet, API and CLI;
 - complete state frames and replays with sun and moon;
 - JSON Schemas and OpenAPI;
-- real-place presets from frozen OSM extracts;
+- real-place presets from frozen OSM extracts (removed in October 2026: every town is now generic);
 - the viewer's receiver conformance in CI.
 
 ## M2: time and physics (partly done)
