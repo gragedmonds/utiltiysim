@@ -1,7 +1,7 @@
 // Engine settings rendered from the engine's JSON Schema: groups (in x-order), defaults, bounds, units, effects and
 // advanced flags (x-unit, x-effects, x-advanced). A field is one compact row (short title, input, unit); its
-// description, default, effects and path sit behind an (i) button, and the fields of a group lay out in two columns. Nested objects (a value per era, a season's temperatures) render as
-// labelled sub-rows, lists as a checked JSON box, and settings the engine marks x-status "not-modelled" or
+// description, default, effects and path sit behind an (i) button, and the fields of a group lay out in two columns. Nested objects (a value per era, a season's temperatures, a crew) render as
+// one compound row (class schema-compound): the title line, then a compact row of captioned sub-inputs with their units, lists as a checked JSON box, and settings the engine marks x-status "not-modelled" or
 // x-deprecated stay visible but disabled with the reason. The form reports only values that differ from a base (the
 // schema defaults, or a town's own configuration), so the engine stays authoritative. Every engine setting also says
 // where its effect reaches (x-reach: year, town, shape, operations, display) and how it changes the results
@@ -121,7 +121,7 @@ export function renderSchemaForm(el,schema,{values={},base=null,groups=null,show
    else if(f.type==='enum'){input=mk('select');for(const o of f.options){const opt=mk('option',null,String(o).replaceAll('_',' '));opt.value=o;input.append(opt);}input.value=current;}
    else if(f.type==='json'){input=mk('textarea','schema-json');input.spellcheck=false;input.value=jsonText(current);input.rows=Math.min(8,input.value.split('\n').length+(input.value.length>60?1:0));row.classList.add('schema-wide');}
    else if(f.type==='object'){input=mk('div','schema-subs');row.setAttribute('role','group');row.setAttribute('aria-label',f.description||f.title);
-    for(const c of f.children){const lab=mk('label','schema-sub'),cap=mk('span',null,c.title),i=mk('input');i.type='number';i.step=c.type==='integer'?'1':'any';if(c.min!=null)i.min=c.min;if(c.max!=null)i.max=c.max;i.value=current?.[c.key]??'';i.dataset.key=c.key;i.name=f.path+'.'+c.key;i.disabled=f.disabled;lab.append(cap,i);input.append(lab);inputs.push(i);}row.classList.add('schema-wide');}
+    for(const c of f.children){const lab=mk('label','schema-sub'),cap=mk('span','schema-sub-cap',c.title),i=mk('input');if(c.unit)cap.append(mk('span','schema-sub-unit',c.unit));lab.title=c.description||c.title;i.type='number';i.step=c.type==='integer'?'1':'any';if(c.min!=null)i.min=c.min;if(c.max!=null)i.max=c.max;i.value=current?.[c.key]??'';i.dataset.key=c.key;i.name=f.path+'.'+c.key;i.disabled=f.disabled;lab.append(cap,i);input.append(lab);inputs.push(i);}row.classList.add('schema-compound');}
    else{input=mk('input');input.type=f.type==='text'?'text':'number';if(f.min!=null)input.min=f.min;if(f.max!=null)input.max=f.max;if(f.maxLength!=null)input.maxLength=f.maxLength;if(f.type!=='text')input.step=f.type==='integer'?'1':'any';input.value=current??'';if(f.nullable)input.placeholder='none';}
    if(f.type!=='object'){input.name=f.path;input.dataset.group=f.group;input.dataset.key=f.key;input.disabled=f.disabled;inputs=[input];}
    const finfo=info(sentenceTitle(f.title),infoLines(f,schema?.['x-reaches']));const rc=REACH[f.reach];if(rc){const chip=mk('span','schema-reach reach-'+f.reach,rc.chip);chip.title=(schema?.['x-reaches']?.[f.reach])||rc.text;name.append(chip);}if(finfo){row.classList.add('has-pop');name.append(finfo[0]);}

@@ -399,9 +399,12 @@ details.schema-group>.schema-field:last-child{margin-bottom:10px}
 .schema-group h3 .schema-badge{margin-left:8px;vertical-align:middle}
 .schema-field.schema-wide{grid-template-columns:minmax(0,1fr)}
 .schema-hint,.schema-was,.schema-status,.schema-name,.schema-error{overflow-wrap:anywhere;min-width:0}
+.schema-field.schema-compound{grid-template-columns:minmax(0,1fr)}
 .schema-subs{display:flex;flex-wrap:wrap;gap:8px 12px}
-.schema-sub{display:flex;flex-direction:column;gap:3px;font-size:12px;color:#5f6b5c;flex:1 1 84px;min-width:0;max-width:150px}
-.schema-sub input{min-height:36px;font-size:14px;border:1px solid #cdd5c9;border-radius:6px;padding:4px 8px;background:#fff;width:100%;min-width:0}
+.schema-sub{display:flex;flex-direction:column;justify-content:flex-end;gap:3px;font-size:12px;color:#5f6b5c;flex:1 1 84px;min-width:0;max-width:150px}
+.schema-sub-cap{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.schema-sub-unit{margin-left:4px;color:#9a95ad}
+.schema-sub input{flex:none;min-height:36px;font-size:14px;border:1px solid #cdd5c9;border-radius:6px;padding:4px 8px;background:#fff;width:100%;min-width:0}
 .schema-json{width:100%;min-height:40px;font:12.5px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace;border:1px solid #cdd5c9;border-radius:6px;padding:8px;background:#fff;resize:vertical}
 .schema-json[aria-invalid=true],.schema-sub input[aria-invalid=true]{border-color:#c96f4a}
 .schema-field input,.schema-field select{min-width:0;max-width:100%}
@@ -533,9 +536,21 @@ details.schema-group>.schema-field:last-child{margin-bottom:10px}
 #settings-page .schema-was{grid-column:1/-1;font-size:11px;margin:-2px 0 2px}
 #settings-page .schema-error{grid-column:1/-1;font-size:11px}
 #settings-page .schema-error:empty{display:none}
-#settings-page .schema-subs{gap:6px 10px}
-#settings-page .schema-sub{font-size:11px;flex:1 1 72px;max-width:130px}
-#settings-page .schema-sub input{min-height:30px;font-size:12.5px}
+/* A compound setting (a crew, a work type, a contact reason, a value per era or season) is one row-group across both
+   columns: a quiet card whose title line reads like the other rows, and a compact row of captioned sub-inputs the size
+   of the scalar inputs, pushed to the right edge. When the title and inputs do not fit on one line, the inputs wrap
+   under the title. */
+#settings-page .schema-field.schema-compound{grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:flex-end;gap:4px 18px;margin:6px 0 0;padding:7px 10px 8px 12px;border:1px solid #ecebf3;border-radius:9px;background:#fbfafd}
+#settings-page .schema-field.schema-compound+.schema-field:not(.schema-compound){margin-top:6px}
+#settings-page .schema-compound>.schema-name{flex:1 1 210px;min-height:30px}
+#settings-page .schema-compound>.schema-control{flex:0 1 auto;width:auto;justify-self:auto;overflow:visible;min-width:0}
+#settings-page .schema-compound>.schema-was,#settings-page .schema-compound>.schema-error{flex:1 0 100%}
+#settings-page .schema-subs{display:flex;flex-wrap:wrap;gap:6px 10px}
+#settings-page .schema-sub{flex:0 0 118px;max-width:none;font-size:10.5px;line-height:1.2;color:#77728c;gap:3px}
+#settings-page .schema-compound .schema-sub input{flex:none;width:100%;height:30px;min-height:30px;font-size:12.5px;padding:2px 7px;border-color:#d5d3e2;border-radius:6px}
+#settings-page .schema-field.schema-compound.is-changed{box-shadow:inset 3px 0 0 #7357d8;padding-left:12px}
+#settings-page .schema-compound.is-disabled .schema-sub-cap{color:#a3a0b2}
+@media (max-width:600px){#settings-page .schema-field.schema-compound{padding:7px 9px 9px 10px}#settings-page .schema-compound>.schema-control{flex:1 1 100%}#settings-page .schema-subs{display:grid;grid-template-columns:repeat(auto-fill,minmax(86px,1fr));gap:6px 8px;width:100%}#settings-page .schema-sub{flex:none;min-width:0}}
 #settings-page .schema-json{font-size:12px;min-height:34px}
 #settings-page .schema-count{font-size:11px;color:#9a95ad}
 .schema-info{flex:0 0 auto;width:16px;height:16px;border-radius:50%;border:1px solid #b9b4cc;background:#fff;color:#6b6585;font:italic 700 10.5px/1 Georgia,serif;cursor:pointer;padding:0;display:inline-flex;align-items:center;justify-content:center}

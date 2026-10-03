@@ -18,6 +18,13 @@ The manual wizard has four steps:
 3. **Utility & operations**: services, billing analysts, contact-centre agents and Year field crews, followed by
    scenario intensity and view date. Advanced contains utility networks and metering, Year workflows and costs,
    and a separately labelled map-day operations section. Year field crews are expressed per 1,000 total premises.
+   Services are three checkbox cards. Electricity and water are always served (locked on). Natural gas maps to
+   `gas.all_electric_district_share` (off = 1, no gas mains); it is locked on below the engine's
+   `gasDistrictMinHomes` (2,251), where the town is one district that keeps its gas mains. Analysts and agents start
+   from a suggestion that scales the engine defaults (2 and 1, fitted to the 1,900-home small town) linearly with
+   homes, rounded, at least one (`suggestedStaffing` in `setup-utility.js`). Changing the size updates the values
+   nobody typed, including ones the chosen focus hides; a typed value is kept (`draft.staffing.edited`) and "Use n"
+   returns it to the suggestion.
 4. **Review & open**: the editable per-input summary, validation and links back to either setup stage.
 
 Town-size starters are **500, 5,000, 25,000 and 50,000 residential homes**. New drafts start at 500.

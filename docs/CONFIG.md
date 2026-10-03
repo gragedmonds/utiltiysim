@@ -162,7 +162,7 @@ City gate, mains, regulators and services.
 
 | Field | Reaches | Default | Range | Unit | Description | How it changes the results |
 |---|---|---|---|---|---|---|
-| `all_electric_district_share` | town | `0.15` | 0–1 |  | Share of districts with no gas mains (all-electric). *Affects: gas services, electric heat share, winter electric peak.* | Share of districts without gas mains, counted in whole districts and never the core: those homes heat with electricity, mostly heat pumps. Gas accounts and usage fall, winter electric usage rises. One-district towns (village, small_town) have none whatever the share. |
+| `all_electric_district_share` | town | `0.15` | 0–1 |  | Share of districts with no gas mains (all-electric). *Affects: gas services, electric heat share, winter electric peak.* | Share of districts without gas mains, counted in whole districts, the core last (1: no gas mains at all): those homes heat with electricity, mostly heat pumps. Gas accounts and usage fall, winter electric usage rises. One-district towns (under 2,251 homes: village, small_town) have none whatever the share. |
 | `scheme` | operations | `mp_with_lp_core` |  |  | Medium-pressure PE everywhere with a regulator at every meter, optionally with a legacy low-pressure core fed by district regulators. | Medium pressure everywhere or a legacy low-pressure core: regulators and pressures on the map. |
 | `transmission_kpa` | operations | `3800.0` | 700–10000 | kPa | (advanced) Off-map transmission pressure at the city gate inlet. | Pressure into the city gate: gas pressures on the operations day. |
 | `mp_kpa` | operations | `414.0` | 35–700 | kPa | Medium-pressure distribution set point (60 psig). | Medium-pressure set point: gas pressures on the operations day. |
