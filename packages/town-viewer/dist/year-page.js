@@ -9,6 +9,7 @@ import {bindPopovers} from './config-page.js';
 import {episodeDates,YEAR_END} from './m2c.js';
 import {fmtCell} from './data-page.js';
 import {prettyKey} from './schema-form.js';
+import {installSetupAgent,currentRunInput} from './setup-agent.js';
 export const ROUTE=/^#\/year$/;
 export const YEAR=2026;
 export const MAX_EPISODES=40;
@@ -123,9 +124,23 @@ export function chartTable(model){const first=model.months.find((m,i)=>model.top
  return `<table><thead><tr><th>Month</th>${model.series.map(s=>`<th>${e(s.label)}</th>`).join('')}${extra.map(k=>`<th>${e(k)}</th>`).join('')}</tr></thead><tbody>${model.months.map((m,i)=>{const det=m&&model.tops[i]!=null&&model.detail?Object.fromEntries(model.detail(m)):{};
   return `<tr><td>${MONTHS[i]}${model.partial[i]?'*':''}</td>${model.series.map(s=>`<td>${fmtValue(s.values[i],model.fmt)}</td>`).join('')}${extra.map(k=>`<td>${fmtValue(det[k],'int')}</td>`).join('')}</tr>`;}).join('')}</tbody></table>${model.partial.some(Boolean)?'<p class="yr-note">* to the run date, not a whole month</p>':''}`;}
 
-export function installYearPage({getClient,getEngineState=()=>({state:'idle',towns:[]}),toast=()=>{},onDate=null,root=document.getElementById('year-root')}){
- const ui={library:null,trend:null,busy:false,recalc:false,error:'',panel:null,confirmClear:false,models:[]};
- let closePops=null;
+export function episodeRunEnd(episodes){return episodes.reduce((end,ep)=>{const day=ep.to||YEAR_END;return day>end?day:end;},'2026-01-01');}
+
+export async function inflictReviewedEpisodes(m,proposal,analyse){
+ if(m.readOnly)throw Error('Open a live simulation to inflict tweaks.');
+ if(!proposal.episodes?.length||m.episodes.length+proposal.episodes.length>MAX_EPISODES)throw Error('Choose new periods within the 40-episode limit.');
+ const before=structuredClone(m.episodes),date=m.asOf;
+ try{for(const ep of proposal.episodes)m.addEpisode(ep);m.setAsOf(proposal.runTo);const error=await analyse();if(error)throw error;}
+ catch(error){m.episodes=before;m.asOf=date;m.save();throw error;}
+}
+
+export function installYearPage({getClient,getSimulation=()=>null,getEngineState=()=>({state:'idle',towns:[]}),toast=()=>{},onDate=null,root=document.getElementById('year-root')}){
+ const ui={library:null,trend:null,busy:false,recalc:false,error:'',panel:null,confirmClear:false,models:[],agent:null,applying:false};
+ let closePops=null,closeAgent=null,agentClient=null;
+ const header=root?.ownerDocument?.querySelector('.studio-header');
+ const positionGuide=()=>{if(header)root.style.setProperty('--year-guide-top',header.getBoundingClientRect().bottom+'px');};
+ if(header&&globalThis.ResizeObserver)new ResizeObserver(positionGuide).observe(header);
+ positionGuide();
  const client=()=>getClient?.()||null;
  const scenarioOf=id=>ui.library?.scenarios?.find(s=>s.id===id)||null;
  // ---- loading --------------------------------------------------------------------------------------------------
@@ -141,8 +156,10 @@ export function installYearPage({getClient,getEngineState=()=>({state:'idle',tow
   for(const d of p.draft){const r=draftEpisode(d);if(r.error){p.error=r.error;render();return;}parsed.push(r.episode);}
   if(m.episodes.length+parsed.length>MAX_EPISODES){p.error=`At most ${MAX_EPISODES} episodes in a year.`;render();return;}
   const added=parsed.map(ep=>m.addEpisode(ep)),title=parsed.length>1?scenarioOf(p.scenario)?.title||added[0].title:added[0].title;
-  ui.panel=null;toast(`Recalculating the year with ${title}…`);const err=await load({recalc:true});
-  if(err?.status===422){for(const a of added)m.removeEpisode(a.id);ui.panel={...p,error:engineRefusal(err)};toast('The engine refused the episode.');await load();}}
+  const previous=m.asOf,end=episodeRunEnd(parsed);m.setAsOf(end);
+  ui.panel=null;toast(`Analysing ${title} through ${longDay(end)}…`);const err=await load({recalc:true});
+  if(err?.status===422){for(const a of added)m.removeEpisode(a.id);m.setAsOf(previous);ui.panel={...p,error:engineRefusal(err)};toast('The engine refused the episode.');await load();}
+  else if(!err&&onDate){try{await onDate(end);}catch(e){toast('Year updated; the operations day could not refresh: '+e.message);}}}
  async function saveEdit(){const m=client(),p=ui.panel;if(!m||p?.kind!=='edit')return;const r=draftEpisode(p.draft);if(r.error){p.error=r.error;render();return;}
   const was=m.episodes.find(x=>x.id===p.id);if(!was)return;const before=JSON.parse(JSON.stringify(was));m.updateEpisode(p.id,r.episode);
   ui.panel=null;toast(`Recalculating the year with ${r.episode.title}…`);const err=await load({recalc:true});
@@ -150,9 +167,19 @@ export function installYearPage({getClient,getEngineState=()=>({state:'idle',tow
  async function remove(id){const m=client();if(!m)return;const ep=m.episodes.find(x=>x.id===id);if(!m.removeEpisode(id))return;ui.panel=null;toast(`Recalculating the year without ${ep.title}…`);await load({recalc:true});}
  async function clearAll(){const m=client();if(!m)return;const n=m.episodes.length;m.clearEpisodes();ui.confirmClear=false;ui.panel=null;toast(`Recalculating the year without ${n} episode${n===1?'':'s'}…`);await load({recalc:true});}
  function viewDay(day){const m=client();if(!day)return;Promise.resolve(onDate?onDate(day):null).then(()=>{if(m&&m.asOf!==day)m.setAsOf(day);load();});}
+ function mountAgent(){const m=client(),p=ui.panel;if(p?.kind!=='agent'||!m||m.readOnly)return;
+  agentClient=m;closeAgent=installSetupAgent({root:root.querySelector('#year-agent-root'),api:m.api,mode:'inflict',getDraft:()=>({...currentRunInput(m,p.day),name:getSimulation()?.name||'',region:getSimulation()?.region||'',purpose:getSimulation()?.purpose||'',agent:ui.agent}),onSave:s=>{ui.agent=s;},onBack:()=>{ui.panel=null;render();},onApply:async proposal=>{
+   if(client()!==m)throw Error('The active simulation changed. Open the guide again.');
+   ui.applying=true;toast(`Analysing ${proposal.name} through ${longDay(proposal.runTo)}…`);
+   try{await inflictReviewedEpisodes(m,proposal,()=>load({recalc:true}));}
+   catch(err){ui.error='';render();throw Error(err.status===422?engineRefusal(err):'Analysis could not finish. The added periods were rolled back. '+err.message);}
+   finally{ui.applying=false;}
+   ui.agent=null;ui.panel=null;render();
+   if(onDate)try{await onDate(proposal.runTo);}catch(err){toast('Year updated; the operations day could not refresh: '+err.message);}
+  }});}
  // ---- rendering ------------------------------------------------------------------------------------------------
  function head(){const m=client(),asOf=ui.trend?.asOf||m?.asOf||'',n=m?.readOnly?0:m?.episodes.length||0;
-  return `<header class="year-head"><div><span class="section-kicker">RUN · ${YEAR}</span><h1 class="has-pop">Year<button type="button" class="schema-info" aria-label="About the Year" aria-expanded="false" title="About the Year">i</button><div class="schema-pop" role="note"><p>The simulated year, day by day. Click a day to inflict a scenario from the engine's library starting that day; the engine replays the whole year with that episode and the charts below show its mark, month by month.</p><p>Episodes are run input like your actions and settings: kept in this browser, sent with every request, applied by the engine. Settings in an episode are absolute (a number, true/false) or relative to the base (*0.5, +2, -1); a ramp slides a number there over that many days.</p></div></h1></div><div class="year-tools"><label>Run date <input type="date" id="year-asof" min="${YEAR}-01-01" max="${YEAR}-12-31" value="${e(asOf)}"></label>${n?ui.confirmClear?`<span class="year-confirm">Clear ${n} episode${n===1?'':'s'}? <button type="button" class="small-link" data-act="clear-yes">Yes, clear</button><button type="button" class="small-link" data-act="clear-no">Keep</button></span>`:`<button type="button" class="small-link" data-act="clear">Clear all episodes</button>`:''}</div></header>`;}
+  return `<header class="year-head"><div><span class="section-kicker">RUN · ${YEAR}</span><h1 class="has-pop">Year<button type="button" class="schema-info" aria-label="About the Year" aria-expanded="false" title="About the Year">i</button><div class="schema-pop" role="note"><p>The simulated year, day by day. Click a day to inflict a scenario from the engine's library starting that day; the engine replays the whole year with that episode and the charts below show its mark, month by month.</p><p>Episodes are run input like your actions and settings: kept in this browser, sent with every request, applied by the engine. Settings in an episode are absolute (a number, true/false) or relative to the base (*0.5, +2, -1); a ramp slides a number there over that many days.</p></div></h1></div><div class="year-tools">${m&&!m.readOnly?`<button type="button" class="outline-btn" data-act="voice-tweak">● Talk through a tweak</button>`:""}<label>Run date <input type="date" id="year-asof" min="${YEAR}-01-01" max="${YEAR}-12-31" value="${e(asOf)}"></label>${n?ui.confirmClear?`<span class="year-confirm">Clear ${n} episode${n===1?'':'s'}? <button type="button" class="small-link" data-act="clear-yes">Yes, clear</button><button type="button" class="small-link" data-act="clear-no">Keep</button></span>`:`<button type="button" class="small-link" data-act="clear">Clear all episodes</button>`:''}</div></header>`;}
  function status(){const m=client(),t=ui.trend,n=m?.episodes.length||0,eps=`${n} episode${n===1?'':'s'}`;
   if(ui.error)return `<p class="year-status" role="status"><span class="year-error">${e(ui.error)}</span></p>`;
   if(!t)return `<p class="year-status" role="status">${ui.busy?(m?.readOnly?'Loading saved trends…':ui.recalc?'Recalculating the year… (5–15 s)':'Asking the engine… (a cold engine replays the year first, 5–15 s)'):''}</p>`;
@@ -178,13 +205,17 @@ export function installYearPage({getClient,getEngineState=()=>({state:'idle',tow
    return `<h3>${e(g.title)}</h3>${own.map(s=>`<div class="year-sc"><button type="button" class="year-sc-pick" data-sc="${e(s.id)}"><strong>${e(s.title)}</strong><span>${e(s.description||'')}</span></button>${s.watch?`<details><summary>What to watch</summary><p>${e(s.watch)}</p></details>`:''}${s.tags?.length?`<span class="year-tags">${s.tags.map(t=>`<em>${e(t)}</em>`).join('')}</span>`:''}</div>`).join('')}${soon.map(s=>`<div class="year-sc is-coming" aria-disabled="true"><strong>${e(s.title)}<em class="year-soon">coming soon</em></strong><span>${e(s.description||'')}</span></div>`).join('')}`;}).join('')||'<p class="small-note">The library is empty.</p>';}
  function draftForm(drafts,{single=false}={}){return drafts.map((d,k)=>`<fieldset class="year-ep"><legend>${single?'Episode':`Episode ${k+1}`}</legend><label class="year-f">Title <input type="text" data-k="${k}" data-f="title" value="${e(d.title||'')}" maxlength="80"></label><div class="year-f-row"><label class="year-f">Start <input type="date" data-k="${k}" data-f="from" min="${YEAR}-01-01" max="${YEAR}-12-31" value="${e(d.from||'')}"></label><label class="year-f">End <input type="date" data-k="${k}" data-f="to" min="${YEAR}-01-01" max="${YEAR}-12-31" value="${e(d.to||'')}" placeholder="year end"></label><label class="year-f">Ramp <input type="number" data-k="${k}" data-f="ramp" min="0" max="365" step="1" value="${e(d.ramp??0)}"> days</label></div><table class="year-settings"><thead><tr><th>Setting</th><th>Value</th></tr></thead><tbody>${settingRows(d.settings).map(([g,key,v])=>`<tr><td><span>${e(prettyKey(g))}</span><code>${e(g)}.${e(key)}</code></td><td><input type="text" data-k="${k}" data-g="${e(g)}" data-key="${e(key)}" value="${e(v)}" aria-label="${e(g)}.${e(key)}"></td></tr>`).join('')||'<tr><td colspan="2">No settings.</td></tr>'}</tbody></table></fieldset>`).join('')+'<p class="small-note">A number or true/false sets the value for the episode; *0.5, +2 or -1 change the base value. Blank end: to the year end.</p>';}
  function panel(){const p=ui.panel;if(!p)return '';const m=client();
+  if(p.kind==='agent')return '<aside class="year-panel year-agent-panel" aria-label="Talk through a tweak"><div id="year-agent-root"></div></aside>';
   if(p.kind==='inflict'){const sc=p.scenario?scenarioOf(p.scenario):null;
-   return `<aside class="year-panel" aria-label="Inflict a scenario"><header><div><span class="section-kicker">INFLICT ON</span><h2>${e(longDay(p.day))}</h2></div><button type="button" class="close-btn" data-act="close" aria-label="Close">×</button></header><div class="year-panel-actions"><button type="button" class="outline-btn" data-act="view-day">View this day</button>${m?.asOf===p.day?'<span class="small-note">This is the run date.</span>':''}</div>${p.error?`<p class="year-error" role="alert">${e(p.error)}</p>`:''}${sc?`<button type="button" class="small-link" data-act="back">← Library</button><h3 class="year-sc-title">${e(sc.title)}</h3><p class="small-note">${e(sc.description||'')}</p>${sc.watch?`<p class="year-watch"><strong>Watch</strong> ${e(sc.watch)}</p>`:''}${draftForm(p.draft)}<div class="year-panel-foot"><button type="button" class="primary-btn" data-act="inflict">Inflict</button></div>`:`<p class="small-note">Pick a scenario; its episodes start on this day.</p><div class="year-library">${library(p)}</div>`}</aside>`;}
+   return `<aside class="year-panel" aria-label="Inflict a scenario"><header><div><span class="section-kicker">INFLICT ON</span><h2>${e(longDay(p.day))}</h2></div><button type="button" class="close-btn" data-act="close" aria-label="Close">×</button></header><div class="year-panel-actions"><button type="button" class="outline-btn" data-act="view-day">View this day</button>${m?.asOf===p.day?'<span class="small-note">This is the run date.</span>':''}</div>${p.error?`<p class="year-error" role="alert">${e(p.error)}</p>`:''}${sc?`<button type="button" class="small-link" data-act="back">← Library</button><h3 class="year-sc-title">${e(sc.title)}</h3><p class="small-note">${e(sc.description||'')}</p>${sc.watch?`<p class="year-watch"><strong>Watch</strong> ${e(sc.watch)}</p>`:''}${draftForm(p.draft)}<div class="year-panel-foot"><button type="button" class="primary-btn" data-act="inflict">Inflict &amp; run to period end</button></div>`:`<p class="small-note">Pick a scenario; its episodes start on this day. Inflicting runs the analysis to the last episode’s end (year end for an open-ended period).</p><button type="button" class="outline-btn" data-act="voice-tweak">● Describe a tweak by voice or text</button><div class="year-library">${library(p)}</div>`}</aside>`;}
   const ep=m?.episodes.find(x=>x.id===p.id);if(!ep){return '';}
   return `<aside class="year-panel" aria-label="Edit an episode"><header><div><span class="section-kicker">EPISODE ${e(ep.id)}</span><h2>${e(ep.title)}</h2></div><button type="button" class="close-btn" data-act="close" aria-label="Close">×</button></header>${ep.scenario?`<p class="small-note">From the scenario ${e(scenarioOf(ep.scenario)?.title||ep.scenario)}.</p>`:''}${p.error?`<p class="year-error" role="alert">${e(p.error)}</p>`:''}${draftForm([p.draft],{single:true})}<div class="year-panel-foot"><button type="button" class="primary-btn" data-act="save">Save</button><button type="button" class="small-link" data-act="remove">Remove</button></div></aside>`;}
  function render(){if(!root)return;const m=client();
+  const keepAgent=ui.panel?.kind==='agent'&&m===agentClient?root.querySelector('#year-agent-root'):null;
+  if(!keepAgent){closeAgent?.();closeAgent=null;agentClient=null;}
   if(!m){root.innerHTML=`<section class="fiori-shell"><div class="fiori-empty ws-empty">${engineNotice(getEngineState(),undefined,'#/year','The Year')}</div></section>`;root.querySelector('[data-ws="retry"]')?.addEventListener('click',()=>location.reload());return;}
   root.innerHTML=`<div class="year-layout${ui.panel?' has-panel':''}"><main class="year-main">${head()}${status()}${calendar()}${trends()}</main>${panel()}</div>`;
+  if(keepAgent)root.querySelector('#year-agent-root')?.replaceWith(keepAgent);else if(ui.panel?.kind==='agent')mountAgent();
   if(m.readOnly){root.querySelector('#year-asof').disabled=true;for(const b of root.querySelectorAll('[data-day],[data-ep]')){b.disabled=true;b.removeAttribute('data-day');b.removeAttribute('data-ep');}const pop=root.querySelector('.schema-pop');if(pop)pop.innerHTML='<p>Saved engine results through '+e(m.asOf)+'. Episodes and trends are archived with this run. Open a live engine to change inputs or replay another date.</p>';const empty=root.querySelector('.year-legend-empty');if(empty)empty.textContent='No episodes in this saved run.';}
   closePops?.();closePops=bindPopovers(root);if(ui.panel)root.querySelector('.year-panel h2')?.scrollIntoView?.({block:'nearest'});}
  // ---- hover readout ----------------------------------------------------------------------------------------------
@@ -195,11 +226,12 @@ export function installYearPage({getClient,getEngineState=()=>({state:'idle',tow
   tip.replaceChildren(...rows);tip.hidden=false;tip.style.left=`${((Number(hit.getAttribute('x'))+Number(hit.getAttribute('width'))/2)/GEOM.w*100).toFixed(1)}%`;tip.classList.toggle('is-right',i>=8);tip.classList.toggle('is-left',i<3);}
  function hideTip(card){card?.querySelector('.yr-tip')?.setAttribute('hidden','');}
  // ---- events ---------------------------------------------------------------------------------------------------
- root?.addEventListener('click',ev=>{const b=ev.target.closest('button');if(!b||!root.contains(b))return;const m=client();if(m?.readOnly)return;
+ root?.addEventListener('click',ev=>{const b=ev.target.closest('button');if(!b||!root.contains(b)||ui.applying)return;const m=client();if(m?.readOnly)return;
   if(b.dataset.day){ui.panel={kind:'inflict',day:b.dataset.day,scenario:null,draft:null,error:''};ui.confirmClear=false;render();return;}
   if(b.dataset.ep){const ep=m?.episodes.find(x=>x.id===b.dataset.ep);if(!ep)return;ui.panel={kind:'edit',id:ep.id,draft:{...JSON.parse(JSON.stringify(ep)),to:ep.to||''},error:''};render();return;}
   if(b.dataset.sc){const p=ui.panel,sc=scenarioOf(b.dataset.sc);if(p?.kind!=='inflict'||!sc)return;p.scenario=sc.id;p.draft=episodeDates(sc,p.day).map(d=>({...d,to:d.to||''}));p.error='';render();return;}
   switch(b.dataset.act){
+   case 'voice-tweak':ui.agent=null;ui.panel={kind:'agent',day:ui.panel?.day||m?.asOf||'2026-03-31'};ui.confirmClear=false;render();return;
    case 'close':ui.panel=null;render();return;
    case 'back':if(ui.panel){ui.panel.scenario=null;ui.panel.draft=null;ui.panel.error='';}render();return;
    case 'view-day':viewDay(ui.panel?.day);return;
@@ -217,5 +249,6 @@ export function installYearPage({getClient,getEngineState=()=>({state:'idle',tow
  root?.addEventListener('focusin',ev=>{const hit=ev.target.closest?.('.yr-hit');if(hit)showTip(hit);});
  root?.addEventListener('focusout',ev=>{if(ev.target.classList?.contains('yr-hit'))hideTip(ev.target.closest('.yr-card'));});
  root?.addEventListener('keydown',ev=>{if(ev.key==='Escape'&&ui.panel&&!ev.target.closest?.('input,select,textarea')){ui.panel=null;render();}});
+ globalThis.addEventListener?.('hashchange',()=>{if(!parseYearRoute(location.hash)&&closeAgent){ui.panel=null;render();}});
  return {open,render,load,refresh(){if(parseYearRoute(location.hash)){if(client()&&!ui.trend)open(location.hash);else render();}},get state(){return ui;}};
 }

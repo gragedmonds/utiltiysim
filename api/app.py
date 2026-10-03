@@ -13,6 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import Response
 
+from api._agent import router as agent_router
 from api._m2c import router as m2c_router
 from api._ops import router as ops_router
 from api._store import store
@@ -33,6 +34,7 @@ app.add_middleware(GZipMiddleware, minimum_size=2048)
 app.add_middleware(CORSMiddleware, allow_origins=os.environ.get("CORS_ORIGINS", "*").split(","),
                    allow_methods=["*"], allow_headers=["*"])
 app.include_router(ops_router)  # operations (also the hosted engine's API, api/index.py)
+app.include_router(agent_router)
 app.include_router(m2c_router)  # meter-to-cash: reads, VEE, work queues
 app.include_router(towns_router)  # generated towns (POST /api/towns), also a snapshot source for the two above
 

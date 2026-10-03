@@ -341,13 +341,49 @@ it; the page adds nothing of its own. Tested in `tests/guide.test.mjs` and `test
 
 ## 15. The portal build: your instructions
 
-The next phase is yours to build: account login, the launcher and pairing, the control plane, the worker, portal mode
+The next phase is yours to build: shared workspace metadata, the launcher and pairing, the control plane, the worker, portal mode
 in the Studio, the utility spec and roll-ups, and campaigns. The instructions, milestone by milestone with done-when
 checks, contracts, tests and the rules every PR follows, are in [HANDOFF_BUILD.md](HANDOFF_BUILD.md). The
 architecture they implement is [PORTAL_ARCHITECTURE.md](PORTAL_ARCHITECTURE.md); step 1 (saved runs and the
 read-only Runs page) is done and described in [RUN_BUNDLES.md](RUN_BUNDLES.md).
 
-## 16. Settings say where they reach and how (Configuration)
+## 16. Runner product decisions to implement
+
+The login and pairing screens shown during design are mockups. The next implementation uses eight separate code
+boxes with a dash between the fourth and fifth characters (`K7M2-Q9RX`), supports full-code paste, and pairs the
+computer to the workspace once. Model/scenario selection happens afterward on the same connection.
+
+The runner must choose and remember a storage folder before downloading its runtime, including Windows paths such
+as `P:\UtilitySim\`. All large files belong there; show free space and a drive-unavailable state, and support moving
+or switching libraries. Returning users open saved models without another pairing code or an automatic replay.
+Users can keep complete downloaded archive copies locally; NAS integration is outside the current scope.
+The acceptance checks and planned contracts are incorporated into [HANDOFF_BUILD.md](HANDOFF_BUILD.md), milestones
+2, 3 and 5. Multi-year execution and checkpoint resume remain later engine work.
+
+
+## Guided entry and the Year dashboard (October 2026)
+
+The Studio root is now a four-step setup wizard or a chooser for saved simulations. No WorkOS or login gate.
+The library is **browser-local**, with resumable drafts and isolated per-simulation M2C state/operations settings.
+The old workbench is `studio.html`, entered through a saved simulation. Year opens first; Config is in the header.
+Existing pack-town browser work is adopted without deleting original keys. Downloaded results still open in Runs.
+
+Four starters range from normal operations through organised chaos. The engine catalogue also includes catch-up
+team and migration hangover recovery scenarios. Inflicting advances analysis through the last episode end, or
+December 31 for open-ended episodes. A 422 refusal rolls back the added episodes and date.
+
+The floating engine monitor shows real queued/active browser requests, elapsed time, learned estimates and errors.
+It collapses when idle and moves away from the Year editor. This is not the planned durable runner job queue.
+The downloadable runner, pairing, storage-folder selection and shared metadata remain unbuilt.
+
+## Conversational setup guide
+
+`setup-agent.js` provides the wizard's **Talk it through** panel. Replies and proposed settings come through
+`/api/setup-agent/*`; the Anthropic key stays in `ANTHROPIC_API_KEY` on the server. Optional voice input uses browser
+speech recognition and an editable transcript; typing is the fallback. Only **Use this setup** applies a validated
+proposal to a draft, followed by the usual review and Year handoff. See [SETUP_AGENT.md](SETUP_AGENT.md).
+
+## 17. Settings say where they reach and how (Configuration)
 
 Every engine setting now carries two schema hints, in `GET /api/config/schema` and `GET /api/m2c/settings`:
 
