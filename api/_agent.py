@@ -28,7 +28,7 @@ from api._agent_config import (
     validate_infliction,
     validate_proposal,
 )
-from api._setup import REGIONAL_NOTE, REGIONS, configuration, operation_defaults
+from api._setup import REGIONAL_NOTE, REGIONS, TOWN_SIZES, configuration, operation_defaults
 from api._towns import MAX_HOUSES
 from utilsim.m2c.scenarios import catalog
 
@@ -205,7 +205,7 @@ async def anthropic_message(payload: dict, key: str) -> dict:
 async def conversation(req: ChatRequest, key: str) -> dict:
     allowed = set(Proposal.model_fields)
     current = {k: v for k, v in req.draft.items() if k in allowed}
-    context = {"homeLimit": MAX_HOUSES, "towns": presets(), "configurationGroups": group_index(),
+    context = {"homeLimit": MAX_HOUSES, "townSizes": TOWN_SIZES, "towns": presets(), "configurationGroups": group_index(),
                "regionalStarters": REGIONS, "regionalNote": REGIONAL_NOTE,
                "scenarioLibrary": catalog(), "currentDraft": current}
     if req.mode == "inflict":
