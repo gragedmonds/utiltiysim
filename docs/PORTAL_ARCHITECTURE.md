@@ -6,7 +6,8 @@
 **Implemented:** step 1 now has `utilsim export-run` and the Studio's Runs reader (no-map boot, Year, Data,
 month-end Workspace snapshots and VEE scorecard). See [RUN_BUNDLES.md](RUN_BUNDLES.md) for the exact contract,
 commands, verification and current limits. Account login, launcher download, code pairing, queueing and campaigns
-below are planned. The next milestone is the connection flow described below.
+below are planned. The next milestone is the connection flow described below. The build instructions, milestone by
+milestone with done-when checks, contracts and tests, are in [HANDOFF_BUILD.md](HANDOFF_BUILD.md).
 
 ## The user flow: login, launch, pair
 

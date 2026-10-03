@@ -338,3 +338,11 @@ what the engine can do (with where each capability shows in the Studio), the imp
 (measured towns, the serverless and container limits, the request limits), the gaps still remaining with the next
 step for each, and the engine's live status. The text lives with the engine so it stays true to the build that serves
 it; the page adds nothing of its own. Tested in `tests/guide.test.mjs` and `tests/test_m2c_guide.py`.
+
+## 15. The portal build: your instructions
+
+The next phase is yours to build: account login, the launcher and pairing, the control plane, the worker, portal mode
+in the Studio, the utility spec and roll-ups, and campaigns. The instructions, milestone by milestone with done-when
+checks, contracts, tests and the rules every PR follows, are in [HANDOFF_BUILD.md](HANDOFF_BUILD.md). The
+architecture they implement is [PORTAL_ARCHITECTURE.md](PORTAL_ARCHITECTURE.md); step 1 (saved runs and the
+read-only Runs page) is done and described in [RUN_BUNDLES.md](RUN_BUNDLES.md).

@@ -47,6 +47,7 @@ for carrying Studio inputs into an export, loading bundles by URL, and the archi
 | `docs/OPERATIONS.md` | Clock, fleet, incidents and meter-to-cash process design (M2/M3) |
 | `docs/ARCHITECTURE.md` · `docs/ROADMAP.md` | Layers, determinism rules, performance · milestones |
 | `docs/RUN_BUNDLES.md` · `docs/PORTAL_ARCHITECTURE.md` | Saved runs and the offline reader · portal/worker roadmap |
+| `docs/HANDOFF_BUILD.md` · `docs/DATA_FIRST.md` | Build instructions for the portal, worker, utilities and campaigns (milestones, contracts, done-when) · the data-first generation plan |
 
 **Hosting (Vercel).** `vercel.json` builds a static site: `npm ci --prefix packages/town-viewer` (vendors
 Three.js), then `node scripts/build_site.mjs` copies the viewer and the prebuilt town packs (`packs/`) into
