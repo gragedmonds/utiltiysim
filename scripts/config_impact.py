@@ -269,33 +269,39 @@ def report(town_path: str, run_path: str | None) -> str:
            "in the town), so on a 480-home town totals move by a few percent even when nothing systematic changed. "
            "The reseeding rows at the top of each table are that noise floor. A setting is a lever on the year when "
            "it moves totals well beyond them, in the direction its explanation says.", "",
-           "## Findings (October 2026)", "",
+           "## Findings (October 2026, generic towns)", "",
            "- **What the year reads.** The customer tables, each home's usage (from its household, appliances, floor "
            "area and the weather), prices and payer mix, each route's meter technology, and the run settings. Reads, "
            "cases, bills and collections never read the networks, incident rates, storm days, crews or the map's "
            "demonstration scenario; those shape the operations day, and reach them only through interruptions "
            "carried from a day into a run.",
            "- **The contact centre reads everything the year does, plus the networks.** Incident rates, storm days "
-           "and the incident seed draw the year's outages and gas leaks, and so the outage and gas odour contacts; the "
-           "networks decide who loses service. Contact settings change only the contact centre: reads, cases, bills "
-           "and collections stay byte-identical.",
+           "and the incident seed draw the year's outages and gas leaks, and so the outage and gas odour contacts "
+           "(storm days +25 percent: contacts +5 percent on the small town; overhead faults +25 percent: +10 percent "
+           "on the village). Payment behaviour is the biggest town lever on it: on-time payers down from 82 to 66 "
+           "percent raises contacts about 30 percent and more than doubles hang-ups. Contact settings change only "
+           "the contact centre: reads, cases, bills and collections stay byte-identical. Its cost barely moves "
+           "with volume, because agents are paid for their hours. On the village a second agent removes every "
+           "hang-up and doubles staffing cost, self-service +25 percent sends 16 percent fewer calls to agents, and "
+           "the year's incident factor +25 percent draws 30 percent more incidents and 10 percent more contacts.",
            "- **Biggest town levers.** AMI route share (+25 percent: about a third fewer cases, estimates and carry), "
-           "AMR share, the heating base temperature (+25 percent: gas +21 to +24 percent), household size (water +46 to "
-           "+58 percent), occupancy, water per person, the seasons, lot frontage (+20 percent: gas +11 to +14 "
-           "percent, from wider houses) and the two-storey share.",
-           "- **Geometry is not a lever.** Arterial spacing and warp, parks, margins, shop clustering and setbacks move "
-           "totals only within the reseeding noise (2 to 18 percent on these towns). They change which household lands "
+           "AMR share (about a fifth fewer), the heating base temperature (+25 percent: gas +22 to +26 percent), "
+           "household size (water +50 to +65 percent), occupancy, water per person (+14 to +18 percent), lot "
+           "frontage (+20 percent: gas +11 to +14 percent, from wider houses) and the number of homes.",
+           "- **Geometry is not a lever.** Arterial spacing and warp, era noise, parks and setbacks move totals only "
+           "within the reseeding noise (up to about 15 percent on these towns). They change which household lands "
            "where, not how the town behaves.",
-           "- **Small towns hide rare events.** At a 25 percent nudge on 480 homes some anomaly rates, the data error "
-           "rate and staffing capacity changed nothing; a strong nudge moves them all (slow meters ×10: billing error "
-           "×4; no analysts: open cases ×27, carry ×14).",
+           "- **Small towns hide rare events.** At a 25 percent nudge some anomaly rates, the data error rate and "
+           "several incident rates (gas main leaks, water main breaks, transformer failures) changed nothing on "
+           "these towns: the extra probability drew no extra event. A strong nudge moves them all.",
            "- **Some settings act only on your decisions.** Disconnection timing and payment after disconnection apply "
            "to disconnections you approve; arrangement breaks to arrangements you set up; outage events to "
            "interruptions you carry into a run. First-bill and true-up limits fire rarely.",
            "- **Removed.** Nine settings nothing used or that only labelled the map: `housing.semi_share`, "
            "`electric.transmission_kv`, `electric.severe_turn_deg`, `ami.battery_life_years`, `ami.comm_fail_rate`, "
            "`operations.drive_by_radius_m`, `operations.walker_meters_per_hour`, `process.sequences`, "
-           "`scenario.tick_minutes`.", ""]
+           "`scenario.tick_minutes`; and the four street-extract settings (`town.skeleton`, `osm_source`, "
+           "`osm_sha256`, `expansion`) now that every town is generic.", ""]
     for preset in dict.fromkeys(r["preset"] for r in rows):
         base = next(r for r in rows if r["preset"] == preset and r["group"] is None)
         out += [f"## Town settings on `{preset}` ({base['homes']:,} homes, {base['accounts']:,} accounts)", "",
