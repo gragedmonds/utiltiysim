@@ -2,7 +2,6 @@
 from api._agent_config import Proposal, grouped_ops_defaults, preset_config, schemas, validate_proposal
 from api._towns import MAX_HOUSES
 from utilsim.config.model import RUN_GROUPS, SimConfig
-from utilsim.config.presets import deep_merge
 
 REGIONAL_NOTE = ("Regional starters are illustrative modelling assumptions, not measured local statistics. "
                  "Edit them for your service area. Regional choices do not calibrate tariffs or regulations.")
@@ -61,6 +60,8 @@ def configuration(preset: str) -> dict:
 
 
 def operation_defaults(proposal: Proposal) -> dict:
+    from utilsim.config.presets import deep_merge
+
     validate_proposal(proposal)
     base = preset_config(proposal.preset)
     cfg = SimConfig.model_validate(deep_merge(base.model_dump(mode="json"), proposal.townOverrides))
