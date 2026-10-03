@@ -102,8 +102,14 @@ queries. The exporter currently handles one town and the engine's 2026 calendar.
 
 ## Following milestones
 
-This implements architecture step 1. The control-plane queue, worker polling/leases/uploads, run comparisons,
-utility/region roll-ups, packaged executables, data-first synthesis and multi-year campaigns remain the next stages.
+This implements architecture step 1. The next milestone is **log in to Sim → download and open the small launcher →
+configure online → pair with an eight-character alphanumeric code → see the local engine Ready**. See
+[the connection flow](PORTAL_ARCHITECTURE.md#the-user-flow-login-launch-pair). The launcher downloads and caches the
+larger runtime on first use; pairing and online sync need internet access, while cached computation stays local.
+
+Login, pairing and launcher distribution are planned, not implemented by `export-run`. The control-plane queue,
+worker polling/leases/uploads, run comparisons, utility/region roll-ups, data-first synthesis and multi-year campaigns
+follow that connection milestone.
 The existing hosted and local live engine routes continue to work alongside the saved reader.
 
 Validation includes Python engine-to-archive comparisons for every table and saved worklist date, archive reuse

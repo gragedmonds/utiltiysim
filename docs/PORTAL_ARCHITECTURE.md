@@ -5,7 +5,57 @@
 
 **Implemented:** step 1 now has `utilsim export-run` and the Studio's Runs reader (no-map boot, Year, Data,
 month-end Workspace snapshots and VEE scorecard). See [RUN_BUNDLES.md](RUN_BUNDLES.md) for the exact contract,
-commands, verification and current limits. Queueing, worker mode and campaigns below are still planned.
+commands, verification and current limits. Account login, launcher download, code pairing, queueing and campaigns
+below are planned. The next milestone is the connection flow described below.
+
+## The user flow: login, launch, pair
+
+1. **Log in to Sim online.** The account owns configurations, connected computers and saved run metadata.
+2. **Download and open a small launcher.** It starts a local server and opens a minimal pairing/status screen.
+   No Python installation, terminal command, copied server URL or hand-managed token is part of the user flow.
+3. **Configure online.** Town or utility specifications, seed, settings and scenarios are composed and saved in Sim.
+   A configuration can be saved before a computer is connected; it has an immutable revision when submitted for a run.
+4. **Connect with an eight-character alphanumeric code.** The proposed direction is that Sim displays a code such as
+   `K7M2Q9RX`, and the launcher accepts it. Sim links that computer to the logged-in account and selected configuration.
+5. **See the connection established.** Sim shows the computer's name, engine readiness and last contact. The local
+   screen shows the linked account and configuration revision. Initial download or setup appears as **Preparing**;
+   **Ready** means the engine is running and the configuration is available locally.
+6. **Work from Sim.** Subsequent configuration changes and run requests reach the paired server through the control
+   plane. The local engine computes and stores results; Sim receives progress and small result summaries.
+
+The first acceptance milestone stops at **Ready**, with the saved online configuration received by the local server.
+Pairing itself does not start a simulation. Job execution, details requests and the campaign flow follow it.
+
+Here, "offline server" means the engine runs on the user's computer. Pairing, new online configuration and result
+sync need internet access. Once the runtime and a run's inputs are cached, computation and local saved-result browsing
+can continue without it; progress and results sync on reconnection.
+
+### Small launcher, cached engine
+
+The initial executable is a bootstrapper and supervisor: start the local service, accept the pairing code, show its
+status, and stop or restart it. The Python runtime, numerical libraries, engine and local Studio assets are a separate,
+versioned download cached on first use. Their size is shown during setup. The initial executable can therefore remain
+small; a complete first installation still includes the larger engine download. Exact sizes need measurement on the
+target platforms.
+
+Later launches use the installed runtime and keep the device link. Updates download and verify a new signed runtime
+before switching to it; the previous version and saved bundles remain available if setup fails.
+
+### What the pairing code establishes
+
+The eight characters are a short-lived, single-use pairing code, generated randomly from an alphabet that avoids
+ambiguous characters. They are exchanged for a device credential scoped to the issuing account and computer; the code
+is not reused as the connection password. Pairing attempts are rate-limited and expire after ten minutes.
+
+The server initiates outbound HTTPS requests for pairing, heartbeat, configuration and jobs. The portal needs no
+inbound connection to the computer, open router port or public local-server address. The local API binds to loopback;
+the hosted portal uses the control plane to communicate with it. Existing direct `?engine=` integration remains a
+development option rather than a prerequisite for this flow.
+
+The device credential is kept in the platform credential store. Restarting the launcher reconnects automatically;
+Sim can disconnect a computer and revoke its credential. Expired codes can be regenerated. Unpairing stops account
+sync without deleting locally stored bundles. Changes to configuration are revisioned, and each run records the exact
+revision it uses so a later edit cannot change an in-progress run.
 
 ## Principles
 
@@ -43,6 +93,8 @@ Details (a table, a town, a worklist month) are uploaded on request, from the st
 
 Map, Workspace, Data, Year and Configuration as today, plus:
 
+- **Account and computers**: login, launcher download, pairing-code display, connection/readiness status and disconnect.
+- **Configuration**: save online before pairing; show which revision a connected computer has received.
 - **Runs**: compose a job (utility spec or town, settings, episodes carried over from the Year calendar, seed, the
   outputs wanted), the queue with status and progress, the library of completed runs, fork a run with edits, compare
   two runs.
@@ -57,6 +109,11 @@ snapshots read-only with "Open in local engine", and the map shows a town only w
 
 | Call | Does |
 |---|---|
+| `POST /api/pairings` | logged-in user creates a ten-minute, single-use code for the selected configuration |
+| `POST /api/pairings/redeem` | launcher exchanges the code and device identity for a scoped device credential |
+| `GET /api/devices` · `DELETE /api/devices/{id}` | account's paired computers and their status; revoke a computer's link |
+| `POST /api/devices/heartbeat` | authenticated device reports engine version, capabilities, readiness and received configuration revision |
+| `GET /api/device/config` | authenticated device fetches its assigned, revisioned configuration |
 | `POST /api/jobs` | create a job from inputs; computes the run key; returns the stored run if one exists |
 | `GET /api/jobs` · `GET /api/jobs/{id}` | queue and status for the Studio |
 | `POST /api/jobs/claim` | a worker takes the next queued job it is able to run (by size, by capability); a lease with a TTL |
@@ -65,24 +122,30 @@ snapshots read-only with "Open in local engine", and the map shows a town only w
 | `POST /api/runs/{key}/upload` · `GET /api/runs/{key}/files/{name}` | signed URLs for optional detail files |
 | `GET/POST /api/specs` | utility specs, versioned |
 
-State in a key-value store (jobs, runs index, specs), files in a blob store (aggregates, optional details, specs).
-Auth: a token per worker machine, a token per portal user to start with; a login later. The hosted engine
-(`api/index.py`) keeps serving the small packs beside this; nothing in the control plane imports the engine.
+State in a key-value store (account-scoped configurations, pairings, devices, jobs, runs index, specs), files in a blob
+store (aggregates, optional details, specs). Portal users authenticate through account login from the start. Device
+credentials are issued through pairing; no manually copied worker token is needed. All configuration, job and result
+access is scoped to that account. The code's consumption and device registration are atomic, so concurrent redemption
+cannot connect two devices with one code. The hosted engine (`api/index.py`) keeps serving the small packs beside this;
+nothing in the control plane imports the engine. The identity provider and storage service remain implementation
+choices; these endpoints are proposed contracts, not existing routes.
 
-### Worker (the offline executable)
+### Worker (the local engine behind the launcher)
 
-`utilsim worker --portal https://… --token … --store ~/utilsim [--cores 8] [--max-accounts 200000]`
+The launcher owns startup and pairing; the worker uses the stored device credential and configuration revisions.
+An advanced/development entry point can expose `utilsim worker --portal https://… --store ~/utilsim [--cores 8]
+[--max-accounts 200000]`, with credentials resolved from the device store.
 
+- Starts its local API, registers readiness and reports heartbeat/configuration receipt to Sim after pairing.
 - Polls, claims, runs. Towns are cached in the store by town id; a utility spec's towns are generated once.
 - Replays towns in a process pool; reports progress per town; writes `store/runs/<key>/` (below).
 - Computes and uploads the aggregates and the manifest; uploads detail files only for `detail` jobs or when a job asked
   for them up front.
 - Leases: a crashed worker's job returns to the queue when its lease expires; the run key makes a retry safe.
-- `--serve` also runs the full local API, so the Studio on the same machine opens any stored run live (actions, the
-  map, inflicting scenarios with the result in seconds). The portal's "open in local engine" link carries the run key;
-  the local engine rebuilds the inputs from it.
-- Packaged as one download per platform with Python, the engine and the Studio inside; double-click gives the local
-  Studio, the `worker` flag joins the queue.
+- The launcher starts the full local API and serves the local Studio, so the same computer can open any stored run
+  live (actions, map and scenarios). The local engine rebuilds that run's inputs from its saved bundle.
+- Distributed as a small launcher per platform plus a cached runtime, as described above. Double-click starts the
+  local service and pairing/status screen. After first setup it reconnects without another pairing code.
 
 ### Storage
 
@@ -156,6 +219,13 @@ per-town form of the same idea.
 
 ## Behaviour under failure
 
+- Pairing code expired or already used: show that outcome and allow the logged-in user to issue a new code.
+- Runtime download fails: stay in Preparing and offer a retry; a working cached runtime remains usable.
+- Device loses internet: show Disconnected/last contact online; local computation and saved results remain usable,
+  and account sync resumes with the stored credential when connectivity returns.
+- Device credential revoked: stop account sync; require pairing again to reconnect, retaining local bundles.
+- Configuration revision not received or engine incompatible: show the specific readiness state; do not claim a run
+  until its exact inputs and required runtime are available.
 - No worker online: jobs stay queued, the Runs page shows "waiting for a worker, last seen …", everything stored still
   renders.
 - Worker crash mid-run: the lease expires, the job requeues, the retry reuses cached towns.
@@ -169,15 +239,18 @@ Nothing in the engine or its contracts. The always-on container becomes optional
 big utility from a browser with nothing installed). Sharding (DATA_FIRST step B) becomes the worker's process pool
 and the roll-up in the aggregates rather than a server.
 
-| Step | What | Size |
+The connection experience comes before job queueing and campaigns. Packaging is part of that experience from the
+start, with runtime size measured separately from launcher size.
+
+| Step | What | Status |
 |---|---|---|
-| 1 | Run bundle and aggregates (`utilsim export-run`); the Studio reads a bundle read-only (Year, Data, Workspace snapshots, scorecard) | about 1 week |
-| 2 | Control plane: jobs, runs, specs on KV + Blob, tokens, signed URLs | 2 to 3 days |
-| 3 | Worker mode: claim, run, progress, upload, lease, `--serve` | 2 to 3 days |
-| 4 | Runs page, "Queue a run" in Year and Configuration, the Utility board, comparisons | 4 to 5 days |
-| 5 | Packaged executable per platform | 2 to 3 days |
+| 1 | Run bundle and aggregates (`utilsim export-run`); the Studio reads a bundle read-only (Year, Data, Workspace snapshots, scorecard) | Implemented |
+| 2 | Account login, online configuration revisions, eight-character pairing codes and device registry | Next connection milestone |
+| 3 | Small launcher, cached runtime, local server, heartbeat and configuration receipt; Sim shows Ready | Next connection milestone |
+| 4 | Control-plane jobs/runs/specs and signed detail URLs; worker claim, replay, progress, upload and leases | After connection |
+| 5 | "Run on connected computer" in Year and Configuration, Runs queue, Utility board and comparisons | After worker execution |
 | 6 | DATA_FIRST step A on the worker; roll-ups per region and utility in the aggregates | as planned |
-| 7 | Campaigns: the multi-year calendar and opening state in the engine (DATA_FIRST step E), batches, check-in cards, the decision log, pause and timeout policies, the Year strip across years | about 2 weeks |
+| 7 | Campaigns: the multi-year calendar and opening state in the engine (DATA_FIRST step E), batches, check-in cards, the decision log, pause and timeout policies, the Year strip across years | After the paired run flow |
 
 Step 1 is the foundation: the bundle is both the upload format and the local archive, and a Studio that reads it is
 the portal mode.
