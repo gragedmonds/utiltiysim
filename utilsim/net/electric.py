@@ -49,6 +49,7 @@ from utilsim.net.tables import SECONDARY, THREE_PHASE_KVA, coincidence, conducto
 from utilsim.sim.demand import design_kva
 
 LARGE_SERVICE_KVA = 150.0  # three-phase services above this design load are 347/600 V
+TRANSMISSION_KV = 115.0  # the off-map supply into the substations (a label: nothing is computed from it)
 
 EXPRESS_LANE_M = 1.5  # an express circuit runs this much further out than the line it parallels, per lane
 MAX_TRUNK_PATHS = 48  # trunk branches routed per feeder (the rest of its demand is reached by laterals)
@@ -588,7 +589,7 @@ def build_electric(ctx: NetContext) -> Network:
     sub0 = subs[0]
     entry = ctx.exit_for(sub0.xy)
     src = net.add_node("electric-supply", "external_supply", entry,
-                       label=f"Regional grid · {ec.transmission_kv:g} kV (off-map)")
+                       label=f"Regional grid · {TRANSMISSION_KV:g} kV (off-map)")
     net.source_id, net.station_id = "electric-supply", "electric-station"
     station_nodes = []
     sub_designs = []
@@ -600,12 +601,12 @@ def build_electric(ctx: NetContext) -> Network:
         sub_designs.append(sub_design)
         mva = max(10.0, math.ceil(sub_design / 1000.0 / 5.0) * 5.0 + 5.0)
         st = net.add_node(sid, "substation", f.xy, label=f.label, facilityId=f.id, ratingMVA=mva,
-                          primaryKV=ec.transmission_kv, secondaryKV=ec.primary_kv, feeders=len(mine),
+                          primaryKV=TRANSMISSION_KV, secondaryKV=ec.primary_kv, feeders=len(mine),
                           designKVA=round(sub_design, 1))
         start = net.nodes[prev].xy
         path = facility_path(roads, start, f) if k else facility_path(roads, entry, f)
         net.add_edge("supply", prev, st, densify_polyline(path, 250.0), placement="overhead", tier="transmission",
-                     voltageKV=ec.transmission_kv, conductor="795 kcmil ACSR (115 kV)", designRole="supply")
+                     voltageKV=TRANSMISSION_KV, conductor="795 kcmil ACSR (115 kV)", designRole="supply")
         station_nodes.append(st)
         prev = st
 
@@ -816,7 +817,7 @@ def build_electric(ctx: NetContext) -> Network:
                               "trunkLengthM": round(u["m"], 2) if u else 0.0})
     c = RouteCosts.from_config(ec)
     net.meta.update({"feeders": feeders, "substations": len(subs), "transformers": n_tx, "poles": n_pole,
-                     "primaryKV": ec.primary_kv, "transmissionKV": ec.transmission_kv,
+                     "primaryKV": ec.primary_kv, "transmissionKV": TRANSMISSION_KV,
                      "townDesignKVA": round(float(sum(sub_designs)), 1),
                      "ties": len(ties), "switches": len(switched), "corridors": len(corridors.chains),
                      "risers": n_riser,

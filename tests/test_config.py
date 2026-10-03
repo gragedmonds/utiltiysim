@@ -71,13 +71,7 @@ def test_fields_say_when_a_run_setting_overrides_them_or_they_are_not_modelled()
     hinted = {(g, f): p for g, d in defs.items() if d.get("x-group") for f, p in d["properties"].items()
               if "x-status" in p or "x-run-setting" in p}
     status = {k: p["x-status"] for k, p in hinted.items() if "x-status" in p}
-    assert status == {("HousingConfig", "semi_share"): "not-modelled",
-                      ("AmiConfig", "battery_life_years"): "not-modelled",
-                      ("AmiConfig", "comm_fail_rate"): "deprecated", ("ProcessConfig", "sequences"): "not-modelled",
-                      ("OperationsConfig", "drive_by_radius_m"): "not-modelled",
-                      ("OperationsConfig", "walker_meters_per_hour"): "deprecated"}
-    assert all(hinted[k]["x-status-reason"] for k in status)
-    assert hinted[("AmiConfig", "comm_fail_rate")]["x-deprecated"] == "reading.ami_missed_read"
+    assert status == {}  # settings nothing used were removed (utilsim/config/impact.py REMOVED)
     runs = {k: p["x-run-setting"] for k, p in hinted.items() if "x-run-setting" in p}
     assert set(runs.values()) <= set(DEFAULTS) and len(runs) == len(TOWN_SETTINGS) == 18
     assert runs[("IncidentConfig", "manual_only")] == "randomIncidents"

@@ -1,5 +1,5 @@
 {
-  "generatorVersion": "0.9.0",
+  "generatorVersion": "0.9.1",
   "cases": {
     "whitby-120-T120": {
       "roads": "b609b82be1049ae6",
@@ -13,8 +13,8 @@
       "meters": "f6dcc33af9b43b5c",
       "registers": "5edb02810243b807",
       "mrus": "c43347f7a65dad0b",
-      "sampleReads": "2785951113298160",
-      "townId": "town-cc2a461afca712f2"
+      "sampleReads": "cd953fedc71bca2b",
+      "townId": "town-d69e893c78ade9de"
     },
     "synthetic-600-42": {
       "roads": "c6c4cdde68a4747e",
@@ -28,8 +28,8 @@
       "meters": "8a39145ab8c27622",
       "registers": "9420f5f72061fa52",
       "mrus": "5ebe0c8b46482ec7",
-      "sampleReads": "a8f0c7f90cc3100c",
-      "townId": "town-7383f90b772eb874"
+      "sampleReads": "c68ac41aba80d601",
+      "townId": "town-e01a3a8a57b3722d"
     }
   }
 }

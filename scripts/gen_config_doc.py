@@ -17,6 +17,8 @@ generated from `GET /api/config/schema`, which carries these UI hints on every f
 | `x-group`, `x-order` | Group cards and their order on the page |
 | `x-applies` (on a group) | `town`: part of the town id, so changing it generates a new town (new `townId`, revisions and ids); `run`: applies to a simulation run of the same town (no regeneration) |
 | `x-run-setting` | This town value is the default of an operations run setting with that key (`GET /api/sim/settings/schema?town=`): change it per run there without generating a new town |
+| `x-reach` | Where the setting's effect reaches: `year` (the meter-to-cash year, same town), `town` (the customers, usage, routes or prices the year replays; a new town), `shape` (map geometry; the year moves only because homes are drawn again), `operations` (the operations day on the map), `display` (labels, units, clocks, default dates) |
+| `x-impact` | How the setting changes the results, in a sentence or two (the first line of its (i) popover) |
 | `x-status`, `x-status-reason` | `not-modelled`: the engine does not use the field yet (show it disabled with the reason); `deprecated`: another setting replaces it, named in `x-deprecated` |
 
 Presets (`GET /api/config/presets`) are YAML overrides deep-merged on the defaults. The town id is a hash of the
@@ -24,6 +26,13 @@ generation-relevant config plus the generator version, so every combination is r
 (`x-applies: run`: scenario, process, anomalies, reading, VEE, billing) are the meter-to-cash run's settings
 (`GET /api/m2c/settings`). Crews, the day shift, the gas response target, incident rates and storm days stay in the
 town groups but are only defaults: the operations run settings (`x-run-setting`) override them per run.
+
+Each table below has a **Reaches** column and the setting's **How it changes the results** text
+(`utilsim/config/impact.py`). Measurements behind them: [CONFIG_IMPACT.md](CONFIG_IMPACT.md). Settings removed in
+generator 0.9.1 because nothing used them or they only labelled the map: `housing.semi_share`,
+`electric.transmission_kv`, `electric.severe_turn_deg`, `ami.battery_life_years`, `ami.comm_fail_rate`,
+`operations.drive_by_radius_m`, `operations.walker_meters_per_hour`, `process.sequences`, `scenario.tick_minutes`.
+Configs that still carry them load; the keys are ignored.
 
 ## Knock-on chains worth demonstrating
 
@@ -54,8 +63,8 @@ def main() -> None:
     lines = [HEADER]
     for name, d in groups:
         lines.append(f"## {d.get('title', name)}\n\n{d.get('description', '')}\n")
-        lines.append("| Field | Default | Range | Unit | Description |")
-        lines.append("|---|---|---|---|---|")
+        lines.append("| Field | Reaches | Default | Range | Unit | Description | How it changes the results |")
+        lines.append("|---|---|---|---|---|---|---|")
         for f, p in d["properties"].items():
             default = p.get("default")
             if isinstance(default, dict):
@@ -74,7 +83,8 @@ def main() -> None:
                 desc += f" **Deprecated** (use `{p['x-deprecated']}`): {p['x-status-reason']}"
             if p.get("x-advanced"):
                 desc = "(advanced) " + desc
-            lines.append(f"| `{f}` | `{default}` | {rng} | {p.get('x-unit', '')} | {desc} |")
+            impact = p.get("x-impact", "").replace("|", "/")
+            lines.append(f"| `{f}` | {p.get('x-reach', '')} | `{default}` | {rng} | {p.get('x-unit', '')} | {desc} | {impact} |")
         lines.append("")
     Path("docs/CONFIG.md").write_text("\n".join(lines))
 

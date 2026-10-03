@@ -41,7 +41,7 @@ for carrying Studio inputs into an export, loading bundles by URL, and the archi
 | `schemas/` | JSON Schemas (snapshot, state, replay, read, VEE fixture, config) and OpenAPI |
 | `docs/SCHEMA_MAPPING.md` | Prototype `utility-town/1.0` → 2.0, SAP IS-U aliases, m2c.vee read mapping |
 | `docs/REQUIREMENTS.md` | Numbered requirements with status |
-| `docs/CONFIG.md` | Every setting with default, range, unit and knock-on effects (generated) |
+| `docs/CONFIG.md` · `docs/CONFIG_IMPACT.md` | Every setting with default, range, unit, where it reaches and how it changes the results (generated) · what each setting measurably changes, with findings |
 | `docs/NETWORK_RULES.md` | Sizing tables and placement rules per utility |
 | `docs/DATA_MODEL.md` | Customer, device and read model |
 | `docs/OPERATIONS.md` | Clock, fleet, incidents and meter-to-cash process design (M2/M3) |

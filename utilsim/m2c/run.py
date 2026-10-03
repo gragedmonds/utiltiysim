@@ -28,7 +28,8 @@ from datetime import date
 import numpy as np
 import orjson
 
-from utilsim.config.model import SimConfig
+from utilsim.config.impact import REACHES
+from utilsim.config.model import SimConfig, annotate_group
 from utilsim.core.ids import str_key
 from utilsim.core.rng import Purpose, hash_normal, hash_u01
 from utilsim.customers.calendar import business_days, to_utc_iso
@@ -166,9 +167,9 @@ def settings_schema() -> dict:
         model = SimConfig.model_fields[g].annotation
         s = model.model_json_schema(ref_template="#/$defs/{model}")
         defs.update(s.pop("$defs", {}))
-        props[g] = s
+        props[g] = annotate_group(g, s)
     return {"$schema": "https://json-schema.org/draft/2020-12/schema", "title": "Meter-to-cash run settings",
-            "type": "object", "properties": props, "$defs": defs, "x-applies": "run"}
+            "type": "object", "properties": props, "$defs": defs, "x-applies": "run", "x-reaches": REACHES}
 
 
 def _hash(obj) -> str:

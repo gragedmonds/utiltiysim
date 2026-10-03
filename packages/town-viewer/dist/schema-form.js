@@ -3,7 +3,23 @@
 // description, default, effects and path sit behind an (i) button, and the fields of a group lay out in two columns. Nested objects (a value per era, a season's temperatures) render as
 // labelled sub-rows, lists as a checked JSON box, and settings the engine marks x-status "not-modelled" or
 // x-deprecated stay visible but disabled with the reason. The form reports only values that differ from a base (the
-// schema defaults, or a town's own configuration), so the engine stays authoritative.
+// schema defaults, or a town's own configuration), so the engine stays authoritative. Every engine setting also says
+// where its effect reaches (x-reach: year, town, shape, operations, display) and how it changes the results
+// (x-impact): a small chip on the row and the first lines of its (i) popover. Searching "year" lists what moves it.
+// Where a setting's effect reaches (utilsim/config/impact.py): chip label and the sentence the popover shows when the
+// schema carries no x-reaches of its own.
+export const REACH={year:{chip:'Year',text:'Changes the meter-to-cash year directly, on the same town.'},
+ town:{chip:'Town',text:'Changes the customers, usage, routes or prices the year replays. Builds a new town.'},
+ shape:{chip:'Map',text:'Map shape. Rearranges the town; the year moves only because homes are drawn again (seed-sized noise).'},
+ operations:{chip:'Ops day',text:'The operations day on the map. Reaches the year only through interruptions you carry into a run.'},
+ display:{chip:'Display',text:'Display only: labels, units, clocks or default dates. No result changes.'}};
+// The popover's lines for a field, in order: how it changes the results, where that reaches, then the description,
+// status, unit/default, effects and path.
+export function infoLines(f,reaches=null){const r=f.reach&&REACH[f.reach];
+ return [f.impact&&`How it changes the results: ${f.impact}`,r&&`Reaches: ${(reaches&&reaches[f.reach])||r.text}`,f.description,
+  f.status&&`${f.status==='deprecated'?'Deprecated':f.status==='not-modelled'?'Not modelled':'Unavailable'}: ${f.reason}`,
+  [f.unit&&`Unit ${f.unit}`,f.default!==undefined&&`Default ${show(f.default)}`,f.advanced&&'Advanced'].filter(Boolean).join(' · '),
+  f.effects?.length&&`Affects ${f.effects.join(', ')}`,f.path].filter(Boolean);}
 const SUB_LABEL={pre_1945:'Pre-1945',postwar:'Post-war',modern:'Modern',mean_c:'Mean',sd_c:'Std dev',min_c:'Min',max_c:'Max',up_to:'Up to',price:'Price'};
 export const prettyKey=k=>SUB_LABEL[k]||(s=>s.charAt(0).toUpperCase()+s.slice(1))(String(k).replaceAll('_',' '));
 // Field titles read as sentences: a generated Title Case title ("Analyst Queue Days Max") becomes "Analyst queue days
@@ -20,7 +36,7 @@ function describe(defs,key,p0){
  const resolve=s=>{if(s?.$ref){const {$ref,...rest}=s;return {...(defs[$ref.split('/').pop()]||{}),...rest,title:rest.title,_ref:true};}if(s?.allOf?.length===1&&s.allOf[0].$ref){const {allOf,...rest}=s;return resolve({...rest,$ref:allOf[0].$ref});}return s||{};};
  let p=resolve(p0),nullable=false;
  if(Array.isArray(p.anyOf)){const opts=p.anyOf.filter(o=>o.type!=='null');nullable=opts.length<p.anyOf.length;if(opts.length===1){const {anyOf,...rest}=p;p={...resolve(opts[0]),...rest,title:rest.title,description:rest.description??resolve(opts[0]).description};}}
- const title=p.title||prettyKey(key),base={key,title,description:p.description||'',min:p.minimum,max:p.maximum,xmin:p.exclusiveMinimum,xmax:p.exclusiveMaximum,unit:p['x-unit']||'',advanced:!!p['x-advanced'],effects:p['x-effects']||[],options:p.enum||null,default:p.default,nullable,...(statusOf(p)||{})};
+ const title=p.title||prettyKey(key),base={key,title,description:p.description||'',min:p.minimum,max:p.maximum,xmin:p.exclusiveMinimum,xmax:p.exclusiveMaximum,unit:p['x-unit']||'',advanced:!!p['x-advanced'],effects:p['x-effects']||[],reach:p['x-reach']||'',impact:p['x-impact']||'',options:p.enum||null,default:p.default,nullable,...(statusOf(p)||{})};
  if(p.type==='object'&&p.properties&&Object.values(p.properties).every(c=>{const r=resolve(c);return !r.properties&&r.type!=='array'&&r.type!=='object';}))
   return {...base,type:'object',children:Object.entries(p.properties).map(([k,c])=>{const d=describe(defs,k,c);return {...d,title:SUB_LABEL[k]||(d.title===prettyKey(k)||/^[A-Z][a-z]*( [A-Z0-9][a-z0-9]*)*$/.test(d.title)?prettyKey(k):d.title),unit:d.unit||base.unit};})};
  if(p.type==='array'||p.type==='object'||p.anyOf)return {...base,type:'json',array:p.type==='array',items:p.items?resolve(p.items):null,minItems:p.minItems,maxItems:p.maxItems};
@@ -79,7 +95,7 @@ export function changeList(fields,values,base=null){
 }
 // A search over titles, descriptions, keys and group titles; every word must match.
 export function fieldMatches(f,query){const words=String(query||'').toLowerCase().split(/\s+/).filter(Boolean);if(!words.length)return true;
- const text=[f.title,f.description,f.path||f.group+'.'+f.key,f.key,f.groupTitle,f.unit,...(f.children||[]).map(c=>c.title)].join(' ').toLowerCase().replaceAll('_',' ');
+ const text=[f.title,f.description,f.path||f.group+'.'+f.key,f.key,f.groupTitle,f.unit,f.impact,REACH[f.reach]?.chip,...(f.children||[]).map(c=>c.title)].join(' ').toLowerCase().replaceAll('_',' ');
  return words.every(w=>text.includes(w.replaceAll('_',' ')));}
 const show=v=>v===null?'none':v===undefined?'—':typeof v==='object'?Array.isArray(v)?JSON.stringify(v):Object.values(v).join(' / '):String(v);
 const jsonText=v=>v==null?'null':Array.isArray(v)&&v.some(x=>x&&typeof x==='object')?'[\n'+v.map(x=>' '+JSON.stringify(x)).join(',\n')+'\n]':JSON.stringify(v);
@@ -108,7 +124,7 @@ export function renderSchemaForm(el,schema,{values={},base=null,groups=null,show
     for(const c of f.children){const lab=mk('label','schema-sub'),cap=mk('span',null,c.title),i=mk('input');i.type='number';i.step=c.type==='integer'?'1':'any';if(c.min!=null)i.min=c.min;if(c.max!=null)i.max=c.max;i.value=current?.[c.key]??'';i.dataset.key=c.key;i.name=f.path+'.'+c.key;i.disabled=f.disabled;lab.append(cap,i);input.append(lab);inputs.push(i);}row.classList.add('schema-wide');}
    else{input=mk('input');input.type=f.type==='text'?'text':'number';if(f.min!=null)input.min=f.min;if(f.max!=null)input.max=f.max;if(f.maxLength!=null)input.maxLength=f.maxLength;if(f.type!=='text')input.step=f.type==='integer'?'1':'any';input.value=current??'';if(f.nullable)input.placeholder='none';}
    if(f.type!=='object'){input.name=f.path;input.dataset.group=f.group;input.dataset.key=f.key;input.disabled=f.disabled;inputs=[input];}
-   const finfo=info(sentenceTitle(f.title),[f.description,f.status&&`${f.status==='deprecated'?'Deprecated':f.status==='not-modelled'?'Not modelled':'Unavailable'}: ${f.reason}`,[f.unit&&`Unit ${f.unit}`,f.default!==undefined&&`Default ${show(f.default)}`,f.advanced&&'Advanced'].filter(Boolean).join(' · '),f.effects.length&&`Affects ${f.effects.join(', ')}`,f.path]);if(finfo){row.classList.add('has-pop');name.append(finfo[0]);}
+   const finfo=info(sentenceTitle(f.title),infoLines(f,schema?.['x-reaches']));const rc=REACH[f.reach];if(rc){const chip=mk('span','schema-reach reach-'+f.reach,rc.chip);chip.title=(schema?.['x-reaches']?.[f.reach])||rc.text;name.append(chip);}if(finfo){row.classList.add('has-pop');name.append(finfo[0]);}
    err.setAttribute('role','alert');
    const read=()=>f.type==='boolean'?input.checked:f.type==='object'?Object.fromEntries(inputs.map(i=>[i.dataset.key,i.value])):input.value;
    const check=()=>{const res=parseField(f,read());for(const i of inputs)i.setAttribute('aria-invalid',String(!res.ok));err.textContent=res.ok?'':res.error;return res;};

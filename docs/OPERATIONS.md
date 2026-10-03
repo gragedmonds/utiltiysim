@@ -22,8 +22,8 @@ All vehicles start at the depot and drive shortest paths on the road graph at cl
 
 | Agent | Behaviour |
 |---|---|
-| AMR van | drives its route's streets on the scheduled day; reads meters within `drive_by_radius_m` as it passes |
-| Walker | visits premises in route `sequenceNo` order at `walker_meters_per_hour`; may log no-access |
+| AMR van | drives its route's streets on the scheduled day; reads each meter on its route as it passes (radio range is not modelled) |
+| Walker | visits premises in route `sequenceNo` order at the run's walking speed and time per meter; may log no-access |
 | Gas crew | responds to odour calls within the target; makes safe, closes the upstream valve, repairs, relights |
 | Electric trouble crew | patrols from the predicted device, isolates the faulted section with the nearest switches, re-closes upstream, restores the sections beyond through ties, repairs |
 | Water crew | isolates a break with N−1 valves, repairs, flushes, restores |
