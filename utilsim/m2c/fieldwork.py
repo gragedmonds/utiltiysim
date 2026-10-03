@@ -848,7 +848,7 @@ class FieldEngine:
             x = run.exchange_meter(o.meter, o.end, by=o.crew_id or "MT", note=TYPES[o.type][1],
                                    tech="AMI" if key == "ami_conversion" else None)
             if x is None:
-                o.outcome = "skipped: the meter was off or already read on a new register"
+                o.outcome = "skipped: the meter was off, already read on a new register, or not the registered meter"
         elif key == "ami_battery" and o.meter >= 0:
             if o.end < run.battery_dead[o.meter]:
                 run.battery_dead[o.meter] = INF  # replaced before it died

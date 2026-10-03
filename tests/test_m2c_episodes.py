@@ -15,7 +15,7 @@ from api._m2c import RunRequest, _master, run_for
 from api.index import app
 from utilsim.m2c import scenarios as sc
 from utilsim.m2c import tables, trend
-from utilsim.m2c.run import M2CRun, parse_day, parse_episodes
+from utilsim.m2c.run import OFF, M2CRun, parse_day, parse_episodes
 
 DAY = "2026-03-01"
 D0 = parse_day(DAY, 0)
@@ -43,7 +43,7 @@ def inflicted(scenario: str, day: str = DAY) -> list[dict]:
 
 
 def test_no_episodes_is_the_base_run(base):
-    same = M2CRun(base.town, episodes=[])
+    same = M2CRun(base.town, episodes=[], ops_factory=base.ops_factory)
     assert same.simulation_id == base.simulation_id and same.cfg_at(100) is same.cfg
     assert np.array_equal(same.obs, base.obs, equal_nan=True)
     assert np.array_equal(same.released, base.released, equal_nan=True)
@@ -150,7 +150,8 @@ def test_trend_reports_the_year_month_by_month(base):
     assert all(m["reads"] is None and m["cases"] is None and m["billing"] is None for m in t["months"][7:])
     day, T = tables.views.as_of_t(base, "2026-07-15")
     assert sum(m["cases"]["opened"] for m in done) == sum(1 for c in base.cases if c.created <= T)
-    assert sum(m["reads"]["scheduled"] for m in done) == int((base.read_t[:, 1:] <= T).sum())
+    sched = (base.read_t[:, 1:] <= T) & (base.status[:, 1:] != OFF)  # a meter switched off is not read
+    assert sum(m["reads"]["scheduled"] for m in done) == int(sched.sum())
     june = done[5]
     assert june["reads"]["taken"] + june["reads"]["missed"] == june["reads"]["scheduled"]
     assert sum(june["cases"]["byQueue"].values()) == june["cases"]["backlog"]

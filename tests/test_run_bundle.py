@@ -44,8 +44,9 @@ def read(directory, name):
 
 def test_archive_agrees_with_every_engine_table_and_month_end_view(archive):
     snap, _, directory, manifest = archive
-    run = M2CRun(M2CTown.from_snapshot(snap), **{k: v for k, v in REQUEST.items() if k != "asOf"})
-    run.ops_factory = lambda: ops_town(snap)  # the export draws the year's outages from the networks too
+    # the export draws the year's outages (and the crews' emergencies) from the networks too
+    run = M2CRun(M2CTown.from_snapshot(snap), **{k: v for k, v in REQUEST.items() if k != "asOf"},
+                 ops_factory=lambda: ops_town(snap))
     assert manifest["readOnly"] and manifest["tableDates"] == [DAY]
     assert manifest["worklistDates"] == ["2026-01-31", "2026-02-28", DAY]
     assert read(directory, "trend.json") == trend.trend(run, DAY)
@@ -140,8 +141,9 @@ def test_cli_uses_studio_inputs_and_saved_snapshot(archive, tmp_path):
 
 def test_browser_reader_matches_engine_selection_and_csv_without_api(archive, tmp_path):
     snap, _, directory, _ = archive
-    run = M2CRun(M2CTown.from_snapshot(snap), **{k: v for k, v in REQUEST.items() if k != "asOf"})
-    run.ops_factory = lambda: ops_town(snap)  # the export draws the year's outages from the networks too
+    # the export draws the year's outages (and the crews' emergencies) from the networks too
+    run = M2CRun(M2CTown.from_snapshot(snap), **{k: v for k, v in REQUEST.items() if k != "asOf"},
+                 ops_factory=lambda: ops_town(snap))
     master = tables.master_data(snap)
     queries = [
         {"table": "reads", "page": 2, "pageSize": 50, "sort": "consumption", "desc": True,

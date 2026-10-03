@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 
 from api._m2c import RunRequest, _master, _town, run_for
 from api.index import app
-from utilsim.m2c import contact, tables, trend, views
+from utilsim.m2c import contact, fieldwork, tables, trend, views
 from utilsim.m2c.base import date_of
 from utilsim.m2c.run import M2CRun, parse_day
 
@@ -97,13 +97,20 @@ def test_agents_hours_and_self_service_move_the_queue_the_way_they_say(base):
     assert wrong["kpis"]["byReason"]["bill_wrong"] > s0["byReason"]["bill_wrong"]
 
 
-def test_contact_settings_never_change_the_year_itself(base):
+def test_how_the_contact_centre_answers_never_changes_the_year_itself(base):
     run, _ = base
-    other = _run({"contact": {"agents": 0, "volume_factor": 3.0}, "outages": {"storm_factor": 5.0}})
+    other = _run({"contact": {"agents": 0, "handle_factor": 3.0, "self_serve_factor": 0.0, "patience_s": 30.0}})
     a, b = views.summary(run, DAY), views.summary(other, DAY)
     for key in ("kpis", "billing", "queues", "exceptions"):
         assert orjson.dumps(a[key], option=orjson.OPT_SERIALIZE_NUMPY) == \
             orjson.dumps(b[key], option=orjson.OPT_SERIALIZE_NUMPY), key
+
+
+def test_new_connection_requests_are_the_field_crews_new_services(base):
+    run, _ = base
+    busy = _run({"contact": {"volume_factor": 3.0}})
+    sets = [sum(1 for o in r.field.orders if o.type == fieldwork.IDX["new_set"]) for r in (run, busy)]
+    assert 0 < sets[0] < sets[1]  # three times the requests: more new services for the crews to build
 
 
 def test_outages_follow_their_settings(base):

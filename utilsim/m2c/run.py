@@ -680,6 +680,8 @@ class M2CRun:
         # with a device change, the new register's base for billing.
         self.installs: list[Install] = []
         self.installs_of: dict[int, list[Install]] = {}  # register row -> its device changes, in time order
+        self._read_done = -1  # the last day whose read batch has run
+        self._carry_later: dict[int, list[Install]] = {}  # a change after a read still waiting for its batch
         self.swaps: dict[int, list[tuple[float, float]]] = {}
         self.has_swap = np.zeros(R, dtype=bool)
         self.dev_change = np.full(shape, None, dtype=object)  # (r, m) -> the Install inside read period m
@@ -823,14 +825,19 @@ class M2CRun:
                        tech: str | None = None) -> Install | None:
         """A crew swaps the meter on slot ``meter`` at ``t`` for a new one (its registers start at zero): reads are
         diffed against the new register, a fault (or drift) on the old meter ends, and an AMI conversion changes how
-        the meter is read. None when it cannot apply (the slot is off, or a read after ``t`` is already out)."""
+        the meter is read. None when it cannot apply (the slot is off, a read after ``t`` is already out, or the meter
+        on site is an unregistered swap: that mismatch is VEE's to find, not a planned order's to paper over)."""
         rows = np.flatnonzero(self.town.meter_of == meter)
         if any(self.off_reason(int(r), t) for r in rows):
+            return None
+        if self.fault_type[meter] == 3 and self.fault_t[meter] <= t:
             return None
         device = self.new_device_id(meter)
         if self.install_check(meter, t, t, device) is not None:
             return None
         x = self._install(meter, t, t, device, {}, by=by, order=order, note=note, planned=True)
+        if t < self.fault_t[meter] < INF:  # a fault drawn for later was the old meter's: the new one does not carry it
+            self.fault_t[meter], self.fault_type[meter] = INF, -1
         if self.drift_t[meter] < INF:
             self.drift_end[meter] = min(self.drift_end[meter], t)
         if tech:
@@ -939,6 +946,11 @@ class M2CRun:
                 col.advance(day + 18.0 / 24)  # before the read batch: what the crews did today
                 if day in self.batches:
                     self._evening(day, *self.batches[day])
+                self._read_done = day
+                for r, xs in self._carry_later.items():  # devices changed after today's reads: onto the new register
+                    for x in xs:
+                        self.prev_val[r] = x.carry(r, float(self.prev_val[r]), float(self.prev_normal[r]))
+                self._carry_later.clear()
                 self._same_day_rpa()
                 self.books.bill(day)
                 self._same_day_rpa()
@@ -1397,7 +1409,10 @@ class M2CRun:
             if m < 13:
                 self.dev_change[r, m] = x
             self.installs_of.setdefault(r, []).append(x)
-            self.prev_val[r] = x.carry(r, float(self.prev_val[r]), float(self.prev_normal[r]))
+            if any(self.read_t[r, j] < t_inst and tw.read_day[r, j] > self._read_done for j in range(1, 13)):
+                self._carry_later.setdefault(r, []).append(x)  # today's read was on the old meter: diff it first
+            else:
+                self.prev_val[r] = x.carry(r, float(self.prev_val[r]), float(self.prev_normal[r]))
         self.installs.append(x)
         if physical and self.field is not None and not planned:  # a corrective exchange: the meter crew's time
             self.field.exchanged(x)
