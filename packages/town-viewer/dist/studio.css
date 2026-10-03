@@ -768,3 +768,28 @@ details.schema-group>.schema-field:last-child{margin-bottom:10px}
  .year-f-row{grid-template-columns:1fr 1fr}
 }
 @media (max-width:480px){.year-months{grid-template-columns:repeat(2,minmax(0,1fr))}.year-day{font-size:10px}}
+/* Engine guide (Configuration › Engine guide, guide.js): the engine's own account of itself. */
+.engine-guide .guide-summary{font-size:14px;line-height:1.5;color:#3d3750;max-width:78ch;margin:0 0 14px}
+.engine-guide .guide-body{padding:4px 2px 10px}
+.engine-guide .guide-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px}
+.engine-guide .guide-card{background:#fff;border:1px solid #e4e2ee;border-radius:9px;padding:12px 14px}
+.engine-guide .guide-card h4{margin:0 0 6px;font-size:13.5px;color:#211d2e}
+.engine-guide .guide-card p{margin:0 0 6px;font-size:12.5px;line-height:1.45;color:#4a4560}
+.engine-guide .guide-where{margin:4px 0 0}
+.engine-guide .guide-chips{display:inline-flex;flex-wrap:wrap;gap:4px}
+.engine-guide .guide-chip{font-size:11px;background:#f0ecfc;color:#5d43b8;border-radius:5px;padding:2px 7px;white-space:nowrap}
+.engine-guide .guide-table{width:100%;border-collapse:collapse;font-size:12.5px;background:#fff;border:1px solid #e4e2ee;border-radius:9px;overflow:hidden}
+.engine-guide .guide-table th{text-align:left;background:#f3f1f8;color:#5d5870;font-weight:600;padding:8px 10px}
+.engine-guide .guide-table td{padding:7px 10px;border-top:1px solid #f0eef5;vertical-align:top;color:#2d2840;line-height:1.4}
+.engine-guide .guide-num td:nth-child(n+2),.engine-guide .guide-num th:nth-child(n+2){text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.engine-guide .guide-muted{color:#8a8497;font-size:12px}
+.engine-guide .guide-dl{margin:12px 0 6px;display:grid;grid-template-columns:minmax(160px,220px) 1fr;gap:6px 16px;font-size:12.5px}
+.engine-guide .guide-dl dt{font-weight:600;color:#211d2e}
+.engine-guide .guide-dl dd{margin:0;color:#4a4560;line-height:1.45}
+.engine-guide .guide-gaps{margin:0;padding-left:20px;font-size:12.5px;line-height:1.5;color:#4a4560}
+.engine-guide .guide-gaps li{margin:0 0 8px}
+.engine-guide .guide-plan{display:block;color:#5d43b8;font-size:12px}
+.engine-guide .guide-status{display:grid;grid-template-columns:140px 1fr;gap:6px 14px;font-size:12.5px;margin:0}
+.engine-guide .guide-status dt{color:#8a8497}
+.engine-guide .guide-status dd{margin:0;color:#2d2840}
+@media (max-width:600px){.engine-guide .guide-dl,.engine-guide .guide-status{grid-template-columns:1fr}.engine-guide .guide-table{display:block;overflow-x:auto}}

@@ -20,7 +20,7 @@ from api._ops import J, load_snapshot, town_key
 from utilsim.config.model import SimConfig
 from utilsim.m2c import catalog as cat
 from utilsim.m2c import collections as colls
-from utilsim.m2c import followup, lookups, scenarios, tables, trend, views
+from utilsim.m2c import followup, guide, lookups, scenarios, tables, trend, views
 from utilsim.m2c import orders as ords
 from utilsim.m2c.base import M2CTown, cached_m2c_town, m2c_town
 from utilsim.m2c.run import (
@@ -460,6 +460,16 @@ def post_possible_entries(req: EntriesRequest):
     """``m2c-possible-entries/1.0`` (F4): installation, read, account or premise ids matching ``query``, paged."""
     return _view(lookups.possible_entries, run_for(req), req.kind, req.query, as_of=req.asOf, page=req.page,
                  page_size=req.pageSize)
+
+
+@router.get("/api/m2c/guide")
+def get_guide():
+    """``engine-guide/1.0``: what this engine can do, the impact it can show, how far it scales and what is still
+    missing, with the engine's live status (kind, versions, towns, capabilities, request limits)."""
+    from api._store import SERVERLESS
+    from api._towns import health
+
+    return J(guide.guide(health("hosted" if SERVERLESS else "local")))
 
 
 @router.get("/api/m2c/scenarios")
