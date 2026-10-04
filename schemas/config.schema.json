@@ -2349,6 +2349,24 @@
           "x-impact": "Meter removals at vacant premises: the removed meters are not read or billed again.",
           "x-reach": "year"
         },
+        "renewed_main_break_factor": {
+          "default": 0.3,
+          "description": "A renewed main's breaks and leaks, as a share of the cast-iron main's it replaced: from the day the construction crew finishes a segment.",
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Renewed Main Break Factor",
+          "type": "number",
+          "x-impact": "How much less a renewed main breaks and leaks than the cast iron it replaced: fewer main breaks and gas leaks (outages, contacts, repairs) after the construction crews renew it.",
+          "x-reach": "year"
+        },
+        "routing": {
+          "default": true,
+          "description": "Crews drive the town's streets: from the depot in the morning, job to job by the fastest route (the operations driving speeds), and back at the end of the day. Of the jobs equally urgent and due, a crew takes the nearest next. On-call responders drive from the depot and back. Off, or in a town without streets: every visit adds travel_minutes.",
+          "title": "Routing",
+          "type": "boolean",
+          "x-impact": "Crews drive the streets from the depot, job to job, nearest first: travel follows the town's size and layout. Off: a flat travel time per visit (usually more crew time, later work and slower emergency response).",
+          "x-reach": "year"
+        },
         "seal_exchange": {
           "$ref": "#/$defs/FieldWorkType",
           "default": {
@@ -2437,14 +2455,25 @@
           "x-reach": "year",
           "x-unit": "h"
         },
+        "stop_minutes": {
+          "default": 5.0,
+          "description": "With routing: parking, walking to the asset and setting up at each stop, added to the drive.",
+          "maximum": 120,
+          "minimum": 0,
+          "title": "Stop Minutes",
+          "type": "number",
+          "x-impact": "Time at each stop on top of the drive (with routing): more fills the crews' day with fewer jobs.",
+          "x-reach": "year",
+          "x-unit": "min"
+        },
         "travel_minutes": {
           "default": 20.0,
-          "description": "Driving to the job and back, added to every visit.",
+          "description": "Driving to the job and back, added to every visit without routing (and to the VEE field visits the run times).",
           "maximum": 240,
           "minimum": 0,
           "title": "Travel Minutes",
           "type": "number",
-          "x-impact": "Driving to each job and back: more travel fills the crews' day with fewer jobs, and slows emergency response.",
+          "x-impact": "Without routing, driving to each job and back: more travel fills the crews' day with fewer jobs, and slows emergency response. VEE field visits use it always.",
           "x-reach": "year",
           "x-unit": "min"
         },
