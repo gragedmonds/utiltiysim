@@ -10,7 +10,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from api._m2c import RunRequest, _town, run_for
-from api.index import app
+from api.app import app
 from utilsim.m2c import catalog as cat
 from utilsim.m2c import lookups, views
 from utilsim.m2c import orders as ords

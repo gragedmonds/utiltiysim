@@ -1,10 +1,8 @@
-"""Operations runtime: snapshot-built towns, crew routing, incidents, field visits and the hosted API."""
+"""Operations runtime: snapshot-built towns, crew routing, incidents, field visits and the engine API."""
 
 from __future__ import annotations
 
 import gzip
-import subprocess
-import sys
 from pathlib import Path
 
 import numpy as np
@@ -205,12 +203,12 @@ def test_appending_a_command_keeps_what_already_happened(small_town):
     assert Run(small_town, first).timeline() == a  # deterministic
 
 
-def test_hosted_api(small_town):
-    from api.index import app
+def test_engine_api(small_town):
+    from api.app import app
 
     client = TestClient(app)
     health = client.get("/api/health").json()
-    assert health["engine"] == "hosted" and "small_town" in health["towns"]
+    assert health["engine"] == "local" and "small_town" in health["towns"]
     assert {t["preset"] for t in client.get("/api/packs").json()["towns"]} >= {"small_town"}
     pole = fused_pole(small_town)
     body = {"town": "small_town", "commands": [break_pole(pole, 8 * 3600)]}
@@ -230,19 +228,6 @@ def test_hosted_api(small_town):
         ops_api._pack_snapshot = real
     bad = {"town": "small_town", "commands": [{"at": 1, "type": "explode", "payload": {}}]}
     assert client.post("/api/sim/timeline", json=bad).status_code == 422
-
-
-def test_hosted_engine_imports_without_the_generation_stack():
-    code = ("import sys\nfor m in ('scipy','shapely','pyarrow','matplotlib','yaml'):\n    sys.modules[m]=None\n"
-            "import api.index\nfrom fastapi.testclient import TestClient\nc = TestClient(api.index.app)\n"
-            "print(c.get('/api/health').json()['capabilities']['generate'], "
-            "c.post('/api/towns', json={'preset': 'small_town'}).status_code)")
-    out = subprocess.run([sys.executable, "-c", code], cwd=ROOT, capture_output=True, text=True, timeout=120)
-    # Without the stack the hosted engine says it cannot generate, and POST /api/towns answers 501.
-    assert out.returncode == 0 and out.stdout.strip() == "False 501", out.stderr[-2000:]
-    from api.index import app
-
-    assert TestClient(app).get("/api/health").json()["capabilities"]["generate"] is True  # this env has the stack
 
 
 def test_reading_rounds_walk_the_route_in_order(small_town):
@@ -273,7 +258,7 @@ def test_reading_rounds_show_the_meter_to_cash_outcome_of_each_read(small_town):
     from fastapi.testclient import TestClient
 
     from api._m2c import RunRequest, run_for
-    from api.index import app
+    from api.app import app
 
     run = run_for(RunRequest(town="small_town"))
     tw = run.town
@@ -313,7 +298,7 @@ def test_m2c_field_orders_become_crew_jobs_and_field_visits_settle_cases(small_t
     from fastapi.testclient import TestClient
 
     from api._m2c import RunRequest, run_for
-    from api.index import app
+    from api.app import app
 
     client = TestClient(app)
     run = run_for(RunRequest(town="small_town"))
@@ -376,7 +361,7 @@ def test_outages_from_operations_reach_meter_to_cash(small_town):
     from fastapi.testclient import TestClient
 
     from api._m2c import RunRequest, run_for
-    from api.index import app
+    from api.app import app
     from utilsim.m2c import views
 
     pole = fused_pole(small_town)
@@ -427,7 +412,7 @@ def test_days_endpoint_replays_a_range_like_single_day_timelines(small_town):
     import time
     from datetime import date, timedelta
 
-    from api.index import app
+    from api.app import app
 
     client = TestClient(app)
     client.post("/api/sim/timeline", json={"town": "small_town", "commands": []})  # a warm instance
@@ -448,7 +433,7 @@ def test_days_endpoint_replays_a_range_like_single_day_timelines(small_town):
         assert d["interruptions"] == tl["interruptions"]
         assert (d["incidents"], d["jobs"]) == (len(tl["incidents"]), len(tl["jobs"]))
         assert d["jobs"] >= d["incidents"]
-    assert took < 10, f"a month took {took:.1f} s"  # 0.3 s locally; the hosted function allows 60
+    assert took < 10, f"a month took {took:.1f} s"  # 0.3 s locally
     # Linked to the meter-to-cash run (its field orders and reading rounds have their own crews): still the same.
     worst = max(busy, key=lambda d: len(d["interruptions"]))
     tl = client.post("/api/sim/timeline", json={"town": "small_town", "date": worst["date"], "commands": [],
@@ -465,7 +450,7 @@ def test_days_endpoint_replays_a_range_like_single_day_timelines(small_town):
 
 
 def test_days_endpoint_limits_and_settings():
-    from api.index import app
+    from api.app import app
 
     client = TestClient(app)
 

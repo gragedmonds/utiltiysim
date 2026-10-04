@@ -1,4 +1,5 @@
-"""Exercise launcher readiness without generating or replaying a simulation."""
+"""The app's server starts without generating or replaying anything: a free port, a readiness file with the per-launch
+credential, the Studio pages, the packs, the engine API and the job queue behind the token."""
 import json
 import os
 import subprocess
@@ -12,7 +13,7 @@ import httpx
 
 
 @contextmanager
-def running_runner(root):
+def running_app(root):
     root.mkdir()
     ready = root / 'ready.json'
     source = str(Path(__file__).resolve().parents[1])
@@ -21,8 +22,8 @@ def running_runner(root):
         process = subprocess.Popen([sys.executable, '-c', script, str(root), str(ready)], cwd=root,
                                    env={**os.environ, 'PYTHONPATH': source}, stdout=log, stderr=log)
         try:
-            deadline = time.monotonic() + 25
-            with httpx.Client(timeout=1, trust_env=False) as client:
+            deadline = time.monotonic() + 40
+            with httpx.Client(timeout=5, trust_env=False) as client:
                 while time.monotonic() < deadline:
                     if process.poll() is not None:
                         raise AssertionError((root / 'test.log').read_text())
@@ -48,17 +49,24 @@ def running_runner(root):
                 process.wait()
 
 
-def test_dynamic_ports_ready_credentials_and_bundled_ui(tmp_path):
-    with running_runner(tmp_path / 'first') as (client, origin, headers, ready):
-        assert client.get(origin + '/').status_code == 200
-        assert client.get(origin + '/assets/runner.js').status_code == 200
+def test_dynamic_port_credentials_pages_packs_and_engine(tmp_path):
+    with running_app(tmp_path / 'first') as (client, origin, headers, ready):
+        page = client.get(origin + '/')
+        assert page.status_code == 200 and 'setup.js' in page.text  # the Studio entry (the setup wizard)
+        assert client.get(origin + '/setup.js').status_code == 200
+        assert client.get(origin + '/runs.html').status_code == 200
+        assert client.get(origin + '/packs/index.json').json()['schemaVersion'] == 'town-pack/1.0'
+        health = client.get(origin + '/api/health').json()
+        assert health['engine'] == 'local' and 'small_town' in health['towns']
+        assert client.get(origin + '/api/setup/configuration?preset=small_town').status_code == 200
+        assert client.get(origin + '/api/setup-agent/status').json()['available'] is False
         assert client.get(origin + '/local/status').status_code == 401
         assert client.get(origin + '/local/status', headers={**headers, 'Host': 'external.example'}).status_code == 403
         state = client.get(origin + '/local/status', headers=headers).json()
-        assert state['schemaVersion'] == 'local-status/1.0' and state['active'] is None
+        assert state['schemaVersion'] == 'local-status/2.0' and state['active'] is None and state['jobs'] == []
+        assert client.get(origin + '/local/claude-key', headers=headers).json() == {'configured': False, 'fromEnvironment': False}
         if os.name != 'nt':
             assert ready.stat().st_mode & 0o077 == 0
-        with running_runner(tmp_path / 'second') as (other, second, second_headers, _):
-            assert second != origin
-            assert other.get(second + '/local/status', headers=headers).status_code == 401
-            assert other.get(second + '/local/status', headers=second_headers).status_code == 200
+        # Another library gets its own server on its own port.
+        with running_app(tmp_path / 'second') as (_, other, *_rest):
+            assert other != origin

@@ -62,7 +62,7 @@ def test_run_settings_default_to_the_towns_config(small_town):
 
 
 def test_settings_schema_takes_its_defaults_from_the_town():
-    from api.index import app
+    from api.app import app
 
     client = TestClient(app)
     body = client.get("/api/sim/settings/schema", params={"town": "small_town"}).json()

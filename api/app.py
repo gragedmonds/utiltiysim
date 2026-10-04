@@ -16,7 +16,7 @@ from fastapi.responses import Response
 from api._agent import router as agent_router
 from api._m2c import router as m2c_router
 from api._ops import router as ops_router
-from api._portal import router as portal_router
+from api._share import router as share_router
 from api._store import store
 from api._towns import health as health_body
 from api._towns import ready_town as _town
@@ -34,9 +34,9 @@ app = FastAPI(title="utilsim", version=GENERATOR_VERSION,
 app.add_middleware(GZipMiddleware, minimum_size=2048)
 app.add_middleware(CORSMiddleware, allow_origins=os.environ.get("CORS_ORIGINS", "*").split(","),
                    allow_methods=["*"], allow_headers=["*"])
-app.include_router(ops_router)  # operations (also the hosted engine's API, api/index.py)
+app.include_router(ops_router)  # operations
 app.include_router(agent_router)
-app.include_router(portal_router)
+app.include_router(share_router)  # simulation codes: copy a simulation, paste it into another Utility Studio
 app.include_router(m2c_router)  # meter-to-cash: reads, VEE, work queues
 app.include_router(towns_router)  # generated towns (POST /api/towns), also a snapshot source for the two above
 

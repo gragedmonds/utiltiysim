@@ -3,7 +3,7 @@
 // episodes go into the next revision's job file, and POST /api/m2c/episodes/preview checks them and gives the days a
 // sporadic episode strikes, so the calendar marks them as the Command Center does.
 // A job's districts are separate towns with their own run seeds, so a sporadic episode gets the simulation's own
-// pattern seed (`local:<id>`, as api/_portal.py prepare_recipe fills a missing one): every district strikes the same days.
+// pattern seed (`local:<id>`, as utilsim/worker/prepare.py prepare_recipe fills a missing one): every district strikes the same days.
 // A revision is the job prepared from the inputs at the time; runPlan says what changed since the latest one.
 import {FIRST_YEAR} from './m2c.js';
 const clone=v=>JSON.parse(JSON.stringify(v));

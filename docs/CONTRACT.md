@@ -429,4 +429,4 @@ gas_equipment, water_transmission, water_mains, water_services, water_equipment,
 
 ## Local job transport
 
-`local-job/1.0`, `local-job-file/1.0` and `local-result-file/1.0` are defined in utilsim/worker/contracts.py and schemas/local-job-1.0.schema.json. `/api/portal/*` supplies workspace links, pairing, leased jobs, result import and small detail pages. See LOCAL_RUNNER.md for authentication, storage and reconnect semantics.
+`local-job/1.0`, `local-job-file/1.0` and `local-result-file/1.0` are defined in utilsim/worker/contracts.py and schemas/local-job-1.0.schema.json. The app queues them on this computer (`POST /local/jobs`, `utilsim/worker/jobs.py`); `simulation-code/1.0` (`POST /api/share/encode`, `/decode`, utilsim/share.py) carries a whole simulation as one code. See LOCAL_RUNNER.md.

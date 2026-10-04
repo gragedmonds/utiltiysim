@@ -1,4 +1,4 @@
-"""Operations endpoints, shared by the full local API (api/app.py) and the hosted engine (api/index.py).
+"""Operations endpoints of the engine API (api/app.py), the one the app serves and `utilsim serve` runs.
 
 Stateless: a request names a town (a pack preset or town id) and carries the run's whole command list; the engine
 replays it deterministically (utilsim/ops/timeline.py). Imports only the light runtime (numpy), so the same code

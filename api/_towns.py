@@ -1,6 +1,6 @@
 """Generated towns: ``POST /api/towns`` with a preset or a complete config, its status and its snapshot, and the
 health body that says whether this engine can generate. Shared by the local API (api/app.py) and the hosted engine
-(api/index.py).
+(the app, utilsim/worker/server.py).
 
 Importing this module never imports the generation stack (scipy, shapely, PyYAML for presets, pyarrow,
 matplotlib): it is loaded on the first request that needs it, and an engine without it answers 501. Once ready, a

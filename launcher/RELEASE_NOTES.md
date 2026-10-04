@@ -1,9 +1,16 @@
-Download the small **UtilityStudio** launcher for your computer. Windows users open the `.exe`; macOS/Linux users extract the launcher zip first. The `runtime-*` files are downloaded automatically; you do not need to choose one yourself.
+Download **UtilityStudio** for your computer: Windows opens the `.exe`; macOS and Linux unzip the launcher first.
+The `runtime-*` files are downloaded automatically by the launcher; you do not need to choose one yourself.
 
-Click **Choose folder** for the native folder selector, choose storage (for example `P:\UtilitySim`), let the launcher install its verified runtime, then enter the eight-character code from Studio. Reopening reconnects using the stored device link. The launcher and runtime must both remain running to receive jobs; cached jobs continue through internet outages.
+Open it, keep or change the storage folder, and click **Open Utility Studio**. The first start downloads and verifies
+the engine into that folder; later starts reuse it. Utility Studio then opens in your browser: set up a simulation,
+tweak any setting, run the year and read the results, all on this computer. Nothing is uploaded.
 
-The runtime has a pinned SHA-256 digest and Ed25519 signature verified by the launcher. These builds do not have Apple notarization or a Windows publisher certificate; operating systems may show an unidentified-publisher prompt. Linux needs a desktop browser and glibc 2.35 or newer. Measured launcher/runtime sizes are in each platform's manifest JSON.
+**Simulation codes.** Copy a simulation's code in Studio and paste it into Utility Studio on another computer: the same
+town, homes, seed, settings, dates and every scenario on the year come across.
 
-Full archives remain on your selected drive. Manual job import and result-summary export work without portal storage. Automatic sync requires the Studio host's Upstash Redis integration. The paired-job contract currently uses 2026 and independent district teams. Existing live/CLI engine paths also support later years, shared-workforce coordination and connected utility networks.
+**Talk it through** with Claude is optional and needs an internet connection and an Anthropic API key, which you
+paste into the guide's panel; it is kept in your computer's secure storage.
 
-Startup now shows progress immediately, preserves the launcher session on refresh, and waits for an authenticated local-server response before confirming success. **Open local engine** remains available if the browser did not open automatically. Each runner uses an available local port, so another service on port 8010 cannot silently block startup. Errors show the log location.
+The engine has a pinned SHA-256 digest and Ed25519 signature verified by the launcher. These builds have no Apple
+notarization or Windows publisher certificate, so the operating system may show an unidentified-publisher prompt.
+Linux needs a desktop browser and glibc 2.35 or newer. Measured sizes are in each platform's manifest JSON.

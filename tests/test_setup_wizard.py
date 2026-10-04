@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 from api._agent_config import Proposal, validate_proposal
 from api._setup import REGIONS, gas_district_min_homes
 from api._towns import config_from_ref
-from api.index import app
+from api.app import app
 
 
 def test_wizard_configuration_without_provider_key(monkeypatch):

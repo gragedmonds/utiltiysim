@@ -1,4 +1,4 @@
-"""Meter-to-cash endpoints, shared by the full local API (api/app.py) and the hosted engine (api/index.py).
+"""Meter-to-cash endpoints of the engine API (api/app.py), the one the app serves and `utilsim serve` runs.
 
 Stateless like operations: a request names a town and carries the run's ``settings`` (run-scoped overrides) and
 ``actions`` (append-only analyst decisions). The engine replays the year (utilsim/m2c/run.py) and returns one bounded
@@ -681,7 +681,7 @@ def _preview_cfg(ref: str) -> SimConfig:
 def post_episode_preview(req: EpisodePreviewRequest):
     """``m2c-episode-preview/1.0``: the episodes checked as a run checks them and, for a sporadic one, the days it
     strikes (``hits``: ``[date, strength]``, as the trend gives them), without running the year. A pattern with its
-    own ``seed`` strikes the same days in every run (the local runner's districts share them); one without draws
+    own ``seed`` strikes the same days in every run (the app's districts share them); one without draws
     from the town's seed, as a run without a seed of its own does. A bad episode is HTTP 422 with the engine's message."""
     cfg = _preview_cfg(req.town)
     cal = calendar(req.year)

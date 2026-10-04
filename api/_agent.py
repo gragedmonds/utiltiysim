@@ -511,9 +511,28 @@ async def stream_answer(req: ChatRequest, key: str, slot: Slot) -> AsyncIterator
         slot.release()
 
 
+# Where the key comes from: the environment (a hosted deployment), else a source the app registers (the key the
+# person saved in Utility Studio's settings, kept in the OS vault by utilsim/worker/server.py).
+KEY_SOURCES: list = []
+
+
+def api_key() -> str | None:
+    key = os.environ.get("ANTHROPIC_API_KEY")
+    if key:
+        return key
+    for source in KEY_SOURCES:
+        try:
+            key = source()
+        except OSError:
+            key = None
+        if key:
+            return key
+    return None
+
+
 @router.get("/api/setup-agent/status", response_model=StatusResponse)
 def status():
-    return {"schemaVersion": VERSION, "available": bool(os.environ.get("ANTHROPIC_API_KEY")), "provider": "Anthropic"}
+    return {"schemaVersion": VERSION, "available": bool(api_key()), "provider": "Anthropic"}
 
 
 @router.get("/api/setup/configuration")
@@ -539,7 +558,7 @@ def setup_operation_defaults(proposal: Proposal):
                               "description": "With Accept: text/event-stream, progress and reply-text events, then "
                                              "{type: done, ...ChatResponse} or {type: error, status, detail}."}})
 async def chat(req: ChatRequest, request: Request):
-    key = os.environ.get("ANTHROPIC_API_KEY")
+    key = api_key()
     if not key:
         raise HTTPException(503, "The setup assistant is not connected yet. You can still use the starter setups.")
     rate_limit(request)

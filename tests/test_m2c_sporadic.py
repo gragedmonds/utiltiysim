@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 
 from api._agent_config import episode_changes
 from api._m2c import RunRequest, run_for
-from api.index import app
+from api.app import app
 from utilsim.m2c import daily as daily_mod
 from utilsim.m2c import scenarios as sc
 from utilsim.m2c import trend

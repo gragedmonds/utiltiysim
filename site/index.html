@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Utility Studio · Download</title>
+  <meta name="description" content="Utility Studio runs utility simulations on your own computer. Download it, open it, and everything stays with you.">
+  <link rel="icon" type="image/svg+xml" href="brand/utility-studio-icon-color.svg">
+  <style>
+    :root{font-family:Inter,system-ui,Arial,sans-serif;color:#18332e;background:#f5f6f2;font-size:16px;line-height:1.6}
+    *{box-sizing:border-box}body{margin:0}
+    header{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:22px 32px;max-width:1040px;margin:0 auto}
+    header span{letter-spacing:2px;font-size:11px;color:#5f7168}
+    main{max-width:1040px;margin:0 auto;padding:12px 32px 72px}
+    .hero{display:grid;grid-template-columns:1.1fr .9fr;gap:40px;align-items:center;padding:36px 0}
+    h1{font-size:clamp(36px,5.2vw,58px);line-height:1.05;letter-spacing:-.04em;margin:0 0 18px}
+    .lead{font-size:19px;color:#3e5550;margin:0 0 28px}
+    .download{background:#fff;border:1px solid #dce5e4;border-radius:22px;padding:28px}
+    .download h2{margin:0 0 6px;font-size:20px}
+    .primary{display:inline-block;background:#196b61;color:#fff;text-decoration:none;font-weight:650;padding:16px 24px;border-radius:12px;font-size:18px}
+    .primary:hover{background:#145a52}
+    .others{margin:18px 0 0;padding:0;list-style:none;display:grid;gap:8px;font-size:15px}
+    .others a{color:#196b61}
+    .note{font-size:14px;color:#5f7168;margin-top:16px}
+    .steps{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin:36px 0}
+    .step{background:#fff;border:1px solid #dce5e4;border-radius:18px;padding:22px}
+    .step b{display:grid;place-items:center;width:34px;height:34px;border-radius:50%;background:#e4efe9;color:#196b61;margin-bottom:12px}
+    .step h3{margin:0 0 6px;font-size:17px}.step p{margin:0;color:#3e5550;font-size:15px}
+    .code{font:600 15px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.04em;background:#e8efe9;padding:2px 8px;border-radius:6px}
+    footer{color:#5f7168;font-size:14px;padding:0 32px 40px;max-width:1040px;margin:0 auto}
+    footer a{color:#196b61}
+    @media(max-width:760px){.hero,.steps{grid-template-columns:1fr}header,main,footer{padding-left:20px;padding-right:20px}}
+  </style>
+</head>
+<body>
+  <header><img src="brand/utility-studio-horizontal-color.svg" alt="Utility Studio" width="190" height="52"><span>RUNS ON YOUR COMPUTER</span></header>
+  <main>
+    <section class="hero">
+      <div>
+        <h1>A place. A utility. A year to explore.</h1>
+        <p class="lead">Utility Studio builds a seeded town, its electric, gas and water networks and its customers, then runs a year of meter-to-cash operations with the scenarios you inflict. It all happens on your own computer, offline, and every result stays there.</p>
+        <div class="steps" style="margin:0">
+          <div class="step"><b>1</b><h3>Download and open</h3><p>One small file. The engine downloads once on first start, into a folder you choose.</p></div>
+          <div class="step"><b>2</b><h3>Set up your simulation</h3><p>Environment, utility, staffing and how the year begins. Tweak any setting before you lock it in.</p></div>
+          <div class="step"><b>3</b><h3>Share it as a code</h3><p>Copy a simulation code like <span class="code">UTS1-NDBCM-0ZQQ9…</span> and paste it into Utility Studio on another computer: same town, same seed, same scenarios.</p></div>
+        </div>
+      </div>
+      <aside class="download" id="download">
+        <h2>Download Utility Studio</h2>
+        <p id="release-line" class="note" style="margin:0 0 16px">Looking up the latest release…</p>
+        <a class="primary" id="primary-download" href="https://github.com/gragedmonds/utiltiysim/releases/latest">All downloads on GitHub →</a>
+        <ul class="others" id="other-downloads"></ul>
+        <p class="note">Windows opens the <code>.exe</code>; macOS and Linux unzip the launcher first. The builds are not signed by Apple or Microsoft, so your system may ask you to confirm an unidentified publisher. The launcher checks the engine’s signature and checksum before it runs it.</p>
+      </aside>
+    </section>
+  </main>
+  <footer>Source and documentation: <a href="https://github.com/gragedmonds/utiltiysim">github.com/gragedmonds/utiltiysim</a>. Towns, streets, customers and utility assets are synthetic; nothing describes a real place or person.</footer>
+  <script>
+    const PLATFORMS=[['windows-x64','Windows'],['macos-arm64','macOS (Apple silicon)'],['macos-x64','macOS (Intel)'],['linux-x64','Linux']];
+    function guess(){const ua=navigator.userAgent,p=navigator.platform||'';if(/Windows/i.test(ua))return 'windows-x64';if(/Mac/i.test(p)||/Macintosh/i.test(ua))return 'macos-arm64';if(/Linux/i.test(ua))return 'linux-x64';return null;}
+    (async()=>{try{
+      const r=await fetch('https://api.github.com/repos/gragedmonds/utiltiysim/releases/latest',{headers:{Accept:'application/vnd.github+json'}});if(!r.ok)throw Error(r.status);
+      const release=await r.json(),assets=release.assets||[],find=t=>assets.find(a=>a.name.startsWith('UtilityStudio-'+t));
+      const mine=guess(),first=find(mine)||assets.find(a=>a.name.startsWith('UtilityStudio-'));
+      const megabytes=a=>a?` · ${(a.size/1e6).toFixed(1)} MB`:'';
+      if(first){const label=PLATFORMS.find(([t])=>first.name.includes(t))?.[1]||'';document.getElementById('primary-download').href=first.browser_download_url;document.getElementById('primary-download').textContent=`Download for ${label}${megabytes(first)} →`;}
+      document.getElementById('release-line').textContent=`Latest release ${release.tag_name}${release.published_at?' · '+new Date(release.published_at).toLocaleDateString('en-CA',{year:'numeric',month:'short',day:'numeric'}):''}`;
+      const list=document.getElementById('other-downloads');for(const [tag,label] of PLATFORMS){const a=find(tag);if(!a||a===first)continue;const li=document.createElement('li'),link=document.createElement('a');link.href=a.browser_download_url;link.textContent=`${label}${megabytes(a)}`;li.append(link);list.append(li);}
+      const all=document.createElement('li'),link=document.createElement('a');link.href=release.html_url;link.textContent='Release notes and all files';all.append(link);list.append(all);
+    }catch{document.getElementById('release-line').textContent='The latest release is on GitHub.';}})();
+  </script>
+</body>
+</html>

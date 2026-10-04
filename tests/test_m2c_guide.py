@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-from api.index import app
+from api.app import app
 from utilsim.m2c import guide, scenarios, tables
 from utilsim.m2c.run import EPISODE_MAX
 

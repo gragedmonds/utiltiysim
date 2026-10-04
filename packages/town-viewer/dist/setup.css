@@ -57,3 +57,6 @@
 .schema-set-item>span{margin:0;color:inherit;font-size:inherit}
 .schema-set-item input[type=checkbox]{flex:none;padding:0;accent-color:#3e6a48}
 .schema-field .schema-hint{grid-column:1/-1;font-size:11px;line-height:1.45;color:#6f7d69}
+
+/* Simulation codes: the Copy code / Import code dialog (share-code.js). */
+.code-dialog{border:0;border-radius:18px;padding:0;max-width:min(640px,92vw);box-shadow:0 24px 60px rgba(20,40,40,.25)}.code-dialog::backdrop{background:rgba(20,40,40,.35)}.code-form{padding:28px}.code-form h2{margin:6px 0 14px;font-size:24px;letter-spacing:-.02em}.code-form label{display:block;font-weight:600;margin:12px 0 6px}.code-form label span{font-weight:400;color:#5f7168;margin-left:6px}.code-text{display:block;width:100%;box-sizing:border-box;font:600 15px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.04em;padding:14px;border:1px solid #b9cbc9;border-radius:10px;background:#f7faf8;color:#153c3c;resize:vertical;overflow-wrap:anywhere}.code-actions{display:flex;gap:10px;margin-top:18px;flex-wrap:wrap}.library-heading .library-actions{display:flex;gap:10px;flex-wrap:wrap}.card-code{font-size:13px}

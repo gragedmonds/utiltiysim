@@ -118,7 +118,7 @@ def test_events_need_the_towns_networks(town):
 def test_upstream_over_the_api(runs):
     from fastapi.testclient import TestClient
 
-    from api.index import app
+    from api.app import app
 
     base, run = runs
     client = TestClient(app)

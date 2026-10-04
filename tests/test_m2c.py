@@ -202,7 +202,7 @@ def test_a_run_seed_rerolls_the_run_on_the_same_town(small_town, pack_town):
 def test_hosted_m2c_api():
     from fastapi.testclient import TestClient
 
-    from api.index import app
+    from api.app import app
 
     client = TestClient(app)
     st = client.get("/api/m2c/settings").json()
@@ -307,7 +307,7 @@ def test_billing_invoices_payments_and_collections(small_town):
 def test_external_vee_dispositions_become_actions():
     from fastapi.testclient import TestClient
 
-    from api.index import app
+    from api.app import app
 
     client = TestClient(app)
     slow = {"process": {"analysts": 0, "rpa_coverage": 0}}
@@ -551,7 +551,7 @@ def test_case_views_carry_the_data_a_decision_needs(small_town):
 def test_queue_sorted_by_created_is_newest_first_and_pages_add_up():
     from fastapi.testclient import TestClient
 
-    from api.index import app
+    from api.app import app
 
     client = TestClient(app)
     body = {"town": "small_town", "asOf": "2026-08-31", "status": "all", "sort": "created", "pageSize": 200}

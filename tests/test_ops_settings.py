@@ -31,7 +31,7 @@ def test_form_overrides_become_timeline_settings():
 
 
 def test_hosted_settings_schema_endpoint():
-    from api.index import app
+    from api.app import app
 
     body = TestClient(app).get("/api/sim/settings/schema").json()
     assert body["defaults"] == DEFAULTS and "backfeed" in body["schema"]["properties"]

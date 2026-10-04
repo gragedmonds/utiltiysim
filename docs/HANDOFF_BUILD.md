@@ -1,3 +1,7 @@
+> **Superseded (October 2026).** Utility Studio is now a downloaded app that runs everything on the person's own computer:
+> pages, engine and job queue in one process, no pairing, no portal, no hosted sync. Simulations travel between computers
+> as codes. See [LOCAL_RUNNER.md](LOCAL_RUNNER.md). This document is kept as the design history of the portal and worker build.
+
 # Build handoff: the portal as command centre, the offline worker, utilities and campaigns
 
 > **Current product decision:** link access, no login or WorkOS. The entry wizard and browser-local simulation

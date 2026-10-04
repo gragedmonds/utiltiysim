@@ -1,4 +1,5 @@
 import {summaryMarkup,editProposalInput,collectEditedProposal,summaryNeedsRefresh} from './proposal-summary.js';
+import {isApp,localRequest} from './local-session.js';
 // The engine's test goals by id (utilsim/config/goals.py), for the guide's opening line.
 const GOAL_NAMES={operations:'the operations day',reading:'meter reading',vee:'validation & estimation (VEE)',billing:'billing quality',collections:'payments & collections',fieldwork:'field work & maintenance',contact:'the contact centre',everything:'everything'};
 export function goalNames(ids){const n=(ids||[]).map(id=>GOAL_NAMES[id]||String(id).replaceAll('_',' '));return n.length>1?n.slice(0,-1).join(', ')+' and '+n.at(-1):n.join('');}
@@ -151,7 +152,8 @@ export function installSetupAgent({root,api,getDraft,onSave,onApply,onBack,mode=
   if(globalThis.ResizeObserver){resized=new ResizeObserver(()=>{if(pinned)scrollEnd();});resized.observe(thread);}
  }
  function paint(){if(!alive)return;if(summaryNeedsRefresh(state.proposal))state.summaryDirty=true;
-  $('#agent-notice').innerHTML=available===false?`<div class="help-card"><strong>The setup guide isn’t connected yet.</strong><p>${inflict?'You can still pick scenarios from the Year library.':'You can use the starter setups while the assistant is being connected.'}</p></div>`:'';
+  $('#agent-notice').innerHTML=available===false?`<div class="help-card"><strong>The setup guide isn’t connected yet.</strong><p>${isApp()?'Talk it through needs an internet connection and an Anthropic API key, kept in this computer’s secure storage. Everything else in Utility Studio works without one.':inflict?'You can still pick scenarios from the Year library.':'You can use the starter setups while the assistant is being connected.'}</p>${isApp()?'<form id="agent-key-form" class="agent-key"><label for="agent-key">Anthropic API key</label><input id="agent-key" type="password" autocomplete="off" spellcheck="false" placeholder="sk-ant-…" required><button type="submit" class="secondary">Save key</button><p id="agent-key-message" role="alert"></p></form>':''}</div>`:'';
+  const keyForm=$('#agent-key-form');if(keyForm)keyForm.onsubmit=async e=>{e.preventDefault();const m=$('#agent-key-message'),key=$('#agent-key').value.trim();m.textContent='Saving…';try{await localRequest('claude-key',{key});const data=await request('status');available=data.available;m.textContent=available?'':'Saved, but the assistant still reports unavailable.';if(available)paint();}catch(err){m.textContent=err.message;}};
   paintLog();paintProposal();paintTail(false);paintControls();if(pinned)scrollEnd();}
  function paintLog(){const log=$('#agent-log'),all=rows();
   if(painted<0||all.length<painted||!log.insertAdjacentHTML)log.innerHTML=logMarkup(all);else if(all.length>painted)log.insertAdjacentHTML('beforeend',logMarkup(all.slice(painted),all[painted-1]?.role));

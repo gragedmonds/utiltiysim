@@ -28,9 +28,9 @@ node web/serve.mjs                                     # http://localhost:5175 �
 node scripts/viewer_conformance.mjs examples/village-480-seed42   # engine export vs the viewer's receiver
 ```
 
-**Offline runs.** `uv run utilsim export-run --town small_town --as-of 2026-12-31 --store out/store` saves a complete
-meter-to-cash run. Open the Studio's **Runs** link and choose the resulting run folder to browse Year, Data,
-Workspace snapshots and the VEE scorecard without an engine connection. See [Saved runs](docs/RUN_BUNDLES.md)
+**Saved runs.** `uv run utilsim export-run --town small_town --as-of 2026-12-31 --store out/store` saves a complete
+meter-to-cash run (the app writes one per finished district). Open the Studio's **Runs** link and choose the run
+folder to browse Year, Data, Workspace snapshots and the VEE scorecard without an engine connection. See [Saved runs](docs/RUN_BUNDLES.md)
 for carrying Studio inputs into an export, loading bundles by URL, and the archive contract.
 
 | Doc | What it covers |
@@ -45,14 +45,15 @@ for carrying Studio inputs into an export, loading bundles by URL, and the archi
 | `docs/DATA_MODEL.md` | Customer, device and read model |
 | `docs/OPERATIONS.md` | Clock, fleet, incidents and meter-to-cash process design (M2/M3) |
 | `docs/ARCHITECTURE.md` · `docs/ROADMAP.md` | Layers, determinism rules, performance · milestones |
-| `docs/RUN_BUNDLES.md` · `docs/PORTAL_ARCHITECTURE.md` | Saved runs and the offline reader · portal/worker roadmap |
-| `docs/HANDOFF_BUILD.md` · `docs/DATA_FIRST.md` | Build instructions for the portal, worker, utilities and campaigns (milestones, contracts, done-when) · the data-first generation plan |
+| `docs/LOCAL_RUNNER.md` · `docs/RUN_BUNDLES.md` | The app: install, the run page, simulation codes, release · saved runs and the offline reader |
+| `docs/PORTAL_ARCHITECTURE.md` · `docs/HANDOFF_BUILD.md` · `docs/DATA_FIRST.md` | Earlier design history (the web-paired portal, superseded by the app) · the data-first generation plan |
 
-**Hosting (Vercel).** `vercel.json` builds a static site: `npm ci --prefix packages/town-viewer` (vendors
-Three.js), then `node scripts/build_site.mjs` copies the viewer and the prebuilt town packs (`packs/`) into
-`public/`. Open `/?town=small_town` (or pick from the Town files pop-out). After changing the generator or a preset, rebuild
-the packs with `uv run utilsim pack` (a test fails while they are stale). The live engine for operations
-(`api/index.py`, a slim Python function) arrives with the operations work.
+**The app.** Utility Studio is downloaded and run on the person's own computer: a small Go launcher
+(`launcher/`) installs the signed engine runtime into a storage folder and starts one process
+(`utilsim/worker/server.py`) that serves the Studio pages, the whole engine API and the job queue on a loopback port,
+all offline. `vercel.json` builds only the static landing page with the download buttons (`site/`, read from the
+latest GitHub release). After changing the generator or a preset, rebuild the packs with `uv run utilsim pack` (a
+test fails while they are stale). See [the app](docs/LOCAL_RUNNER.md).
 
 `examples/village-480-seed42/` is a committed bundle (snapshot, replay, scenario frames, GeoJSON, parquet tables,
 PNG, VEE fixture) so frontend work never waits on the engine. `packages/town-viewer/` is Astra's viewer and
@@ -74,14 +75,17 @@ an **Advanced** panel with its live engine settings. Regional starters are edita
 range from normal operations to organised chaos; inflicting a period runs analysis through its end. A floating
 monitor shows active/queued analysis and estimates based on completed requests.
 
-For local live analysis, run `utilsim serve --port 8010` and open
-`http://localhost:5175/?engine=http://127.0.0.1:8010`. Browser metadata, settings and analyst actions persist per
-simulation; the list is not shared between computers. Downloaded archives open through **Open downloaded results**.
-The executable, pairing and storage-folder selection are still planned.
+In the app everything runs on this computer (`uv run utilsim studio --store out/library` from a checkout). For
+engine-only development, run `utilsim serve --port 8010` and open `http://localhost:5175/?engine=http://127.0.0.1:8010`.
+Browser metadata, settings and analyst actions persist per simulation; the list is not shared between computers.
+**Copy code** on a simulation's card turns the whole simulation (town, homes, seed, settings, dates, every scenario on
+the year) into one uppercase code, and **Import a code** rebuilds it on another computer. Saved runs open through
+**Open saved results**.
 
 **Conversational setup:** choose **Talk it through** to speak or type to Claude, answer follow-up questions and
-review an engine-validated configuration. Set the server-only Vercel variable `ANTHROPIC_API_KEY` and redeploy.
+review an engine-validated configuration. It needs an internet connection and an Anthropic API key: paste one into
+the guide's panel in the app (kept in the OS vault), or set `ANTHROPIC_API_KEY` for a development server.
 `ANTHROPIC_MODEL` optionally overrides the default `claude-sonnet-4-6`. Voice transcription depends on browser
 support; typing and manual starters remain available. See [setup agent configuration](docs/SETUP_AGENT.md).
 
-Local processing: [paired runner, large simulations and deployment](docs/LOCAL_RUNNER.md).
+Large simulations run as districts from the run page: [the app](docs/LOCAL_RUNNER.md).

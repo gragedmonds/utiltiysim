@@ -60,7 +60,7 @@ func waitForRunner(path string, done <-chan struct{}, timeout time.Duration) (st
 			}
 			err = json.NewDecoder(io.LimitReader(response.Body, 65536)).Decode(&status)
 			response.Body.Close()
-			if response.StatusCode == 200 && err == nil && status.Schema == "local-status/1.0" {
+			if response.StatusCode == 200 && err == nil && status.Schema == "local-status/2.0" {
 				return ready.URL, nil
 			}
 		}
@@ -123,7 +123,7 @@ func runEngine(exe, root string) {
 	os.Remove(readyPath)
 	mu.Lock()
 	engineURL = address
-	message = "Engine running. Open the local engine below to pair this computer or check your jobs."
+	message = "Utility Studio is open in your browser. Keep this window open while you use it."
 	mu.Unlock()
 	openBrowser(address)
 	<-done
@@ -133,6 +133,6 @@ func runEngine(exe, root string) {
 	if processError != nil {
 		setMessage("Engine stopped: " + processError.Error() + ". Log: " + logName + "\n" + logTail(logName))
 	} else {
-		setMessage("Engine stopped. Your files are saved. Start it again when you’re ready.")
+		setMessage("Utility Studio has stopped. Your files are saved. Start it again when you’re ready.")
 	}
 }

@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 from api import _agent as agent
 from api._agent_config import Proposal, inspect_configuration, validate_proposal
 from api._towns import config_from_ref
-from api.index import app
+from api.app import app
 
 
 def proposal(**changes):
