@@ -213,7 +213,7 @@ net-exports at noon in July. M2 weather-driven profiles replace them.
 | `GET /api/packs` · `POST /api/sim/timeline` · `POST /api/sim/days` · `POST /api/sim/frame` | operations (below); also served by the hosted engine |
 | `GET /api/m2c/guide` | the engine guide: capabilities, impacts, measured scale and limits, gaps, live status (`utilsim/m2c/guide.py`) |
 | `GET /api/m2c/scenarios` · `POST /api/m2c/trend` | the scenario library and the year month by month; every meter-to-cash request also takes `episodes` (scenarios inflicted from a day), see [M2C.md](M2C.md) "Episodes" |
-| `POST /api/m2c/contact` | `m2c-contact/1.0`: the contact centre as of `asOf` (KPIs, the sixteen reasons, groups, the last 60 days, the year's outages and leaks); also served by the hosted engine, see [M2C.md](M2C.md) "Contact centre" |
+| `POST /api/m2c/contact` | `m2c-contact/1.0`: the contact centre as of `asOf` (KPIs, `feedback` (disputes, rebills, credits, complaints, customers paying later, autopay cancelled), the sixteen reasons, groups, the last 60 days, the year's outages and leaks); also served by the hosted engine, see [M2C.md](M2C.md) "Contact centre" |
 | `POST /api/m2c/fieldwork` | `m2c-fieldwork/1.0`: the field crews' year as of `asOf` (work orders by programme and type, on time, emergency response, crews' utilisation and overtime, cost, the maintenance plan, the last 60 days); also served by the hosted engine, see [M2C.md](M2C.md) "Field work" |
 | `GET /api/m2c/tables` · `POST /api/m2c/table` · `POST /api/m2c/table.csv` | flat tables of the town and its meter-to-cash run as of a date, paged (the Studio's Data tab); also served by the hosted engine, see [M2C.md](M2C.md) "Data tables" |
 
