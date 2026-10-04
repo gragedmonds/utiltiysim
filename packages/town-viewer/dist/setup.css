@@ -60,3 +60,8 @@
 
 /* Simulation files (share-file.js): the Export and Import buttons and a simulation's three-word handle. */
 .library-heading .library-actions{display:flex;gap:10px;flex-wrap:wrap}.card-code{font-size:13px}.card-handle{font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:#196b61;background:#e4efe9;padding:2px 8px;border-radius:999px;margin-right:8px}
+
+/* KPI picker (kpis.js): chips under the goals, and the autofill row in the conversation. */
+.kpi-picker{border:0;padding:0;margin:4px 0 20px}.kpi-picker legend{font-size:13px;font-weight:600;margin-bottom:10px}.kpi-picker legend span{font-weight:400;color:#5f7168;margin-left:6px}.kpi-chips{display:flex;flex-wrap:wrap;gap:8px}.kpi-chip{position:relative;margin:0;font-weight:400;display:inline-flex;align-items:baseline;gap:6px;border:1px solid #d5dfce;border-radius:999px;padding:6px 12px;background:#fff;cursor:pointer;font-size:14px;line-height:1.3}.kpi-chip input{position:absolute;opacity:0;width:0;height:0}.kpi-chip>span{color:inherit;font-size:14px;margin:0}.kpi-chip small{color:#5f7168;font-size:11px}.kpi-chip.is-on{background:#e4efe9;border-color:#196b61;color:#153c3c}.kpi-chip:focus-within{outline:3px solid #d6a647;outline-offset:2px}
+.agent-autofill{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:0 0 6px}.agent-autofill-label{font-size:10px;letter-spacing:1.4px;color:#71835f;font-weight:700}.agent-kpi{background:#e9efdf}
+.input-watch{font-size:14px;color:#355739;margin:4px 0 10px}

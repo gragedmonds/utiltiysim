@@ -586,7 +586,7 @@
                 "type": "null"
               }
             ],
-            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field); see GET /api/m2c/settings.",
+            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field, kpi); see GET /api/m2c/settings.",
             "title": "Settings"
           },
           "staffing": {
@@ -817,7 +817,7 @@
                 "type": "null"
               }
             ],
-            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field); see GET /api/m2c/settings.",
+            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field, kpi); see GET /api/m2c/settings.",
             "title": "Settings"
           },
           "staffing": {
@@ -1008,7 +1008,7 @@
                 "type": "null"
               }
             ],
-            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field); see GET /api/m2c/settings.",
+            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field, kpi); see GET /api/m2c/settings.",
             "title": "Settings"
           },
           "sort": {
@@ -1200,7 +1200,7 @@
                 "type": "null"
               }
             ],
-            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field); see GET /api/m2c/settings.",
+            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field, kpi); see GET /api/m2c/settings.",
             "title": "Settings"
           },
           "staffing": {
@@ -1566,7 +1566,7 @@
                 "type": "null"
               }
             ],
-            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field); see GET /api/m2c/settings.",
+            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field, kpi); see GET /api/m2c/settings.",
             "title": "Settings"
           },
           "staffing": {
@@ -1774,7 +1774,7 @@
                 "type": "null"
               }
             ],
-            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field); see GET /api/m2c/settings.",
+            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field, kpi); see GET /api/m2c/settings.",
             "title": "Settings"
           },
           "staffing": {
@@ -1941,7 +1941,7 @@
                 "type": "null"
               }
             ],
-            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field); see GET /api/m2c/settings.",
+            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field, kpi); see GET /api/m2c/settings.",
             "title": "Settings"
           },
           "staffing": {
@@ -2054,7 +2054,7 @@
               "additionalProperties": true,
               "type": "object"
             },
-            "description": "Run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field) → setting → value or operator.",
+            "description": "Run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field, kpi) → setting → value or operator.",
             "title": "Settings",
             "type": "object"
           },
@@ -2588,7 +2588,7 @@
                 "type": "null"
               }
             ],
-            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field); see GET /api/m2c/settings.",
+            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field, kpi); see GET /api/m2c/settings.",
             "title": "Settings"
           },
           "staffing": {
@@ -2647,6 +2647,159 @@
           "installationId"
         ],
         "title": "InstallationRequest",
+        "type": "object"
+      },
+      "KpiRequest": {
+        "properties": {
+          "actions": {
+            "items": {
+              "$ref": "#/components/schemas/Action"
+            },
+            "maxItems": 2000,
+            "title": "Actions",
+            "type": "array"
+          },
+          "asOf": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "View date (YYYY-MM-DD); default: the town's scenario date.",
+            "title": "Asof"
+          },
+          "episodes": {
+            "description": "Scenarios inflicted from a day (GET /api/m2c/scenarios lists the library); the run replays the year with each day's settings.",
+            "items": {
+              "$ref": "#/components/schemas/Episode"
+            },
+            "maxItems": 40,
+            "title": "Episodes",
+            "type": "array"
+          },
+          "kpis": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 40,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Figures to compute (default: every figure).",
+            "title": "Kpis"
+          },
+          "outages": {
+            "description": "Service interruptions from the operations simulator (a timeline's ``interruptions``): consumption stops, AMI meters without power miss their reads, and VEE sees the outage.",
+            "items": {
+              "$ref": "#/components/schemas/Outage"
+            },
+            "maxItems": 500,
+            "title": "Outages",
+            "type": "array"
+          },
+          "previous": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/YearInputs"
+                },
+                "maxItems": 4,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The inputs of the years before ``year``, from 2026 on, one each. Omitted: the earlier years run with this request's settings and nothing else.",
+            "title": "Previous"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Run seed: re-rolls the run's random draws (missed reads, anomalies, analyst work, bill checks) on the same town. Blank or null: the town's seed (GET /api/m2c/settings?town= shows it).",
+            "title": "Seed"
+          },
+          "settings": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field, kpi); see GET /api/m2c/settings.",
+            "title": "Settings"
+          },
+          "staffing": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A day-by-day staffing schedule (staff-schedule/1.0): {pools: {pool: [[date, n], ...]}}, pools analysts, supervisors, agents (people) and crew_meter, crew_electric, crew_water, crew_gas, crew_construction, crew_emergency (crews); from each date the pool has n until the next entry, and the settings hold before the first. A utility pooling its people across districts gives each its people per day.",
+            "title": "Staffing"
+          },
+          "town": {
+            "description": "Pack preset (e.g. 'small_town') or town id.",
+            "title": "Town",
+            "type": "string"
+          },
+          "upstream": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Events upstream of the town (upstream/1.0): {stormSeed?, events: [{id, utility, day, start, end, label?, storm?}]}: its supply lost in the utility's wider networks (an outage here without a repair order; tanks and line pack carry water and gas for a while, gas premises are relit after); stormSeed shares storm days with the utility's other towns.",
+            "title": "Upstream"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "maximum": 2030.0,
+                "minimum": 2026.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The calendar year to replay (2026-2030; default: the year after ``previous``, else 2026). A later year opens on the years before it, each where the one before closed (dials, money owed, open work, services off, devices). ``actions``, ``outages``, ``episodes`` and ``asOf`` are the year's own.",
+            "title": "Year"
+          }
+        },
+        "required": [
+          "town"
+        ],
+        "title": "KpiRequest",
         "type": "object"
       },
       "KpiTarget": {
@@ -2843,7 +2996,7 @@
                 "type": "null"
               }
             ],
-            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field); see GET /api/m2c/settings.",
+            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field, kpi); see GET /api/m2c/settings.",
             "title": "Settings"
           },
           "staffing": {
@@ -3004,7 +3157,7 @@
                 "type": "null"
               }
             ],
-            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field); see GET /api/m2c/settings.",
+            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field, kpi); see GET /api/m2c/settings.",
             "title": "Settings"
           },
           "sourceCaseId": {
@@ -3268,7 +3421,7 @@
                 "type": "null"
               }
             ],
-            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field); see GET /api/m2c/settings.",
+            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field, kpi); see GET /api/m2c/settings.",
             "title": "Settings"
           },
           "staffing": {
@@ -3436,7 +3589,7 @@
                 "type": "null"
               }
             ],
-            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field); see GET /api/m2c/settings.",
+            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field, kpi); see GET /api/m2c/settings.",
             "title": "Settings"
           },
           "staffing": {
@@ -3538,6 +3691,15 @@
             "maxItems": 8,
             "minItems": 1,
             "title": "Goals",
+            "type": "array"
+          },
+          "kpis": {
+            "description": "The figures to watch, by id from the KPI catalogue (GET /api/m2c/kpis).",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 12,
+            "title": "Kpis",
             "type": "array"
           },
           "limitations": {
@@ -3841,7 +4003,7 @@
                 "type": "null"
               }
             ],
-            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field); see GET /api/m2c/settings.",
+            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field, kpi); see GET /api/m2c/settings.",
             "title": "Settings"
           },
           "sort": {
@@ -4015,7 +4177,7 @@
                 "type": "null"
               }
             ],
-            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field); see GET /api/m2c/settings.",
+            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field, kpi); see GET /api/m2c/settings.",
             "title": "Settings"
           },
           "staffing": {
@@ -4218,7 +4380,7 @@
                 "type": "null"
               }
             ],
-            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field); see GET /api/m2c/settings.",
+            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field, kpi); see GET /api/m2c/settings.",
             "title": "Settings"
           },
           "staffing": {
@@ -4381,7 +4543,7 @@
                 "type": "null"
               }
             ],
-            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field); see GET /api/m2c/settings.",
+            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field, kpi); see GET /api/m2c/settings.",
             "title": "Settings"
           },
           "since": {
@@ -4592,7 +4754,7 @@
                 "type": "null"
               }
             ],
-            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field); see GET /api/m2c/settings.",
+            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field, kpi); see GET /api/m2c/settings.",
             "title": "Settings"
           },
           "sort": {
@@ -4811,7 +4973,7 @@
                 "type": "null"
               }
             ],
-            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field); see GET /api/m2c/settings.",
+            "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field, kpi); see GET /api/m2c/settings.",
             "title": "Settings"
           },
           "sort": {
@@ -5322,6 +5484,15 @@
           "homes": {
             "title": "Homes",
             "type": "integer"
+          },
+          "kpis": {
+            "description": "The figures to watch, by id from the KPI catalogue (GET /api/m2c/kpis).",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 12,
+            "title": "Kpis",
+            "type": "array"
           },
           "limitations": {
             "items": {
@@ -6137,6 +6308,86 @@
           }
         },
         "summary": "Post Installation"
+      }
+    },
+    "/api/m2c/kpis": {
+      "get": {
+        "description": "``m2c-kpis/1.0``: every figure with its family, unit, definition, the settings and scenarios that move it,\nwhere it shows, and the threshold settings it counts with (their values from ``town``'s config, else the\ndefaults).",
+        "operationId": "get_kpis_api_m2c_kpis_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "town",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Town"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Kpis"
+      },
+      "post": {
+        "description": "A run's figures year to date at ``asOf`` (``null`` where nothing can be counted yet), with the thresholds in\nforce: a request like any meter-to-cash view, plus ``kpis`` to restrict the figures.",
+        "operationId": "post_kpis_api_m2c_kpis_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KpiRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Kpis"
       }
     },
     "/api/m2c/order": {

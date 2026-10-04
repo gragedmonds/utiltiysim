@@ -3264,6 +3264,87 @@
       "x-group": true,
       "x-order": 8
     },
+    "KpiConfig": {
+      "additionalProperties": false,
+      "description": "The windows the KPIs count with: what makes a bill on time, a read prompt, a case resolved in time, an invoice paid on time. They change the figures reported, never the run itself.",
+      "properties": {
+        "case_resolution_days": {
+          "default": 5,
+          "description": "A case is resolved in time when it closes within this many business days of being raised.",
+          "maximum": 60,
+          "minimum": 0,
+          "title": "Case Resolution Days",
+          "type": "integer",
+          "x-effects": [
+            "cases resolved in time"
+          ],
+          "x-impact": "Business days a case may take and still count as resolved in time. Changes the Cases resolved in time figure only.",
+          "x-reach": "year",
+          "x-unit": "business days"
+        },
+        "on_time_bill_days": {
+          "default": 3,
+          "description": "A bill is on time when it is released to invoicing within this many calendar days of the scheduled read it bills.",
+          "maximum": 60,
+          "minimum": 0,
+          "title": "On Time Bill Days",
+          "type": "integer",
+          "x-effects": [
+            "bills on time"
+          ],
+          "x-impact": "The window that makes a bill on time: days from the scheduled read to the bill's release. Changes the Bills on time figure only.",
+          "x-reach": "year",
+          "x-unit": "days"
+        },
+        "payment_grace_days": {
+          "default": 3,
+          "description": "An invoice is paid on time when it is settled within this many calendar days after its due date.",
+          "maximum": 60,
+          "minimum": 0,
+          "title": "Payment Grace Days",
+          "type": "integer",
+          "x-effects": [
+            "invoices paid on time"
+          ],
+          "x-impact": "Days after the due date an invoice may still be paid on time. Changes the Invoices paid on time figure only.",
+          "x-reach": "year",
+          "x-unit": "days"
+        },
+        "read_release_days": {
+          "default": 3,
+          "description": "A held read is released promptly when its case releases it to billing within this many calendar days of the scheduled read.",
+          "maximum": 90,
+          "minimum": 0,
+          "title": "Read Release Days",
+          "type": "integer",
+          "x-effects": [
+            "reads released promptly"
+          ],
+          "x-impact": "The window that makes a held read prompt: days from the scheduled read to its release. Changes the Reads released promptly figure only.",
+          "x-reach": "year",
+          "x-unit": "days"
+        },
+        "timely_invoice_days": {
+          "default": 5,
+          "description": "An invoice is timely when it is created within this many calendar days of the last scheduled read it bills (the twin's invoice timeliness).",
+          "maximum": 60,
+          "minimum": 1,
+          "title": "Timely Invoice Days",
+          "type": "integer",
+          "x-effects": [
+            "invoice timeliness"
+          ],
+          "x-impact": "The window that makes an invoice timely: days from the last scheduled read to the invoice. Changes the Invoice timeliness figure only.",
+          "x-reach": "year",
+          "x-unit": "days"
+        }
+      },
+      "title": "KPI definitions",
+      "type": "object",
+      "x-applies": "run",
+      "x-group": true,
+      "x-order": 26
+    },
     "OperationsConfig": {
       "additionalProperties": false,
       "description": "Fleet, shifts, response targets and vehicle movement. Crews, readers, the shift and the gas target are the defaults of the operations run settings (x-run-setting), so a run can change them without a new town.",
@@ -4946,6 +5027,9 @@
     },
     "incidents": {
       "$ref": "#/$defs/IncidentConfig"
+    },
+    "kpi": {
+      "$ref": "#/$defs/KpiConfig"
     },
     "name": {
       "default": "custom",

@@ -1,0 +1,14 @@
+.glossary{max-width:1040px;margin:0 auto;padding:28px 32px 72px;color:#18332e}
+.glossary h1{font-size:clamp(30px,4.5vw,44px);letter-spacing:-.04em;margin:8px 0 10px}.glossary .lead{font-size:17px;color:#3e5550;max-width:760px}
+.glossary-toc{display:flex;flex-wrap:wrap;gap:8px;margin:18px 0 6px;padding:0;list-style:none}.glossary-toc a{display:inline-block;border:1px solid #d5dfce;border-radius:999px;padding:6px 12px;background:#fff;color:#196b61;text-decoration:none;font-size:14px}
+.glossary-tools{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:14px 0 24px}.glossary-tools input{flex:1;min-width:220px;padding:10px 12px;border:1px solid #b9cbc9;border-radius:8px;font:inherit}
+.glossary-mine{background:#e4efe9;border:1px solid #cfdcc3;border-radius:14px;padding:14px 18px;margin:0 0 22px}.glossary-mine h2{margin:0 0 6px;font-size:16px}.glossary-mine a{color:#196b61}
+.glossary-windows{background:#fff;border:1px solid #dce5e4;border-radius:14px;padding:16px 18px;margin:0 0 26px}.glossary-windows h2{margin:0 0 8px;font-size:18px}.glossary-windows table{border-collapse:collapse;width:100%;font-size:14px}.glossary-windows td,.glossary-windows th{text-align:left;padding:6px 8px;border-top:1px solid #edf1e7;vertical-align:top}.glossary-windows th{color:#5f7168;font-weight:600}
+.glossary-family{margin:30px 0 10px}.glossary-family h2{font-size:24px;letter-spacing:-.02em;margin:0 0 4px}.glossary-family p{margin:0 0 14px;color:#3e5550}
+.kpi-card{background:#fff;border:1px solid #dce5e4;border-radius:16px;padding:18px 20px;margin:0 0 14px;scroll-margin-top:16px}.kpi-card.is-mine{border-color:#196b61;box-shadow:0 0 0 1px #196b61 inset}
+.kpi-card header{display:flex;gap:12px;align-items:baseline;flex-wrap:wrap}.kpi-card h3{margin:0;font-size:19px}.kpi-card .kpi-unit{font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:#196b61;background:#e4efe9;padding:2px 8px;border-radius:999px}.kpi-card .kpi-twin{font-size:12px;color:#5f7168}
+.kpi-card .kpi-def{margin:8px 0 4px;font-size:15px}.kpi-card .kpi-formula{font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;color:#3e5550;background:#f7faf8;padding:6px 10px;border-radius:8px;display:inline-block}
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px 18px;margin-top:12px}.kpi-grid h4{margin:0 0 4px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:#5f7168}.kpi-grid ul{margin:0;padding-left:18px;font-size:14px}.kpi-grid li{margin:2px 0}.kpi-grid .dir{color:#5f7168;font-size:12px;margin-left:4px}.kpi-grid a{color:#196b61}
+.kpi-card .kpi-window{margin-top:10px;font-size:14px;color:#355739}.kpi-card .kpi-window b{font-weight:650}
+.glossary-empty{color:#5f7168}
+@media(max-width:700px){.glossary{padding:18px 20px 60px}}

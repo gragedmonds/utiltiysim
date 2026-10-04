@@ -896,3 +896,15 @@ details.schema-group>.schema-field:last-child{margin-bottom:10px}
 #settings-page .schema-compound>.schema-na{flex:1 0 100%}
 .schema-set{display:flex;flex-wrap:wrap;gap:4px 14px}
 .schema-set-item{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;white-space:nowrap}
+
+/* Your KPIs: the simulation's chosen figures, measured for the run in view (Command Center, Run statistics). */
+.kpi-strip{margin:0 0 16px;padding:14px 16px;border:1px solid #dce5e4;border-radius:14px;background:#fff}
+.kpi-strip-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+.kpi-strip-head h3{margin:0;font-size:13px;letter-spacing:.04em;text-transform:uppercase;color:#3e5550}
+.kpi-strip-head a{font-size:13px}
+.kpi-tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:10px}
+.kpi-tile{display:flex;flex-direction:column;gap:2px;padding:10px 12px;border-radius:10px;background:#f4f8f7;min-width:0}
+.kpi-tile span{font-size:12px;color:#3e5550;line-height:1.3}
+.kpi-tile strong{font-size:22px;font-variant-numeric:tabular-nums;line-height:1.15}
+.kpi-tile small{font-size:11px;color:#6b7f7b;line-height:1.3}
+.kpi-strip .small-note{margin:8px 0 0}

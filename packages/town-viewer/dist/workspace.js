@@ -5,6 +5,7 @@ import {escapeText as e} from './customer-view.js';
 import {scorecardMarkup} from './worklists.js';
 import {activeYear,dayYear,yearStart,yearEnd} from './m2c.js';
 import {COLLECTION_TRANSACTIONS,parseCollectionsRoute,collectionsHash,isCollectionsRoute,installCollections} from './workspace-collections.js';
+import {fetchKpiCatalogue,fetchKpiValues,kpiStrip} from './kpis.js';
 
 export const TRANSACTIONS=[
  ['Worklists','exceptions','Clarification Case List'],
@@ -198,11 +199,18 @@ export function installWorkspace({getClient,getEngineState=()=>({state:'idle',to
    ${b.documents!=null?group('Billing and Collections',grid([[['Billing documents',num(b.documents,0)],['Blocked',num(b.blocked,0)],['Billed',money(b.billed)],['Billing error vs truth',money(b.billingError)]],[['Invoices',num(b.invoices,0)],['Collected',money(b.collected)],['Receivable',money(b.receivable)],['Overdue',money(b.overdue)]]]))+col.collectionsGroup(b):''}`;
   const runNote=col.state.period==='run'&&!sum.window?'<p class="gui-processing-hint">No actions yet: the run has been yours since January 1, so this is the year to date.</p>':'';
   return `<section class="fiori-shell gui-case-shell">${header('exceptions','Run Statistics')}<nav class="gui-transaction-toolbar">${btn('‹ Back to List','back')}${btn(ui.scorecard?'Hide VEE scorecard':'VEE scorecard','scorecard')}${col.periodSelect()}</nav><div class="gui-case-scroll"><div class="gui-case-content">
-   ${runNote}${sum.window?col.periodBody(sum)+group('Work Queues (now)',`<table class="gui-history-table"><thead><tr><th>Queue</th><th>Open</th><th>0–1 d</th><th>2–3 d</th><th>4–7 d</th><th>8+ d</th><th>Oldest</th></tr></thead><tbody>${queues}</tbody></table>`):ytd}
+   ${kpiStripMarkup()}${runNote}${sum.window?col.periodBody(sum)+group('Work Queues (now)',`<table class="gui-history-table"><thead><tr><th>Queue</th><th>Open</th><th>0–1 d</th><th>2–3 d</th><th>4–7 d</th><th>8+ d</th><th>Oldest</th></tr></thead><tbody>${queues}</tbody></table>`):ytd}
    ${relRows?group('Service Interruptions',`<table class="gui-history-table"><thead><tr><th>Utility</th><th>Interruptions</th><th>Customers</th><th>Customer-minutes</th><th>SAIDI min</th><th>Use lost</th></tr></thead><tbody>${relRows}</tbody></table>`):''}
    ${group('VEE against Simulation Truth',grid([[['Precision',pct(k.vee.precision)],['Recall',pct(k.vee.recall)]],[['True positives',num(k.vee.truePositives,0)],['False positives',num(k.vee.falsePositives,0)]]])+(ui.scorecard?`<div class="ws-scorecard">${ui.scorecard===true?'<p class="small-note">Scoring VEE…</p>':scorecardMarkup(ui.scorecard)}</div>`:''))}
   </div></div>${statusbar('Run statistics · '+(sum.window?`${sum.window.since} to ${sum.asOf}`:'year to date, as of '+sum.asOf))}</section>`;}
- async function loadSummary(){const m=client();if(!m)return;const ticket=++ui.busy;try{const sum=await m.summary(col.since());if(ticket!==ui.busy)return;ui.summary=sum;ui.asOf=sum.asOf;}catch(err){if(!err.superseded)toast('Engine: '+err.message);}finally{if(ticket===ui.busy){ui.busy=0;render();}}}
+ // The simulation's chosen figures (its record's `kpis`), measured by the engine for the run in view.
+ const kpi={catalogue:null,values:null,thresholds:{},key:'',error:''};
+ function kpiStripMarkup(){const s=ui.simulation,ids=Array.isArray(s?.kpis)?s.kpis:[];if(!ids.length)return '';const href='./glossary.html?simulation='+encodeURIComponent(s.id)+'&town='+encodeURIComponent(s.townRef||'');
+  if(kpi.error)return `<section class="kpi-strip" aria-label="Your KPIs"><div class="kpi-strip-head"><h3>Your KPIs</h3><a href="${e(href)}">Glossary ↗</a></div><p class="small-note">${e(kpi.error)}</p></section>`;return kpiStrip(kpi.catalogue,ids,kpi.values,{thresholds:kpi.thresholds,href});}
+ async function loadKpis(){const m=client(),s=ui.simulation,ids=Array.isArray(s?.kpis)?s.kpis:[];if(!m||!ids.length)return;const key=JSON.stringify([ids,m.asOf,m.settings,m.seed,m.episodes,m.actions?.length]);if(kpi.key===key)return;kpi.key=key;kpi.values=null;kpi.error='';
+  try{kpi.catalogue||=await fetchKpiCatalogue(m.api,{fetchImpl:m.fetchImpl});const data=await fetchKpiValues(m.api,m.body({asOf:m.asOf,kpis:ids}),{fetchImpl:m.fetchImpl});if(kpi.key!==key)return;kpi.values=data.values;kpi.thresholds=data.thresholds;}catch(err){if(kpi.key===key)kpi.error=err.message;}
+  const strip=root?.querySelector('.kpi-strip');if(strip)strip.outerHTML=kpiStripMarkup();}
+ async function loadSummary(){const m=client();if(!m)return;loadKpis();const ticket=++ui.busy;try{const sum=await m.summary(col.since());if(ticket!==ui.busy)return;ui.summary=sum;ui.asOf=sum.asOf;}catch(err){if(!err.superseded)toast('Engine: '+err.message);}finally{if(ticket===ui.busy){ui.busy=0;render();}}}
 
  // ---- Clarification case detail ---------------------------------------------------------------------------------
  function casePage(c){

@@ -14,6 +14,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import Response
 
 from api._agent import router as agent_router
+from api._kpis import router as kpis_router
 from api._m2c import router as m2c_router
 from api._ops import router as ops_router
 from api._share import router as share_router
@@ -39,6 +40,7 @@ app.include_router(ops_router)  # operations
 app.include_router(agent_router)
 app.include_router(share_router)  # simulation files: export a simulation, import it into another Utility Studio
 app.include_router(m2c_router)  # meter-to-cash: reads, VEE, work queues
+app.include_router(kpis_router)  # the KPI catalogue and a run's figures
 app.include_router(towns_router)  # generated towns (POST /api/towns), also a snapshot source for the two above
 app.include_router(twin_router)  # the digital twin: fit a setup to observed KPIs (utilsim/twin)
 

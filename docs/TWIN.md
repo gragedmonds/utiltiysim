@@ -8,7 +8,8 @@ result is an ordinary setup proposal, opened, locked in and explored like any ot
 shows for every KPI, which levers it moved and how far each observed figure was reproduced.
 
 Engine module `utilsim/twin/`, command `utilsim twin`, API `GET /api/twin/dictionary` and `POST /api/twin/fit`
-(`twin-fit/1.0`). The Studio entry card ("Start from your numbers") is the next slice; see "Studio" below.
+(`twin-fit/1.0`). The eleven figures the twin reproduces are part of the Studio's KPI catalogue under the same ids
+(`utilsim/m2c/kpis.py`, [KPIS.md](KPIS.md)), marked `twin`. The Studio entry card ("Start from your numbers") is the next slice; see "Studio" below.
 
 ## What goes in
 

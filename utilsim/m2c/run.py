@@ -45,7 +45,7 @@ from utilsim.m2c.calendar import FIRST_YEAR, RunCalendar, calendar
 # A day of the analysts' or supervisors' work (``work_log``): minutes of work waiting for them that day, minutes
 # done, cases done, cases still waiting after the day, the oldest still waiting (days since it was raised).
 WORK_LOG = ("offeredMin", "doneMin", "done", "waiting", "oldestDays")
-M2C_GROUPS = ("process", "anomalies", "reading", "vee", "billing", "contact", "outages", "field")
+M2C_GROUPS = ("process", "anomalies", "reading", "vee", "billing", "contact", "outages", "field", "kpi")
 SUMMARY_VERSION = "m2c-summary/1.0"
 CASE_VERSION = "work-case/1.0"
 DECISION_VERSION = "vee-decision/1.0"
@@ -296,7 +296,7 @@ def parse_episodes(cfg: SimConfig, episodes: list[dict] | None, cal: RunCalendar
 
 
 def settings_schema() -> dict:
-    """JSON Schema for the run settings page: the four run-scoped groups with defaults, bounds, units and hints."""
+    """JSON Schema for the run settings page: the run-scoped groups with defaults, bounds, units and hints."""
     props, defs = {}, {}
     for g in M2C_GROUPS:
         model = SimConfig.model_fields[g].annotation

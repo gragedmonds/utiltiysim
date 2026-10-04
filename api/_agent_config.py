@@ -63,9 +63,22 @@ class Proposal(StrictModel):
     settings: dict[str, dict[str, Any]] = Field(default_factory=dict, description="Base meter-to-cash settings.")
     operations: dict[str, dict[str, Any]] = Field(default_factory=dict, description="Grouped operations overrides, as in inspect_configuration.")
     episodes: list[AgentEpisode] = Field(default_factory=list, max_length=40)
+    kpis: list[str] = Field(default_factory=list, max_length=12,
+                            description="The figures to watch, by id from the KPI catalogue (GET /api/m2c/kpis).")
     summary: str = Field(min_length=1, max_length=2000)
     assumptions: list[str] = Field(default_factory=list, max_length=12)
     limitations: list[str] = Field(default_factory=list, max_length=20)
+
+    @field_validator("kpis")
+    @classmethod
+    def supported_kpis(cls, value):
+        from utilsim.m2c.kpis import KPI_IDS
+
+        unknown = [k for k in value if k not in KPI_IDS]
+        if unknown or len(set(value)) != len(value):
+            raise ValueError("Choose KPIs from the catalogue (GET /api/m2c/kpis), without duplicates: "
+                             + ", ".join(unknown or ["duplicates"]))
+        return value
 
     @field_validator("goals")
     @classmethod
