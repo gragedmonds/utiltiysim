@@ -8,8 +8,11 @@ view *as of* a date. Warm instances keep the last few runs, so scrubbing dates a
 from __future__ import annotations
 
 import base64
+import re
 import zlib
 from collections import OrderedDict
+from functools import lru_cache
+from types import SimpleNamespace
 from typing import Any, Literal
 
 import numpy as np
@@ -49,6 +52,7 @@ from utilsim.m2c.run import (
     MAX_SEED,
     ORDER_ACTIONS,
     M2CRun,
+    parse_episodes,
     run_seed,
     settings_schema,
     town_seed,
@@ -638,6 +642,58 @@ def get_scenarios():
     (start offset in days from the day inflicted, duration, ramp, settings as values or operators) and what to watch,
     plus the scenarios still coming."""
     return J(scenarios.catalog())
+
+
+class EpisodePreviewRequest(BaseModel):
+    town: str = Field("small_town", description="Pack preset or town reference (``preset~changes``) the episodes' "
+                                                "settings are checked against; a town id builds that town.")
+    year: int = Field(FIRST_YEAR, ge=FIRST_YEAR, le=LAST_YEAR, description="The episodes' calendar year.")
+    episodes: list[Episode] = Field(default_factory=list, max_length=EPISODE_MAX)
+
+
+@lru_cache(maxsize=8)
+def _preset_cfg(name: str) -> SimConfig:
+    from utilsim.config.presets import load_preset
+
+    return load_preset(name)
+
+
+def _preview_cfg(ref: str) -> SimConfig:
+    """A town's configuration without building the town: a warm town's, a pack preset's or a reference's."""
+    hit = cached_m2c_town(town_key(ref))
+    if hit is not None:
+        return hit.cfg
+    from utilsim.config.presets import PRESET_DIR
+
+    if re.fullmatch(r"[a-z0-9_]{1,64}", ref) and (PRESET_DIR / f"{ref}.yaml").is_file():
+        return _preset_cfg(ref)
+    if "~" in ref:
+        from api._towns import config_from_ref
+
+        try:
+            return config_from_ref(ref)
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from exc
+    return _town(ref).cfg
+
+
+@router.post("/api/m2c/episodes/preview")
+def post_episode_preview(req: EpisodePreviewRequest):
+    """``m2c-episode-preview/1.0``: the episodes checked as a run checks them and, for a sporadic one, the days it
+    strikes (``hits``: ``[date, strength]``, as the trend gives them), without running the year. A pattern with its
+    own ``seed`` strikes the same days in every run (the local runner's districts share them); one without draws
+    from the town's seed, as a run without a seed of its own does. A bad episode is HTTP 422 with the engine's message."""
+    cfg = _preview_cfg(req.town)
+    cal = calendar(req.year)
+    seed = f"{town_seed(cfg)}:m2c" + ("" if req.year == FIRST_YEAR else f":{req.year}")  # as M2CRun.seed
+    try:
+        parsed = parse_episodes(cfg, [e.model_dump(by_alias=True, exclude_none=True) for e in req.episodes], cal,
+                                seed=seed)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    keep = ("id", "title", "from", "to", "pattern", "hits")
+    out = [{k: e[k] for k in keep if k in e} for e in trend.episode_json(SimpleNamespace(episodes=parsed, cal=cal))]
+    return J({"schemaVersion": "m2c-episode-preview/1.0", "year": req.year, "episodes": out})
 
 
 @router.post("/api/m2c/daily")

@@ -178,7 +178,8 @@ def _pattern(p, eid: str, title: str, start: int, end: int, cal: RunCalendar, se
             raise ValueError(f"episode {eid}: pattern.{name} is not used by {kind}")
     flags = {}
     for name, default in (("workdays", True), ("independent", False)):
-        v = p.get(name, default)
+        v = p.get(name)
+        v = default if v is None else v  # absent or null (a request model's unset field): the default
         if not isinstance(v, bool):
             raise ValueError(f"episode {eid}: pattern.{name} is true or false")
         flags[name] = v

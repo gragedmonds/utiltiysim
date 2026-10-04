@@ -2212,6 +2212,34 @@
         "title": "EpisodePattern",
         "type": "object"
       },
+      "EpisodePreviewRequest": {
+        "properties": {
+          "episodes": {
+            "items": {
+              "$ref": "#/components/schemas/Episode"
+            },
+            "maxItems": 40,
+            "title": "Episodes",
+            "type": "array"
+          },
+          "town": {
+            "default": "small_town",
+            "description": "Pack preset or town reference (``preset~changes``) the episodes' settings are checked against; a town id builds that town.",
+            "title": "Town",
+            "type": "string"
+          },
+          "year": {
+            "default": 2026,
+            "description": "The episodes' calendar year.",
+            "maximum": 2030.0,
+            "minimum": 2026.0,
+            "title": "Year",
+            "type": "integer"
+          }
+        },
+        "title": "EpisodePreviewRequest",
+        "type": "object"
+      },
       "ExistingEpisode": {
         "additionalProperties": false,
         "properties": {
@@ -5594,6 +5622,43 @@
           }
         },
         "summary": "Post Daily"
+      }
+    },
+    "/api/m2c/episodes/preview": {
+      "post": {
+        "description": "``m2c-episode-preview/1.0``: the episodes checked as a run checks them and, for a sporadic one, the days it\nstrikes (``hits``: ``[date, strength]``, as the trend gives them), without running the year. A pattern with its\nown ``seed`` strikes the same days in every run (the local runner's districts share them); one without draws\nfrom the town's seed, as a run without a seed of its own does. A bad episode is HTTP 422 with the engine's message.",
+        "operationId": "post_episode_preview_api_m2c_episodes_preview_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EpisodePreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Episode Preview"
       }
     },
     "/api/m2c/export/{table}.csv": {

@@ -95,6 +95,13 @@ def test_a_strike_goes_part_way_and_whole_numbers_round_by_chance(base):
     assert days[weekend].process.analysts == 2 and days[weekend].vee.zero_at_occupied is True
 
 
+def test_unset_pattern_fields_take_their_defaults(base):
+    """A pattern passed through a request model arrives with its unset fields as null: they are the defaults."""
+    full = {"kind": "spikes", "count": 6, "length": [1, 2], "share": None, "strength": [0.7, 1.0],
+            "workdays": None, "independent": None, "seed": None}
+    assert hits(base.cfg, ep(HEADEND, full)) == hits(base.cfg, ep(HEADEND, SPIKES))
+
+
 def test_bad_patterns_are_refused(base):
     cfg = base.cfg
     for pattern, msg in [({"kind": "bursts"}, "spikes"), ({"kind": "spikes"}, "count"),

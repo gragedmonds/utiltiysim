@@ -32,6 +32,25 @@ To open another library, select its folder before starting. Automated library re
 processing, copy the complete library, then select the destination. Missing drives pause work instead of redirecting
 writes to another volume. Start only one runner per library (an OS lock prevents competing processes).
 
+## The year before the run
+
+The local-run page (`local-runs.html`) runs top to bottom: configuration, **the year**, then **Run revision N
+locally**. The year is the Command Center's calendar (`year-page.js` in plan mode over `local-year.js`): click a day
+to inflict a scenario from the engine's library, edit or remove an episode from its bar or the legend, clear all, or
+talk a tweak through. Nothing runs in the browser and there are no trend charts: the episodes are saved with the
+simulation and go into the next revision's job, which every district applies. `POST /api/m2c/episodes/preview`
+(`{town?, year?, episodes}`) checks them as a run does (HTTP 422 with the engine's message) and returns each sporadic
+episode's struck days (`hits`) without a run, so the calendar marks them.
+
+Districts are separate towns with their own run seeds, so a sporadic episode would strike different days in each.
+The page gives each one the simulation's own `pattern.seed` (`local:<simulationId>`), and `prepare` fills a missing one
+the same way: every district strikes the same days, the ones the calendar shows.
+
+Any change to the episodes or the other inputs since the latest revision is spelled out ("Changed since revision 2:
+Head end down added") and the button runs the next revision; without sync it downloads the new job file at once. With
+no change the latest revision is up to date and its job file stays available. An old job file is never reused for
+changed inputs.
+
 ## Jobs, edits and results
 
 - Every submitted job captures an immutable recipe and numbered revision. Concurrent edits get a conflict rather
