@@ -513,8 +513,28 @@ How the lines answer them:
 `volume_factor` scales every reason's shares. Costs are agents' paid hours (`agent_cost_per_hour`, whether busy or not),
 `self_serve_cost` per self-served contact, `abandon_cx_cost` per hang-up and the emergency line's handling time. Every
 draw is a counter-based hash of the run seed and the contact's identity, so one reason never moves another's draws,
-and episodes on `contact` or `outages` settings apply from their day. The contact settings never change the rest of
-the year: reads, cases, bills and collections are byte-identical (`tests/test_m2c_contact.py`).
+and episodes on `contact` or `outages` settings apply from their day.
+
+### What the contact centre changes
+
+The contact centre answers inside the replay (`ContactEngine`, `run.contact`). At the end of each day it takes what the
+replay made that day (invoices as they go out, their bills, dunning, no-access reads, cases sent to the field, the
+day's incidents) and answers the day's contacts. What it does changes the rest of the year:
+
+| Contact | What it changes |
+|---|---|
+| An answered bill-wrong contact, or an unresolved high-bill or back-bill one (`dispute_cases` of them) | Opens a **Bill Correction** case (`BILL_DISPUTE`, queue `BILLING`, no RPA) on the bill, and pauses dunning on the account until it is decided (at most `dispute_hold_days`). The analyst checks the read: a bill off against the truth is reversed and rebilled on the quantities a check read finds (`CHECK_READ`, `REBILL`; the next invoice credits the reversed version, and a credit invoice settles the account's open bills); a right bill is explained (`DISPUTE_EXPLAINED`). Escalated above `vee.escalate_impact` like any billing block |
+| An answered complaint (`complaint_cases`) | Opens a **Customer Complaints** case (`COMPLAINT`, account work, queue `BILLING`) the analysts answer (`COMPLAINT_ANSWERED`); one open complaint per account |
+| A bad experience: a hang-up, an unresolved contact, an answered wait over `long_wait_s`, a complaint | Counts against the customer. At `frustration_threshold` of them the customer pays later from then on (on time → late → at risk; `PAYMENT_RISK_RAISED` on the account), and a pre-authorized debit customer cancels it at `autopay_cancel_share` and pays by hand (`AUTOPAY_CANCELLED`) |
+
+You can decide a dispute yourself: `accept` (the bill stands and is explained) or `estimate` (rebill on a check read),
+or `escalate`; a complaint takes `accept` (answered) or `escalate`. With `frustration_threshold` 0, `dispute_cases` 0
+and `complaint_cases` off, how the lines answer never changes the year (a test checks it).
+
+The summary's `feedback` (and each trend month's `contact.feedback`) counts disputes (rebilled, explained, open), the
+credit invoices and what they gave back, complaints, and customers who pay later or cancelled their automatic
+payments. The contacts table names the case each contact opened; the Year page's **What the contact centre changed**
+chart draws them by month.
 
 **Summary** (`POST /api/m2c/contact`, `m2c-contact/1.0`): as of `asOf`, the settings in force, `kpis` (contacts,
 self-served, to agents, answered, call backs, abandoned, closed, gave up, emergency, repeats, resolved first time,
@@ -538,7 +558,6 @@ one person busy for a tenth of the day, and storm days or a week of disconnectio
 The scenario library's **Contact centre** group tries the levers (lines open mornings only, IVR and website down, hire
 a second agent), and **Storm season** (operations) triples the storm days for three months.
 
-Not yet modelled: contacts do not open back-office cases (a bill-wrong call does not raise a billing exception).
 
 ## Field work
 
