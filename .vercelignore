@@ -1,0 +1,20 @@
+# Vercel deploys only the static landing page (scripts/build_site.mjs: site/ and the brand files). Nothing Python
+# reaches it: without this, Vercel would build api/app.py as a serverless function with the whole engine's
+# dependencies, which is not the product (the engine runs in the downloaded app) and fails the deployment.
+/api
+/utilsim
+/tests
+/scripts/*.py
+/pyproject.toml
+/uv.lock
+/out
+/.utilsim_cache
+/.venv
+/examples
+/web
+/packs
+/launcher
+/prototypes
+/schemas
+/assets
+/docs
