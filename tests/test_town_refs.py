@@ -1,5 +1,5 @@
 """Self-describing town references: a generated town is named by its preset plus the settings that differ from it, so
-any engine instance (a cold serverless function, a shared link) rebuilds exactly the same town from the name."""
+any engine instance (a fresh process, a shared link) rebuilds exactly the same town from the name."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-import api.index as hosted
+import api.app as engine
 from api._store import store
 from api._towns import REF_SEP, config_from_ref, town_ref
 from utilsim.config import load_preset
@@ -59,7 +59,7 @@ def test_a_reference_round_trips_to_the_same_town():
 
 
 def test_a_cold_instance_builds_the_town_from_its_reference():
-    client = TestClient(hosted.app)
+    client = TestClient(engine.app)
     ref = client.post("/api/towns", json={"config": _changed()}).json()["ref"]
     _cold()
     snap = client.get(f"/api/towns/{ref}/snapshot.json?detail=viewer")
@@ -75,7 +75,7 @@ def test_a_cold_instance_builds_the_town_from_its_reference():
 
 
 def test_bad_references_and_oversized_towns_are_refused(monkeypatch):
-    client = TestClient(hosted.app)
+    client = TestClient(engine.app)
     assert client.get("/api/towns/small_town~not-a-reference/snapshot.json").status_code == 404
     assert client.post("/api/sim/timeline", json={"town": "nope~eJwDAAAAAAE", "date": "2026-07-15",
                                                   "commands": []}).status_code == 404
@@ -87,10 +87,10 @@ def test_bad_references_and_oversized_towns_are_refused(monkeypatch):
 
 
 @pytest.mark.timeout(300)
-def test_the_hosted_function_builds_a_town_without_tables_or_renders():
-    # The Vercel function installs api/requirements.txt: scipy, shapely and PyYAML, but not pyarrow or matplotlib.
+def test_the_engine_builds_a_town_without_tables_or_renders():
+    # The packaged app leaves out pyarrow and matplotlib (scripts/build_runner.py); town building must not need them.
     code = ("import sys\nfor m in ('pyarrow','matplotlib'):\n    sys.modules[m]=None\n"
-            "from fastapi.testclient import TestClient\nimport api.index as h\n"
+            "from fastapi.testclient import TestClient\nimport api.app as h\n"
             "c=TestClient(h.app)\n"
             "r=c.post('/api/towns',json={'preset':'village','seed':'NO-TABLES-1'})\n"
             "assert r.status_code==201,r.text\nref=r.json()['ref']\n"

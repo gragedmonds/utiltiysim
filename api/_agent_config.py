@@ -354,7 +354,7 @@ def validate_proposal(proposal: Proposal) -> dict:
     from utilsim.config.presets import deep_merge
 
     if proposal.totalHomes is not None and proposal.execution != "local":
-        raise ValueError("Large utility batches require the local runner.")
+        raise ValueError("A total above the live limit runs as districts: set execution to local.")
     base = preset_config(proposal.preset)
     town = proposal.townOverrides
     if any(not isinstance(v, dict) for v in town.values()):

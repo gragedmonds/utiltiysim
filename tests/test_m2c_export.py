@@ -9,7 +9,7 @@ import io
 from fastapi.testclient import TestClient
 
 from api import _m2c
-from api.index import app
+from api.app import app
 
 CLIENT = TestClient(app)
 BODY = {"town": "small_town", "asOf": "2026-10-31", "table": "cases", "sort": "createdAt", "desc": True,

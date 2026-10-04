@@ -20,7 +20,7 @@ func TestReadinessRequiresAuthenticatedLiveRunner(t *testing.T) {
 			w.WriteHeader(401)
 			return
 		}
-		fmt.Fprint(w, `{"schemaVersion":"local-status/1.0"}`)
+		fmt.Fprint(w, `{"schemaVersion":"local-status/2.0"}`)
 	}))
 	defer server.Close()
 	file := filepath.Join(t.TempDir(), "ready.json")

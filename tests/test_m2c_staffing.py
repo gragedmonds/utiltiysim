@@ -9,7 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from api._m2c import _ops_town, load_snapshot
-from api.index import app
+from api.app import app
 from utilsim.m2c import contact, daily, staffing
 from utilsim.m2c import fieldwork as fwk
 from utilsim.m2c.base import M2CTown

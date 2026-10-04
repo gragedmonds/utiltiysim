@@ -1,7 +1,7 @@
-name: Local runner packages
+name: Utility Studio packages
 # Cost (see CLAUDE.md): four operating systems per run, 2 to 7 minutes each. Free while the repository is public;
 # if it goes private, GitHub bills Windows minutes at 2x and macOS at 10x (about 100 billed minutes a run), so keep
-# this to merges that change what the runner ships, and cancel a run that a newer merge supersedes.
+# this to merges that change what the app ships, and cancel a run that a newer merge supersedes.
 # Merges to main publish a release (pull requests are tested before they merge; CI no longer runs on main).
 on:
   pull_request:
@@ -72,5 +72,5 @@ jobs:
         run: |
           TAG="runner-$(git rev-parse --short=12 HEAD)"
           if ! gh release view "$TAG" >/dev/null 2>&1; then
-            gh release create "$TAG" release/* --target "$(git rev-parse HEAD)" --title "Utility Studio local runner" --notes-file launcher/RELEASE_NOTES.md
+            gh release create "$TAG" release/* --target "$(git rev-parse HEAD)" --title "Utility Studio" --notes-file launcher/RELEASE_NOTES.md
           fi

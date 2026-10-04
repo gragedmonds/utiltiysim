@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 
 from api import _m2c
 from api._m2c import RunRequest, _ops_town, load_snapshot, run_for
-from api.index import app
+from api.app import app
 from utilsim.m2c import yearclose
 
 TOWN = "village"

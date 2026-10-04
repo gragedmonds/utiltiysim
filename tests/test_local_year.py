@@ -8,10 +8,10 @@ import pytest
 from fastapi.testclient import TestClient
 
 from api._m2c import RunRequest, run_for
-from api._portal import pattern_seed, prepare_recipe
-from api.index import app
+from api.app import app
 from utilsim.m2c import trend
 from utilsim.worker.contracts import JobFile, check_job, recipe_key
+from utilsim.worker.prepare import pattern_seed, prepare_recipe
 
 HEADEND = {"reading": {"ami_missed_read": 0.9}}
 # As the Studio's "When it strikes" controls send it (year-page.js draftPattern).

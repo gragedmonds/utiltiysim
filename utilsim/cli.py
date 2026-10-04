@@ -195,17 +195,18 @@ def batch_run_command(
                            "open": "Open each completed district's runs/<runKey> folder in Studio's saved-run reader."}))
 
 
-@app.command("runner")
-def runner_command(store: Path = typer.Option(..., help="Existing storage folder, e.g. P:/UtilitySim."),
-                   port: int = typer.Option(8010)):
-    """Open the local runner: pair once, queue jobs in Studio, keep all large files here."""
+@app.command("studio")
+def studio_command(store: Path = typer.Option(..., help="Existing storage folder, e.g. P:/UtilitySim."),
+                   port: int = typer.Option(0, help="0: any free port.")):
+    """Open Utility Studio on this computer: pages, engine and job queue in one process, everything saved under
+    the storage folder (what the packaged app runs)."""
     from utilsim.worker.server import serve
     serve(store, port)
 
 
 @app.command("run-job")
 def run_job_command(job: Path, store: Path = typer.Option(...)):
-    """Process a downloaded job offline and write a small result file for Studio."""
+    """Process a job file (a revision's recipe) and write its result summary under the storage folder."""
     from utilsim.worker.execute import execute
     result = execute(orjson.loads(job.read_bytes()), store, lambda p: typer.echo(json.dumps(p)))
     typer.echo(str(store / "results" / (result["jobId"] + ".result.json")))

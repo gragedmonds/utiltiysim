@@ -57,3 +57,6 @@
 .schema-set-item>span{margin:0;color:inherit;font-size:inherit}
 .schema-set-item input[type=checkbox]{flex:none;padding:0;accent-color:#3e6a48}
 .schema-field .schema-hint{grid-column:1/-1;font-size:11px;line-height:1.45;color:#6f7d69}
+
+/* Simulation files (share-file.js): the Export and Import buttons and a simulation's three-word handle. */
+.library-heading .library-actions{display:flex;gap:10px;flex-wrap:wrap}.card-code{font-size:13px}.card-handle{font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:#196b61;background:#e4efe9;padding:2px 8px;border-radius:999px;margin-right:8px}

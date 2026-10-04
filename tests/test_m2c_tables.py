@@ -12,7 +12,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from api._m2c import RunRequest, _master, run_for
-from api.index import app
+from api.app import app
 from utilsim.m2c import tables as T
 from utilsim.m2c import views
 from utilsim.m2c.calendar import calendar

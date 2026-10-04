@@ -1,7 +1,7 @@
 # Saved runs and the offline Studio
 
-The first implementation of [PORTAL_ARCHITECTURE.md](PORTAL_ARCHITECTURE.md): replay on a local machine, keep a
-content-addressed archive, and inspect saved results without an engine. The **Runs** link in the live Studio opens
+Replay on a local machine, keep a content-addressed archive, and inspect saved results without an engine (the app
+writes one bundle per finished district: [LOCAL_RUNNER.md](LOCAL_RUNNER.md)). The **Runs** link in the live Studio opens
 `runs.html`, a separate entry point that boots without loading a map, town pack, or engine API.
 
 ## Export
@@ -102,20 +102,13 @@ files. The initial browser reader limits each compressed or expanded file to 256
 it still loads a whole requested table. Large utility shards will need paged detail files or Parquet-backed local
 queries. The exporter currently handles one town and the engine's 2026 calendar.
 
-## Following milestones
+## In the app
 
-The planned runner will expose a **Storage folder** selector and remember paths such as `P:\UtilitySim\` for models,
-archives, downloads and runtime caches. The current CLI already supports an explicit location, for example
-`utilsim export-run --town ayr --as-of 2026-12-31 --store "P:\UtilitySim"` on Windows. The runner's folder picker,
-library migration and unavailable-drive handling are still to be built. Archive identities are independent of paths.
-
-The product uses downloadable archive copies and local libraries, with no NAS integration required. Opening an old
-archive reads its saved results; switching scenarios uses the existing device connection and creates a new run.
-Pairing screens will use eight individual boxes with a central dash, such as `K7M2-Q9RX`; the dash is display-only.
-
-The paired local runner now adds revisioned jobs, persistent pairing, offline receipt sync and a manual-file fallback.
-See [LOCAL_RUNNER.md](LOCAL_RUNNER.md) for installation, storage, credentials and deployment requirements.
-Automatic hosted sync requires Upstash Redis; it does not fall back to ephemeral Vercel storage.
+The app's storage folder holds the libraries: `runs/<runKey>/` bundles, `baselines/`, `batches/`, `results/` and the
+queue, under a path the launcher remembers (`P:\UtilitySim` works). The CLI takes the same location, for example
+`utilsim export-run --town small_town --as-of 2026-12-31 --store "P:\UtilitySim"`. Archive identities are independent
+of paths. The app serves every bundle at `/runs/<runKey>/`, so a finished district opens in the reader with one link
+(`runs.html?run=/runs/<runKey>/`); a bundle copied elsewhere opens through the folder picker.
 The live small-town routes and saved reader remain available.
 
 Validation includes Python engine-to-archive comparisons for every table and saved worklist date, archive reuse

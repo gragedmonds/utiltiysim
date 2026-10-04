@@ -7,8 +7,6 @@ import io
 from pathlib import Path
 
 import orjson
-import pyarrow as pa
-import pyarrow.parquet as pq
 
 TABLES = ["premises", "buildings", "accounts", "businessPartners", "servicePoints", "meters", "registers",
           "installations", "contracts", "tariffAssignments", "tariffs", "mrus", "readSchedules", "sampleReads",
@@ -56,6 +54,11 @@ def _normalise(rows: list[dict]) -> list[dict]:
 
 
 def to_parquet_bytes(rows: list[dict]) -> bytes:
+    # pyarrow is imported here, not at module import: the packaged app leaves it out (scripts/build_runner.py) and
+    # serves the engine API without parquet tables.
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
     rows = _normalise(rows)
     buf = io.BytesIO()
     if not rows:

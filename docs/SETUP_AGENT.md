@@ -14,6 +14,13 @@ disabled, reset and generate controls hidden, a banner links to a new simulation
 and seed changes (`simulation-lock.js`). Dated episodes from the Command Center remain allowed: they are run input,
 not base settings. A record saved before this flag existed counts as locked and opens as before.
 
+## The key in the app
+
+Talk it through needs an internet connection and an Anthropic API key. When none is set, the guide's panel in the
+app shows a key field: the key is saved with `POST /local/claude-key` into the OS vault (Windows DPAPI, macOS Keychain,
+an owner-only file on Linux) and read by `api/_agent.py` `api_key()`; `ANTHROPIC_API_KEY` in the environment takes
+precedence. The key is never part of exports, bundles or simulation files.
+
 ## Environment and utility wizard
 
 The manual wizard has four steps:
@@ -37,9 +44,8 @@ The manual wizard has four steps:
    returns it to the suggestion.
 4. **Review & open**: the editable per-input summary, validation and links back to either setup stage.
 
-Town-size starters are **500, 5,000, 25,000, 50,000 and 500,000 residential homes**. New drafts start at 500. Sizes above the live-engine limit open the paired local workflow (see LOCAL_RUNNER.md).
-The last two choices are visibly unavailable: the current hosted engine caps detailed towns at 6,000 homes
-(local default: 10,000), so large-city simulation requires further engine work. Advanced retains custom
+Town-size starters are **500, 5,000, 25,000, 50,000 and 500,000 residential homes**. New drafts start at 500. Sizes above the live-engine limit run as independent districts from the run page (see LOCAL_RUNNER.md).
+The engine caps one live town at 10,000 homes, so the larger sizes run as districts. Advanced retains custom
 counts within the connected engine’s limit; existing saved sizes are preserved. Claude receives the same size catalogue.
 
 Focused setup shows relevant controls and Advanced groups. **Show all settings for this step** reveals the rest,

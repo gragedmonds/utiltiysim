@@ -1,4 +1,5 @@
-"""Frozen runtime entry point. Launcher chooses storage before starting this process."""
+"""Frozen runtime entry point: the app's server (Studio, engine API and job queue). The launcher chooses the storage
+folder before starting this process."""
 from __future__ import annotations
 
 import argparse
@@ -10,7 +11,7 @@ def main():
     parser.add_argument('--batch-worker', nargs=3)
     parser.add_argument('--store')
     parser.add_argument('--self-test')
-    parser.add_argument('--port', type=int, default=8010)
+    parser.add_argument('--port', type=int, default=0)
     parser.add_argument('--ready-file')
     args = parser.parse_args()
     if args.self_test:

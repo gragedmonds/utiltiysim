@@ -1,4 +1,5 @@
-// A small bootstrapper. The user selects storage before any runtime download.
+// A small bootstrapper: it keeps the signed runtime up to date in the storage folder, starts the app's server there
+// and opens Utility Studio in the browser. The storage folder is chosen before any download.
 package main
 
 import (
@@ -27,7 +28,7 @@ import (
 // Release build pins the runtime identity, verification key and signed digest.
 var runtimeURL, runtimeSHA, runtimeSignature, runtimePublicKey, runtimeBytes, releaseVersion string
 var mu sync.Mutex
-var message = "Choose a folder for the engine and your simulations."
+var message = "Ready to open Utility Studio."
 var busy, picking bool
 var engineURL, logPath string
 

@@ -5626,7 +5626,7 @@
     },
     "/api/m2c/episodes/preview": {
       "post": {
-        "description": "``m2c-episode-preview/1.0``: the episodes checked as a run checks them and, for a sporadic one, the days it\nstrikes (``hits``: ``[date, strength]``, as the trend gives them), without running the year. A pattern with its\nown ``seed`` strikes the same days in every run (the local runner's districts share them); one without draws\nfrom the town's seed, as a run without a seed of its own does. A bad episode is HTTP 422 with the engine's message.",
+        "description": "``m2c-episode-preview/1.0``: the episodes checked as a run checks them and, for a sporadic one, the days it\nstrikes (``hits``: ``[date, strength]``, as the trend gives them), without running the year. A pattern with its\nown ``seed`` strikes the same days in every run (the app's districts share them); one without draws\nfrom the town's seed, as a run without a seed of its own does. A bad episode is HTTP 422 with the engine's message.",
         "operationId": "post_episode_preview_api_m2c_episodes_preview_post",
         "requestBody": {
           "content": {
@@ -6407,413 +6407,6 @@
         "summary": "Get Packs"
       }
     },
-    "/api/portal/check-file": {
-      "post": {
-        "operationId": "check_file_api_portal_check_file_post",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Check File",
-        "tags": [
-          "local runner"
-        ]
-      }
-    },
-    "/api/portal/check-result": {
-      "post": {
-        "operationId": "check_result_api_portal_check_result_post",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Check Result",
-        "tags": [
-          "local runner"
-        ]
-      }
-    },
-    "/api/portal/claim": {
-      "post": {
-        "operationId": "claim_api_portal_claim_post",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Claim",
-        "tags": [
-          "local runner"
-        ]
-      }
-    },
-    "/api/portal/details": {
-      "post": {
-        "operationId": "detail_request_api_portal_details_post",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Detail Request",
-        "tags": [
-          "local runner"
-        ]
-      }
-    },
-    "/api/portal/details/{rid}": {
-      "get": {
-        "operationId": "detail_read_api_portal_details__rid__get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "rid",
-            "required": true,
-            "schema": {
-              "title": "Rid",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Detail Read",
-        "tags": [
-          "local runner"
-        ]
-      }
-    },
-    "/api/portal/device/details": {
-      "post": {
-        "operationId": "device_details_api_portal_device_details_post",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Device Details",
-        "tags": [
-          "local runner"
-        ]
-      }
-    },
-    "/api/portal/devices/{device_id}/revoke": {
-      "post": {
-        "operationId": "revoke_api_portal_devices__device_id__revoke_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "device_id",
-            "required": true,
-            "schema": {
-              "title": "Device Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Revoke",
-        "tags": [
-          "local runner"
-        ]
-      }
-    },
-    "/api/portal/jobs": {
-      "post": {
-        "operationId": "queue_api_portal_jobs_post",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Queue",
-        "tags": [
-          "local runner"
-        ]
-      }
-    },
-    "/api/portal/jobs/{job_id}/report": {
-      "post": {
-        "operationId": "report_api_portal_jobs__job_id__report_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "job_id",
-            "required": true,
-            "schema": {
-              "title": "Job Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Report",
-        "tags": [
-          "local runner"
-        ]
-      }
-    },
-    "/api/portal/jobs/{job_id}/retry": {
-      "post": {
-        "operationId": "retry_api_portal_jobs__job_id__retry_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "job_id",
-            "required": true,
-            "schema": {
-              "title": "Job Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Retry",
-        "tags": [
-          "local runner"
-        ]
-      }
-    },
-    "/api/portal/pairings": {
-      "post": {
-        "operationId": "pairing_api_portal_pairings_post",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Pairing",
-        "tags": [
-          "local runner"
-        ]
-      }
-    },
-    "/api/portal/prepare": {
-      "post": {
-        "operationId": "prepare_api_portal_prepare_post",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Prepare",
-        "tags": [
-          "local runner"
-        ]
-      }
-    },
-    "/api/portal/redeem": {
-      "post": {
-        "operationId": "redeem_api_portal_redeem_post",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Redeem",
-        "tags": [
-          "local runner"
-        ]
-      }
-    },
-    "/api/portal/results/import": {
-      "post": {
-        "operationId": "import_result_api_portal_results_import_post",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Import Result",
-        "tags": [
-          "local runner"
-        ]
-      }
-    },
-    "/api/portal/status": {
-      "get": {
-        "operationId": "status_api_portal_status_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Status",
-        "tags": [
-          "local runner"
-        ]
-      }
-    },
-    "/api/portal/workspace": {
-      "get": {
-        "operationId": "read_api_portal_workspace_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Read",
-        "tags": [
-          "local runner"
-        ]
-      }
-    },
-    "/api/portal/workspaces": {
-      "post": {
-        "operationId": "create_api_portal_workspaces_post",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Create",
-        "tags": [
-          "local runner"
-        ]
-      }
-    },
     "/api/process/costs": {
       "post": {
         "description": "Cost (labor, system, CX), carry and days to release by exception type.",
@@ -7172,6 +6765,84 @@
           }
         },
         "summary": "Setup Operation Defaults"
+      }
+    },
+    "/api/share/export": {
+      "post": {
+        "description": "The simulation file for a simulation's inputs: a wizard proposal by alias (``summary`` may be left out), with\na Studio record's ``townRef`` and flat ``opsSettings`` accepted in place of ``townOverrides`` and ``operations``.\nAnswers ``{file, filename}``; the file's ``handle`` is its three-word name.",
+        "operationId": "share_export_api_share_export_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Proposal",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Share Export"
+      }
+    },
+    "/api/share/import": {
+      "post": {
+        "description": "The validated proposal a simulation file holds, in the shape ``POST /api/setup-agent/validate`` answers\nwith, plus its ``handle``.",
+        "operationId": "share_import_api_share_import_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "File",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Share Import"
       }
     },
     "/api/sim/days": {

@@ -40,11 +40,13 @@ def smoke_startup(executable, library):
                         headers = {'Authorization': 'Bearer ' + parse_qs(address.fragment)['token'][0]}
                         response = client.get(origin + '/local/status', headers=headers)
                         if response.status_code == 200:
-                            assert response.json()['schemaVersion'] == 'local-status/1.0'
+                            assert response.json()['schemaVersion'] == 'local-status/2.0'
                             assert client.get(origin + '/').status_code == 200
-                            assert client.get(origin + '/assets/runner.js').status_code == 200
+                            assert client.get(origin + '/setup.js').status_code == 200
+                            assert client.get(origin + '/packs/index.json').status_code == 200
+                            assert client.get(origin + '/api/health').status_code == 200
                             assert client.get(origin + '/local/status').status_code == 401
-                            print('Packaged server startup, UI and authenticated readiness passed.')
+                            print('Packaged server startup, Studio pages, engine API and authenticated readiness passed.')
                             return
                     except (OSError, ValueError, httpx.HTTPError):
                         pass
@@ -74,7 +76,7 @@ def main():
     build_file.parent.mkdir(exist_ok=True)
     build_file.write_text(engine_build())
     command = [sys.executable, '-m', 'PyInstaller', '--noconfirm', '--clean', '--onedir', '--name', 'utility-runner',
-               '--hidden-import', 'utilsim.batch', '--hidden-import', 'utilsim.gen.pipeline',
+               '--hidden-import', 'utilsim.batch', '--hidden-import', 'utilsim.gen.pipeline', '--hidden-import', 'api.app',
                '--collect-data', 'utilsim', '--copy-metadata', 'numpy', '--copy-metadata', 'pydantic',
                '--copy-metadata', 'orjson', '--exclude-module', 'matplotlib', '--exclude-module', 'pyarrow']
     for source, dest in [(ROOT / 'packages/town-viewer/dist', 'packages/town-viewer/dist'),

@@ -1,4 +1,4 @@
-"""Device credentials live outside archives. Native vault on Windows/macOS; private file on Linux."""
+"""Secrets (the Anthropic API key for Talk it through) live outside archives. Native vault on Windows/macOS; private file on Linux."""
 from __future__ import annotations
 
 import os
@@ -49,3 +49,10 @@ def windows_protect(data: bytes, decrypt: bool):
         return ctypes.string_at(target.data, target.size)
     finally:
         ctypes.windll.kernel32.LocalFree(target.data)
+
+
+def clear(path: Path):
+    if sys.platform == 'darwin':
+        subprocess.run(['security', 'delete-generic-password', '-a', str(path), '-s', 'UtilityStudio'], capture_output=True)
+        return
+    path.unlink(missing_ok=True)

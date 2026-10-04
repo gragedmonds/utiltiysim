@@ -1,3 +1,7 @@
+> **Superseded (October 2026).** Utility Studio is now a downloaded app that runs everything on the person's own computer:
+> pages, engine and job queue in one process, no pairing, no portal, no hosted sync. Simulations travel between computers
+> as files. See [LOCAL_RUNNER.md](LOCAL_RUNNER.md). This document is kept as the design history of the web-paired portal.
+
 # The portal as command centre, processing and storage offline
 
 *Architecture, October 2026. Companion to [DATA_FIRST.md](DATA_FIRST.md) (what gets generated) and [M2C.md](M2C.md)

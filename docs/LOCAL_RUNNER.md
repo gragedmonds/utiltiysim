@@ -1,118 +1,114 @@
-# Paired local simulations
+# Utility Studio, the app: everything on your computer
 
-Studio supports **500 / 5,000 / 25,000 / 50,000 / 500,000 residential homes**. Sizes above the connected live
-engine's limit open the local-run workspace. Commercial sites add accounts. A 500k option does not promise a
-500k shared workforce: this release explicitly requires independent districts with independent teams/networks.
-Each district has at most 2,000 homes by default. Existing 50k measurements do not establish a measured 500k runtime;
-the monitor estimates from completed districts and shows actual phase times.
+Utility Studio is a downloaded app. Its one process serves the Studio pages, runs the engine behind them and keeps the
+job queue, and everything it makes stays in a storage folder you choose. No account, no upload, no connection needed
+once the engine is installed. The only online features are optional: the first-run engine download and **Talk it
+through** with Claude (an Anthropic API key you paste in).
 
-## One-time setup
+## Install and open
 
-1. Open a simulation from the guided setup. Large sizes say **Local computer required**.
-2. Download the UtilityStudio launcher from the repository's latest release. Select the matching operating system.
-3. Click **Choose folder** to open the native folder selector (Windows supports mapped drives), or use **Type a path**. Choose a writable storage folder, such as `P:\UtilitySim`. The engine, baselines, archives, temporary downloads,
-   jobs and receipts stay under it. The bootstrap preference stores only the selected path in the OS config folder.
-4. Click **Start local engine**. The launcher shows storage checks, download and installation progress, then verifies that the local server answers before showing **Engine running** and an **Open local engine** link. Errors remain visible with the log location. Refreshing the launcher keeps its session. In Studio, choose **Connect a computer** in Studio, and enter the eight boxes (`ABCD–2345`) in the runner.
-   Codes expire after ten minutes and can be redeemed once. The computer keeps a separate credential for reconnection.
-5. Review the independent-district staffing explanation and queue a run. Pairing itself never starts a simulation.
+1. Download **UtilityStudio** for your operating system from the site, or from the repository's latest release
+   (`UtilityStudio-windows-x64.exe`, `UtilityStudio-macos-arm64.zip`, `UtilityStudio-macos-x64.zip`,
+   `UtilityStudio-linux-x64.zip`; unzip the launcher on macOS and Linux).
+2. Open it. The launcher page shows the storage folder (default `~/UtilitySim`; **Change** opens the native folder
+   selector or lets you type a path, mapped drives such as `P:\UtilitySim` included) and one button, **Open Utility
+   Studio**. The first start downloads the versioned engine (about 135 MB) into `runtime/<version>` under the folder,
+   checks its size, SHA-256 and Ed25519 signature, and installs it; later starts reuse it. Errors stay on the page
+   with the log location (`runner.log` in the folder).
+3. Utility Studio opens in your browser at `http://127.0.0.1:<port>/`, the setup wizard first. Keep the launcher
+   window open while you work; close it to stop everything.
 
-Windows credentials use DPAPI; macOS uses Keychain; Linux uses an owner-readable credential file under the chosen
-storage root. Credentials are not part of exported archives. The local API binds to 127.0.0.1, validates the Host
-header and requires a per-launch bearer token; hosted Studio communicates through outbound HTTPS polling.
+The launcher remembers the folder in the OS config directory. Choosing another folder opens another library and
+leaves this one where it is. One app runs per library (a lock file refuses a second).
 
-The compiled launcher is small; its versioned engine is a separate first-use download. A Linux development build
-measured a **3.1 MB compressed launcher and 135 MB runtime**. Release manifests record each platform's exact sizes.
-The launcher checks the pinned digest and Ed25519 signature before extraction, rejects traversal and symlinks,
-resumes interrupted downloads, and commits an installed version only after verification. Each launcher pins its
-release verification key; the ephemeral release signing key is never stored or published. This is runtime integrity,
-not OS publisher signing: Apple notarization and Windows Authenticode certificates are not configured.
+Developers run the same server from a checkout: `uv run utilsim studio --store out/library` (any free port; the URL
+with its token is printed and opened). `node web/serve.mjs` with `?engine=http://127.0.0.1:8010` and `uv run utilsim
+serve` remain the engine-only development host; the pages then have no queue or codes.
 
-Download a newer launcher to update its pinned runtime. Older runtime versions and libraries remain on disk.
-To open another library, select its folder before starting. Automated library relocation is not implemented: stop
-processing, copy the complete library, then select the destination. Missing drives pause work instead of redirecting
-writes to another volume. Start only one runner per library (an OS lock prevents competing processes).
+## What runs where
 
-## The year before the run
+The process (`utilsim/worker/server.py`, FastAPI on a random loopback port) serves:
 
-The local-run page (`local-runs.html`) runs top to bottom: configuration, **the year**, then **Run revision N
-locally**. The year is the Command Center's calendar (`year-page.js` in plan mode over `local-year.js`): click a day
-to inflict a scenario from the engine's library, edit or remove an episode from its bar or the legend, clear all, or
-talk a tweak through. Nothing runs in the browser and there are no trend charts: the episodes are saved with the
-simulation and go into the next revision's job, which every district applies. `POST /api/m2c/episodes/preview`
-(`{town?, year?, episodes}`) checks them as a run does (HTTP 422 with the engine's message) and returns each sporadic
-episode's struck days (`hits`) without a run, so the calendar marks them.
+| Path | What |
+|---|---|
+| `/` | The Studio pages (`packages/town-viewer/dist`): setup wizard, Studio, run page, saved-results reader |
+| `/packs/` | The prebuilt town packs |
+| `/api/` | The whole engine API (`api/app.py`): setup, towns, operations, meter-to-cash, simulation files |
+| `/runs/<runKey>/` | Every finished district's run bundle, for the saved-results reader (`runs.html?run=/runs/<runKey>/`) |
+| `/local/` | This computer's queue, result summaries, library and the Claude key; needs the per-launch bearer token |
 
-Districts are separate towns with their own run seeds, so a sporadic episode would strike different days in each.
-The page gives each one the simulation's own `pattern.seed` (`local:<simulationId>`), and `prepare` fills a missing one
-the same way: every district strikes the same days, the ones the calendar shows.
+The launcher opens the pages with the token in the URL fragment (`#token=…`); `local-session.js` keeps it in the
+browser for that origin and sends it with every `/local` request. The server binds to 127.0.0.1, refuses other Host
+headers and sets no CORS headers, so only pages it serves can call it. The engine's generated-town cache lives under
+the storage folder too (`cache/`).
 
-Any change to the episodes or the other inputs since the latest revision is spelled out ("Changed since revision 2:
-Head end down added") and the button runs the next revision; without sync it downloads the new job file at once. With
-no change the latest revision is up to date and its job file stays available. An old job file is never reused for
-changed inputs.
+Simulations up to the engine's live limit (10,000 homes) run as one live town: the Command Center, the map and the
+workspace call `/api` and replay the year on demand, as before. Larger sizes (25,000, 50,000, 500,000 homes) run as
+independent districts of up to 2,000 homes from the run page (`local-runs.html?model=<id>`), below.
 
-## Jobs, edits and results
+## The run page: revisions on this computer
 
-- Every submitted job captures an immutable recipe and numbered revision. Concurrent edits get a conflict rather
-  than reusing the same revision. Previous results remain readable while the next job processes.
-- A paired worker claims a job with a 120-second renewable lease, reports progress every five seconds, and saves a
-  local receipt before upload. A stale lease cannot overwrite another worker's result. If two workers eventually
-  compute the same recipe, content-addressed district archives can be reused; completion is fenced by the lease.
-- Baselines are cached by generation configuration, district seed, map mode and engine build. Staffing/Year scenario
-  edits reuse those snapshots; environment changes create different baselines. No database download is needed for a
-  newly generated model. A revised year may still replay in full; there is no incremental mid-year checkpoint.
-- The worker checkpoints completed districts and retries an interrupted district. Pause waits until the current
-  district completes. Restart reopens the active inbox, verifies saved results and resumes. Offline completion saves
-  a receipt; reconnect uploads it idempotently. Revocation stops sync and keeps local files.
-- Studio receives additive monthly totals, phase timings and references/checksums for district manifests. It does
-  not upload all tables. A selected page of an archived table can be requested from the computer holding the result;
-  it must be online. Requested pages expire after five minutes. Imported receipts have no attached detail provider.
-- The local saved-run reader opens full district folders without an engine or internet connection.
+The page runs top to bottom: the configuration, **the year**, then **Run revision N**. The year is the Command
+Center's calendar (`year-page.js` in plan mode over `local-year.js`): click a day to inflict a scenario from the
+engine's library, edit or remove an episode, clear all, or talk a tweak through. The episodes are saved with the
+simulation and go into the next revision's job, which every district applies; `POST /api/m2c/episodes/preview`
+checks them as a run does and marks a sporadic episode's struck days on the calendar.
 
-A workspace link contains a high-entropy capability in its URL fragment. Anyone with that link can read its small
-results, edit configurations, queue jobs and connect computers. WorkOS/login remain absent. Devices are scoped to
-one workspace and cannot read another workspace. Browser-local drafts remain available independently.
+Districts are separate towns with their own run seeds, so a sporadic episode gets the simulation's own `pattern.seed`
+(`local:<simulationId>`) and every district strikes the same days.
 
-## Manual fallback
+**Run revision N** posts the inputs to `POST /local/jobs`. The server prepares the recipe (`utilsim/worker/prepare.py`:
+the preset config deep-merged with the town overrides, the run settings, the episodes, the seed and the results
+date), checks it exactly as a run does, numbers it as the next revision of that simulation and queues it. Revisions
+run one at a time (`utilsim/worker/jobs.py`); the page and a floating card on every Studio page show the active
+revision's stage, districts done and ETA. Any change to the year or the other inputs since the latest revision is
+spelled out ("Changed since revision 2: Head end down added") and runs the next revision; with no change the latest
+revision stands. A completed revision shows the year's monthly totals and timings, and each district opens in the
+saved-results reader with its full tables, work queues and scorecard. Failed revisions can be retried; queued and
+finished ones removed from the list (their files stay). **Pause** holds the queue after the current district.
 
-Without shared storage, **Prepare/Run locally** creates a portable job, marked as awaiting manual processing.
-Download it, import it into the local runner, then download the result summary and import it back into Studio.
-Both inputs and receipts carry job/revision identities; mismatched or partial results are rejected. The server's
-validation endpoints do not need Redis. Full files remain in the runner's `runs/<runKey>` folders.
+On disk under the storage folder: `runner.json` (the queue), `baselines/` (generated towns, reused across revisions
+that change only the year), `batches/` (checkpoints per district), `runs/<runKey>/` (one bundle per finished district)
+and `results/<jobId>.result.json` (the small summary). A revision interrupted by closing the app resumes from its
+finished districts on the next start. A missing drive pauses work instead of writing anywhere else.
 
-Advanced CLI equivalents:
+## Simulation files
 
-```sh
-utilsim runner --store "P:/UtilitySim"
-utilsim run-job my-job.job.json --store "P:/UtilitySim"
-```
+**Export** (on a simulation's card in the list, and on the run page) downloads the whole simulation as one small JSON
+file; **Import simulation** picks one. A file carries everything that shapes the simulation: the prepared town and
+the town settings that differ from it (the exact town the simulation runs on, from its town reference), the number of
+homes (a 500,000-home simulation included), the run seed, the locked run settings and map-day settings, the goals,
+the results date, the name, and every episode on the year, the starting scenario's and the ones inflicted later, each
+with its dates, ramp, settings and sporadic pattern with its seed. Nothing is stored anywhere: the same engine build
+rebuilds the same simulation from the file alone. An imported simulation appears in the list ready to review; it
+opens unlocked on Config so every setting can be changed before it starts, or on the run page for a large one.
 
-The directory must exist. Manual jobs process without internet; importing them into hosted Studio and using Claude
-requires a connection. `baselines/`, `batches/`, `runs/`, `results/` and `runner.json` live under the selected root.
+Every file has a handle, three plain words with an animal in the middle, such as `brave-otter-harbour`, derived from
+the simulation's run-changing inputs (`utilsim/share.py`): two people holding the same simulation see the same handle,
+a changed setting or episode changes it, and renaming does not. It names the file (`brave-otter-harbour.utilitysim.json`)
+and labels the simulation's card. The file is `utility-studio-simulation/1.0`: `handle`, `name`, `exported`,
+`engineBuild` and `simulation` (the wizard proposal by alias). `POST /api/share/export` and `POST /api/share/import`
+are the endpoints; a file from a newer version, or one holding settings this version does not accept, is refused with
+the reason.
 
-## Deployment and release
+## Talk it through
 
-For automatic pairing/queueing on Vercel, connect **Upstash Redis** and expose:
+The setup guide needs an internet connection and an Anthropic API key. In the app, the guide's panel offers a key
+field when none is set; the key is saved with `POST /local/claude-key` into the OS vault (Windows DPAPI, macOS
+Keychain, an owner-only file on Linux) and read by the engine (`api/_agent.py` `api_key()`); it is never part of
+exports, bundles or codes. `ANTHROPIC_API_KEY` in the environment takes precedence. Everything else works without it.
 
-- `UPSTASH_REDIS_REST_URL`
-- `UPSTASH_REDIS_REST_TOKEN`
+## Release
 
-The older Vercel integration aliases `KV_REST_API_URL` / `KV_REST_API_TOKEN` are also accepted. Redis uses an atomic
-compare-and-swap Lua script for workspace updates; pairing redemption and lease transitions happen in those atomic
-updates. Hosted deployment never falls back to an ephemeral filesystem or in-memory queue. If credentials are absent,
-`GET /api/portal/status` reports unavailable and Studio offers manual files.
+The **Utility Studio packages** workflow (`.github/workflows/runner.yml`) builds and smoke-tests Windows x64,
+Linux x64, macOS arm64 and macOS x64: `scripts/build_runner.py` freezes the engine with PyInstaller (the pages,
+presets, packs and schemas inside), zips it as `runtime-<platform>.zip`, signs its digest with a per-release Ed25519
+key whose public half is compiled into the Go launcher with the pinned URL, size and digest, then runs the engine's
+self-test and starts the packaged server to check the pages, the packs, the API and the authenticated readiness.
+Pull requests produce artifacts; merges to main publish a release, which the site's download buttons read. This is
+runtime integrity, not OS publisher signing: Apple notarization and Windows Authenticode are not configured, so the
+operating system may show an unidentified-publisher prompt.
 
-A standalone/local portal uses SQLite transactions at `UTILSIM_PORTAL_DB` (default `out/portal.sqlite3` when not on
-Vercel). Keep that database on a persistent volume. This backend supports integration tests and self-hosting; it is
-not an ephemeral fallback for Vercel.
-
-The **Local runner packages** workflow builds and smoke-tests Windows x64, Linux x64, macOS arm64 and macOS x64.
-PRs produce artifacts only. A successful main CI run triggers release builds; publication requires every platform's
-packaged smoke test. The latest GitHub release supplies the download page. The release workflow uses the repository's
-normal Actions token with contents write; no runtime signing secret is uploaded or embedded.
-
-Current operational bounds: 100 revisions per workspace; five concurrent five-minute detail requests; metadata
-requests up to 2 MB and detail pages up to 500 KB; full data stays local. Rate limits protect workspace creation and
-pair-code attempts. This paired-batch workflow uses calendar year 2026 and independent districts. The engine also has shared-workforce,
-connected-network and chained-year modes through the existing CLI and live Studio paths; those are not selected by
-this first paired-job contract.
+Costs follow CLAUDE.md: the build runs only on merges that change what the app ships, about 100 billed minutes a run
+if the repository goes private. The site is static (`scripts/build_site.mjs`: the landing page and brand files), so
+Vercel runs no functions.
