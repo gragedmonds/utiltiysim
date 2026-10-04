@@ -88,7 +88,8 @@ export function incidentImpact(i,time=0){const u=i?.unsupplied||{},n=x=>Number(x
 // The next job of the day that has not started yet (a reading round, a field order), for an empty operations list.
 export function nextJob(jobs,time){return (jobs||[]).filter(j=>j.startAt>time).sort((a,b)=>a.startAt-b.startAt)[0]||null;}
 // Run-day arithmetic (YYYY-MM-DD). A month on is the same day of the next month, clamped to its length (31 Jan →
-// 28 Feb). The simulated year ends on 31 December 2026; `clampDay` holds a day there.
+// 28 Feb). The map's operations days are 2026's (the operations engine runs 2026 only, whichever meter-to-cash year is
+// active): they end on 31 December 2026, and `clampDay` holds a day there.
 export const YEAR_END='2026-12-31';
 export const addDays=(day,n)=>new Date(Date.parse(day+'T12:00:00Z')+n*86400000).toISOString().slice(0,10);
 export function addMonths(day,n=1){const [y,m,d]=day.split('-').map(Number),t=new Date(Date.UTC(y,m-1+n,1)),last=new Date(Date.UTC(t.getUTCFullYear(),t.getUTCMonth()+1,0)).getUTCDate();t.setUTCDate(Math.min(d,last));return t.toISOString().slice(0,10);}

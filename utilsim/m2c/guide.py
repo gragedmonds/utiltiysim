@@ -183,9 +183,9 @@ GAPS = (
     {"title": "Undetected water loss", "text": "No mains leakage fraction and no supplied-versus-billed water "
      "balance.", "plan": "Per-zone unbilled loss that shows in flows but never in bills, and a monthly water-balance "
      "report."},
-    {"title": "Multiple years in the Studio", "text": "The engine chains years 2026 to 2030 (a request's year and "
-     "previous); the Studio still works on 2026 alone, and the map's operations days are 2026's.", "plan": "A year "
-     "switcher and Continue into the next year in the Command Center; operations days in any year."},
+    {"title": "Operations days in later years", "text": "Years chain from 2026 to 2030 in the engine and the Studio "
+     "(the Command Center's year switcher and Continue), but the map's operations days are 2026's.", "plan": "Run the "
+     "operations day (crews on the map, incidents, frames) in any year of the chain."},
     {"title": "A utility above the town", "text": "Independent district batches and additive archive totals are available locally. "
      "There is no shared utility-wide workforce, connected cross-district network or live utility dashboard.",
      "plan": "Coordinate work and staffing daily across districts; add boundary conditions for connected networks "

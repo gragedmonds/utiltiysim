@@ -107,3 +107,63 @@ test('background interruptions are recorded too; a worked day keeps its outages 
  assert.equal(m.recordDay('2026-05-02',[],{reset:true}),true);assert.equal(m.outages['2026-05-02'],undefined);assert.equal(m.outageSources['2026-05-02'],undefined);
  assert.equal(m.recordDay('2026-05-03',[]),false);assert.equal(m.outageList().length,1);
 });
+
+// ---- years: a simulation starts in 2026 and continues a year at a time; a later year opens on the one before ----------
+const OLD_STATE={settings:{process:{analysts:3}},seed:'S-1',actions:[{id:'ACT-1',day:'2026-04-10',type:'accept',caseId:'CASE-260401-1'}],episodes:[{id:'EP-1',title:'Half',scenario:null,from:'2026-03-01',to:null,ramp:0,settings:{process:{analysts:'*0.5'}}}],asOf:'2026-05-01',outages:{'2026-03-11':[{utility:'electric',start:10,end:90,premiseIds:['P1']}]},outageSources:{'2026-03-11':'background'}};
+function oldStore(){const s=memory();s.setItem('utility-town-m2c:town-1',JSON.stringify(OLD_STATE));return s;}
+
+test('an old saved state (no years) loads as 2026, and 2026 requests stay as they were',async()=>{
+ const store=oldStore(),log=[],m=new EngineM2C({townRef:'small_town',townId:'town-1',storage:store,fetchImpl:fakeEngine(log)});
+ assert.equal(m.year,2026);assert.deepEqual(m.years,[2026]);assert.equal(m.lastYear,2026);assert.equal(m.isClosed(),false);assert.equal(m.canContinue(),true);
+ assert.deepEqual(m.actions,OLD_STATE.actions);assert.deepEqual(m.episodes,OLD_STATE.episodes);assert.equal(m.asOf,'2026-05-01');assert.deepEqual(m.outages,OLD_STATE.outages);assert.equal(m.outageSources['2026-03-11'],'background');
+ assert.equal(m.yearStart(),'2026-01-01');assert.equal(m.yearEnd(),'2026-12-31');
+ const b=m.body({page:1});assert.equal('year' in b,false);assert.equal('previous' in b,false);
+ assert.deepEqual(b,{town:'small_town',actions:OLD_STATE.actions,page:1,settings:OLD_STATE.settings,seed:'S-1',outages:[{day:'2026-03-11',utility:'electric',start:10,end:90,premiseIds:['P1']}],episodes:OLD_STATE.episodes,asOf:'2026-05-01'});
+ assert.equal('year' in m.export(),false);assert.equal('previous' in m.export(),false);
+ m.setAsOf('2026-05-02');assert.deepEqual(Object.keys(JSON.parse(store.getItem('utility-town-m2c:town-1'))),['settings','seed','actions','episodes','asOf','outages','outageSources'],'2026 alone saves as before');
+});
+
+test('Continue opens the next year on this one: empty input, viewed from 31 January, with year and previous on every request',async()=>{
+ const store=oldStore(),log=[],m=new EngineM2C({townRef:'small_town',townId:'town-1',storage:store,fetchImpl:fakeEngine(log)});
+ assert.equal(m.continueYear(),2027);assert.equal(m.year,2027);assert.deepEqual(m.years,[2026,2027]);assert.equal(m.asOf,'2027-01-31');
+ assert.deepEqual([m.actions,m.episodes,m.outages,m.outageSources],[[],[],{},{}]);assert.equal(m.yearStart(),'2027-01-01');assert.equal(m.yearEnd(),'2027-12-31');assert.equal(m.isClosed(),false);assert.equal(m.isClosed(2026),true);
+ await m.summary();const b=log.at(-1).body;
+ assert.equal(b.year,2027);assert.equal(b.asOf,'2027-01-31');assert.deepEqual(b.actions,[]);assert.equal('episodes' in b,false);assert.equal('outages' in b,false);assert.equal(b.settings.process.analysts,3);assert.equal(b.seed,'S-1');
+ assert.deepEqual(b.previous,[{settings:OLD_STATE.settings,episodes:OLD_STATE.episodes,actions:OLD_STATE.actions,outages:[{day:'2026-03-11',utility:'electric',start:10,end:90,premiseIds:['P1']}]}],'one entry per earlier year, its own input and the shared settings');
+ // The year's own input rides as the request's; the earlier year stays in previous.
+ m.addEpisode({title:'Cold',from:'2027-02-01',to:'2027-02-28',settings:{vee:{high_ratio:3}}});await m.trend();assert.deepEqual(log.at(-1).body.episodes.map(e=>e.from),['2027-02-01']);assert.equal(log.at(-1).body.previous[0].episodes.length,1);
+ const x=m.export();assert.equal(x.year,2027);assert.deepEqual(x.previous,b.previous);assert.equal(x.asOf,'2027-01-31');assert.equal(x.episodes.length,1);
+ // Kept: reopening finds 2027 active and 2026 as it was; the stored 2026 is still the top-level state.
+ const saved=JSON.parse(store.getItem('utility-town-m2c:town-1'));assert.equal(saved.year,2027);assert.deepEqual(saved.actions,OLD_STATE.actions);assert.equal(saved.later[0].year,2027);
+ const again=new EngineM2C({townRef:'small_town',townId:'town-1',storage:store});assert.equal(again.year,2027);assert.deepEqual(again.years,[2026,2027]);assert.equal(again.episodes.length,1);assert.deepEqual(again.yearState(2026).actions,OLD_STATE.actions);
+ // A previous entry without settings when the run has none (the engine then runs that year on the town's).
+ const plain=new EngineM2C({townRef:'small_town',townId:'town-2',storage:memory(),fetchImpl:fakeEngine(log)});plain.continueYear();assert.deepEqual(plain.body().previous,[{}]);
+});
+
+test('a closed year is view only: actions, episodes and outages are refused there; switching years is fine',async()=>{
+ const store=oldStore(),log=[],m=new EngineM2C({townRef:'small_town',townId:'town-1',storage:store,fetchImpl:fakeEngine(log)});m.continueYear();
+ assert.equal(m.setYear(2026),true);assert.equal(m.year,2026);assert.equal(m.isClosed(),true);assert.equal(m.canAct(),false);assert.equal(m.canContinue(),false);
+ assert.equal(m.closedMessage(),'2026 is closed: 2027 opened on it. Work in 2027, or switch years to look back.');assert.equal(m.actBlock(),m.closedMessage());
+ const n=log.length;await assert.rejects(()=>m.act('accept','CASE-260401-2'),/2026 is closed: 2027 opened on it\. Work in 2027, or switch years to look back\./);assert.equal(log.length,n,'refused before the engine is asked');assert.equal(m.actions.length,1);
+ assert.throws(()=>m.addEpisode({from:'2026-06-01',settings:{a:{b:1}}}),/2026 is closed/);assert.throws(()=>m.reset(),/2026 is closed/);assert.throws(()=>m.continueYear(),/Continue from 2027/);
+ // The map's days are 2026's: a closed 2026 keeps its outages, and nothing lands in 2027.
+ assert.equal(m.recordDay('2026-06-02',[{utility:'gas',start:5,end:50,premiseIds:['P7']}],{commands:true}),false);assert.equal(m.setOutages('2026-03-11',[]),false);
+ assert.equal(m.yearState(2026).outages['2026-06-02'],undefined);assert.deepEqual(m.yearState(2027).outages,{});
+ // Viewing back is fine: the view date moves within 2026, and 2026's requests are 2026's as before.
+ assert.equal(m.setAsOf('2026-07-01'),true);assert.equal(m.setAsOf('2027-02-01'),false,'a day of another year is not taken');assert.equal(m.asOf,'2026-07-01');
+ await m.summary();assert.equal('year' in log.at(-1).body,false);assert.equal('previous' in log.at(-1).body,false);assert.equal(log.at(-1).body.asOf,'2026-07-01');
+ assert.throws(()=>m.setYear(2029),/not open/);assert.equal(m.setYear(2027),true);assert.equal(m.canAct(),true);assert.equal(m.asOf,'2027-01-31');
+ // The operations day (2026's) keeps 2026's input whichever year is active.
+ assert.deepEqual(m.context().actions,OLD_STATE.actions);assert.equal(m.context().outages.length,1);assert.equal(m.lockedBefore('2026-04-01'),'2026-04-10');
+});
+
+test('years run to 2030, and each year has its own date bounds (2028 has 29 February)',async()=>{
+ const m=new EngineM2C({townRef:'small_town',townId:'town-1',storage:memory(),fetchImpl:fakeEngine([])});
+ for(const y of [2027,2028,2029,2030])assert.equal(m.continueYear(),y);
+ assert.deepEqual(m.years,[2026,2027,2028,2029,2030]);assert.equal(m.canContinue(),false);assert.throws(()=>m.continueYear(),/runs to 2030/);
+ assert.equal(m.body().previous.length,4);
+ m.setYear(2028);assert.equal(m.yearStart(),'2028-01-01');assert.equal(m.yearEnd(),'2028-12-31');assert.equal(m.asOf,'2028-01-31');
+ assert.equal(m.setAsOf('2028-02-29'),true);assert.equal(m.asOf,'2028-02-29');
+ const {episodeDates}=await import('../dist/m2c.js');assert.equal(episodeDates({id:'x',episodes:[{startOffset:0,durationDays:90,settings:{}}]},'2028-12-01')[0].to,'2028-12-31','clamped at its own year end');
+ assert.equal(episodeDates({id:'x',episodes:[{startOffset:0,durationDays:2,settings:{}}]},'2028-02-28')[0].to,'2028-02-29');
+});

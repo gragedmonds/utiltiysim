@@ -2,7 +2,8 @@
 export const MANIFEST_VERSION='run-manifest/1.0';
 const MAX_FILE=256*1024*1024;
 const copy=value=>structuredClone(value);
-const savedDate=date=>typeof date==='string'&&/^2026-\d{2}-\d{2}$/.test(date)&&!Number.isNaN(Date.parse(date))&&new Date(date).toISOString().slice(0,10)===date;
+// A saved run is of one year, 2026-2030 (a later year's bundle keeps `year` and `previous` in its inputs).
+const savedDate=date=>typeof date==='string'&&/^20(2[6-9]|30)-\d{2}-\d{2}$/.test(date)&&!Number.isNaN(Date.parse(date))&&new Date(date).toISOString().slice(0,10)===date;
 const superseded=()=>Object.assign(Error('superseded'),{superseded:true});
 export const savedText=v=>v==null?'':typeof v==='boolean'?(v?'true':'false'):String(v);
 export function safeName(name){return typeof name==='string'&&name.length>0&&!name.includes('\\')&&!name.startsWith('/')&&!name.split('/').some(p=>!p||p==='.'||p==='..')&&!/[?#:]/.test(name);}
@@ -65,7 +66,7 @@ export function selectSavedTable(table,{search='',filters={},sort=null,desc=fals
 }
 const csvCell=v=>{const s=savedText(v);return /[",\n\r]/.test(s)?'"'+s.replaceAll('"','""')+'"':s;};
 export class SavedM2C{
- constructor(bundle){this.bundle=bundle;this.tableTicket=0;this.readOnly=true;this.asOf=bundle.manifest.asOf;this.townRef=bundle.manifest.inputs.town;this.townId=this.townRef;this.episodes=copy(bundle.manifest.inputs.episodes||[]);this.actions=copy(bundle.manifest.inputs.actions||[]);this.seed=bundle.manifest.inputs.seed;this.settings=copy(bundle.manifest.inputs.settings);}
+ constructor(bundle){this.bundle=bundle;this.tableTicket=0;this.readOnly=true;this.asOf=bundle.manifest.asOf;this.year=Number(bundle.manifest.inputs.year)||Number(this.asOf.slice(0,4));this.years=[this.year];this.lastYear=this.year;this.townRef=bundle.manifest.inputs.town;this.townId=this.townRef;this.episodes=copy(bundle.manifest.inputs.episodes||[]);this.actions=copy(bundle.manifest.inputs.actions||[]);this.seed=bundle.manifest.inputs.seed;this.settings=copy(bundle.manifest.inputs.settings);}
  tables(){return this.bundle.read('tables/catalog.json');}
  trend(){return this.bundle.read('trend.json');}
  scorecard(){return this.bundle.read('scorecard.json');}
@@ -82,6 +83,10 @@ export class SavedM2C{
  }
  async tableCsv(params){const table=await this.bundle.read('tables/'+params.table+'.json.gz'),rows=selectSavedTable(table,params),page=Math.max(1,params.page||1),size=Math.min(5000,Math.max(1,params.pageSize||5000));return [table.columns.map(c=>csvCell(c.key)).join(','),...rows.slice((page-1)*size,page*size).map(r=>r.map(v=>csvCell(v)).join(','))].join('\n')+'\n';}
  canAct(){return false;}
+ yearStart(){return this.year+'-01-01';}
+ yearEnd(){return this.year+'-12-31';}
+ isClosed(){return false;}
+ canContinue(){return false;}
  setAsOf(){throw Error('This archive is read-only; its tables are saved as of '+this.asOf+'.');}
  act(){throw Error('Open a live engine to change this run.');}
  export(){return copy(this.bundle.manifest.inputs);}

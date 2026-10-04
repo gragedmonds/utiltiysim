@@ -3,6 +3,7 @@
 // nothing here invents a record. Query context (what you executed) is session state, kept apart from engine data.
 import {escapeText as e} from './customer-view.js';
 import {scorecardMarkup} from './worklists.js';
+import {activeYear,dayYear,yearStart,yearEnd} from './m2c.js';
 import {COLLECTION_TRANSACTIONS,parseCollectionsRoute,collectionsHash,isCollectionsRoute,installCollections} from './workspace-collections.js';
 
 export const TRANSACTIONS=[
@@ -162,7 +163,7 @@ export function installWorkspace({getClient,getEngineState=()=>({state:'idle',to
   const groups=[...new Set(ALL.map(t=>t[0]))],current=title||ALL.find(t=>t[1]===tx)?.[2]||'';
   return `<header class="sap-transaction-header ${title?'sap-transaction-classic':''}"><span class="sap-emblem">SAP</span><select id="ws-transaction" aria-label="SAP transaction">${title?`<option value="" selected disabled>${e(title)}</option>`:''}${groups.map(g=>`<optgroup label="${g}">${ALL.filter(t=>t[0]===g).map(([,id,label])=>`<option value="${id}" ${!title&&id===tx?'selected':''}>${label}</option>`).join('')}</optgroup>`).join('')}</select><span class="spacer"></span><small>100</small></header>`;
  }
- function statusbar(text){const m=client();return `<footer class="fiori-status"><span class="sap-square ${ui.acting?'amber':'green'}"></span><span role="status" aria-live="polite">${e(ui.acting?'Recording with the engine… (2–5 s while it replays the run)':text)}</span><span class="spacer"></span><label class="ws-asof">Run date <input type="date" id="ws-asof" min="2026-01-01" max="2026-12-31" value="${e(m?.asOf||ui.asOf||'')}"></label>${btn('+1 day','next-day','class="ws-next-day" title="Fast-forward the run one day"')}<span>Engine data</span></footer>`;}
+ function statusbar(text){const m=client();return `<footer class="fiori-status"><span class="sap-square ${ui.acting?'amber':'green'}"></span><span role="status" aria-live="polite">${e(ui.acting?'Recording with the engine… (2–5 s while it replays the run)':text)}</span><span class="spacer"></span><label class="ws-asof">Run date <input type="date" id="ws-asof" min="${yearStart(activeYear(m))}" max="${yearEnd(activeYear(m))}" value="${e(m?.asOf||ui.asOf||'')}"></label>${btn('+1 day','next-day','class="ws-next-day" title="Fast-forward the run one day"')}<span>Engine data</span></footer>`;}
  function empty(text){return `<section class="fiori-shell">${header(ui.route.tx)}<div class="fiori-empty ws-empty">${text}</div>${statusbar('Workspace')}</section>`;}
 
  // ---- Clarification Case List ----------------------------------------------------------------------------------
@@ -295,14 +296,14 @@ export function installWorkspace({getClient,getEngineState=()=>({state:'idle',to
  function setOrder(o,tab='header'){ui.order={...o,fields:{...blankFields(),...o.fields},components:(o.components||[]).map(c=>({...c})),errors:{},tab};}
  function foField(name,wide=false){const d=ui.order,spec=foSpec(name),value=d.fields[name]??'',err=d.errors[name],id='fo-'+name;
   const attrs=`id="${id}" data-fo-field="${name}" ${d.editable?'':'disabled'} ${spec.required?'aria-required="true"':''} ${err?`aria-invalid="true" aria-describedby="fo-error-${name}"`:''}`;
-  const control=spec.kind==='choice'?`<select ${attrs}><option value=""> </option>${(spec.choices||[]).map(v=>`<option ${v===value?'selected':''}>${e(v)}</option>`).join('')}</select>`:spec.kind==='textarea'?`<textarea ${attrs} rows="${name==='longText'?9:4}" maxlength="${spec.maxLength||1600}">${e(value)}</textarea>`:spec.kind==='date'?`<input ${attrs} type="date" value="${e(value)}" min="${e(client()?.asOf||'2026-01-01')}" max="2026-12-31">`:spec.kind==='minutes'?`<input ${attrs} type="number" min="1" max="${spec.maximum||1440}" step="1" value="${e(value)}">`:`<input ${attrs} type="${name==='contactPhone'?'tel':'text'}" maxlength="${spec.maxLength||120}" value="${e(value)}">`;
+  const control=spec.kind==='choice'?`<select ${attrs}><option value=""> </option>${(spec.choices||[]).map(v=>`<option ${v===value?'selected':''}>${e(v)}</option>`).join('')}</select>`:spec.kind==='textarea'?`<textarea ${attrs} rows="${name==='longText'?9:4}" maxlength="${spec.maxLength||1600}">${e(value)}</textarea>`:spec.kind==='date'?`<input ${attrs} type="date" value="${e(value)}" min="${e(client()?.asOf||yearStart(activeYear(client())))}" max="${yearEnd(activeYear(client()))}">`:spec.kind==='minutes'?`<input ${attrs} type="number" min="1" max="${spec.maximum||1440}" step="1" value="${e(value)}">`:`<input ${attrs} type="${name==='contactPhone'?'tel':'text'}" maxlength="${spec.maxLength||120}" value="${e(value)}">`;
   return `<div class="fo-field ${wide?'fo-wide':''}"><label for="${id}">${e(FO_LABELS[name]||spec.label)}${spec.required?' <span class="fo-required">*</span>':''}</label>${control}${err?`<small id="fo-error-${name}" class="fo-field-error">${e(err)}</small>`:''}</div>`;}
  const foFlag=name=>`<label><input type="checkbox" data-fo-field="${name}" ${ui.order.fields[name]?'checked':''} ${ui.order.editable?'':'disabled'}> ${e(foSpec(name).label)}</label>`;
  // The release rules, checked here first so the form can point at the fields; the engine checks them again.
  function validateOrder(d){const v=ui.vocab.order,errors={},asOf=client()?.asOf||'',f=d.fields,label=n=>foSpec(n).label,max=foSpec('duration').maximum||1440,units=v.components?.units||['EA','M'];
   for(const n of v.required||[])if(!String(f[n]??'').trim())errors[n]=label(n)+' is required.';
   for(const [n,ch] of Object.entries(v.choices||{}))if(f[n]&&!ch.includes(f[n]))errors[n]='Choose a valid '+label(n).toLowerCase()+'.';
-  if(f.startDate&&(!validDay(f.startDate)||f.startDate<asOf||!f.startDate.startsWith('2026')))errors.startDate=`Choose a date in 2026 on or after the run date (${asOf}).`;
+  const year=activeYear(client());if(f.startDate&&(!validDay(f.startDate)||f.startDate<asOf||dayYear(f.startDate)!==year))errors.startDate=`Choose a date in ${year} on or after the run date (${asOf}).`;
   if(f.finishDate&&(!validDay(f.finishDate)||f.finishDate<(f.startDate||'')))errors.finishDate='Finish must be on or after the start date.';
   if(String(f.duration??'')!==''&&!(Number(f.duration)>0&&Number(f.duration)<=max))errors.duration=`Enter a duration from 1 to ${max} minutes.`;
   if(d.components.some(c=>!String(c.description||'').trim()||!(Number(c.quantity)>0)||!units.includes(c.unit)))errors.components='Each component needs a description, a positive quantity and a unit.';
@@ -402,6 +403,7 @@ export function installWorkspace({getClient,getEngineState=()=>({state:'idle',to
   else if(t.id==='ws-vee-utility'){ui.veeUtility=t.value;render();}
   else if(t.dataset.readSelect){const r=ui.veeRows.find(x=>x.caseId===t.dataset.readSelect);if(t.checked&&r&&canWork(r,client()?.asOf))ui.selected.add(r.caseId);else ui.selected.delete(t.dataset.readSelect);render();}
   else if(t.id==='ws-select-all'){const asOf=client()?.asOf,open=veeRows().filter(r=>!r.resolvedAt&&canWork(r,asOf));if(t.checked)open.forEach(r=>ui.selected.add(r.caseId));else ui.selected.clear();render();}
+  else if(t.id==='ws-asof'&&t.value&&dayYear(t.value)!==activeYear(client())){toast(`Choose a date in ${activeYear(client())}.`);render();}
   else if(t.id==='ws-asof'&&t.value){setRunDate(t.value).then(()=>toast(`Run date ${t.value}: actions are recorded on this day.`));}
   else if(t.dataset.foField||t.dataset.foComponent!=null)captureOrder(t);
  });
@@ -418,7 +420,7 @@ export function installWorkspace({getClient,getEngineState=()=>({state:'idle',to
   if(act==='related'){ui.relatedOpen=ui.relatedOpen===b.dataset.case?null:b.dataset.case;const body=root.querySelector('#ws-cases');if(body)body.innerHTML=caseBody();return;}
   if(act==='open-case'){go({caseId:b.dataset.case});return;}
   if(act==='layout'){ui.compact=!ui.compact;render();}
-  else if(act==='next-day'){const from=m?.asOf||ui.asOf;if(!from)return;const day=addDays(from,1);if(day>'2026-12-31'){toast('The simulated year ends on 31 December 2026.');return;}await setRunDate(day);toast(`Run date ${day}.`);}
+  else if(act==='next-day'){const from=m?.asOf||ui.asOf;if(!from)return;const day=addDays(from,1),year=activeYear(m);if(day>yearEnd(year)){toast(`${year} ends on 31 December.${m?.canContinue?.()?` Continue into ${year+1} from the Command Center.`:''}`);return;}await setRunDate(day);toast(`Run date ${day}.`);}
   else if(act==='refresh'){loadCases();loadCounts();}
   else if(act==='statistics')go({tx:'statistics'});
   else if(act==='scorecard'){if(ui.scorecard){ui.scorecard=null;render();return;}ui.scorecard=true;render();try{ui.scorecard=await m.scorecard();}catch(err){ui.scorecard=null;if(!err.superseded)toast('Engine: '+err.message);}render();}

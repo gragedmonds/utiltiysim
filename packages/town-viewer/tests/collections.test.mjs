@@ -29,6 +29,7 @@ test('run statistics periods start on the right day',()=>{
  assert.equal(periodStart('month','2026-08-05',null),'2026-08-01');
  assert.equal(periodStart('30d','2026-08-05',null),'2026-07-07'); // 30 days including today
  assert.equal(periodStart('30d','2026-01-12',null),'2026-01-01'); // never before the year
+ assert.equal(periodStart('30d','2027-01-12',null),'2027-01-01');assert.equal(periodStart('30d','2027-03-15',null),'2027-02-14'); // the view date's own year
  assert.equal(periodStart('run','2026-08-05','2026-03-31'),'2026-03-31');
  assert.equal(periodStart('run','2026-08-05',null),null); // no action yet: the run is the year
  assert.equal(periodStart('run','2026-03-01','2026-03-31'),null);

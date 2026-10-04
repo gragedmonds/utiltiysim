@@ -64,7 +64,7 @@ test('a trace is the whole Activity Sequence, Initiating Event first, with day b
 });
 
 test('day deltas, local dates and clock times come from the engine day index and hour',()=>{
- assert.equal(dayDelta({day:60},{day:68}),8);assert.equal(localDate(0),'2026-01-01');assert.equal(localDate(60),'2026-03-02');assert.equal(localDate(364),'2026-12-31');
+ assert.equal(dayDelta({day:60},{day:68}),8);assert.equal(localDate(0),'2026-01-01');assert.equal(localDate(60),'2026-03-02');assert.equal(localDate(364),'2026-12-31');assert.equal(localDate(3,2027),'2027-01-04');assert.equal(localDate(59,2028),'2028-02-29');
  assert.equal(clock(17.52),'17:31');assert.equal(clock(7),'07:00');assert.equal(clock(18.05),'18:03');assert.equal(clock(0),'00:00');
  assert.equal(costTotal({labor:1,system:.5,cx:2}),3.5);assert.equal(costTotal(undefined),0);
 });

@@ -82,3 +82,12 @@ test('saved overview escapes supplied names and workspace selects only matching 
  const rows=[{caseId:'C1',queue:'FIELD',address:'One'},{caseId:'C2',queue:'BILLING',address:'Two'}];
  assert.deepEqual(filterWorklist(rows,{queue:'FIELD',search:'one'}),[rows[0]]);assert.deepEqual(filterWorklist(rows,{queue:'FIELD',search:'two'}),[]);
 });
+
+test('a saved run of a later year (2027-2030) opens with its year; dates outside 2026-2030 are refused',()=>{
+ const {manifest}=fixture(),dated=(d,inputs=manifest.inputs)=>({...manifest,asOf:d,worklistDates:[d],inputs,files:manifest.files.map(f=>({...f,name:f.name.replace('2026-01-31',d)}))});
+ const later=dated('2027-03-31',{...manifest.inputs,year:2027,previous:[{actions:[]}]});assert.equal(validateManifest(later).asOf,'2027-03-31');
+ const client=new SavedM2C(new RunBundle(later,()=>null));assert.equal(client.year,2027);assert.deepEqual(client.years,[2027]);assert.equal(client.yearStart(),'2027-01-01');assert.equal(client.yearEnd(),'2027-12-31');assert.equal(client.isClosed(),false);assert.equal(client.canContinue(),false);
+ assert.equal(new SavedM2C(new RunBundle(dated('2030-12-31'),()=>null)).year,2030,'no year in its inputs: the saved date\'s');assert.equal(new SavedM2C(new RunBundle(manifest,()=>null)).year,2026);
+ assert.equal(validateManifest(dated('2028-02-29')).asOf,'2028-02-29');
+ for(const d of ['2025-12-31','2031-01-01','2027-02-29'])assert.throws(()=>validateManifest(dated(d)),/Invalid saved run dates/,d);
+});
