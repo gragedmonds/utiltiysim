@@ -3604,8 +3604,8 @@
       "properties": {
         "ami_missed_read": {
           "default": 0.012,
-          "description": "AMI billing reads still missing after the head-end retry window.",
-          "maximum": 0.5,
+          "description": "AMI billing reads still missing after the head-end retry window (1: a day the head end is down).",
+          "maximum": 1,
           "minimum": 0,
           "title": "Ami Missed Read",
           "type": "number",
@@ -3618,8 +3618,8 @@
         },
         "amr_missed_read": {
           "default": 0.03,
-          "description": "Drive-by reads missed (no signal, street skipped).",
-          "maximum": 0.5,
+          "description": "Drive-by reads missed (no signal, street skipped; 1: the van does not go out).",
+          "maximum": 1,
           "minimum": 0,
           "title": "Amr Missed Read",
           "type": "number",
@@ -3628,8 +3628,8 @@
         },
         "manual_no_access": {
           "default": 0.06,
-          "description": "Manual reads with no access (locked gate, dog, meter inside).",
-          "maximum": 0.8,
+          "description": "Manual reads with no access (locked gate, dog, meter inside; 1: nobody walks the route).",
+          "maximum": 1,
           "minimum": 0,
           "title": "Manual No Access",
           "type": "number",

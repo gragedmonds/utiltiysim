@@ -1,17 +1,24 @@
 name: Local runner packages
+# Cost (see CLAUDE.md): four operating systems per run, about 10 minutes each. Free while the repository is public;
+# if it goes private, GitHub bills Windows minutes at 2x and macOS at 10x (about 230 billed minutes a run), so keep
+# this to merges that change what the runner ships, and cancel a run that a newer merge supersedes.
+# Merges to main publish a release (pull requests are tested before they merge; CI no longer runs on main).
 on:
   pull_request:
     paths: ['launcher/**', 'utilsim/worker/**', 'scripts/build_runner.py', '.github/workflows/runner.yml']
-  workflow_run:
-    workflows: [ci]
+  push:
     branches: [main]
-    types: [completed]
+    paths: ['launcher/**', 'utilsim/**', 'api/**', 'packages/town-viewer/dist/**', 'scripts/build_runner.py',
+            'pyproject.toml', 'uv.lock', '.github/workflows/runner.yml']
   workflow_dispatch:
+concurrency:
+  group: runner-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
   package:
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -19,8 +26,6 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
       - uses: astral-sh/setup-uv@v3
       - uses: actions/setup-go@v5
         with:
@@ -46,14 +51,13 @@ jobs:
           retention-days: 14
   publish:
     needs: package
-    if: github.event_name == 'workflow_run' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
       - uses: actions/download-artifact@v4
         with:
           pattern: runner-*

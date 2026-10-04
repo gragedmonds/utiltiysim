@@ -38,6 +38,10 @@ class AgentEpisode(StrictModel):
     to: str | None = None
     ramp: int = Field(0, ge=0, le=366)
     settings: dict[str, dict[str, Any]]
+    pattern: dict[str, Any] | None = Field(None, description="Sporadic: strike only some days of the window. "
+                                           "{kind: 'spikes', count, length: [min, max]} for a few bursts, or "
+                                           "{kind: 'days', share} for a share of the days; strength: [min, max] "
+                                           "(0–1) how hard each day; independent: true draws it per setting.")
 
     @field_validator("from_", "to")
     @classmethod
@@ -317,13 +321,18 @@ def episode_changes(cfg: SimConfig, existing: list[dict], additions: list[dict])
     prior = list(existing)
     before_days = resolve_episode_days(cfg, parse_episodes(cfg, prior))
     for index, ep in enumerate(additions):
-        after_days = resolve_episode_days(cfg, parse_episodes(cfg, prior + [ep]))
+        parsed = parse_episodes(cfg, prior + [ep])
+        after_days = resolve_episode_days(cfg, parsed)
         start = (date.fromisoformat(ep["from"]) - date(2026, 1, 1)).days
         end = (date.fromisoformat(ep.get("to") or "2026-12-31") - date(2026, 1, 1)).days
+        # A sporadic episode: compare on its hardest day (on the others it changes nothing).
+        hits = next((e.get("hits") for e in parsed if e["id"] == ep.get("id")), None)
+        at = max(hits, key=lambda h: max(h[1]) if isinstance(h[1], list) else h[1])[0] if hits else end
         rows = input_changes(ep["settings"], before_days[start].model_dump(mode="json"),
-                             after_days[end].model_dump(mode="json"), settings_schema(), "episode", index)
+                             after_days[at].model_dump(mode="json"), settings_schema(), "episode", index)
         for row in rows:
-            row["period"] = f"{ep['title']} · {ep['from']} → {ep.get('to') or '2026-12-31'}"
+            row["period"] = f"{ep['title']} · {ep['from']} → {ep.get('to') or '2026-12-31'}" + \
+                (f" · strikes {len(hits)} days (the hardest shown)" if hits else "")
             for key, days in (("beforeRange", before_days), ("afterRange", after_days)):
                 values = [at_path(days[d].model_dump(mode="json"), row["path"]) for d in range(start, end + 1)]
                 if all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in values):

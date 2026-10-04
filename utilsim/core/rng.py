@@ -70,6 +70,7 @@ class Purpose(IntEnum):
     CONTACT = 39
     FIELD = 40
     UTILITY = 41
+    EPISODE = 42
 
 
 def normalize_seed(seed: int | str) -> int:

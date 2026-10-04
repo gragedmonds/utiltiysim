@@ -380,6 +380,19 @@
             "title": "From",
             "type": "string"
           },
+          "pattern": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Sporadic: strike only some days of the window. {kind: 'spikes', count, length: [min, max]} for a few bursts, or {kind: 'days', share} for a share of the days; strength: [min, max] (0–1) how hard each day; independent: true draws it per setting.",
+            "title": "Pattern"
+          },
           "ramp": {
             "default": 0,
             "maximum": 366.0,
@@ -431,6 +444,19 @@
           "id": {
             "title": "Id",
             "type": "string"
+          },
+          "pattern": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Sporadic: strike only some days of the window. {kind: 'spikes', count, length: [min, max]} for a few bursts, or {kind: 'days', share} for a share of the days; strength: [min, max] (0–1) how hard each day; independent: true draws it per setting.",
+            "title": "Pattern"
           },
           "ramp": {
             "default": 0,
@@ -1972,7 +1998,7 @@
         "type": "object"
       },
       "Episode": {
-        "description": "A scenario inflicted from a day: setting overrides in force from ``from`` to ``to`` (inclusive; null = the\nyear's end), sliding from the base to the target over ``ramp`` days. A value is a number or boolean, or an\noperator on the value in force before the episode: ``\"*0.5\"``, ``\"+2\"``, ``\"-1\"`` (numeric settings).",
+        "description": "A scenario inflicted from a day: setting overrides in force from ``from`` to ``to`` (inclusive; null = the\nyear's end), sliding from the base to the target over ``ramp`` days. A value is a number or boolean, or an\noperator on the value in force before the episode: ``\"*0.5\"``, ``\"+2\"``, ``\"-1\"`` (numeric settings). With a\n``pattern`` it strikes only some of those days (sporadic spikes, or scattered days).",
         "properties": {
           "from": {
             "description": "First day (YYYY-MM-DD, in the run's year).",
@@ -1990,6 +2016,17 @@
               }
             ],
             "title": "Id"
+          },
+          "pattern": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EpisodePattern"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Sporadic: the days it strikes within its window."
           },
           "ramp": {
             "default": 0,
@@ -2053,6 +2090,128 @@
         "title": "Episode",
         "type": "object"
       },
+      "EpisodePattern": {
+        "additionalProperties": false,
+        "description": "Sporadic instead of steady: the episode strikes only some days between ``from`` and ``to``, drawn from the\nrun's seed (utilsim/m2c/run.py ``_pattern``). ``spikes``: ``count`` bursts of ``length`` days, one in each equal\nstretch of the window; ``days``: a ``share`` of the window's days, scattered. Each day struck has a ``strength``:\nhow far the settings go from the value in force towards the episode's (1: all the way; a whole number rounds up\nwith chance its fraction).",
+        "properties": {
+          "count": {
+            "anyOf": [
+              {
+                "maximum": 60.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "spikes: how many bursts in the window.",
+            "title": "Count"
+          },
+          "independent": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Draw the strength per setting each day (default false): a bit of everything, some days one team, some days another.",
+            "title": "Independent"
+          },
+          "kind": {
+            "description": "spikes: a few bursts; days: a share of the days.",
+            "enum": [
+              "spikes",
+              "days"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "length": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "spikes: days per burst, or [min, max] (1–30; default 1).",
+            "title": "Length"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Draw the days from this instead of the run's seed (the same on every run).",
+            "title": "Seed"
+          },
+          "share": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 1.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "days: the share of the window's days struck.",
+            "title": "Share"
+          },
+          "strength": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How hard each day strikes, or [min, max] (0–1; default 1).",
+            "title": "Strength"
+          },
+          "workdays": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Strike working days only (default true); a spike then runs over consecutive working days.",
+            "title": "Workdays"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "EpisodePattern",
+        "type": "object"
+      },
       "ExistingEpisode": {
         "additionalProperties": false,
         "properties": {
@@ -2065,6 +2224,19 @@
             "minLength": 1,
             "title": "Id",
             "type": "string"
+          },
+          "pattern": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Sporadic: strike only some days of the window. {kind: 'spikes', count, length: [min, max]} for a few bursts, or {kind: 'days', share} for a share of the days; strength: [min, max] (0–1) how hard each day; independent: true draws it per setting.",
+            "title": "Pattern"
           },
           "ramp": {
             "default": 0,

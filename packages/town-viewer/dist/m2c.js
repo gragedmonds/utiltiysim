@@ -17,6 +17,7 @@ export const dayYear=d=>/^\d{4}-\d{2}-\d{2}/.test(String(d||''))?Number(String(d
 export const activeYear=m=>Number(m?.year)||FIRST_YEAR;
 const addDays=(day,n)=>new Date(Date.parse(day+'T12:00:00Z')+n*86400000).toISOString().slice(0,10);
 const obj=v=>v&&typeof v==='object'&&!Array.isArray(v)?v:{};
+const clone=v=>JSON.parse(JSON.stringify(v));
 // One year's own input: actions, episodes, the map's outages per day (and where each day's came from) and the view date.
 const yearState=(year,s={})=>({year,actions:Array.isArray(s.actions)?s.actions:[],episodes:Array.isArray(s.episodes)?s.episodes:[],outages:obj(s.outages),outageSources:obj(s.outageSources),asOf:dayYear(s.asOf)===year?s.asOf:null});
 // Interruptions per operations day as the engine takes them; one still open at the end of the day runs a day.
@@ -62,9 +63,14 @@ export class EngineM2C{
   if(this.year>FIRST_YEAR){b.year=this.year;b.previous=this.previous();}return b;}
  // Episodes (the Year tab): a scenario's setting changes from one day to another (`to` null: year end), at most 40, kept
  // sorted by `from`. Ids are EP-n and never reused. The engine applies them when it replays the year; a bad one is a 422.
- addEpisode(ep){this.assertOpen();const n=this.episodes.reduce((m,x)=>Math.max(m,Number(String(x.id||'').slice(3))||0),0)+1;const e={id:'EP-'+n,title:ep.title||ep.scenario||'Episode',scenario:ep.scenario||null,from:ep.from,to:ep.to??null,ramp:Number(ep.ramp)||0,settings:ep.settings||{}};
+ // A sporadic episode also has a `pattern` (spikes, or scattered days: the engine draws the days it strikes); a
+ // steady one has no `pattern` key at all (never null).
+ addEpisode(ep){this.assertOpen();const n=this.episodes.reduce((m,x)=>Math.max(m,Number(String(x.id||'').slice(3))||0),0)+1;const e={id:'EP-'+n,title:ep.title||ep.scenario||'Episode',scenario:ep.scenario||null,from:ep.from,to:ep.to??null,ramp:Number(ep.ramp)||0,settings:ep.settings||{},...(ep.pattern?{pattern:clone(ep.pattern)}:{})};
   this.episodes.push(e);this.sortEpisodes();this.save();return e;}
- updateEpisode(id,patch){this.assertOpen();const e=this.episodes.find(x=>x.id===id);if(!e)return null;Object.assign(e,patch,{id});this.sortEpisodes();this.save();return e;}
+ // A patch's `pattern` (when it has the key) sets the episode's own copy, or removes it when null (a steady episode
+ // again); a patch without the key keeps the pattern as it is.
+ updateEpisode(id,patch){this.assertOpen();const e=this.episodes.find(x=>x.id===id);if(!e)return null;const {pattern,...rest}=patch||{};Object.assign(e,rest,{id});
+  if(patch&&'pattern' in patch){if(pattern)e.pattern=clone(pattern);else delete e.pattern;}this.sortEpisodes();this.save();return e;}
  removeEpisode(id){this.assertOpen();const n=this.episodes.length;this.episodes=this.episodes.filter(x=>x.id!==id);if(this.episodes.length===n)return false;this.save();return true;}
  clearEpisodes(){this.assertOpen();this.episodes=[];this.save();}
  sortEpisodes(){this.episodes.sort((a,b)=>a.from<b.from?-1:a.from>b.from?1:(Number(a.id.slice(3))||0)-(Number(b.id.slice(3))||0));}
@@ -165,9 +171,11 @@ export class EngineM2C{
 // A library scenario's episode templates as concrete episodes for the day they are inflicted: `startOffset` days after
 // that day, `durationDays` null to the year end (to: null), else the inclusive end `durationDays - 1` days on, clamped at
 // the day's year end, 31 December (as is a start past it). The ramp and the settings are the template's; the engine interprets the operators.
+// A sporadic template's `pattern` comes along as it is (a copy; the window is the episode's from and to); a steady
+// template's episode has no `pattern`.
 export function episodeDates(scenario,day){const end=yearEnd(dayYear(day)||FIRST_YEAR),clamp=d=>d>end?end:d;
  return (scenario?.episodes||[]).map(t=>{const from=clamp(addDays(day,Number(t.startOffset)||0)),to=t.durationDays==null?null:clamp(addDays(from,Math.max(1,Number(t.durationDays))-1));
-  return {title:t.title||scenario.title,scenario:scenario.id,from,to,ramp:Number(t.ramp)||0,settings:JSON.parse(JSON.stringify(t.settings||{}))};});}
+  return {title:t.title||scenario.title,scenario:scenario.id,from,to,ramp:Number(t.ramp)||0,settings:clone(t.settings||{}),...(t.pattern?{pattern:clone(t.pattern)}:{})};});}
 
 // The engine's notices on one action ("ACT-3 (notice): CASE-… was completed while …"): recorded, but worth a warning.
 export function noticesFor(warnings,id){const p=id+' (notice):';return (warnings||[]).map(String).filter(w=>w.startsWith(p)).map(w=>w.slice(p.length).trim());}
