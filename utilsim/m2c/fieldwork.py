@@ -35,12 +35,17 @@ technicians, the three utilities' crews and the construction crews work business
 ``shift_hours``: an order is released on its day, and each crew type works its released orders by priority, then due
 date. Work the run or an incident has already timed (VEE visits, outage repairs) takes the crews' time on its day
 first. A long job carries over to the next day. Customer work (priority 1 and 2) due today or overdue may run into
-overtime, up to ``overtime_max_hours`` per crew.
+overtime, up to ``overtime_max_hours`` per crew. With ``routing`` the crews drive the town's streets at the operations
+driving speeds (``_Roads``): each crew leaves the depot in the morning, takes of the jobs as urgent as the most
+pressing (and due within a day of it) the nearest next, adds ``stop_minutes`` at each stop and drives back at the end
+of the day; on-call responders drive from the depot and back. Without it every visit adds ``travel_minutes``.
 
 What the crews do changes the year from that moment:
 
-* **Disconnect, removal:** the service is off (nothing flows); its scheduled reads are not taken, so no bill is made
-  for those months. A reconnect switches it back; the next bill runs from the last read before the disconnection.
+* **Disconnect, removal:** the service is off (nothing flows). The meter is read as it goes off: the first scheduled
+  read in the off period is that final read (taken at the disconnection), so the bill runs to the disconnection;
+  later scheduled reads are not taken, so no bill is made for those months. A reconnect switches it back; the next
+  bill runs from the final read.
   Collections asks for the disconnect on the earliest day; it happens when the crew (or the remote switch) does it, and
   a customer who paid before the crew arrived is not disconnected.
 * **Exchanges** (seal, water meter replacement, AMI conversion) register a new meter: reads are measured on the new
@@ -50,6 +55,8 @@ What the crews do changes the year from that moment:
   (``failed_lot_drift``, ``old_water_meter_drift``); a pole found needing replacement, a span overdue for trimming (on
   storm days) and a surveyed leak overdue for repair can fail (``deferred_*``): an outage or a public gas leak, with
   its customers, contacts, emergency response and repair.
+* **Main renewal:** a renewed segment of cast-iron main breaks and leaks at ``renewed_main_break_factor`` of the old
+  main's rate from the day it is finished (the year's drawn breaks and leaks on it are dropped at that share).
 
 Every draw is a counter-based hash of the run seed and the order's identity, so episodes on ``field`` settings apply
 from their day.
@@ -123,6 +130,7 @@ MAIN_SEGMENT_M = 100.0
 DESIGN_BDAYS = 15  # a new service: request to construction release (design, locates, permits)
 _M64 = 0xFFFFFFFFFFFFFFFF
 P_FAIL = 901  # draw key: overdue work failing (apart from the work types' own draws)
+P_RENEW = 902  # draw key: a break or leak a renewed main does not have
 
 
 def _mix(z: int) -> int:
@@ -214,6 +222,67 @@ class FieldWork:
     failures: list[dict] = field(default_factory=list)  # overdue work that failed: {t, kind, orderId, incident}
 
 
+class _Roads:
+    """Drive times on the town's streets for the field crews, at the operations driving speeds: where a crew parks
+    for an order (the premise's street access, or the street point nearest the asset) and how long the drive is
+    between two such points. A shortest-time tree per street corner is built on first use."""
+
+    def __init__(self, run: M2CRun, ops):
+        from utilsim.ops.routing import Router, access_point
+
+        o = ops.ops
+        self.g = g = ops.roads
+        self.mps = Router(g, (o["speed_kmh_arterial"], o["speed_kmh_collector"], o["speed_kmh_local"])).edge_mps
+        self.sec = (g.length / self.mps).tolist()
+        self.ops, self.tw, self._point = ops, run.town, access_point
+        dep = ops.depot
+        self.depot = access_point(g, *dep["access"]) if dep.get("access") else ops.nearest_access(dep["x"], dep["z"])
+        self._tree: dict[int, list[float]] = {}
+        self._at: dict[int, tuple[int, float] | None] = {}
+
+    def spot(self, o: Order) -> tuple[int, float] | None:
+        if o.k not in self._at:
+            at = None
+            if o.prem >= 0:
+                i = self.ops.premise_index.get(self.tw.premise_ids[o.prem])
+                if i is not None:
+                    at = self._point(self.g, *self.ops.premise_access[i])
+            if at is None and math.isfinite(o.x) and math.isfinite(o.z):
+                at = self.ops.nearest_access(o.x, o.z)
+            self._at[o.k] = at
+        return self._at[o.k]
+
+    def _from(self, n: int) -> list[float]:
+        tree = self._tree.get(n)
+        if tree is None:
+            adj, sec = self.g.adj, self.sec
+            tree = [INF] * len(self.g.node_xy)
+            tree[n] = 0.0
+            heap = [(0.0, n)]
+            while heap:
+                t, v = heapq.heappop(heap)
+                if t > tree[v]:
+                    continue
+                for k, w in adj[v]:
+                    nt = t + sec[k]
+                    if nt < tree[w]:
+                        tree[w] = nt
+                        heapq.heappush(heap, (nt, w))
+            self._tree[n] = tree
+        return tree
+
+    def minutes(self, a: tuple[int, float], b: tuple[int, float]) -> float:
+        """The fastest drive from ``a`` to ``b`` (street points), in minutes; inf on separate road islands."""
+        g, mps = self.g, self.mps
+        (e0, s0), (e1, s1) = a, b
+        best = abs(s1 - s0) / mps[e0] if e0 == e1 else INF
+        for n0, d0 in ((int(g.a[e0]), s0), (int(g.b[e0]), float(g.length[e0]) - s0)):
+            tree, t0 = self._from(n0), d0 / mps[e0]
+            for n1, d1 in ((int(g.a[e1]), s1), (int(g.b[e1]), float(g.length[e1]) - s1)):
+                best = min(best, t0 + tree[n1] + d1 / mps[e1])
+        return float(best) / 60.0
+
+
 class _Build:
     def __init__(self, run: M2CRun):
         from utilsim.m2c import contact
@@ -232,6 +301,7 @@ class _Build:
         for mi, (p, c) in enumerate(zip(tw.meter_prem.tolist(), tw.meter_commodity.tolist(), strict=True)):
             self.prem_meter.setdefault((p, c), mi)
             self.prem_meters.setdefault(p, []).append(mi)
+        self.main_seg: dict[str, tuple[str, int, float]] = {}  # main renewal segment -> (utility, edge, share)
         self.meter_mru = {}
         for r in range(tw.n_registers):
             self.meter_mru.setdefault(int(tw.meter_of[r]), tw.mru[r])
@@ -614,8 +684,9 @@ class _Build:
                 pts = net.points[e]
                 for j in range(k):
                     q = pts[min(len(pts) - 1, int((j + 0.5) * len(pts) / k))]
-                    segs.append((f"{net.edge_ids[e]}/{j + 1}", float(q[0]), float(q[1]), length / k / MAIN_SEGMENT_M,
-                                 None, None))
+                    aid = f"{net.edge_ids[e]}/{j + 1}"
+                    self.main_seg[aid] = (u, e, 1.0 / k)
+                    segs.append((aid, float(q[0]), float(q[1]), length / k / MAIN_SEGMENT_M, None, None))
         self.programme("main_replacement", segs, days)
 
 
@@ -656,6 +727,8 @@ class FieldEngine:
         self.storm = np.zeros(YEAR_DAYS, dtype=bool)
         self.failures: list[dict] = []  # {t, kind, orderId k, incident id}
         self.responded = False
+        self._roads: _Roads | bool | None = None
+        self.renewed: dict[tuple[str, int], float] = {}  # (utility, main edge) -> share renewed so far
 
     @property
     def orders(self) -> list[Order]:
@@ -721,7 +794,7 @@ class FieldEngine:
         if self.ops is not None:
             from utilsim.m2c import incidents as incs
 
-            todays, storm = incs.draw_day(run, self.ops, day)
+            todays, storm = incs.draw_day(run, self.ops, day, keep=self._renewal(day))
             self.storm[day] = storm
             failed = self._failures(day, storm)
             for inc, background in [*((x, True) for x in todays), *((x, False) for x in failed)]:
@@ -765,72 +838,150 @@ class FieldEngine:
             if o.crew in DAY_CREWS:
                 heapq.heappush(self.pending, (o.release, o.k))
 
+    def roads(self, day: int) -> _Roads | None:
+        """The street drive times when the crews route on ``day`` (None without routing or streets)."""
+        if self.ops is None or not self.b.fc[min(max(day, 0), YEAR_DAYS - 1)].routing:
+            return None
+        if self._roads is None:
+            try:
+                self._roads = _Roads(self.run, self.ops)
+            except (KeyError, IndexError, ValueError, StopIteration):  # a town without a usable street graph
+                self._roads = False
+        return self._roads or None
+
     def _work(self, day: int) -> None:
         """The business-day crews: timed work first, then released orders by priority and due date, overtime for
-        customer work due today or overdue."""
+        customer work due today or overdue. With routing each crew leaves the depot in the morning, drives job to job
+        (of the jobs as urgent and due within a day of the most pressing, the nearest next) and drives back."""
         orders, fc = self.b.orders, self.b.fc[day]
         shift_end = fc.shift_start_hour + fc.shift_hours
         while self.pending and self.pending[0][0] < day + shift_end / 24.0:
             _, k = heapq.heappop(self.pending)
             o = orders[k]
             heapq.heappush(self.queues[o.crew], (o.prio, o.due, o.release, o.k))
+        roads = self.roads(day)
         for c in DAY_CREWS:
-            n = float(self.crews[c]["crews"][day])
-            if n <= 0:
+            if self.crews[c]["crews"][day] > 0:
+                self._crew_day(day, c, roads)
+
+    def _crew_day(self, day: int, c: str, roads: _Roads | None) -> None:
+        """One crew type's business day."""
+        orders, fc = self.b.orders, self.b.fc[day]
+        shift_end = fc.shift_start_hour + fc.shift_hours
+        n = float(self.crews[c]["crews"][day])
+        slots = max(1, math.ceil(n))
+        cc = getattr(fc, f"crew_{c}")
+        cap = n * fc.shift_hours * 60.0
+        self.crews[c]["availableMin"][day] = cap
+        used = min(cap, self.fixed_on.get((c, day), 0.0))
+        q = self.queues[c]
+        t0 = day + fc.shift_start_hour / 24.0
+        pos = [roads.depot] * slots if roads else []
+        last: list[Order | None] = [None] * slots
+        started = 0
+
+        def pick(slot: int, due_max: float) -> None:
+            """Bring the nearest of the jobs as urgent as the queue's head, and due within a day of it, to the
+            front (the crew's next stop)."""
+            p0, d0 = q[0][0], q[0][1]
+            lim = min(d0 + 1.0, due_max) + 1e-9
+            best, bi = INF, 0
+            for i, e in enumerate(q):
+                if e[0] != p0 or e[1] > lim:
+                    continue
+                x = orders[e[3]]
+                if x.cancelled or x.start != INF:
+                    continue
+                spot = roads.spot(x)
+                d = roads.minutes(pos[slot], spot) if spot is not None else INF
+                if d < best:
+                    best, bi = d, i
+            if bi:
+                e = q[bi]
+                q[bi] = q[-1]
+                q.pop()
+                heapq.heapify(q)
+                heapq.heappush(q, (p0, d0, -INF, e[3]))
+
+        def begin(o: Order, at: float) -> None:
+            nonlocal started
+            slot = started % slots
+            started += 1
+            o.start = max(o.release, at)
+            o.crew_id = f"{CREW_CODE[c]}-{slot + 1}"
+            drive = INF
+            if roads is not None:
+                spot = roads.spot(o)
+                if spot is not None:
+                    drive = roads.minutes(pos[slot], spot)
+                    if math.isfinite(drive):
+                        pos[slot] = spot
+                last[slot] = o
+            if math.isfinite(drive):
+                o.travel = drive + fc.stop_minutes
+                o.left = o.minutes + o.travel
+                o.arrive = o.start + drive / 1440.0
+            else:
+                o.arrive = o.start + o.travel / 2880.0
+
+        while q and used < cap - 1e-9:
+            o = orders[q[0][3]]
+            if o.cancelled:
+                heapq.heappop(q)
                 continue
-            slots = max(1, math.ceil(n))
-            cc = getattr(fc, f"crew_{c}")
-            cap = n * fc.shift_hours * 60.0
-            self.crews[c]["availableMin"][day] = cap
-            used = min(cap, self.fixed_on.get((c, day), 0.0))
-            q = self.queues[c]
-            t0 = day + fc.shift_start_hour / 24.0
-            started = 0
-            while q and used < cap - 1e-9:
-                o = orders[q[0][3]]
-                if o.cancelled:
-                    heapq.heappop(q)
-                    continue
-                if o.start == INF:
-                    o.start = max(o.release, t0 + used / n / 1440.0)
-                    o.arrive = o.start + o.travel / 2880.0
-                    o.crew_id = f"{CREW_CODE[c]}-{started % slots + 1}"
-                    started += 1
-                take = min(o.left, cap - used)
-                used += take
-                o.left -= take
-                o.regular += take
-                o.labour += take / 60.0 * cc.cost_per_hour
-                if o.left > 1e-9:
-                    break
+            if o.start == INF:
+                if roads is not None:
+                    pick(started % slots, INF)
+                    o = orders[q[0][3]]
+                begin(o, t0 + used / n / 1440.0)
+            take = min(o.left, cap - used)
+            used += take
+            o.left -= take
+            o.regular += take
+            o.labour += take / 60.0 * cc.cost_per_hour
+            if o.left > 1e-9:
+                break
+            heapq.heappop(q)
+            o.end = max(o.arrive, t0 + used / n / 1440.0)
+            self._done(o)
+        ot_cap, ot = n * fc.overtime_max_hours * 60.0, 0.0
+        while q and ot < ot_cap - 1e-9:
+            o = orders[q[0][3]]
+            if o.cancelled:
                 heapq.heappop(q)
-                o.end = max(o.arrive, t0 + used / n / 1440.0)
-                self._done(o)
-            ot_cap, ot = n * fc.overtime_max_hours * 60.0, 0.0
-            while q and ot < ot_cap - 1e-9:
-                o = orders[q[0][3]]
-                if o.cancelled:
-                    heapq.heappop(q)
-                    continue
-                if o.prio > 2 or o.due > day + 1:
-                    break
-                if o.start == INF:
-                    o.start = max(o.release, day + shift_end / 24.0)
-                    o.arrive = o.start + o.travel / 2880.0
-                    o.crew_id = f"{CREW_CODE[c]}-{started % slots + 1}"
-                    started += 1
-                take = min(o.left, ot_cap - ot)
-                ot += take
-                o.left -= take
-                o.overtime += take
-                o.labour += take / 60.0 * cc.cost_per_hour * cc.overtime_factor
-                if o.left > 1e-9:
-                    break
-                heapq.heappop(q)
-                o.end = max(o.arrive, day + shift_end / 24.0 + ot / n / 1440.0)
-                self._done(o)
-            self.crews[c]["busyMin"][day] += used
-            self.crews[c]["overtimeMin"][day] += ot
+                continue
+            if o.prio > 2 or o.due > day + 1:
+                break
+            if o.start == INF:
+                if roads is not None:
+                    pick(started % slots, day + 1.0)
+                    o = orders[q[0][3]]
+                begin(o, day + shift_end / 24.0)
+            take = min(o.left, ot_cap - ot)
+            ot += take
+            o.left -= take
+            o.overtime += take
+            o.labour += take / 60.0 * cc.cost_per_hour * cc.overtime_factor
+            if o.left > 1e-9:
+                break
+            heapq.heappop(q)
+            o.end = max(o.arrive, day + shift_end / 24.0 + ot / n / 1440.0)
+            self._done(o)
+        for slot, o in enumerate(last):  # each crew drives back to the depot
+            if o is None:
+                continue
+            back = roads.minutes(pos[slot], roads.depot)
+            if not math.isfinite(back):
+                continue
+            reg = min(back, max(0.0, cap - used))
+            o.travel += back
+            o.regular += reg
+            o.overtime += back - reg
+            o.labour += (reg + (back - reg) * cc.overtime_factor) / 60.0 * cc.cost_per_hour
+            used += reg
+            ot += back - reg
+        self.crews[c]["busyMin"][day] += used
+        self.crews[c]["overtimeMin"][day] += ot
 
     # ---- what a finished order changes ----------------------------------------------------------------------------
     def _done(self, o: Order) -> None:
@@ -850,6 +1001,9 @@ class FieldEngine:
                                    tech="AMI" if key == "ami_conversion" else None)
             if x is None:
                 o.outcome = "skipped: the meter was off, already read on a new register, or not the registered meter"
+        elif key == "main_replacement" and o.asset in b.main_seg:
+            u, e, share = b.main_seg[o.asset]
+            self.renewed[(u, e)] = min(1.0, self.renewed.get((u, e), 0.0) + share)
         elif key == "ami_battery" and o.meter >= 0:
             if o.end < run.battery_dead[o.meter]:
                 run.battery_dead[o.meter] = INF  # replaced before it died
@@ -857,6 +1011,19 @@ class FieldEngine:
                 run.battery_new[o.meter] = o.end
         if o.then:
             b.finding(o)
+
+    def _renewal(self, day: int):
+        """A filter for the day's drawn breaks and leaks: one on a main the construction crews renewed (in part)
+        happens at ``renewed_main_break_factor`` of the old main's rate."""
+        if not self.renewed:
+            return None
+        f = self.b.fc[day].renewed_main_break_factor
+
+        def keep(item: dict, n: int) -> bool:
+            share = self.renewed.get((item.get("utility"), item.get("edge")), 0.0) \
+                if item.get("kind") in ("water_main_break", "gas_leak") else 0.0
+            return not share or _u(self.run, P_RENEW, day, n) >= share * (1.0 - f)
+        return keep
 
     # ---- overdue maintenance fails ----------------------------------------------------------------------------------
     def _failures(self, day: int, storm: bool) -> list[dict]:
@@ -935,9 +1102,19 @@ class FieldEngine:
             sd = min(int(o.start), YEAR_DAYS - 1)
             h = (o.start - sd) * 24.0
             in_shift = add_bdays(sd, 0) == sd and fc.shift_start_hour <= h < fc.shift_start_hour + fc.shift_hours
-            o.arrive = o.start + (o.travel / 2.0 + (0.0 if in_shift else fc.callout_minutes)) / 1440.0
-            o.end = o.arrive + o.minutes / 1440.0
-            free[i] = o.end + o.travel / 2880.0
+            callout = 0.0 if in_shift else fc.callout_minutes
+            roads, drive = self.roads(d), INF
+            if roads is not None and (spot := roads.spot(o)) is not None:
+                drive = roads.minutes(roads.depot, spot)
+            if math.isfinite(drive):  # from the depot and back
+                o.travel = 2.0 * drive + fc.stop_minutes
+                o.arrive = o.start + (drive + callout) / 1440.0
+                o.end = o.arrive + (fc.stop_minutes + o.minutes) / 1440.0
+                free[i] = o.end + drive / 1440.0
+            else:
+                o.arrive = o.start + (o.travel / 2.0 + callout) / 1440.0
+                o.end = o.arrive + o.minutes / 1440.0
+                free[i] = o.end + o.travel / 2880.0
             o.crew_id = f"ER-{i + 1}"
             mins = o.minutes + o.travel
             cost = fc.crew_emergency.cost_per_hour

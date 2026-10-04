@@ -690,6 +690,9 @@ class M2CRun:
         # (past its life, not replaced), and under-registration (a failed seal lot, a water meter past its life).
         self.off_spans: dict[int, list[list]] = {}  # register -> [[off at, back at (INF), why], ...]
         self.off_any = np.zeros(R, dtype=bool)
+        self.final = np.zeros((R, 13), dtype=bool)  # the read was the final read when the service went off
+        self.final_t = np.full((R, 13), np.nan)  # when that final read was taken (read_t keeps the schedule)
+        self._final_taken: set[tuple[int, float]] = set()  # (register, off at) whose final read is taken
         self.meter_tech_now = tw.meter_tech.copy()
         self.battery_dead = np.full(M, INF)  # when the module's battery died (INF: alive)
         self.battery_new = np.full(M, INF)  # when a new battery went in after it died
@@ -826,9 +829,18 @@ class M2CRun:
 
     def off_reason(self, r: int, t: float) -> str | None:
         """Why register ``r`` has no service at ``t`` (``disconnected``, ``removed``), or None."""
-        for a, b, why in self.off_spans.get(int(r), ()):
-            if a <= t < b:
-                return why
+        span = self.off_span(r, t)
+        return span[2] if span else None
+
+    def taken_t(self, rr, mm):
+        """When reads were taken: the schedule (``read_t``), or a final read's own time."""
+        return np.where(self.final[rr, mm], self.final_t[rr, mm], self.read_t[rr, mm])
+
+    def off_span(self, r: int, t: float) -> list | None:
+        """The ``[off at, back at, why]`` span of register ``r`` covering ``t``, or None."""
+        for span in self.off_spans.get(int(r), ()):
+            if span[0] <= t < span[1]:
+                return span
         return None
 
     def _off_loss(self, rows: np.ndarray, t: np.ndarray) -> np.ndarray:
@@ -1026,14 +1038,25 @@ class M2CRun:
     def _evening(self, day: int, m: int, rows: np.ndarray) -> None:
         tw, c = self.town, self.cfg_at(day)
         t = self.read_t[rows, m]
+        final = np.zeros(len(rows), dtype=bool)
         if self.off_any[rows].any():  # service off at the read (disconnected, removed): no read, no bill
-            why = [self.off_reason(int(r), float(x)) if self.off_any[r] else None for r, x in zip(rows, t)]
-            off = np.array([w is not None for w in why])
+            spans = [self.off_span(int(r), float(x)) if self.off_any[r] else None for r, x in zip(rows, t)]
+            off = np.array([s is not None for s in spans])
             if off.any():
-                for r, w in zip(rows[off].tolist(), [w for w in why if w is not None]):
-                    self.status[r, m] = OFF
-                    self.reason[r, m] = "SIM_DISCONNECTED" if w == "disconnected" else "SIM_REMOVED"
-                rows, t = rows[~off], t[~off]
+                # Except the first: the meter was read when its service went off (the crew reads it, or the remote
+                # switch reports it), so that read is the period's, and the bill runs to the disconnection.
+                t = t.copy()
+                for k in np.flatnonzero(off).tolist():
+                    key = (int(rows[k]), float(spans[k][0]))
+                    if key not in self._final_taken:
+                        self._final_taken.add(key)
+                        final[k], off[k], t[k] = True, False, spans[k][0]
+                for k in np.flatnonzero(off).tolist():
+                    self.status[rows[k], m] = OFF
+                    self.reason[rows[k], m] = "SIM_DISCONNECTED" if spans[k][2] == "disconnected" else "SIM_REMOVED"
+                self.final_t[rows[final], m] = t[final]
+                self.final[rows[final], m] = True
+                rows, t, final = rows[~off], t[~off], final[~off]
                 if not len(rows):
                     return
         meters = tw.meter_of[rows]
@@ -1064,6 +1087,8 @@ class M2CRun:
         dead_m = (self.battery_dead[mm] <= tm) & (tm < self.battery_new[mm]) & (
             hash_u01(self.seed, Purpose.FIELD, tw.meter_keys[mm], m, 1) < c.field.dead_battery_miss)
         miss_m = (u < p) | episode | self.no_doc[mm, m] | dark_m | mute_m | dead_m
+        if final.any():  # a final read is taken on site (or reported by the switch)
+            miss_m &= ~np.isin(mm, meters[final])
         self.missed_last[mm] = miss_m & (mt == "MANUAL")
         dead_of = dict(zip(mm.tolist(), dead_m.tolist(), strict=True))
         miss_of = dict(zip(mm.tolist(), miss_m.tolist(), strict=True))
@@ -1072,7 +1097,12 @@ class M2CRun:
         mute_of = dict(zip(mm.tolist(), mute[first].tolist(), strict=True))
         missed = np.array([miss_of[x] for x in meters.tolist()], dtype=bool)
         # Physical and observed registers (exact read day and hour, as the generator's sample reads).
-        normal = tw.true_advance(rows, tw.read_day[rows, m], tw.hour[rows])
+        rd, hr = tw.read_day[rows, m], tw.hour[rows]
+        if final.any():  # read when the service went off, not at the scheduled hour
+            rd, hr = rd.copy(), hr.astype(float)
+            rd[final] = np.floor(t[final])
+            hr[final] = (t[final] - np.floor(t[final])) * 24.0
+        normal = tw.true_advance(rows, rd, hr)
         true_now = tw.base[rows] + normal + self._extras(rows, t)
         meter_now = self._meter(rows, t, true_now)
         digits = tw.digits[rows]
