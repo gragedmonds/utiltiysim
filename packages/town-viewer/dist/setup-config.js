@@ -1,6 +1,7 @@
 import {renderSchemaForm,schemaFields,servedServices} from './schema-form.js';
 import {proposalInput,applyAgentProposal} from './setup-agent.js';
 import {STAFFING,SERVICES,GAS_PATH,SERVICES_PATH,staffingBase,applySuggestedStaffing,markStaffingEdited,staffingHint,crewHint,migrateServices,servicesState,servicesNote,toggleService,withServices} from './setup-utility.js';
+import {kpisForGoals,kpiChips} from './kpis.js';
 
 const ENVIRONMENT=new Set(['seeds','town','housing','weather']);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -20,6 +21,9 @@ export function focusGroup(data,draft,scope,stage,key,group){if(!inStage(scope,s
  if(scope==='town'&&['town','seeds','gas'].includes(key))return true;
  return selectedGoals(data,draft).some(g=>(scope==='run'?g.run:stage===0?g.environment:g.town).includes(key));
 }
+// The figures to watch, under the goals: the catalogue's figures for the chosen goals, the chosen ones ticked.
+export function kpiMarkup(catalogue,draft){if(!catalogue)return '<p class="field-note">Loading the KPI catalogue…</p>';const kpis=kpisForGoals(catalogue,draft.goals);
+ return `<fieldset class="kpi-picker"><legend>Which numbers matter? <span>Optional</span></legend><div class="kpi-chips">${kpiChips(kpis,draft.kpis||[])}</div><p class="field-note">${kpis.length} figures answer ${(draft.goals||[]).length?'these goals':'any goal'}; pick the ones to watch first in the Command Center. Each one's definition, the settings and scenarios that move it, and the windows it counts with (a bill on time within 3 days, say) are in the <a href="./glossary.html" target="_blank" rel="noopener">glossary ↗</a>.</p></fieldset>`;}
 export function goalMarkup(data,draft){return `<fieldset class="goal-picker"><legend>Choose one or more areas</legend><div class="goal-grid">${(data?.goals||[]).map(g=>`<label class="goal-card"><input type="checkbox" name="test-goal" value="${esc(g.id)}" ${(draft.goals||[]).includes(g.id)?'checked':''}><span class="goal-icon" aria-hidden="true">${g.icon}</span><strong>${esc(g.title)}</strong><span>${esc(g.description)}</span><small>${esc(g.outcomes)}</small></label>`).join('')}</div></fieldset><p class="field-note">These choices come from the engine guide. Your next pages focus on these areas. Other inputs keep their defaults or your previous edits; every setting remains available in Advanced. Choosing a focus does not skip engine calculations.</p>`;}
 export function setupProposal(draft){return {...proposalInput(draft),name:draft.name.trim(),summary:draft.summary||'Review your environment, utility and operating assumptions.',assumptions:draft.assumptions||[],limitations:draft.limitations||[]};}
 export function acceptSetup(draft,p){return {...applyAgentProposal(draft,p),scenarioId:draft.scenarioId,scenarioTitle:draft.scenarioTitle,step:3,wizardVersion:3,configDirty:false,agentSummaryDirty:false};}

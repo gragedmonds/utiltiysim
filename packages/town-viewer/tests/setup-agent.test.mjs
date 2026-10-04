@@ -53,7 +53,7 @@ function controlledStream(){let controller;const body=new ReadableStream({start(
  return {response:new Response(body,{headers:{'content-type':'text/event-stream'}}),push:t=>controller.enqueue(enc.encode(t)),end:()=>controller.close()};}
 const event=e=>`data: ${JSON.stringify(e)}\n\n`;
 function guide({replies,mode='setup',draft={status:'draft'},onApply=()=>{}}){const calls=[],state={draft,saves:0};
- const fetchImpl=async(url,opts={})=>{calls.push({url,opts,body:opts.body?JSON.parse(opts.body):null});if(url.endsWith('/status'))return Response.json({available:true});const next=replies.shift();return typeof next==='function'?next():next;};
+ const fetchImpl=async(url,opts={})=>{calls.push({url,opts,body:opts.body?JSON.parse(opts.body):null});if(url.endsWith('/status'))return Response.json({available:true});if(url.endsWith('/m2c/kpis'))return Response.json({families:[{id:'billing',title:'Billing'}],kpis:[{id:'bills_on_time',title:'Bills on time',family:'billing',unit:'share',better:'higher',goals:['billing'],definition:'Bills released within the window.',thresholds:['kpi.on_time_bill_days'],settings:[],related:[],where:[]}],thresholds:{}});const next=replies.shift();return typeof next==='function'?next():next;};
  const root=fakeRoot();
  const close=installSetupAgent({root,api:'http://engine/api',mode,getDraft:()=>state.draft,onSave:s=>{state.draft={...state.draft,agent:s};state.saves++;},onApply,onBack(){},fetchImpl,pause:0});
  const $=sel=>root.querySelector(sel),type=text=>{const input=$('#agent-input');input.value=text;input.oninput({target:input});};
@@ -185,4 +185,16 @@ test('goal ids read as names in the guide', async () => {
  assert.equal(goalNames(['vee','reading']),'validation & estimation (VEE) and meter reading');
  assert.equal(goalNames(['contact']),'the contact centre');
  assert.equal(goalNames(['a','b_c','fieldwork']),'a, b c and field work & maintenance');
+});
+
+test('KPI autofill: naming a figure shows the catalogue match above the box, and picking it writes the exact title',async()=>{
+ const g=guide({replies:[]});await settle();
+ const box=g.$('#agent-autofill');
+ g.type('I want to watch the bills on');
+ assert.match(box.innerHTML,/data-kpi="bills_on_time"/);assert.match(box.innerHTML,/Bills on time/);assert.equal(box.hidden,false);
+ box.onclick({target:{closest:()=>({dataset:{kpi:'bills_on_time'}})}});
+ assert.equal(g.$('#agent-input').value,'I want to watch the Bills on time ');assert.equal(box.hidden,true);
+ g.type('I want to watch the Bills on time and keep the staff');
+ assert.equal(box.hidden,true,'no match once the words moved on');
+ g.close();
 });

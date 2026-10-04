@@ -46,7 +46,7 @@ test('locked client stores refuse setting and seed edits; episodes, dates and ac
 test('the Studio bar: Simulations, Config, Command Center, Map, Workspace, Data; no Runs tab',()=>{
  const html=readFileSync(new URL('../dist/studio.html',import.meta.url),'utf8'),nav=html.match(/<nav class="studio-tabs"[^>]*>(.*?)<\/nav>/)[1];
  const tabs=[...nav.matchAll(/<a href="([^"]*)" id="([^"]+)">([^<]+)<\/a>/g)].map(m=>[m[2],m[3],m[1]]);
- assert.deepEqual(tabs,[['nav-simulations','Simulations','./'],['nav-config','Config','#/config'],['nav-year','Command Center','#/year'],['nav-map','Map','#/town'],['nav-workspace','Workspace','#/workspace'],['nav-data','Data','#/data']]);
+ assert.deepEqual(tabs,[['nav-simulations','Simulations','./'],['nav-config','Config','#/config'],['nav-year','Command Center','#/year'],['nav-map','Map','#/town'],['nav-workspace','Workspace','#/workspace'],['nav-data','Data','#/data'],['nav-glossary','Glossary','./glossary.html']]);
  assert.ok(!html.includes('id="nav-runs"'));assert.ok(html.includes('aria-label="Command Center"'));
  assert.ok(html.includes('id="cfg-lock-btn"')&&html.includes('Lock in settings and start simulation'));
 });

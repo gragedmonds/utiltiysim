@@ -948,6 +948,28 @@ class FieldConfig(BaseModel):
                                             title="Main renewal")
 
 
+class KpiConfig(BaseModel):
+    """How the KPIs count. These windows define the figures the Studio reports (a bill on time, a read released
+    promptly, a case resolved in time, an invoice paid on time); they never change what the run does."""
+    model_config = group("KPI definitions", 26, "The windows the KPIs count with: what makes a bill on time, a read "
+                         "prompt, a case resolved in time, an invoice paid on time. They change the figures reported, "
+                         "never the run itself.", applies="run")
+    on_time_bill_days: int = F(3, "A bill is on time when it is released to invoicing within this many calendar days "
+                                  "of the scheduled read it bills.", unit="days", ge=0, le=60,
+                               effects=["bills on time"])
+    timely_invoice_days: int = F(5, "An invoice is timely when it is created within this many calendar days of the "
+                                    "last scheduled read it bills (the twin's invoice timeliness).", unit="days",
+                                 ge=1, le=60, effects=["invoice timeliness"])
+    read_release_days: int = F(3, "A held read is released promptly when its case releases it to billing within "
+                                  "this many calendar days of the scheduled read.", unit="days", ge=0, le=90,
+                               effects=["reads released promptly"])
+    payment_grace_days: int = F(3, "An invoice is paid on time when it is settled within this many calendar days "
+                                   "after its due date.", unit="days", ge=0, le=60, effects=["invoices paid on time"])
+    case_resolution_days: int = F(5, "A case is resolved in time when it closes within this many business days of "
+                                     "being raised.", unit="business days", ge=0, le=60,
+                                  effects=["cases resolved in time"])
+
+
 class SimConfig(BaseModel):
     """Complete simulator configuration. ``town_id`` is a pure function of this object and the generator version."""
 
@@ -974,6 +996,7 @@ class SimConfig(BaseModel):
     contact: ContactConfig = Field(default_factory=ContactConfig)
     outages: OutagesConfig = Field(default_factory=OutagesConfig)
     field: FieldConfig = Field(default_factory=FieldConfig)
+    kpi: KpiConfig = Field(default_factory=KpiConfig)
 
     @model_validator(mode="after")
     def _check(self) -> SimConfig:

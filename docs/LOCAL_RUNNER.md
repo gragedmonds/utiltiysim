@@ -95,6 +95,15 @@ and labels the simulation's card. The file is `utility-studio-simulation/1.0`: `
 are the endpoints; a file from a newer version, or one holding settings this version does not accept, is refused with
 the reason.
 
+## KPIs and the Glossary
+
+A simulation's chosen figures (`kpis` in its file) show on the Command Center and on Run statistics, measured by the
+engine for the run in view, each with the window that defines it. The **Glossary** tab (`glossary.html`, opened with
+the simulation and its town) lists every figure of the catalogue, its definition and formula, the window as this
+simulation set it, the settings that move it up or down, the library scenarios that strike it and the related figures;
+the simulation's own figures are marked. Everything on it comes from the engine running in the app. See
+[KPIS.md](KPIS.md).
+
 ## Talk it through
 
 The setup guide needs an internet connection and an Anthropic API key. In the app, the guide's panel offers a key

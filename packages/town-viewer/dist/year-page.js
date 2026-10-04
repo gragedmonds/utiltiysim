@@ -10,6 +10,7 @@
 // bars and legend for a simulation run on the analyst's computer. Nothing runs: no trend charts, run date or years;
 // the client's preview() gives the days sporadic episodes strike, and the episodes go into the next revision's job.
 import {engineNotice} from './workspace.js';
+import {fetchKpiCatalogue,fetchKpiValues,kpiStrip} from './kpis.js';
 import {bindPopovers} from './config-page.js';
 import {episodeDates,FIRST_YEAR,LAST_YEAR,activeYear,dayYear,yearEnd} from './m2c.js';
 import {fmtCell} from './data-page.js';
@@ -233,7 +234,15 @@ export function yearsBar(m,{confirm=false,opening=null,loaded=false}={}){if(!m)r
 
 // `onYear(year)` hears a year switched to or opened (the Studio's other pages and the map follow the active year).
 export function installYearPage({getClient,getSimulation=()=>null,getEngineState=()=>({state:'idle',towns:[]}),toast=()=>{},onDate=null,onYear=null,root=document.getElementById('year-root'),plan=false}){
- const ui={library:null,trend:null,busy:false,recalc:false,opened:false,error:'',panel:null,confirmClear:false,confirmContinue:false,opening:null,models:[],agent:null,applying:false};
+ const ui={library:null,trend:null,busy:false,recalc:false,opened:false,error:'',panel:null,confirmClear:false,confirmContinue:false,opening:null,models:[],agent:null,applying:false,kpi:{catalogue:null,values:null,key:'',error:''}};
+ // The simulation's chosen figures (its record's `kpis`), measured year to date by the engine for the run in view.
+ function kpiIds(){const s=getSimulation();return Array.isArray(s?.kpis)?s.kpis:[];}
+ async function loadKpis(){const m=client(),ids=kpiIds();if(!m||!ids.length||plan)return;const key=JSON.stringify([ids,m.asOf,m.settings,m.seed,m.episodes,m.actions?.length]);if(ui.kpi.key===key)return;ui.kpi.key=key;ui.kpi.values=null;ui.kpi.error='';
+  try{ui.kpi.catalogue||=await fetchKpiCatalogue(m.api,{fetchImpl:m.fetchImpl});const data=await fetchKpiValues(m.api,m.body({asOf:m.asOf,kpis:ids}),{fetchImpl:m.fetchImpl});if(ui.kpi.key!==key)return;ui.kpi.values=data.values;ui.kpi.thresholds=data.thresholds;}catch(err){if(ui.kpi.key===key)ui.kpi.error=err.message;}
+  const strip=root?.querySelector('.kpi-strip');if(strip)strip.outerHTML=kpis();}
+ function kpis(){const s=getSimulation(),ids=kpiIds();if(!ids.length||plan||!client())return '';const href='./glossary.html?simulation='+encodeURIComponent(s.id)+'&town='+encodeURIComponent(s.townRef||'');
+  if(ui.kpi.error)return `<section class="kpi-strip" aria-label="Your KPIs"><div class="kpi-strip-head"><h3>Your KPIs</h3><a href="${e(href)}">Glossary ↗</a></div><p class="small-note">${e(ui.kpi.error)}</p></section>`;
+  return kpiStrip(ui.kpi.catalogue,ids,ui.kpi.values,{thresholds:ui.kpi.thresholds||{},href});}
  let closePops=null,closeAgent=null,agentClient=null,strikes=new Map();
  const header=root?.ownerDocument?.querySelector('.studio-header');
  const positionGuide=()=>{if(header)root.style.setProperty('--year-guide-top',header.getBoundingClientRect().bottom+'px');};
@@ -336,7 +345,7 @@ export function installYearPage({getClient,getSimulation=()=>null,getEngineState
   if(!keepAgent){closeAgent?.();closeAgent=null;agentClient=null;}
   if(!m){root.innerHTML=`<section class="fiori-shell"><div class="fiori-empty ws-empty">${engineNotice(getEngineState(),undefined,'#/year','The Year')}</div></section>`;root.querySelector('[data-ws="retry"]')?.addEventListener('click',()=>location.reload());return;}
   strikes=episodeStrikes(ui.trend,m.episodes||[]);
-  root.innerHTML=`<div class="year-layout${ui.panel?' has-panel':''}"><main class="year-main">${head()}${years()}${status()}${calendar()}${trends()}</main>${panel()}</div>`;
+  root.innerHTML=`<div class="year-layout${ui.panel?' has-panel':''}"><main class="year-main">${head()}${years()}${status()}${kpis()}${calendar()}${trends()}</main>${panel()}</div>`;loadKpis();
   if(keepAgent)root.querySelector('#year-agent-root')?.replaceWith(keepAgent);else if(ui.panel?.kind==='agent')mountAgent();
   if(m.readOnly){root.querySelector('#year-asof').disabled=true;for(const b of root.querySelectorAll('[data-day],[data-ep]')){b.disabled=true;b.removeAttribute('data-day');b.removeAttribute('data-ep');}const pop=root.querySelector('.schema-pop');if(pop)pop.innerHTML='<p>Saved engine results through '+e(m.asOf)+'. Episodes and trends are archived with this run. Open a live engine to change inputs or replay another date.</p>';const empty=root.querySelector('.year-legend-empty');if(empty)empty.textContent='No episodes in this saved run.';}
   else if(frozen(m)){for(const b of root.querySelectorAll('[data-day],[data-ep]')){b.disabled=true;b.removeAttribute('data-day');b.removeAttribute('data-ep');}const empty=root.querySelector('.year-legend-empty');if(empty)empty.textContent=`No episodes in ${m.year}.`;}

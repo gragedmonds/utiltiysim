@@ -712,6 +712,17 @@ IMPACT: dict[str, tuple[str, str]] = {
     "field.meter_set": ("year", "Meter sets on finished new services by the meter technicians."),
     "field.service_upgrade": ("year", "Homes with an EV or electric heat upgrading their service a year."),
     "field.main_replacement": ("year", "Cast-iron main renewed a year: the biggest capital cost."),
+    # KPI definitions: the windows the reported figures count with. They change the figures, never the year.
+    "kpi.on_time_bill_days": ("year", "The window that makes a bill on time: days from the scheduled read to the "
+                                      "bill's release. Changes the Bills on time figure only."),
+    "kpi.timely_invoice_days": ("year", "The window that makes an invoice timely: days from the last scheduled read "
+                                        "to the invoice. Changes the Invoice timeliness figure only."),
+    "kpi.read_release_days": ("year", "The window that makes a held read prompt: days from the scheduled read to its "
+                                      "release. Changes the Reads released promptly figure only."),
+    "kpi.payment_grace_days": ("year", "Days after the due date an invoice may still be paid on time. Changes the "
+                                       "Invoices paid on time figure only."),
+    "kpi.case_resolution_days": ("year", "Business days a case may take and still count as resolved in time. Changes "
+                                         "the Cases resolved in time figure only."),
 }
 
 

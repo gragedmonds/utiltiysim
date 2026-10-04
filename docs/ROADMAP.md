@@ -74,6 +74,10 @@ Viewer (Astra's package):
 - meter-to-cash on the map: reading-round outcomes, the day's cycle, outages feeding meter-to-cash, a VEE scorecard.
 
 Next:
+- **Start from your numbers** (the digital twin, [TWIN.md](TWIN.md)): the engine fits its levers to observed
+  KPIs and known inputs (`utilsim twin`, `POST /api/twin/fit`) and proposes the setup; done. Still open: the Studio
+  entry card and browser-driven fit, town levers for payment figures, candidate explanations side by side, the
+  shared-workforce batch mode for a pool of billers over districts;
 - road hierarchy and utility corridors ([CORRIDOR_ROUTING_REQUIREMENTS.md](CORRIDOR_ROUTING_REQUIREMENTS.md)):
   electric is done in generator 0.6.0 (corridors, turn-aware trunks, feeder territories, express sections,
   normally-open ties, corridor exports and routing metrics); still open: water/gas backbone-first routing, road

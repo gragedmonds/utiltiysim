@@ -26,7 +26,7 @@ export function assertUnlocked(store){if(store?.locked)throw Error(LOCKED_MESSAG
 // Locked: the banner, every form control on the page disabled (re-applied whenever a form renders again) and, through
 // CSS (#settings-page.is-locked), the editing and reset controls hidden. Returns {sync}: call it when the counts move.
 export function installSettingsLock({page,nav,getSimulation,getCounts,canLock=()=>'',onLock,toast=()=>{}}){
- const $=id=>document.getElementById(id),main=page.querySelector('.cfg-main'),OPEN=['nav-simulations','nav-config'];
+ const $=id=>document.getElementById(id),main=page.querySelector('.cfg-main'),OPEN=['nav-simulations','nav-config','nav-glossary'];
  const lockInputs=()=>{for(const el of main.querySelectorAll('input,select,textarea'))if(!el.disabled){el.disabled=true;el.dataset.lockedInput='';}};
  function sync(){const s=getSimulation(),locked=!!s&&isLocked(s),open=!!s&&!locked;
   page.classList.toggle('is-locked',locked);$('cfg-lock-bar').hidden=!open;$('cfg-locked-banner').hidden=!locked;

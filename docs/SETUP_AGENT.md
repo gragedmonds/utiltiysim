@@ -85,6 +85,18 @@ propose a baseline. Streaming needs the server-sent-events form of `POST /api/se
 `docs/CONTRACT.md`); a host that buffers the response shows the whole reply at once, and an older server's JSON
 reply still works.
 
+## KPIs
+
+The proposal carries `kpis`: up to twelve ids from the KPI catalogue (`GET /api/m2c/kpis`), the figures the person
+wants to watch. Claude receives the catalogue in its context (`kpiCatalogue`: id, title, family, unit, direction,
+goals and definition of every figure) and is told to set `kpis` from it when the person names an outcome ("bills
+out on time", "calls answered"); unknown ids are refused by validation. While typing or dictating, the catalogue's
+matches for the last few words show above the box as chips (`matchKpis` in `kpis.js`); a click writes the exact
+title in, so the person and Claude mean the same number. The summary lists them as "Watching: …" and the Studio
+shows them on the Command Center and Run statistics with their values. The windows that define them (an on-time
+bill within 3 days of schedule, a timely invoice within 5) are the `kpi` run settings and are proposed and edited
+like any other setting. See [KPIS.md](KPIS.md).
+
 ## Editable input summary
 
 Both the proposal and final wizard review show **What your inputs change**. Each explicit town, baseline,

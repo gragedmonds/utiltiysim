@@ -1,4 +1,4 @@
-"""utilsim command line: gen | render | schema | validate | pack | export-run | serve."""
+"""utilsim command line: gen | render | schema | validate | pack | export-run | serve | twin."""
 
 from __future__ import annotations
 
@@ -193,6 +193,67 @@ def batch_run_command(
                            "rollup": str(directory / "rollup.json"),
                            "timings": str(directory / "timings.json"),
                            "open": "Open each completed district's runs/<runKey> folder in Studio's saved-run reader."}))
+
+
+@app.command()
+def twin(spec: Path = typer.Argument(None, help="A twin spec JSON (utilsim/twin/fit.py TwinSpec); flags add to it."),
+         customers: int = typer.Option(None, help="Contract accounts in the year."),
+         billers: int = typer.Option(None, help="Billing analysts on the exception queues."),
+         agents: int = typer.Option(None, help="Contact-centre agents."),
+         kpi: list[str] = typer.Option(None, "--kpi", help="id=value, or id=before:after; add ',abs' for a rate "
+                                                            "given as the utility's yearly total. Repeatable."),
+         changed_on: str = typer.Option(None, "--changed-on", help="The 2026 day the 'after' figures begin."),
+         ramp: int = typer.Option(0, help="Days over which the change built up."),
+         calibration: str = typer.Option(None, help="Pack preset to replay (default small_town; village is quick)."),
+         budget: int = typer.Option(None, help="Most replays to spend (default 20)."),
+         out: Path = typer.Option(None, help="Write the fit (twin-fit/1.0) here instead of printing it."),
+         dictionary_: bool = typer.Option(False, "--dictionary", help="Print the KPI and lever dictionary and exit.")):
+    """Fit a digital twin: from the customers, billers and observed KPIs to a setup that replays them."""
+    from pydantic import ValidationError
+
+    from utilsim.twin import TwinSpec, dictionary, fit
+
+    if dictionary_:
+        typer.echo(orjson.dumps(dictionary(), option=orjson.OPT_INDENT_2).decode())
+        return
+    value = orjson.loads(spec.read_bytes()) if spec else {}
+    if not isinstance(value, dict):
+        raise typer.BadParameter("the spec must be a JSON object")
+    for key, v in (("customers", customers), ("billers", billers), ("agents", agents), ("changedOn", changed_on),
+                   ("calibration", calibration), ("budget", budget)):
+        if v is not None:
+            value[key] = v
+    if ramp:
+        value["ramp"] = ramp
+    for item in kpi or []:
+        name, _, rest = item.partition("=")
+        rest, _, flag = rest.partition(",")
+        before, _, after = rest.partition(":")
+        try:
+            target = {"id": name.strip(), "absolute": flag.strip() == "abs"}
+            if after:
+                target.update(before=float(before), after=float(after))
+            else:
+                target["value"] = float(before)
+        except ValueError as exc:
+            raise typer.BadParameter(f"--kpi {item!r}: id=value or id=before:after") from exc
+        value.setdefault("kpis", []).append(target)
+    try:
+        result = fit(TwinSpec.model_validate(value),
+                     progress=lambda p: typer.echo(f"replay {p['replay']}/{p['budget']}  {p['label']}  "
+                                                   f"{p['seconds']} s", err=True))
+    except ValidationError as exc:
+        raise typer.BadParameter("; ".join(".".join(str(k) for k in e["loc"]) + ": " + e["msg"]
+                                           for e in exc.errors())) from exc
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    data = orjson.dumps(result, option=orjson.OPT_INDENT_2)
+    if out:
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_bytes(data)
+        typer.echo(str(out))
+    else:
+        typer.echo(data.decode())
 
 
 @app.command("studio")

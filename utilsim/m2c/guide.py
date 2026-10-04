@@ -123,6 +123,13 @@ CAPABILITIES = (
     {"id": "weather", "title": "Weather year",
      "text": "Daily temperatures drive usage, flows, state frames and reading conditions through the year.",
      "where": ["Map", "Data › Usage by month"]},
+    {"id": "twin", "title": "Start from the outcomes",
+     "text": "A digital twin fitted the other way round: give the customers, billers and services you know and the "
+             "figures you observed (invoice timeliness, missed or estimated reads, exceptions, backlog, before and "
+             "after a day), and the engine moves its levers (missed reads, anomalies, VEE strictness, automation, "
+             "pickup lag, field capacity) until the replayed year reproduces them, then proposes the setup and "
+             "reports every figure the twin shows.",
+     "where": ["utilsim twin", "POST /api/twin/fit"]},
     {"id": "hosting", "title": "Hosting",
      "text": "The same engine runs as a serverless function for the prebuilt towns and small generated towns, and "
              "locally with the full API (exports, renders, GeoJSON, large towns).",
@@ -202,6 +209,11 @@ GAPS = (
      "inflicted from a day.", "plan": "Make the change date and size per-day settings."},
     {"title": "Payer behaviour as a run setting", "text": "On-time, late and at-risk shares are fixed when the town "
      "is generated.", "plan": "A run-scoped payment-stress episode."},
+    {"title": "The twin in the Studio", "text": "The digital twin fit runs from the command line and the API; the "
+     "Studio has no 'Start from your numbers' entry yet, payment figures have no lever (payer mix is a town "
+     "setting), and a pool of billers over districts cannot fall below one analyst at half an hour a day.",
+     "plan": "A second entry card with a browser-driven fit, town levers that regenerate once per candidate, two or "
+     "three candidate explanations side by side, and the shared-workforce batch mode for Studio jobs."},
     {"title": "Saved runs across devices", "text": "Your actions and episodes live in this browser.", "plan": "A "
      "small store for named runs."},
     {"title": "Always-on hosting", "text": "The serverless engine replays on cold start, rebuilds generated towns per "

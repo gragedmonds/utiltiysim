@@ -149,6 +149,10 @@ Operations settings affect map days. Year outages.* controls annual incidents th
 annual incidents do not automatically change meter reads. Recorded map-day interruptions are separate.
 Unsupported requests should get a clear explanation and a supported alternative, never a fake configuration.
 
+Set `kpis` to the figures the person wants to watch, by id from the kpiCatalogue in context (at most 12): when
+they name a number ("on-time bills", "days to pay", "backlog"), match it to a catalogue figure and say which one;
+when they only name a goal, propose the two or three figures that answer it. Never invent a figure the catalogue
+lacks; say what the engine cannot measure instead.
 Give the proposal a useful name, short purpose, summary, explicit assumptions and limitations. Include the
 requested region as context. Normally open asOf at the last episode end, or December 31 for an open-ended episode.
 With no episodes, ask about a useful observation period or offer March 31. You can propose a normal baseline too.
@@ -190,6 +194,14 @@ def tools_spec(mode: str = "setup") -> list[dict]:
                                              "preset": {"type": "string"}}, "required": ["scope", "groups", "preset"]}},
             {"name": "respond", "description": "Ask the user a probing question, or propose a complete configuration for review. Proposal validation is mandatory and may return errors to correct.",
              "input_schema": (InflictReply if mode == "inflict" else AgentReply).model_json_schema(by_alias=True)}]
+
+
+def kpi_index() -> list[dict]:
+    """The KPI catalogue as Claude sees it: id, title, family, unit, goals and definition."""
+    from utilsim.m2c.kpis import KPIS
+
+    return [{"id": k.id, "title": k.title, "family": k.family, "unit": k.unit, "better": k.better,
+             "goals": list(k.goals), "definition": k.definition} for k in KPIS]
 
 
 def rate_limit(request: Request) -> None:
@@ -362,7 +374,7 @@ async def conversation(req: ChatRequest, key: str, emit: Callable[[dict], None] 
     current = {k: v for k, v in req.draft.items() if k in allowed}
     context = {"homeLimit": MAX_HOUSES, "townSizes": TOWN_SIZES, "towns": presets(), "configurationGroups": group_index(),
                "testGoals": GOALS, "regionalStarters": REGIONS, "regionalNote": REGIONAL_NOTE,
-               "scenarioLibrary": catalog(), "currentDraft": current}
+               "scenarioLibrary": catalog(), "kpiCatalogue": kpi_index(), "currentDraft": current}
     if req.mode == "inflict":
         assert req.currentRun is not None
         run_config(req.currentRun)  # Check the current town/settings before making a paid provider request.
