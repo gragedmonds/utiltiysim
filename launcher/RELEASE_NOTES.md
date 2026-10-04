@@ -5,8 +5,9 @@ Open it, keep or change the storage folder, and click **Open Utility Studio**. T
 the engine into that folder; later starts reuse it. Utility Studio then opens in your browser: set up a simulation,
 tweak any setting, run the year and read the results, all on this computer. Nothing is uploaded.
 
-**Simulation codes.** Copy a simulation's code in Studio and paste it into Utility Studio on another computer: the same
-town, homes, seed, settings, dates and every scenario on the year come across.
+**Simulation files.** Export a simulation in Studio and import the file in Utility Studio on another computer: the same
+town, homes, seed, settings, dates and every scenario on the year come across. Each file is named by three words,
+such as `brave-otter-harbour.utilitysim.json`.
 
 **Talk it through** with Claude is optional and needs an internet connection and an Anthropic API key, which you
 paste into the guide's panel; it is kept in your computer's secure storage.

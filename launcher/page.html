@@ -10,7 +10,7 @@
 <button id="start" disabled>Open Utility Studio</button>
 <div class="status-card"><p id="status" role="status" aria-live="polite">Connecting…</p><progress id="progress" hidden aria-label="Starting Utility Studio"></progress><p id="error" role="alert" hidden></p><p id="log" class="note" hidden></p></div>
 <a id="open-engine" class="primary" hidden>Open Utility Studio in your browser →</a>
-<p class="note">Keep this window open while you use Utility Studio. To share a simulation, copy its code in Studio and paste it into Utility Studio on another computer.</p>
+<p class="note">Keep this window open while you use Utility Studio. To share a simulation, export its file in Studio and import it in Utility Studio on another computer.</p>
 <script>
 const $=id=>document.getElementById(id),fragment=new URLSearchParams(location.hash.slice(1));
 let token=fragment.get('token'),state={},pending='',connected=false,actionError='',connectionError='',polling=false,editing=false;

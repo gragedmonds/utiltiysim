@@ -33,7 +33,7 @@ The process (`utilsim/worker/server.py`, FastAPI on a random loopback port) serv
 |---|---|
 | `/` | The Studio pages (`packages/town-viewer/dist`): setup wizard, Studio, run page, saved-results reader |
 | `/packs/` | The prebuilt town packs |
-| `/api/` | The whole engine API (`api/app.py`): setup, towns, operations, meter-to-cash, simulation codes |
+| `/api/` | The whole engine API (`api/app.py`): setup, towns, operations, meter-to-cash, simulation files |
 | `/runs/<runKey>/` | Every finished district's run bundle, for the saved-results reader (`runs.html?run=/runs/<runKey>/`) |
 | `/local/` | This computer's queue, result summaries, library and the Claude key; needs the per-launch bearer token |
 
@@ -72,25 +72,24 @@ that change only the year), `batches/` (checkpoints per district), `runs/<runKey
 and `results/<jobId>.result.json` (the small summary). A revision interrupted by closing the app resumes from its
 finished districts on the next start. A missing drive pauses work instead of writing anywhere else.
 
-## Simulation codes
+## Simulation files
 
-**Copy code** (on a simulation's card in the list, and on the run page) turns the whole simulation into one
-uppercase code; **Import a code** pastes one in. A code carries everything that shapes the simulation: the prepared
-town and the town settings that differ from it (the exact town the simulation runs on, from its town reference), the
-number of homes, the run seed, the locked run settings and map-day settings, the goals, the results date, the name,
-and every episode on the year, the starting scenario's and the ones inflicted later, each with its dates, ramp,
-settings and sporadic pattern with its seed. Nothing is stored anywhere: the same engine build rebuilds the same
-simulation from the code alone. An imported simulation appears in the list ready to review; it opens unlocked on
-Config so every setting can be changed before it starts, or on the run page for a large one.
+**Export** (on a simulation's card in the list, and on the run page) downloads the whole simulation as one small JSON
+file; **Import simulation** picks one. A file carries everything that shapes the simulation: the prepared town and
+the town settings that differ from it (the exact town the simulation runs on, from its town reference), the number of
+homes (a 500,000-home simulation included), the run seed, the locked run settings and map-day settings, the goals,
+the results date, the name, and every episode on the year, the starting scenario's and the ones inflicted later, each
+with its dates, ramp, settings and sporadic pattern with its seed. Nothing is stored anywhere: the same engine build
+rebuilds the same simulation from the file alone. An imported simulation appears in the list ready to review; it
+opens unlocked on Config so every setting can be changed before it starts, or on the run page for a large one.
 
-The format (`utilsim/share.py`): `UTS1` + Crockford base32 (no I, L, O or U; case, spaces and dashes ignored) of the
-raw-deflated compact payload plus two check bytes. Deflate uses a frozen dictionary of the engine's defaults, the
-regional starters and the scenario library (`utilsim/share_dictionary_v1.txt`), so a typical code is three to four
-times shorter than plain compression: a plain small town is about 70 characters, a 5,000-home simulation with a
-region, three settings, a seed and five episodes about 270, and library scenarios cost almost nothing. Unique text
-(the name, custom episode titles) is most of a long code. The dictionary is part of the format; a new one is a new
-version digit. A damaged code, or one from a newer version, is refused with the reason. `POST /api/share/encode` and
-`POST /api/share/decode` are the endpoints.
+Every file has a handle, three plain words with an animal in the middle, such as `brave-otter-harbour`, derived from
+the simulation's run-changing inputs (`utilsim/share.py`): two people holding the same simulation see the same handle,
+a changed setting or episode changes it, and renaming does not. It names the file (`brave-otter-harbour.utilitysim.json`)
+and labels the simulation's card. The file is `utility-studio-simulation/1.0`: `handle`, `name`, `exported`,
+`engineBuild` and `simulation` (the wizard proposal by alias). `POST /api/share/export` and `POST /api/share/import`
+are the endpoints; a file from a newer version, or one holding settings this version does not accept, is refused with
+the reason.
 
 ## Talk it through
 

@@ -45,7 +45,7 @@ for carrying Studio inputs into an export, loading bundles by URL, and the archi
 | `docs/DATA_MODEL.md` | Customer, device and read model |
 | `docs/OPERATIONS.md` | Clock, fleet, incidents and meter-to-cash process design (M2/M3) |
 | `docs/ARCHITECTURE.md` · `docs/ROADMAP.md` | Layers, determinism rules, performance · milestones |
-| `docs/LOCAL_RUNNER.md` · `docs/RUN_BUNDLES.md` | The app: install, the run page, simulation codes, release · saved runs and the offline reader |
+| `docs/LOCAL_RUNNER.md` · `docs/RUN_BUNDLES.md` | The app: install, the run page, simulation files, release · saved runs and the offline reader |
 | `docs/PORTAL_ARCHITECTURE.md` · `docs/HANDOFF_BUILD.md` · `docs/DATA_FIRST.md` | Earlier design history (the web-paired portal, superseded by the app) · the data-first generation plan |
 
 **The app.** Utility Studio is downloaded and run on the person's own computer: a small Go launcher
@@ -78,8 +78,9 @@ monitor shows active/queued analysis and estimates based on completed requests.
 In the app everything runs on this computer (`uv run utilsim studio --store out/library` from a checkout). For
 engine-only development, run `utilsim serve --port 8010` and open `http://localhost:5175/?engine=http://127.0.0.1:8010`.
 Browser metadata, settings and analyst actions persist per simulation; the list is not shared between computers.
-**Copy code** on a simulation's card turns the whole simulation (town, homes, seed, settings, dates, every scenario on
-the year) into one uppercase code, and **Import a code** rebuilds it on another computer. Saved runs open through
+**Export** on a simulation's card saves the whole simulation (town, homes, seed, settings, dates, every scenario on
+the year) as one small JSON file named by three words (`brave-otter-harbour.utilitysim.json`), and **Import
+simulation** rebuilds it on another computer. Saved runs open through
 **Open saved results**.
 
 **Conversational setup:** choose **Talk it through** to speak or type to Claude, answer follow-up questions and

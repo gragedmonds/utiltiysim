@@ -1,7 +1,8 @@
-"""Simulation codes: everything that shapes a simulation, as one uppercase code any copy of the app rebuilds it from."""
+"""Simulation files: everything that shapes a simulation, as one small JSON file any copy of the app rebuilds it from,
+named by three words that follow from its inputs."""
 from __future__ import annotations
 
-import hashlib
+import copy
 
 import pytest
 from fastapi.testclient import TestClient
@@ -12,27 +13,36 @@ from api.app import app
 from utilsim.config.presets import deep_merge
 from utilsim.m2c.scenarios import BY_ID
 from utilsim.share import (
-    CodeError,
-    b32decode,
-    b32encode,
-    build_dictionary,
-    dated_episodes,
-    decode,
-    dictionary,
-    encode,
-    grouped,
+    ADJECTIVES,
+    ANIMALS,
+    PLACES,
+    SCHEMA,
+    FileError,
+    export_file,
+    filename,
+    handle,
+    read_file,
 )
 
-# The committed dictionary is part of the code format: a change here is a new version, not a regeneration.
-DICTIONARY_SHA256 = "cfae08c8e08a2d89913a82a6963d01b056a0acecd015b66b9f5751c16a87d0f6"
+
+def dated(scenario, day):
+    from datetime import date, timedelta
+    start, end = date.fromisoformat(day), date(2026, 12, 31)
+    out = []
+    for t in scenario["episodes"]:
+        frm = min(start + timedelta(days=t["startOffset"]), end)
+        to = None if t["durationDays"] is None else min(frm + timedelta(days=t["durationDays"] - 1), end)
+        out.append({"title": t["title"], "from": frm.isoformat(), "to": to.isoformat() if to else None, "ramp": t["ramp"],
+                    "settings": t["settings"], **({"pattern": t["pattern"]} if t.get("pattern") else {})})
+    return out
 
 
 def typical():
-    chaos = dated_episodes(BY_ID["starter_chaos"], "2026-01-01")
-    flu = dated_episodes(BY_ID["flu_spikes"], "2026-02-02")
+    chaos = dated(BY_ID["starter_chaos"], "2026-01-01")
+    flu = dated(BY_ID["flu_spikes"], "2026-02-02")
     flu[0]["to"] = "2026-05-29"
     flu[0]["pattern"] = {**flu[0]["pattern"], "seed": "local:3f2a"}
-    return {"execution": "local", "totalHomes": 5000, "name": "Can VEE cope with a rough winter?", "goals": ["vee", "billing"],
+    return {"execution": "local", "totalHomes": 500000, "name": "Can VEE cope with a rough winter?", "goals": ["vee", "billing"],
             "region": REGIONS[0]["name"], "preset": "small_town", "seed": "WINTER-7", "asOf": "2026-06-30",
             "townOverrides": deep_merge({"town": {"houses": 2000}, "customers_billing": {"services": ["electric", "water"]}},
                                         REGIONS[0]["overrides"]),
@@ -43,70 +53,65 @@ def typical():
 
 
 def same_simulation(a, b):
-    """Two validated proposals that run the same simulation: town, homes, settings, seed, date and every episode."""
     keys = ("townRef", "townId", "homes", "settings", "opsSettings", "seed", "asOf", "goals", "execution", "totalHomes")
     return all(a[k] == b[k] for k in keys) and a["episodes"] == b["episodes"]
 
 
-def test_a_code_rebuilds_the_same_simulation_and_stays_short():
+def test_a_file_rebuilds_the_same_simulation():
     p = typical()
-    code = encode(p)
-    assert code.startswith("UTS1") and code == code.upper() and code.isalnum()
-    assert len(code) < 400, len(code)  # a region, three settings, a seed and five episodes
-    back = decode(code)
+    file = export_file(p, "ab" * 32)
+    assert file["schemaVersion"] == SCHEMA and file["name"] == p["name"] and file["engineBuild"] == "ab" * 32
+    assert file["simulation"]["totalHomes"] == 500000 and file["simulation"]["episodes"][2]["pattern"]["seed"] == "local:3f2a"
+    back = read_file(file)
     assert same_simulation(validate_proposal(Proposal.model_validate(p)), validate_proposal(Proposal.model_validate(back)))
-    assert back["name"] == p["name"] and back["region"] == p["region"] and back["episodes"][2]["pattern"]["seed"] == "local:3f2a"
-    # A plain small town is far shorter; the name is most of it.
-    small = encode({"name": "Winter VEE", "preset": "small_town", "townOverrides": {"town": {"houses": 500}}, "summary": "x"})
-    assert len(small) < 90, len(small)
-    assert decode(small)["townOverrides"] == {"town": {"houses": 500}} and decode(small)["asOf"] == "2026-03-31"
+    assert read_file({**file, "simulation": {k: v for k, v in file["simulation"].items() if k != "summary"}})["summary"]
 
 
-def test_codes_survive_how_people_paste_them():
-    code = encode(typical())
-    shown = grouped(code)
-    assert shown.startswith("UTS1-") and shown.replace("-", "") == code and all(len(g) <= 5 for g in shown.split("-")[1:])
-    assert decode(shown.lower()) == decode(code)
-    assert decode(" " + shown.replace("-", " \n") + " ") == decode(code)
-    # Crockford: a 0 read as O, a 1 read as I or L, decode the same.
-    assert decode(code.replace("0", "O").replace("1", "I")) == decode(code)
+def test_handles_are_three_plain_words_that_follow_the_inputs():
+    p = typical()
+    h = handle(p)
+    a, b, c = h.split("-")
+    assert a in ADJECTIVES and b in ANIMALS and c in PLACES and filename(p) == h + ".utilitysim.json"
+    assert handle({**p, "name": "Another name", "purpose": "notes"}) == h, "the name and notes are free to edit"
+    assert handle({**p, "settings": {**p["settings"], "process": {"analysts": 5.0}}}) == h, "browser numbers"
+    assert handle({**p, "seed": "WINTER-8"}) != h and handle({**p, "episodes": p["episodes"][:-1]}) != h
+    assert len({(x, y, z) for x in ADJECTIVES for y in ANIMALS[:1] for z in PLACES[:1]}) == len(set(ADJECTIVES))
+    assert all(w.isalpha() and w.islower() for words in (ADJECTIVES, ANIMALS, PLACES) for w in words)
 
 
-def test_damage_and_other_versions_are_refused_with_a_reason():
-    code = encode(typical())
-    for bad, reason in ((code[:-4] + "AAAA", "damaged"), (code[:40], "damaged"), ("UTS9" + code[4:], "newer version"),
-                        ("hello", "starts with UTS1"), ("UTS1", "too short"), ("UTS1" + "U" * 20, "cannot appear")):
-        with pytest.raises(CodeError, match=reason):
-            decode(bad)
-    assert b32decode(b32encode(b"\x00\xff\x10")) == b"\x00\xff\x10"
-    with pytest.raises(CodeError):
-        decode("UTS1" + b32encode(b"\xff" * 20))
-
-
-def test_overrides_equal_to_the_preset_are_not_carried():
-    base = typical()
-    base["townOverrides"]["housing"] = {"pool_rate": validate_proposal(Proposal.model_validate(base))["changes"] and 0.06}
-    noisy = dict(base, settings={**base["settings"], "vee": {"high_ratio": 1.75}})  # whatever the preset already has
-    from api._agent_config import preset_config
-    noisy["settings"]["vee"] = {"high_ratio": preset_config("small_town").vee.high_ratio}
-    assert len(encode(noisy)) <= len(encode(base)) + 2
-
-
-def test_the_dictionary_is_frozen():
-    assert hashlib.sha256(dictionary()).hexdigest() == DICTIONARY_SHA256
-    # What the next version would be built from still fits zlib's window; regenerating v1 in place is not allowed.
-    assert len(build_dictionary()) <= 32768
+def test_other_files_and_versions_are_refused_with_a_reason():
+    file = export_file(typical())
+    for bad, reason in (({"schemaVersion": "utility-studio-simulation/9.0", "simulation": {}}, "newer version"),
+                        ({"hello": 1}, "not a Utility Studio simulation file"), ([1, 2], "not a Utility Studio"),
+                        ({**file, "simulation": {}}, "no simulation in it"), ({**file, "simulation": "x"}, "no simulation")):
+        with pytest.raises(FileError, match=reason):
+            read_file(bad)
 
 
 def test_the_studio_endpoints():
     client = TestClient(app)
-    r = client.post("/api/share/encode", json={k: v for k, v in typical().items() if k != "summary"})
+    r = client.post("/api/share/export", json={k: v for k, v in typical().items() if k != "summary"})
     assert r.status_code == 200, r.text
-    assert r.json()["chars"] == len(r.json()["code"]) and r.json()["grouped"].startswith("UTS1-")
-    r2 = client.post("/api/share/decode", json={"code": r.json()["grouped"]})
-    assert r2.status_code == 200 and r2.json()["proposal"]["homes"] == 5000 and r2.json()["proposal"]["townRef"].startswith("small_town~")
-    assert client.post("/api/share/decode", json={"code": "nope"}).status_code == 422
-    assert "UTS1" in client.post("/api/share/decode", json={"code": "nope"}).json()["detail"]
+    file = r.json()["file"]
+    assert r.json()["filename"] == file["handle"] + ".utilitysim.json" and file["simulation"]["homes" if False else "totalHomes"] == 500000
+    r2 = client.post("/api/share/import", json=file)
+    assert r2.status_code == 200 and r2.json()["proposal"]["homes"] == 500000 and r2.json()["handle"] == file["handle"]
+    assert r2.json()["proposal"]["townRef"].startswith("small_town~")
+    assert client.post("/api/share/import", json={"nope": 1}).status_code == 422
+    assert "simulation file" in client.post("/api/share/import", json={"nope": 1}).json()["detail"]
     bad = typical()
     bad["townOverrides"]["town"]["houses"] = 10**7
-    assert client.post("/api/share/encode", json=bad).status_code == 422
+    assert client.post("/api/share/export", json=bad).status_code == 422
+    # A Studio record that moved on from the wizard: its town reference and flat map-day settings are what is exported.
+    ref = client.post("/api/towns", json={"preset": "small_town", "seed": "ABC-123"}).json()["ref"]
+    moved = client.post("/api/share/export", json={"name": "Moved on", "preset": "small_town", "townRef": ref,
+                                                   "townOverrides": {"town": {"houses": 500}}, "opsSettings": {"electricCrews": 4},
+                                                   "settings": {"process": {"analysts": 3}}, "seed": "RUN-9", "asOf": "2026-05-01"})
+    assert moved.status_code == 200, moved.text
+    sim = moved.json()["file"]["simulation"]
+    assert sim["townOverrides"] == {"seeds": {"master": "ABC-123"}} and sim["operations"] == {"crews": {"electricCrews": 4}} or sim["operations"]
+    back = client.post("/api/share/import", json=moved.json()["file"]).json()["proposal"]
+    assert back["townRef"] == ref and back["opsSettings"] == {"electricCrews": 4} and back["seed"] == "RUN-9"
+    unchanged = copy.deepcopy(moved.json()["file"])
+    unchanged["name"] = "Renamed"
+    assert client.post("/api/share/import", json=unchanged).json()["handle"] == moved.json()["file"]["handle"]

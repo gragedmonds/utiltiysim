@@ -36,7 +36,7 @@ app.add_middleware(CORSMiddleware, allow_origins=os.environ.get("CORS_ORIGINS", 
                    allow_methods=["*"], allow_headers=["*"])
 app.include_router(ops_router)  # operations
 app.include_router(agent_router)
-app.include_router(share_router)  # simulation codes: copy a simulation, paste it into another Utility Studio
+app.include_router(share_router)  # simulation files: export a simulation, import it into another Utility Studio
 app.include_router(m2c_router)  # meter-to-cash: reads, VEE, work queues
 app.include_router(towns_router)  # generated towns (POST /api/towns), also a snapshot source for the two above
 

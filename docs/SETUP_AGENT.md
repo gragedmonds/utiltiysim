@@ -19,7 +19,7 @@ not base settings. A record saved before this flag existed counts as locked and 
 Talk it through needs an internet connection and an Anthropic API key. When none is set, the guide's panel in the
 app shows a key field: the key is saved with `POST /local/claude-key` into the OS vault (Windows DPAPI, macOS Keychain,
 an owner-only file on Linux) and read by `api/_agent.py` `api_key()`; `ANTHROPIC_API_KEY` in the environment takes
-precedence. The key is never part of exports, bundles or simulation codes.
+precedence. The key is never part of exports, bundles or simulation files.
 
 ## Environment and utility wizard
 

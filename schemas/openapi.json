@@ -731,22 +731,6 @@
         "title": "ChatResponse",
         "type": "object"
       },
-      "CodeRequest": {
-        "additionalProperties": false,
-        "properties": {
-          "code": {
-            "maxLength": 20000,
-            "minLength": 1,
-            "title": "Code",
-            "type": "string"
-          }
-        },
-        "required": [
-          "code"
-        ],
-        "title": "CodeRequest",
-        "type": "object"
-      },
       "CollectionsAccountRequest": {
         "properties": {
           "accountId": {
@@ -5642,7 +5626,7 @@
     },
     "/api/m2c/episodes/preview": {
       "post": {
-        "description": "``m2c-episode-preview/1.0``: the episodes checked as a run checks them and, for a sporadic one, the days it\nstrikes (``hits``: ``[date, strength]``, as the trend gives them), without running the year. A pattern with its\nown ``seed`` strikes the same days in every run (the local runner's districts share them); one without draws\nfrom the town's seed, as a run without a seed of its own does. A bad episode is HTTP 422 with the engine's message.",
+        "description": "``m2c-episode-preview/1.0``: the episodes checked as a run checks them and, for a sporadic one, the days it\nstrikes (``hits``: ``[date, strength]``, as the trend gives them), without running the year. A pattern with its\nown ``seed`` strikes the same days in every run (the app's districts share them); one without draws\nfrom the town's seed, as a run without a seed of its own does. A bad episode is HTTP 422 with the engine's message.",
         "operationId": "post_episode_preview_api_m2c_episodes_preview_post",
         "requestBody": {
           "content": {
@@ -6783,47 +6767,10 @@
         "summary": "Setup Operation Defaults"
       }
     },
-    "/api/share/decode": {
+    "/api/share/export": {
       "post": {
-        "description": "The validated proposal a code holds, in the shape ``POST /api/setup-agent/validate`` answers with.",
-        "operationId": "share_decode_api_share_decode_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CodeRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Share Decode"
-      }
-    },
-    "/api/share/encode": {
-      "post": {
-        "description": "The code for a simulation's inputs: a wizard proposal by alias (``summary`` may be left out), with a Studio\nrecord's ``townRef`` and flat ``opsSettings`` accepted in place of ``townOverrides`` and ``operations``.",
-        "operationId": "share_encode_api_share_encode_post",
+        "description": "The simulation file for a simulation's inputs: a wizard proposal by alias (``summary`` may be left out), with\na Studio record's ``townRef`` and flat ``opsSettings`` accepted in place of ``townOverrides`` and ``operations``.\nAnswers ``{file, filename}``; the file's ``handle`` is its three-word name.",
+        "operationId": "share_export_api_share_export_post",
         "requestBody": {
           "content": {
             "application/json": {
@@ -6856,7 +6803,46 @@
             "description": "Validation Error"
           }
         },
-        "summary": "Share Encode"
+        "summary": "Share Export"
+      }
+    },
+    "/api/share/import": {
+      "post": {
+        "description": "The validated proposal a simulation file holds, in the shape ``POST /api/setup-agent/validate`` answers\nwith, plus its ``handle``.",
+        "operationId": "share_import_api_share_import_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "File",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Share Import"
       }
     },
     "/api/sim/days": {

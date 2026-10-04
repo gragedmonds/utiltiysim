@@ -1,7 +1,7 @@
 """The app's server: Utility Studio and the whole engine API on a loopback port, with the job queue, all offline.
 
 One process serves the Studio pages (packages/town-viewer/dist at /), the prebuilt town packs (/packs), the engine
-API Studio talks to (/api, api/app.py: setup, towns, operations, meter-to-cash, simulation codes), the run bundles
+API Studio talks to (/api, api/app.py: setup, towns, operations, meter-to-cash, simulation files), the run bundles
 every finished district writes (/runs/<runKey>/…, for the saved-results reader) and this computer's job queue and
 settings (/local/…). /local needs the per-launch bearer token the launcher passes in the page URL; everything binds
 to 127.0.0.1 and refuses other Host headers. There is no CORS: only pages this process serves may call it.

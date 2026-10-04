@@ -1,14 +1,29 @@
-"""Simulation codes (utilsim/share.py) over HTTP: the Studio's Copy code and Import code. No store, no key."""
+"""Simulation files (utilsim/share.py) over HTTP: the Studio's Export and Import. No store, no key."""
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import ValidationError
 
 from api._agent_config import Proposal, preset_config, validate_proposal
 from api._towns import REF_SEP, config_from_ref
-from utilsim.share import SCHEMA, CodeError, decode, encode, grouped
+from utilsim.io.run_bundle import engine_build
+from utilsim.share import SCHEMA, FileError, export_file, filename, handle, read_file
 
 router = APIRouter()
+
+
+def _detail(exc: ValidationError) -> str:
+    return "; ".join(".".join(str(k) for k in e["loc"]) + (": " if e["loc"] else "") + e["msg"].removeprefix("Value error, ")
+                     for e in exc.errors())[:3000]
+
+
+def _diff(base: Any, value: Any) -> Any:
+    if isinstance(value, dict) and isinstance(base, dict):
+        out = {k: d for k, v in value.items() if (d := _diff(base.get(k), v)) is not None}
+        return out or None
+    return None if value == base else value
 
 
 def town_overrides_from_ref(ref: str, preset: str) -> dict | None:
@@ -19,8 +34,6 @@ def town_overrides_from_ref(ref: str, preset: str) -> dict | None:
         return None
     if not sep:
         return {}
-    from utilsim.share import _diff
-
     return _diff(preset_config(preset).generation_dict(), config_from_ref(ref).generation_dict()) or {}
 
 
@@ -57,40 +70,33 @@ def from_studio(proposal: dict) -> dict:
     return out
 
 
-class CodeRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    code: str = Field(min_length=1, max_length=20_000)
-
-
-def _detail(exc: ValidationError) -> str:
-    return "; ".join(".".join(str(k) for k in e["loc"]) + (": " if e["loc"] else "") + e["msg"].removeprefix("Value error, ")
-                     for e in exc.errors())[:3000]
-
-
-@router.post("/api/share/encode")
-def share_encode(proposal: dict):
-    """The code for a simulation's inputs: a wizard proposal by alias (``summary`` may be left out), with a Studio
-    record's ``townRef`` and flat ``opsSettings`` accepted in place of ``townOverrides`` and ``operations``."""
+@router.post("/api/share/export")
+def share_export(proposal: dict):
+    """The simulation file for a simulation's inputs: a wizard proposal by alias (``summary`` may be left out), with
+    a Studio record's ``townRef`` and flat ``opsSettings`` accepted in place of ``townOverrides`` and ``operations``.
+    Answers ``{file, filename}``; the file's ``handle`` is its three-word name."""
     try:
         checked = Proposal.model_validate({"summary": "Shared simulation", **from_studio(proposal)})
-        validate_proposal(checked)  # only a simulation this engine accepts becomes a code
-        code = encode(checked.model_dump(by_alias=True))
+        validate_proposal(checked)  # only a simulation this engine accepts becomes a file
+        simulation = checked.model_dump(by_alias=True)
+        return {"schemaVersion": SCHEMA, "file": export_file(simulation, engine_build()), "filename": filename(simulation)}
     except ValidationError as exc:
         raise HTTPException(422, _detail(exc)) from exc
     except (ValueError, KeyError) as exc:
         raise HTTPException(422, str(exc)[:3000]) from exc
-    return {"schemaVersion": SCHEMA, "code": code, "grouped": grouped(code), "chars": len(code)}
 
 
-@router.post("/api/share/decode")
-def share_decode(req: CodeRequest):
-    """The validated proposal a code holds, in the shape ``POST /api/setup-agent/validate`` answers with."""
+@router.post("/api/share/import")
+def share_import(file: dict):
+    """The validated proposal a simulation file holds, in the shape ``POST /api/setup-agent/validate`` answers
+    with, plus its ``handle``."""
     try:
-        proposal = validate_proposal(Proposal.model_validate(decode(req.code)))
-    except CodeError as exc:
+        simulation = read_file(file)
+        proposal = validate_proposal(Proposal.model_validate(simulation))
+    except FileError as exc:
         raise HTTPException(422, str(exc)) from exc
     except ValidationError as exc:
-        raise HTTPException(422, "This code holds settings this version does not accept: " + _detail(exc)) from exc
+        raise HTTPException(422, "This simulation file holds settings this version does not accept: " + _detail(exc)) from exc
     except (ValueError, KeyError) as exc:
-        raise HTTPException(422, "This code holds settings this version does not accept: " + str(exc)[:2000]) from exc
-    return {"schemaVersion": SCHEMA, "proposal": proposal}
+        raise HTTPException(422, "This simulation file holds settings this version does not accept: " + str(exc)[:2000]) from exc
+    return {"schemaVersion": SCHEMA, "handle": handle(simulation), "proposal": proposal}
