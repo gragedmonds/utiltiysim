@@ -108,6 +108,10 @@ func runEngine(exe, root string) {
 		setMessage("Could not start the engine: " + err.Error() + ". Log: " + logName)
 		return
 	}
+	mu.Lock()
+	engineCmd = cmd
+	mu.Unlock()
+	defer func() { mu.Lock(); engineCmd = nil; mu.Unlock() }()
 	done := make(chan struct{})
 	var processError error
 	go func() { processError = cmd.Wait(); close(done) }()
@@ -129,8 +133,11 @@ func runEngine(exe, root string) {
 	<-done
 	mu.Lock()
 	engineURL = ""
+	closed := quitting
 	mu.Unlock()
-	if processError != nil {
+	if closed {
+		setMessage("Utility Studio has closed. Your files are saved.")
+	} else if processError != nil {
 		setMessage("Engine stopped: " + processError.Error() + ". Log: " + logName + "\n" + logTail(logName))
 	} else {
 		setMessage("Utility Studio has stopped. Your files are saved. Start it again when you’re ready.")

@@ -31,6 +31,8 @@ var mu sync.Mutex
 var message = "Ready to open Utility Studio."
 var busy, picking bool
 var engineURL, logPath string
+var engineCmd *exec.Cmd
+var quitting bool
 
 func validPath(root, name string) (string, error) {
 	if strings.ContainsAny(name, "\\:") || strings.HasPrefix(name, "/") || filepath.IsAbs(name) {
@@ -243,13 +245,48 @@ func openBrowser(url string) {
 //go:embed page.html
 var page string
 
+// A launcher already running for this user: its page's address, so opening the executable again shows that page
+// instead of starting a second launcher.
+func runningLauncher(path string) string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	var saved struct {
+		URL string `json:"url"`
+	}
+	if json.Unmarshal(data, &saved) != nil || saved.URL == "" {
+		return ""
+	}
+	address, token, _ := strings.Cut(saved.URL, "/#token=")
+	req, err := http.NewRequest("GET", address+"/status", nil)
+	if err != nil || token == "" {
+		return ""
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	response, err := (&http.Client{Timeout: time.Second}).Do(req)
+	if err != nil {
+		return ""
+	}
+	response.Body.Close()
+	if response.StatusCode != 200 {
+		return ""
+	}
+	return saved.URL
+}
+
 func main() {
 	config, err := os.UserConfigDir()
 	if err != nil {
-		fmt.Println(err)
+		fatal(err.Error())
 		return
 	}
 	pref := filepath.Join(config, "UtilityStudio", "storage.json")
+	running := filepath.Join(config, "UtilityStudio", "launcher.json")
+	if url := runningLauncher(running); url != "" {
+		openBrowser(url)
+		return
+	}
 	home, _ := os.UserHomeDir()
 	chosen := filepath.Join(home, "UtilitySim")
 	if data, err := os.ReadFile(pref); err == nil {
@@ -257,7 +294,7 @@ func main() {
 	}
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
-		fmt.Println(err)
+		fatal("Utility Studio could not open a local port: " + err.Error())
 		return
 	}
 	origin := "http://" + listener.Addr().String()
@@ -266,6 +303,22 @@ func main() {
 		panic(err)
 	}
 	token := hex.EncodeToString(random)
+	pageURL := origin + "/#token=" + token
+	os.MkdirAll(filepath.Dir(running), 0700)
+	if data, err := json.Marshal(map[string]string{"url": pageURL}); err == nil {
+		_ = os.WriteFile(running, data, 0600)
+	}
+	quit := func() {
+		mu.Lock()
+		quitting = true
+		if engineCmd != nil && engineCmd.Process != nil {
+			_ = engineCmd.Process.Kill()
+		}
+		mu.Unlock()
+		os.Remove(running)
+		time.Sleep(400 * time.Millisecond)
+		os.Exit(0)
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Referrer-Policy", "no-referrer")
@@ -287,8 +340,13 @@ func main() {
 		}
 		if r.URL.Path == "/status" {
 			mu.Lock()
-			json.NewEncoder(w).Encode(map[string]any{"message": message, "busy": busy, "picking": picking, "folder": chosen, "engineURL": engineURL, "logPath": logPath})
+			json.NewEncoder(w).Encode(map[string]any{"message": message, "busy": busy, "picking": picking, "folder": chosen, "engineURL": engineURL, "logPath": logPath, "quitting": quitting})
 			mu.Unlock()
+			return
+		}
+		if r.URL.Path == "/quit" && r.Method == "POST" {
+			fmt.Fprint(w, `{"ok":true}`)
+			go quit()
 			return
 		}
 		if r.URL.Path == "/browse" && r.Method == "POST" {
@@ -372,7 +430,7 @@ func main() {
 			runEngine(exe, root)
 		}()
 	})
-	openBrowser(origin + "/#token=" + token)
-	fmt.Println("Utility Studio launcher is running. Keep this window open while using the engine.")
+	openBrowser(pageURL)
+	banner(pageURL)
 	_ = http.Serve(listener, mux)
 }

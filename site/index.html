@@ -58,8 +58,10 @@
     const PLATFORMS=[['windows-x64','Windows'],['macos-arm64','macOS (Apple silicon)'],['macos-x64','macOS (Intel)'],['linux-x64','Linux']];
     function guess(){const ua=navigator.userAgent,p=navigator.platform||'';if(/Windows/i.test(ua))return 'windows-x64';if(/Mac/i.test(p)||/Macintosh/i.test(ua))return 'macos-arm64';if(/Linux/i.test(ua))return 'linux-x64';return null;}
     (async()=>{try{
-      const r=await fetch('https://api.github.com/repos/gragedmonds/utiltiysim/releases/latest',{headers:{Accept:'application/vnd.github+json'}});if(!r.ok)throw Error(r.status);
-      const release=await r.json(),assets=release.assets||[],find=t=>assets.find(a=>a.name.startsWith('UtilityStudio-'+t));
+      // The newest published release: GitHub's own "latest" goes by the commit date, not by when it was published.
+      const r=await fetch('https://api.github.com/repos/gragedmonds/utiltiysim/releases?per_page=15',{headers:{Accept:'application/vnd.github+json'}});if(!r.ok)throw Error(r.status);
+      const release=(await r.json()).filter(x=>!x.draft&&!x.prerelease&&(x.assets||[]).some(a=>a.name.startsWith('UtilityStudio-'))).sort((a,b)=>String(b.published_at).localeCompare(String(a.published_at)))[0];if(!release)throw Error('no release');
+      const assets=release.assets||[],find=t=>assets.find(a=>a.name.startsWith('UtilityStudio-'+t));
       const mine=guess(),first=find(mine)||assets.find(a=>a.name.startsWith('UtilityStudio-'));
       const megabytes=a=>a?` · ${(a.size/1e6).toFixed(1)} MB`:'';
       if(first){const label=PLATFORMS.find(([t])=>first.name.includes(t))?.[1]||'';document.getElementById('primary-download').href=first.browser_download_url;document.getElementById('primary-download').textContent=`Download for ${label}${megabytes(first)} →`;}

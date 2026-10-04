@@ -105,6 +105,8 @@ def main():
     name = 'UtilityStudio-' + target + ('.exe' if system == 'windows' else '')
     launcher = out / name
     flags = '-s -w ' + ' '.join('-X main.' + key + '=' + value for key, value in values.items())
+    if system == 'windows':
+        flags += ' -H=windowsgui'  # no console window: the launcher page in the browser is the window
     subprocess.run(['go', 'build', '-trimpath', '-ldflags', flags, '-o', str(launcher), '.'], cwd=ROOT / 'launcher', check=True)
     if system != 'windows':
         # Browser downloads do not preserve executable mode. A zip preserves it on extraction.
