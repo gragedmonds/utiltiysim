@@ -169,10 +169,12 @@ LIMITS = (
              "linear in registers: the reads and VEE side is vectorised, the bills, invoices and collections side is "
              "per-invoice Python. The generator is built for towns up to 10,000 homes."},
     {"title": "Beyond one town",
-     "text": "The local batch-run command plans up to 50,000 homes as independent districts, processed sequentially "
-             "with saved archives, resume, measured ETA and additive billing/case totals. Each district has its own "
-             "teams and networks. One development run of 50,000 homes in 25 districts completed in 505 seconds "
-             "with 313 MB of archives; this is not a hardware-independent estimate. Shared utility-wide resources are still outstanding."},
+     "text": "The local batch-run command plans up to 50,000 homes as districts of one utility, processed "
+             "sequentially with saved archives, resume, measured ETA and additive billing/case totals. Districts "
+             "can share one workforce (a coordinator sends a float team each working day where the work waits) and "
+             "connected upstream networks (transmission, the treatment plant and mains, gas gates) with one weather. "
+             "One development run of 50,000 independent homes in 25 districts completed in 505 seconds with 313 MB "
+             "of archives; this is not a hardware-independent estimate."},
     {"title": "Calendar",
      "text": "A run replays one calendar year (2026 to 2030; Ontario holidays by rule, 366 days in a leap year), "
              "twelve billing cycles, twenty-one portions. A later year opens where the one before closed: dials, "
@@ -186,12 +188,12 @@ GAPS = (
     {"title": "Operations days in later years", "text": "Years chain from 2026 to 2030 in the engine and the Studio "
      "(the Command Center's year switcher and Continue), but the map's operations days are 2026's.", "plan": "Run the "
      "operations day (crews on the map, incidents, frames) in any year of the chain."},
-    {"title": "A utility above the town", "text": "Independent district batches and additive archive totals are available locally, "
-     "and a run takes a day-by-day staffing schedule, events upstream of the town and a storm seed shared with "
-     "the utility's other towns, and reports its days (POST /api/m2c/daily). There is no coordinator yet sharing "
-     "one workforce across districts, drawing the upstream networks' events, or live utility dashboard.",
-     "plan": "Coordinate work and staffing daily across districts; add boundary conditions for connected networks "
-     "and paged utility-wide archive views."},
+    {"title": "A utility above the town", "text": "District batches run locally with additive archive totals; "
+     "their districts can share one workforce coordinated daily and connected upstream networks with one weather "
+     "(batch-run --staffing shared --network connected). There is no utility dashboard in the Studio yet, a "
+     "day's work is not pooled within the day, and batches replay one year.",
+     "plan": "A Studio page over a batch's utility rollup, chained years for batches, and paged utility-wide "
+     "archive views."},
     {"title": "Technology mix and rollouts", "text": "The AMI, AMR and manual mix is set per town at generation and "
      "applied per route; no street or district rules, no mid-year AMR-to-AMI rollout.", "plan": "Generator rules "
      "by street class, district and premise type; a rollout episode on the device-exchange machinery."},
