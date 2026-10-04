@@ -2649,6 +2649,73 @@
         "title": "InstallationRequest",
         "type": "object"
       },
+      "KpiTarget": {
+        "additionalProperties": false,
+        "description": "One observed KPI: a steady ``value``, or ``before`` and ``after`` the spec's ``changedOn``. ``absolute``: a\nrate given as the utility's own yearly total (10,000 exceptions) rather than per 1,000 accounts.",
+        "properties": {
+          "absolute": {
+            "default": false,
+            "title": "Absolute",
+            "type": "boolean"
+          },
+          "after": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "After"
+          },
+          "before": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Before"
+          },
+          "id": {
+            "description": "A KPI id from the dictionary.",
+            "title": "Id",
+            "type": "string"
+          },
+          "tolerance": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Accept a residual up to this (default: the dictionary's).",
+            "title": "Tolerance"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "title": "KpiTarget",
+        "type": "object"
+      },
       "Message": {
         "additionalProperties": false,
         "properties": {
@@ -4964,6 +5031,182 @@
           }
         },
         "title": "TownRequest",
+        "type": "object"
+      },
+      "TwinSpec": {
+        "additionalProperties": false,
+        "description": "What is known about the utility and what was observed. Rates per 1,000 accounts are per year.",
+        "properties": {
+          "agents": {
+            "anyOf": [
+              {
+                "maximum": 5000.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Contact-centre agents on a business day.",
+            "title": "Agents"
+          },
+          "asOf": {
+            "default": "2026-12-31",
+            "title": "Asof",
+            "type": "string"
+          },
+          "billers": {
+            "anyOf": [
+              {
+                "maximum": 5000.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Billing analysts working the exception queues.",
+            "title": "Billers"
+          },
+          "budget": {
+            "default": 20,
+            "description": "Most replays the fit may spend.",
+            "maximum": 80.0,
+            "minimum": 1.0,
+            "title": "Budget",
+            "type": "integer"
+          },
+          "calibration": {
+            "default": "small_town",
+            "description": "The pack preset the fit replays.",
+            "maxLength": 40,
+            "title": "Calibration",
+            "type": "string"
+          },
+          "changedOn": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The day the 'after' figures begin.",
+            "title": "Changedon"
+          },
+          "customers": {
+            "description": "Contract accounts in the year.",
+            "maximum": 600000.0,
+            "minimum": 20.0,
+            "title": "Customers",
+            "type": "integer"
+          },
+          "exclude": {
+            "description": "Levers the fit may not move.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Exclude",
+            "type": "array"
+          },
+          "fixed": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "description": "Lever values held, not fitted.",
+            "title": "Fixed",
+            "type": "object"
+          },
+          "kpis": {
+            "items": {
+              "$ref": "#/components/schemas/KpiTarget"
+            },
+            "maxItems": 12,
+            "minItems": 1,
+            "title": "Kpis",
+            "type": "array"
+          },
+          "name": {
+            "default": "Digital twin",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "ramp": {
+            "default": 0,
+            "description": "Days over which the change built up.",
+            "maximum": 366.0,
+            "minimum": 0.0,
+            "title": "Ramp",
+            "type": "integer"
+          },
+          "seed": {
+            "default": "",
+            "maxLength": 64,
+            "title": "Seed",
+            "type": "string"
+          },
+          "services": {
+            "anyOf": [
+              {
+                "items": {
+                  "enum": [
+                    "electric",
+                    "water",
+                    "gas"
+                  ],
+                  "type": "string"
+                },
+                "maxItems": 3,
+                "minItems": 1,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Services"
+          },
+          "supervisors": {
+            "anyOf": [
+              {
+                "maximum": 500.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supervisors"
+          },
+          "timelyDays": {
+            "default": 5,
+            "description": "Invoice timeliness: within this many days of the read.",
+            "maximum": 60.0,
+            "minimum": 1.0,
+            "title": "Timelydays",
+            "type": "integer"
+          },
+          "townOverrides": {
+            "additionalProperties": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "description": "Generation overrides the utility knows (AMI share, payer mix); the calibration town is generated with them.",
+            "title": "Townoverrides",
+            "type": "object"
+          }
+        },
+        "required": [
+          "customers",
+          "kpis"
+        ],
+        "title": "TwinSpec",
         "type": "object"
       },
       "ValidatedInflictProposal": {
@@ -8053,6 +8296,60 @@
           }
         },
         "summary": "Get Table"
+      }
+    },
+    "/api/twin/dictionary": {
+      "get": {
+        "description": "The twin's vocabulary (``twin-fit/1.0``): KPIs with their engine definitions and the levers that move them,\nthe levers with the settings each sets, the known inputs, the calibration towns and the defaults.",
+        "operationId": "get_twin_dictionary_api_twin_dictionary_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Twin Dictionary"
+      }
+    },
+    "/api/twin/fit": {
+      "post": {
+        "description": "Fit a twin to the spec: sizing, the levers, target against achieved per KPI, every KPI the twin shows, and a\nsetup proposal the Studio opens (validated here; ``validated`` holds its ``townRef``).",
+        "operationId": "post_twin_fit_api_twin_fit_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TwinSpec"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Twin Fit"
       }
     },
     "/api/vee/decision": {

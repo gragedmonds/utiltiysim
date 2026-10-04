@@ -21,6 +21,7 @@ from api._store import store
 from api._towns import health as health_body
 from api._towns import ready_town as _town
 from api._towns import router as towns_router
+from api._twin import router as twin_router
 from utilsim.config import SCENARIOS
 from utilsim.config.presets import deep_merge
 from utilsim.io.geojson import LAYERS, layer
@@ -39,6 +40,7 @@ app.include_router(agent_router)
 app.include_router(share_router)  # simulation files: export a simulation, import it into another Utility Studio
 app.include_router(m2c_router)  # meter-to-cash: reads, VEE, work queues
 app.include_router(towns_router)  # generated towns (POST /api/towns), also a snapshot source for the two above
+app.include_router(twin_router)  # the digital twin: fit a setup to observed KPIs (utilsim/twin)
 
 
 def J(data: Any, status: int = 200) -> Response:

@@ -40,6 +40,7 @@ for carrying Studio inputs into an export, loading bundles by URL, and the archi
 | `schemas/` | JSON Schemas (snapshot, state, replay, read, VEE fixture, config) and OpenAPI |
 | `docs/SCHEMA_MAPPING.md` | Prototype `utility-town/1.0` → 2.0, SAP IS-U aliases, m2c.vee read mapping |
 | `docs/REQUIREMENTS.md` | Numbered requirements with status |
+| `docs/TWIN.md` | The digital twin: start from observed KPIs (timeliness, exceptions, customers, billers) and let the engine fill in the rest; `utilsim twin`, `/api/twin/*` |
 | `docs/CONFIG.md` · `docs/CONFIG_IMPACT.md` | Every setting with default, range, unit, where it reaches and how it changes the results (generated) · what each setting measurably changes, with findings |
 | `docs/NETWORK_RULES.md` | Sizing tables and placement rules per utility |
 | `docs/DATA_MODEL.md` | Customer, device and read model |
@@ -90,3 +91,8 @@ the guide's panel in the app (kept in the OS vault), or set `ANTHROPIC_API_KEY` 
 support; typing and manual starters remain available. See [setup agent configuration](docs/SETUP_AGENT.md).
 
 Large simulations run as districts from the run page: [the app](docs/LOCAL_RUNNER.md).
+
+**Start from the outcomes (engine, Studio entry next).** `uv run utilsim twin --customers 50000 --billers 8 --kpi invoice_timeliness=0.99:0.94 --kpi exceptions_worked=8000:10000,abs --changed-on 2026-04-01` fits the
+engine's levers (missed reads, anomalies, VEE strictness, automation, pickup lag, field capacity) until the replayed year
+reproduces the observed figures, reports every KPI the twin shows and writes a setup proposal the Studio opens: see
+[the digital twin](docs/TWIN.md).
