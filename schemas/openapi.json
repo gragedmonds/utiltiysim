@@ -563,6 +563,19 @@
             "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field); see GET /api/m2c/settings.",
             "title": "Settings"
           },
+          "staffing": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A day-by-day staffing schedule (staff-schedule/1.0): {pools: {pool: [[date, n], ...]}}, pools analysts, supervisors, agents (people) and crew_meter, crew_electric, crew_water, crew_gas, crew_construction, crew_emergency (crews); from each date the pool has n until the next entry, and the settings hold before the first. A utility pooling its people across districts gives each its people per day.",
+            "title": "Staffing"
+          },
           "town": {
             "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
@@ -768,6 +781,19 @@
             "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field); see GET /api/m2c/settings.",
             "title": "Settings"
           },
+          "staffing": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A day-by-day staffing schedule (staff-schedule/1.0): {pools: {pool: [[date, n], ...]}}, pools analysts, supervisors, agents (people) and crew_meter, crew_electric, crew_water, crew_gas, crew_construction, crew_emergency (crews); from each date the pool has n until the next entry, and the settings hold before the first. A utility pooling its people across districts gives each its people per day.",
+            "title": "Staffing"
+          },
           "town": {
             "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
@@ -944,6 +970,19 @@
             "title": "Sort",
             "type": "string"
           },
+          "staffing": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A day-by-day staffing schedule (staff-schedule/1.0): {pools: {pool: [[date, n], ...]}}, pools analysts, supervisors, agents (people) and crew_meter, crew_electric, crew_water, crew_gas, crew_construction, crew_emergency (crews); from each date the pool has n until the next entry, and the settings hold before the first. A utility pooling its people across districts gives each its people per day.",
+            "title": "Staffing"
+          },
           "status": {
             "default": "open",
             "enum": [
@@ -1098,6 +1137,19 @@
             ],
             "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field); see GET /api/m2c/settings.",
             "title": "Settings"
+          },
+          "staffing": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A day-by-day staffing schedule (staff-schedule/1.0): {pools: {pool: [[date, n], ...]}}, pools analysts, supervisors, agents (people) and crew_meter, crew_electric, crew_water, crew_gas, crew_construction, crew_emergency (crews); from each date the pool has n until the next entry, and the settings hold before the first. A utility pooling its people across districts gives each its people per day.",
+            "title": "Staffing"
           },
           "status": {
             "default": "open",
@@ -1439,6 +1491,19 @@
             "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field); see GET /api/m2c/settings.",
             "title": "Settings"
           },
+          "staffing": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A day-by-day staffing schedule (staff-schedule/1.0): {pools: {pool: [[date, n], ...]}}, pools analysts, supervisors, agents (people) and crew_meter, crew_electric, crew_water, crew_gas, crew_construction, crew_emergency (crews); from each date the pool has n until the next entry, and the settings hold before the first. A utility pooling its people across districts gives each its people per day.",
+            "title": "Staffing"
+          },
           "town": {
             "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
@@ -1621,6 +1686,19 @@
             "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field); see GET /api/m2c/settings.",
             "title": "Settings"
           },
+          "staffing": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A day-by-day staffing schedule (staff-schedule/1.0): {pools: {pool: [[date, n], ...]}}, pools analysts, supervisors, agents (people) and crew_meter, crew_electric, crew_water, crew_gas, crew_construction, crew_emergency (crews); from each date the pool has n until the next entry, and the settings hold before the first. A utility pooling its people across districts gives each its people per day.",
+            "title": "Staffing"
+          },
           "town": {
             "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
@@ -1761,6 +1839,19 @@
             ],
             "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field); see GET /api/m2c/settings.",
             "title": "Settings"
+          },
+          "staffing": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A day-by-day staffing schedule (staff-schedule/1.0): {pools: {pool: [[date, n], ...]}}, pools analysts, supervisors, agents (people) and crew_meter, crew_electric, crew_water, crew_gas, crew_construction, crew_emergency (crews); from each date the pool has n until the next entry, and the settings hold before the first. A utility pooling its people across districts gives each its people per day.",
+            "title": "Staffing"
           },
           "town": {
             "description": "Pack preset (e.g. 'small_town') or town id.",
@@ -2209,6 +2300,19 @@
             "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field); see GET /api/m2c/settings.",
             "title": "Settings"
           },
+          "staffing": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A day-by-day staffing schedule (staff-schedule/1.0): {pools: {pool: [[date, n], ...]}}, pools analysts, supervisors, agents (people) and crew_meter, crew_electric, crew_water, crew_gas, crew_construction, crew_emergency (crews); from each date the pool has n until the next entry, and the settings hold before the first. A utility pooling its people across districts gives each its people per day.",
+            "title": "Staffing"
+          },
           "town": {
             "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
@@ -2371,6 +2475,19 @@
             "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field); see GET /api/m2c/settings.",
             "title": "Settings"
           },
+          "staffing": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A day-by-day staffing schedule (staff-schedule/1.0): {pools: {pool: [[date, n], ...]}}, pools analysts, supervisors, agents (people) and crew_meter, crew_electric, crew_water, crew_gas, crew_construction, crew_emergency (crews); from each date the pool has n until the next entry, and the settings hold before the first. A utility pooling its people across districts gives each its people per day.",
+            "title": "Staffing"
+          },
           "town": {
             "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
@@ -2517,6 +2634,19 @@
             ],
             "description": "The order raised from this case (or a Field Work case's own order).",
             "title": "Sourcecaseid"
+          },
+          "staffing": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A day-by-day staffing schedule (staff-schedule/1.0): {pools: {pool: [[date, n], ...]}}, pools analysts, supervisors, agents (people) and crew_meter, crew_electric, crew_water, crew_gas, crew_construction, crew_emergency (crews); from each date the pool has n until the next entry, and the settings hold before the first. A utility pooling its people across districts gives each its people per day.",
+            "title": "Staffing"
           },
           "town": {
             "description": "Pack preset (e.g. 'small_town') or town id.",
@@ -2744,6 +2874,19 @@
             "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field); see GET /api/m2c/settings.",
             "title": "Settings"
           },
+          "staffing": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A day-by-day staffing schedule (staff-schedule/1.0): {pools: {pool: [[date, n], ...]}}, pools analysts, supervisors, agents (people) and crew_meter, crew_electric, crew_water, crew_gas, crew_construction, crew_emergency (crews); from each date the pool has n until the next entry, and the settings hold before the first. A utility pooling its people across districts gives each its people per day.",
+            "title": "Staffing"
+          },
           "status": {
             "default": "all",
             "description": "open: rows whose missed-read case is still open.",
@@ -2885,6 +3028,19 @@
             ],
             "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field); see GET /api/m2c/settings.",
             "title": "Settings"
+          },
+          "staffing": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A day-by-day staffing schedule (staff-schedule/1.0): {pools: {pool: [[date, n], ...]}}, pools analysts, supervisors, agents (people) and crew_meter, crew_electric, crew_water, crew_gas, crew_construction, crew_emergency (crews); from each date the pool has n until the next entry, and the settings hold before the first. A utility pooling its people across districts gives each its people per day.",
+            "title": "Staffing"
           },
           "town": {
             "description": "Pack preset (e.g. 'small_town') or town id.",
@@ -3254,6 +3410,19 @@
             "title": "Sort",
             "type": "string"
           },
+          "staffing": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A day-by-day staffing schedule (staff-schedule/1.0): {pools: {pool: [[date, n], ...]}}, pools analysts, supervisors, agents (people) and crew_meter, crew_electric, crew_water, crew_gas, crew_construction, crew_emergency (crews); from each date the pool has n until the next entry, and the settings hold before the first. A utility pooling its people across districts gives each its people per day.",
+            "title": "Staffing"
+          },
           "status": {
             "default": "open",
             "enum": [
@@ -3390,6 +3559,19 @@
             ],
             "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field); see GET /api/m2c/settings.",
             "title": "Settings"
+          },
+          "staffing": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A day-by-day staffing schedule (staff-schedule/1.0): {pools: {pool: [[date, n], ...]}}, pools analysts, supervisors, agents (people) and crew_meter, crew_electric, crew_water, crew_gas, crew_construction, crew_emergency (crews); from each date the pool has n until the next entry, and the settings hold before the first. A utility pooling its people across districts gives each its people per day.",
+            "title": "Staffing"
           },
           "town": {
             "description": "Pack preset (e.g. 'small_town') or town id.",
@@ -3568,6 +3750,19 @@
             "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field); see GET /api/m2c/settings.",
             "title": "Settings"
           },
+          "staffing": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A day-by-day staffing schedule (staff-schedule/1.0): {pools: {pool: [[date, n], ...]}}, pools analysts, supervisors, agents (people) and crew_meter, crew_electric, crew_water, crew_gas, crew_construction, crew_emergency (crews); from each date the pool has n until the next entry, and the settings hold before the first. A utility pooling its people across districts gives each its people per day.",
+            "title": "Staffing"
+          },
           "town": {
             "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
@@ -3716,6 +3911,19 @@
             ],
             "description": "Start of a period (YYYY-MM-DD): adds ``window``, the figures between that day and asOf (this month, the last 30 days, since your first action, ...).",
             "title": "Since"
+          },
+          "staffing": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A day-by-day staffing schedule (staff-schedule/1.0): {pools: {pool: [[date, n], ...]}}, pools analysts, supervisors, agents (people) and crew_meter, crew_electric, crew_water, crew_gas, crew_construction, crew_emergency (crews); from each date the pool has n until the next entry, and the settings hold before the first. A utility pooling its people across districts gives each its people per day.",
+            "title": "Staffing"
           },
           "town": {
             "description": "Pack preset (e.g. 'small_town') or town id.",
@@ -3902,6 +4110,19 @@
             ],
             "description": "A column key; rows with no value sort last.",
             "title": "Sort"
+          },
+          "staffing": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A day-by-day staffing schedule (staff-schedule/1.0): {pools: {pool: [[date, n], ...]}}, pools analysts, supervisors, agents (people) and crew_meter, crew_electric, crew_water, crew_gas, crew_construction, crew_emergency (crews); from each date the pool has n until the next entry, and the settings hold before the first. A utility pooling its people across districts gives each its people per day.",
+            "title": "Staffing"
           },
           "table": {
             "description": "A table name from GET /api/m2c/tables.",
@@ -4095,6 +4316,19 @@
             ],
             "description": "A column key; rows with no value sort last.",
             "title": "Sort"
+          },
+          "staffing": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A day-by-day staffing schedule (staff-schedule/1.0): {pools: {pool: [[date, n], ...]}}, pools analysts, supervisors, agents (people) and crew_meter, crew_electric, crew_water, crew_gas, crew_construction, crew_emergency (crews); from each date the pool has n until the next entry, and the settings hold before the first. A utility pooling its people across districts gives each its people per day.",
+            "title": "Staffing"
           },
           "table": {
             "description": "A table name from GET /api/m2c/tables.",
@@ -4563,6 +4797,19 @@
             ],
             "description": "That year's run settings (as ``settings``).",
             "title": "Settings"
+          },
+          "staffing": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "That year's staffing schedule (as ``staffing``).",
+            "title": "Staffing"
           }
         },
         "title": "YearInputs",
@@ -4847,6 +5094,43 @@
           }
         },
         "summary": "Post Contact"
+      }
+    },
+    "/api/m2c/daily": {
+      "post": {
+        "description": "``run-daily/1.0``: the run day by day in figures that add up across towns: cases opened, closed and in the\nbacklog per queue; the analysts' and supervisors' day (people, work waiting and done, the oldest waiting); each\nfield crew type (crews, minutes available and busy, overtime, work waiting); the contact centre (agents, time,\ncontacts by how they ended); customers and customer-hours without service.",
+        "operationId": "post_daily_api_m2c_daily_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Daily"
       }
     },
     "/api/m2c/fieldwork": {

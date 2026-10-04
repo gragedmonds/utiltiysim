@@ -42,6 +42,9 @@ from utilsim.m2c.base import M2CTown
 from utilsim.m2c.books import Books
 from utilsim.m2c.calendar import FIRST_YEAR, RunCalendar, calendar
 
+# A day of the analysts' or supervisors' work (``work_log``): minutes of work waiting for them that day, minutes
+# done, cases done, cases still waiting after the day, the oldest still waiting (days since it was raised).
+WORK_LOG = ("offeredMin", "doneMin", "done", "waiting", "oldestDays")
 M2C_GROUPS = ("process", "anomalies", "reading", "vee", "billing", "contact", "outages", "field")
 SUMMARY_VERSION = "m2c-summary/1.0"
 CASE_VERSION = "work-case/1.0"
@@ -303,10 +306,15 @@ def run_seed(cfg: SimConfig, seed: str | None) -> str | None:
     return s if s and s != town_seed(cfg) else None
 
 
-def resolve_episode_days(cfg: SimConfig, episodes: list[dict], cal: RunCalendar | None = None) -> list[SimConfig]:
+def resolve_episode_days(cfg: SimConfig, episodes: list[dict], cal: RunCalendar | None = None,
+                         staffing: dict | None = None, premises: int = 0) -> list[SimConfig]:
     """The configuration in force on each day of ``cal``'s year (default 2026): the base, then every active episode
     in date order (later episodes see earlier ones' values); a ramp slides a numeric value from the base to the target
-    over ``ramp`` days from the episode's first day. Distinct configurations are validated once and shared."""
+    over ``ramp`` days from the episode's first day; then the day's staffing (a parsed ``staff-schedule/1.0``,
+    utilsim/m2c/staffing.py; crews per the town's ``premises``). Distinct configurations are validated once and
+    shared."""
+    from utilsim.m2c import staffing as staff
+
     cal = cal or calendar()
     full = cfg.model_dump(mode="json")
     base = {g: dict(full[g]) for g in M2C_GROUPS}
@@ -328,13 +336,16 @@ def resolve_episode_days(cfg: SimConfig, episodes: list[dict], cal: RunCalendar 
                         cur[g][key] = int(round(v)) if isinstance(was, int) else v
                     else:
                         cur[g][key] = tgt
+        if staffing:
+            staff.overlay(cur, staffing, day, premises)
         sig = orjson.dumps(cur, option=orjson.OPT_SORT_KEYS)
         cfg = cache.get(sig)
         if cfg is None:
             try:
                 cfg = SimConfig.model_validate({**full, **cur})
             except Exception as exc:  # pydantic: a target outside the field's bounds
-                raise ValueError(f"episode settings on {cal.date_of(day).isoformat()}: {exc}") from exc
+                what = "episode or staffing settings" if staffing else "episode settings"
+                raise ValueError(f"{what} on {cal.date_of(day).isoformat()}: {exc}") from exc
             cache[sig] = cfg
         out.append(cfg)
     return out
@@ -343,7 +354,7 @@ def resolve_episode_days(cfg: SimConfig, episodes: list[dict], cal: RunCalendar 
 class M2CRun:
     def __init__(self, town: M2CTown, settings: dict | None = None, actions: list[dict] | None = None,
                  outages: list[dict] | None = None, *, strict: bool = True, seed: str | None = None,
-                 episodes: list[dict] | None = None, ops_factory=None, opening=None):
+                 episodes: list[dict] | None = None, ops_factory=None, opening=None, staffing: dict | None = None):
         self.town = town
         self.cal = town.cal  # the calendar year the run replays
         # A chained year opens on the previous year's close (utilsim/m2c/yearclose.py; its town from open_town).
@@ -355,12 +366,18 @@ class M2CRun:
         self.cfg = resolve_settings(town.cfg, settings)  # the year's base settings
         # Episodes: dated overrides on the base (a scenario inflicted from a day); the day's config is cfg_at(day).
         self.episodes = parse_episodes(self.cfg, episodes, self.cal)
-        self._cfg_day: list[SimConfig] | None = self._resolve_days() if self.episodes else None
+        # A day-by-day staffing schedule (utilsim/m2c/staffing.py): headcounts over the settings' team sizes.
+        from utilsim.m2c import staffing as staff
+
+        self.staffing = staff.parse(staffing, self.cal)
+        self._cfg_day: list[SimConfig] | None = self._resolve_days() if self.episodes or self.staffing else None
         # A run seed re-rolls every draw of the run (reads, anomalies, work, bill checks); the town stays the same.
         self.run_seed = run_seed(town.cfg, seed)
         groups = {g: self.cfg.model_dump(mode="json")[g] for g in M2C_GROUPS}
         if self.episodes:
             groups["episodes"] = self.episodes
+        if self.staffing:
+            groups["staffing"] = staff.as_json(self.staffing, self.cal)
         self.settings_hash = _hash(groups if self.run_seed is None else {**groups, "seed": self.run_seed})
         self.warnings: list[str] = []
         self.meter_index = {mid: i for i, mid in enumerate(town.meter_ids)}
@@ -378,7 +395,7 @@ class M2CRun:
 
     # ---- the day's configuration -----------------------------------------------------------------------------------
     def _resolve_days(self) -> list[SimConfig]:
-        return resolve_episode_days(self.cfg, self.episodes, self.cal)
+        return resolve_episode_days(self.cfg, self.episodes, self.cal, self.staffing, len(self.town.premise_ids))
 
     def cfg_at(self, day) -> SimConfig:
         """The configuration in force on run day ``day`` (the base when the run has no episodes)."""
@@ -649,6 +666,8 @@ class M2CRun:
                 self.batches[int(d)] = (m, np.flatnonzero(col == d))
         self.rpa_due: dict[int, list[Case]] = {}
         self.series = {q: np.zeros((self.cal.days, 3), dtype=np.int64) for q in cat.QUEUES}  # opened, closed, backlog
+        # The analysts' and supervisors' day (WORK_LOG columns): the work waiting for them and what they did.
+        self.work_log = {k: np.zeros((self.cal.days, len(WORK_LOG))) for k in ("analysts", "supervisors")}
         self.read_counts = np.zeros((self.cal.days, 3), dtype=np.int64)  # AMI, AMR, MANUAL reads per day
         self.auto_accepted = np.zeros(self.cal.days, dtype=np.int64)
         self._rpa_later: list[tuple[Case, float]] = []
@@ -1366,22 +1385,34 @@ class M2CRun:
         case.eligible = self.cal.add_bdays(int(t), lo + int(u * (hi - lo + 1)))
         self.series["SUPERVISOR"][int(t), 0] += 1
 
+    def review_minutes(self, case: Case, p) -> float:
+        """An analyst's review of ``case`` (minutes; the same draw whoever works it, whenever)."""
+        return p.review_minutes_min + float(self._u(P_WORK, self.reg_keys[case.r], case.month, 5)) * \
+            (p.review_minutes_max - p.review_minutes_min)
+
+    def _log_work(self, who: str, day: int, todo: list, minutes: list[float], done: int) -> None:
+        log = self.work_log[who][day]
+        log[:] = (sum(minutes), sum(minutes[:done]), done, len(todo) - done,
+                  max((day - c.created for c in todo[done:]), default=0.0))
+
     def _analysts(self, day: int) -> None:
         c = self.cfg_at(day)
         p = c.process
-        if p.analysts <= 0:
-            return
-        cap = p.analysts * p.analyst_hours_per_day * 60.0
-        used = 0.0
         queues = ("VEE_REVIEW", "ESTIMATION", "BILLING") if c.billing.billing_queue_worked_by == "analysts" \
             else ("VEE_REVIEW", "ESTIMATION")  # billing blocks wait for you
         todo = [c for c in self.open if c.resolved is None and c.queue in queues
                 and c.eligible <= day and c.rpa_at is None and c.owner is None]
-        for case in todo:
-            minutes = p.review_minutes_min + float(self._u(P_WORK, self.reg_keys[case.r], case.month, 5)) * \
-                (p.review_minutes_max - p.review_minutes_min)
+        need = [self.review_minutes(case, p) for case in todo]
+        if p.analysts <= 0:
+            self._log_work("analysts", day, todo, need, 0)
+            return
+        cap = p.analysts * p.analyst_hours_per_day * 60.0
+        used = 0.0
+        done = 0
+        for case, minutes in zip(todo, need, strict=True):
             if used + minutes > cap:
                 break
+            done += 1
             t0 = day + (8.0 + used / 60.0 / p.analysts) / 24
             used += minutes
             case.assignee = f"AN-{(case.idx % p.analysts) + 1:02d}"
@@ -1396,14 +1427,19 @@ class M2CRun:
                 self._to_field(case, t1)
             else:
                 self._resolve(case, t1, case.proposal, actor=case.assignee)
+        self._log_work("analysts", day, todo, need, done)
 
     def _supervisors(self, day: int) -> None:
         p = self.cfg_at(day).process
+        waiting = [c for c in self.open if c.resolved is None and c.queue == "SUPERVISOR" and c.eligible <= day
+                   and c.owner is None]
+        need = [float(p.supervisor_minutes)] * len(waiting)
         if p.supervisors <= 0:
+            self._log_work("supervisors", day, waiting, need, 0)
             return
         n = int(p.supervisors * p.supervisor_hours_per_day * 60.0 // p.supervisor_minutes)
-        todo = [c for c in self.open if c.resolved is None and c.queue == "SUPERVISOR" and c.eligible <= day
-                and c.owner is None][:n]
+        todo = waiting[:n]
+        self._log_work("supervisors", day, waiting, need, len(todo))
         for k, case in enumerate(todo):
             t0 = day + (9.0 + k * p.supervisor_minutes / 60.0 / p.supervisors) / 24
             sup = f"SUP-{(k % p.supervisors) + 1:02d}"

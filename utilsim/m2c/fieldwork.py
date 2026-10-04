@@ -712,8 +712,10 @@ class FieldEngine:
         b.maintenance()
         b.construction()
         self.ops = b.ops
-        self.crews = {c: {"crews": np.zeros(self.run.cal.days), "availableMin": np.zeros(self.run.cal.days),
-                          "busyMin": np.zeros(self.run.cal.days), "overtimeMin": np.zeros(self.run.cal.days)} for c in CREWS}
+        # Per crew type and day: crews, minutes available and busy, overtime, and the released work still waiting at
+        # the day's end (minutes, and the oldest's days since release).
+        self.crews = {c: {k: np.zeros(self.run.cal.days) for k in ("crews", "availableMin", "busyMin", "overtimeMin",
+                                                                       "waitingMin", "oldestDays")} for c in CREWS}
         for d, fc in enumerate(b.fc):
             for c in CREWS:
                 self.crews[c]["crews"][d] = crews_on(fc, c, b.n_prem)
@@ -804,6 +806,21 @@ class FieldEngine:
         if self.run.cal.add_bdays(day, 0) == day:
             self._work(day)
         self._absorb(day)
+        self._log_waiting(day)
+
+    def _log_waiting(self, day: int) -> None:
+        """Each business-day crew's released work still waiting at the end of ``day``."""
+        orders = self.b.orders
+        for c in DAY_CREWS:
+            left, oldest = 0.0, 0.0
+            for e in self.queues[c]:
+                o = orders[e[3]]
+                if o.cancelled or o.end <= day + 1:
+                    continue
+                left += o.left
+                oldest = max(oldest, day + 1 - o.release)
+            self.crews[c]["waitingMin"][day] = left
+            self.crews[c]["oldestDays"][day] = oldest
 
     def _absorb(self, day: int) -> None:
         """Orders raised since the last look: queued for their crew, or their timed work booked on its day."""

@@ -186,8 +186,10 @@ GAPS = (
     {"title": "Operations days in later years", "text": "Years chain from 2026 to 2030 in the engine and the Studio "
      "(the Command Center's year switcher and Continue), but the map's operations days are 2026's.", "plan": "Run the "
      "operations day (crews on the map, incidents, frames) in any year of the chain."},
-    {"title": "A utility above the town", "text": "Independent district batches and additive archive totals are available locally. "
-     "There is no shared utility-wide workforce, connected cross-district network or live utility dashboard.",
+    {"title": "A utility above the town", "text": "Independent district batches and additive archive totals are available locally, "
+     "and a run takes a day-by-day staffing schedule and reports its days (POST /api/m2c/daily). There is no "
+     "coordinator yet sharing one workforce across districts, connected cross-district network or live utility "
+     "dashboard.",
      "plan": "Coordinate work and staffing daily across districts; add boundary conditions for connected networks "
      "and paged utility-wide archive views."},
     {"title": "Technology mix and rollouts", "text": "The AMI, AMR and manual mix is set per town at generation and "

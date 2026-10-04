@@ -88,6 +88,7 @@ store/runs/<runKey>/
   inputs.json
   aggregates.json               # run-aggregates/1.0; small summary, trend, scorecard, episodes
   trend.json
+  daily.json.gz                 # run-daily/1.0; the year day by day (queues, staff, crews, contacts, outages)
   scorecard.json
   snapshot.json.gz              # matching town for reproducibility and later live use
   tables/catalog.json
@@ -191,7 +192,9 @@ Batch runs are capped at 50,000 homes.
 
 ### Shared utility-wide resources
 
-A fully shared utility requires a daily coordinator: district workers produce reads and candidate work;
+A run takes a day-by-day `staffing` schedule (see [M2C.md](M2C.md) "Staffing day by day") and saves its days as
+`daily.json.gz`: the inputs and the measurements a utility-wide coordinator works with. A fully shared utility
+requires a daily coordinator: district workers produce reads and candidate work;
 the coordinator allocates analyst, contact and field capacity once across all eligible work; districts then
 apply the assigned outcomes before advancing the day. Independent annual replay cannot reproduce this by
 summing results. Resume checkpoints must include queues, balances, device state and deterministic ordering.

@@ -347,7 +347,7 @@ def _mapped(v, memo: dict, case_idx: dict):
 # ---- the next year opening on a close ------------------------------------------------------------------------------
 def run_year(snapshot: dict, year: int, inputs: dict | None = None, *, opening: YearClose | None = None, **kwargs):
     """One year of a chain from ``snapshot``: its own ``inputs`` (``settings``, ``actions``, ``outages``,
-    ``episodes``), opening on ``opening`` (the year before's close; None for the snapshot's own year). ``kwargs`` go
+    ``episodes``, ``staffing``), opening on ``opening`` (the year before's close; None for the snapshot's own year). ``kwargs`` go
     to the run (``seed``, ``strict``, ``ops_factory``)."""
     from utilsim.m2c.base import m2c_town
     from utilsim.m2c.run import M2CRun
@@ -357,7 +357,7 @@ def run_year(snapshot: dict, year: int, inputs: dict | None = None, *, opening: 
     if opening is not None:
         town = open_town(town, opening)
     return M2CRun(town, inputs.get("settings"), inputs.get("actions") or [], inputs.get("outages") or [],
-                  episodes=inputs.get("episodes") or [], opening=opening, **kwargs)
+                  episodes=inputs.get("episodes") or [], staffing=inputs.get("staffing"), opening=opening, **kwargs)
 
 
 def replay(snapshot: dict, years: list[dict], *, strict: bool = True, **kwargs):
