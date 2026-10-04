@@ -596,14 +596,20 @@ scheduled day decides whether it is ordered, so an episode on a rate applies fro
 How the crews work:
 1. **On-call responders** (`crew_emergency`, whole crews, at least one) work emergencies around the clock, first come
    first served, several at once. After hours a responder takes `callout_minutes` to get on the road; the response is
-   from the report to on site (half of `travel_minutes` each way).
+   from the report to on site: the drive from the depot (with `routing`; half of `travel_minutes` without).
 2. **Business-day crews** (`crew_meter`, `crew_electric`, `crew_water`, `crew_gas`, `crew_construction`) have
    `per_1000_premises` crews per 1,000 premises (a fraction is a crew's share of the day on this work) for
    `shift_hours` from `shift_start_hour` on business days. Work timed elsewhere (VEE visits, outage repairs) takes their
    time on its day first; then they work released orders by priority (1 emergencies, 2 customer work, 3 maintenance, 4
    capital and conversion) and due date. A long job carries over to the next day. Customer work due today or overdue
    may run into overtime, up to `overtime_max_hours` per crew.
-3. **Cost** is crew time at `cost_per_hour` (times `overtime_factor` after hours) plus each order's `materials`.
+3. **Routing** (`routing`, on by default): the crews drive the town's streets at the operations driving speeds
+   (`operations.speed_kmh_*`). Each crew leaves the depot in the morning and, of the jobs as urgent as the most
+   pressing and due within a day of it, drives to the nearest next; each stop adds `stop_minutes` (parking, walking to
+   the asset, setting up), and the crew drives back to the depot at the end of the day (its last job carries that
+   drive). On-call responders drive from the depot and back. Without routing, or in a town without streets, every
+   visit adds `travel_minutes`; VEE field visits, which the run times, always do.
+4. **Cost** is crew time at `cost_per_hour` (times `overtime_factor` after hours) plus each order's `materials`.
 
 ### What field work changes
 
@@ -613,12 +619,13 @@ does changes the rest of the year from that moment:
 
 | Field work | What it changes |
 |---|---|
-| Disconnect (crew, or the remote switch of an AMI electric meter) | Collections asks for it on the earliest disconnection day; the service is off when the crew finishes, and a customer who paid first is not disconnected ("not needed on arrival"). While off nothing flows, the scheduled reads are not taken (read status `off`, reason `SIM_DISCONNECTED`), so no bill is made for those months |
-| Reconnect | After payment, the next business day: service back when the crew (or switch) is done. The next bill runs from the last read before the disconnection (the billing document's `from` month) and holds only the use since reconnection |
-| Removal | The premise's meters are off for good (`SIM_REMOVED`): no more reads or bills |
+| Disconnect (crew, or the remote switch of an AMI electric meter) | Collections asks for it on the earliest disconnection day; the service is off when the crew finishes, and a customer who paid first is not disconnected ("not needed on arrival"). The meter is read as it goes off: the first scheduled read in the off period is that **final read** (taken at the disconnection, `readReason` `disconnection`, read type `final` in the reads table), so that month's bill runs to the disconnection. While off nothing flows and the later scheduled reads are not taken (read status `off`, reason `SIM_DISCONNECTED`), so no bill is made for those months |
+| Reconnect | After payment, the next business day: service back when the crew (or switch) is done. The next bill runs from the last read, the final read when the service was still off at a scheduled read (the billing document's `from` month), and holds only the use since reconnection |
+| Removal | A final read (`device_removal`) and its bill, then the premise's meters are off for good (`SIM_REMOVED`): no more reads or bills |
 | Seal exchange, water meter replacement, AMI conversion | A new meter on the installation (a device change, registers from zero): reads and bills on the new register, an old meter's fault or drift ends, a converted meter is read as AMI from then on |
 | Module battery | Replaced before its anniversary, the module keeps reading; otherwise it dies on the anniversary and misses `dead_battery_miss` of its reads (`SIM_BATTERY_DEAD`) until replaced: estimates and estimation cases follow |
 | Failed seal lot, water meters past their life | Under-register by `failed_lot_drift` (from the failed test) or `old_water_meter_drift` (all year) until exchanged: billed below the truth |
+| Main renewal | A renewed 100 m segment of cast-iron main breaks and leaks at `renewed_main_break_factor` of the old main's rate from the day the construction crew finishes it: the year's drawn breaks and leaks on a renewed main are dropped at that share, and every other incident keeps its id |
 | Overdue pole replacement, tree trimming, gas leak repair | Can fail (`deferred_pole_failures` a year, ten times as likely on storm days; `deferred_tree_faults` per storm day; `deferred_leak_escalation` a year): an incident whose customers lose supply until the repair (no use, an AMI electric meter dark at its read misses it) or gas odour reports, contacts, emergency response and repair. A failed pole or leak is fixed by the emergency repair (the planned order is called off) |
 
 The summary's `effects` (and each trend month's `field.effects`) count it: reads not taken because the service was
@@ -639,17 +646,18 @@ Measured on the default settings, year to 31 December (the field year itself tak
 
 | Town | Premises | Orders | Emergency · service · meter · maintenance · construction | On time | Emergency response | Crew utilisation | Overtime | Cost (labour + materials) |
 |---|---|---|---|---|---|---|---|---|
-| `village` | 570 | 442 | 14 · 75 · 169 · 175 · 9 | 79% | 40 min | 52% | 19 h | $124k ($58k + $65k) |
-| `small_town` | 2,103 | 1,399 | 34 · 270 · 508 · 513 · 74 | 100% | 35 min | 49% | 44 h | $682k ($209k + $474k) |
-| `town` | 3,570 | 1,975 | 52 · 409 · 645 · 764 · 105 | 100% | 34 min | 43% | 72 h | $830k ($309k + $521k) |
-| `large_town` | 5,864 | 3,252 | 88 · 670 · 1,039 · 1,236 · 219 | 100% | 32 min | 42% | 116 h | $1.25M ($513k + $739k) |
+| `village` | 570 | 438 | 15 · 73 · 169 · 174 · 7 | 99.8% | 25 min | 41% | 21 h | $117k ($47k + $70k) |
+| `small_town` | 2,103 | 1,398 | 34 · 266 · 508 · 515 · 75 | 100% | 27 min | 42% | 47 h | $668k ($184k + $484k) |
+| `town` | 3,570 | 1,967 | 50 · 406 · 645 · 763 · 103 | 100% | 26 min | 37% | 75 h | $787k ($269k + $518k) |
+| `large_town` | 5,864 | 3,236 | 85 · 659 · 1,039 · 1,239 · 214 | 100% | 27 min | 37% | 118 h | $1.19M ($450k + $738k) |
 
-The village's fifth of a meter technician is fully booked from January to April by the seal samples (a lot's sample is
-the same size in any town), so a fifth of its orders finish late. On the small town, half the meter technicians from
-March to April drop meter maintenance on time to 73% with 33 orders overdue at the end of May, while service orders
-stay on time (they go first, with overtime); a meter crew of 0.2 per 1,000 premises all year runs at 88% and leaves 53
-orders overdue in May. With the collections rule approving every notice, the year has 145 disconnects and reconnects
-on the village (82 remote), 286 on the small town (160), 483 on the town (229) and 922 on the large town (508).
+The crews drive the streets: a business-day job averages a 1.4-minute drive in the village and 3.7 minutes in the large
+town, plus the 5 minutes at the stop (the flat 20 minutes a visit before routing left the village's fifth of a meter
+technician booked from January to April by the seal samples, with a fifth of its orders late, and took 12% more crew
+time). On the small town, half the meter technicians from March to April drop meter maintenance on time to 89% by the
+end of May (93% for the year); a meter crew of 0.2 per 1,000 premises all year runs at 72% and keeps up. With the
+collections rule approving every notice, the year has 170 disconnects and reconnects on the village (94 remote), 336 on
+the small town (188), 558 on the town (273) and 1,110 on the large town (614).
 
 The scenario library's **Field work** group tries the levers: meter technicians short (half for two months), an AMI
 conversion programme, seal lots that fail sampling, and construction crews off the job for six weeks. **Storm

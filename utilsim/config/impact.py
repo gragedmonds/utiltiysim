@@ -617,8 +617,14 @@ IMPACT: dict[str, tuple[str, str]] = {
                                        "which emergencies fall after hours (call-out and overtime)."),
     "field.shift_hours": ("year", "Hours in a crew's day: every business-day crew's capacity. Shorter days build "
                                   "backlog, overdue work and overtime."),
-    "field.travel_minutes": ("year", "Driving to each job and back: more travel fills the crews' day with fewer "
-                                     "jobs, and slows emergency response."),
+    "field.routing": ("year", "Crews drive the streets from the depot, job to job, nearest first: travel follows "
+                              "the town's size and layout. Off: a flat travel time per visit (usually more crew "
+                              "time, later work and slower emergency response)."),
+    "field.stop_minutes": ("year", "Time at each stop on top of the drive (with routing): more fills the crews' day "
+                                   "with fewer jobs."),
+    "field.travel_minutes": ("year", "Without routing, driving to each job and back: more travel fills the crews' "
+                                     "day with fewer jobs, and slows emergency response. VEE field visits use it "
+                                     "always."),
     "field.callout_minutes": ("year", "Time for an on-call responder to get on the road after hours: emergency "
                                       "response times at night and on weekends."),
     "field.overtime_max_hours": ("year", "Overtime per crew for customer work due today or overdue: more keeps "
@@ -649,6 +655,9 @@ IMPACT: dict[str, tuple[str, str]] = {
                                              "meters dark), outage reports and repairs on the line crews."),
     "field.deferred_tree_faults": ("year", "How likely a span overdue for trimming faults on a storm day: an outage "
                                            "(use lost, AMI meters dark) and outage reports."),
+    "field.renewed_main_break_factor": ("year", "How much less a renewed main breaks and leaks than the cast iron "
+                                                "it replaced: fewer main breaks and gas leaks (outages, contacts, "
+                                                "repairs) after the construction crews renew it."),
     "field.deferred_leak_escalation": ("year", "How likely a surveyed leak overdue for repair becomes a public gas "
                                                "leak: odour calls and emergency response."),
     "field.crew_emergency": ("year", "On-call responders: fewer stretch emergency response when emergencies "

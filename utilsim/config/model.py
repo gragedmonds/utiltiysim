@@ -794,8 +794,14 @@ class FieldConfig(BaseModel):
                          "leaks).", applies="run")
     shift_start_hour: float = F(7.0, "Crews start their day (local time, business days).", unit="h", ge=0, le=20)
     shift_hours: float = F(8.0, "Hours in a crew's working day.", unit="h", ge=1, le=16)
-    travel_minutes: float = F(20.0, "Driving to the job and back, added to every visit.", unit="min", ge=0,
-                              le=240)
+    routing: bool = F(True, "Crews drive the town's streets: from the depot in the morning, job to job by the "
+                      "fastest route (the operations driving speeds), and back at the end of the day. Of the jobs "
+                      "equally urgent and due, a crew takes the nearest next. On-call responders drive from the depot "
+                      "and back. Off, or in a town without streets: every visit adds travel_minutes.")
+    stop_minutes: float = F(5.0, "With routing: parking, walking to the asset and setting up at each stop, added to "
+                            "the drive.", unit="min", ge=0, le=120)
+    travel_minutes: float = F(20.0, "Driving to the job and back, added to every visit without routing (and to the "
+                              "VEE field visits the run times).", unit="min", ge=0, le=240)
     callout_minutes: float = F(30.0, "After hours, the time an on-call responder takes to get on the road.",
                                unit="min", ge=0, le=240)
     overtime_max_hours: float = F(3.0, "Most hours a crew works past its shift to finish same-day and overdue "
@@ -825,6 +831,9 @@ class FieldConfig(BaseModel):
                                     "an outage.", ge=0, le=1)
     deferred_leak_escalation: float = F(1.0, "Chance a year that a leak found by survey becomes a public gas leak "
                                         "(odour calls, an emergency) once its repair is overdue.", ge=0, le=100)
+    renewed_main_break_factor: float = F(0.3, "A renewed main's breaks and leaks, as a share of the cast-iron "
+                                         "main's it replaced: from the day the construction crew finishes a "
+                                         "segment.", ge=0, le=1)
     construction_start_month: int = F(4, "First month of the construction season (digging is frost-free).", ge=1,
                                       le=12)
     construction_end_month: int = F(11, "Last month of the construction season.", ge=1, le=12)

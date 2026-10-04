@@ -240,3 +240,82 @@ def test_hosted_fieldwork_endpoint():
     assert bad.status_code == 422
     sch = client.get("/api/m2c/settings").json()["schema"]["properties"]["field"]
     assert {"crew_meter", "seal_lot_pass_rate", "new_set"} <= set(sch["properties"])
+
+
+def test_crews_drive_the_streets_from_the_depot(base):
+    run, fw = base
+    from utilsim.ops.routing import Router
+
+    eng = run.field
+    roads = eng.roads(100)
+    assert roads is not None
+    # Drive times are the operations router's fastest routes, the same both ways.
+    o = run.cfg_at(0).field
+    spots = [roads.spot(x) for x in fw.orders[:400] if roads.spot(x) is not None][:12]
+    ops = eng.ops.ops
+    router = Router(eng.ops.roads, (ops["speed_kmh_arterial"], ops["speed_kmh_collector"], ops["speed_kmh_local"]))
+    for a, b in zip(spots, spots[1:], strict=False):
+        m = roads.minutes(a, b)
+        assert m == pytest.approx(roads.minutes(b, a), abs=1e-6)
+        assert m == pytest.approx(router.route(a, b).seconds / 60.0, rel=0.02, abs=0.05)
+    assert roads.minutes(spots[0], spots[0]) == 0.0
+    # Every routed visit carries its drive and the stop; the day's last job also the drive back to the depot.
+    day = [x for x in fw.orders if x.crew in fwk.DAY_CREWS and not x.fixed and not x.remote and not x.cancelled
+           and x.end < YEAR_DAYS]
+    assert len(day) > 200 and all(x.travel >= o.stop_minutes - 1e-9 for x in day)
+    assert len({round(x.travel, 3) for x in day}) > 50  # not one flat time
+    assert all(x.arrive >= x.start for x in day)
+    # On-call responders drive from the depot and back: response is the drive (plus the call-out after hours).
+    em = [x for x in fw.orders if fwk.KEYS[x.type] in fwk.EMERGENCY and x.end < YEAR_DAYS]
+    assert em
+    for x in em[:30]:
+        drive = roads.minutes(roads.depot, roads.spot(x))
+        assert x.travel == pytest.approx(2 * drive + o.stop_minutes)
+        assert (x.arrive - x.start) * 1440 == pytest.approx(drive, abs=1e-6) or \
+            (x.arrive - x.start) * 1440 == pytest.approx(drive + o.callout_minutes, abs=1e-6)
+    # Without routing every visit adds the flat travel time again.
+    flat = fwk.fieldwork(_run({"field": {"routing": False}}))
+    fday = [x for x in flat.orders if x.crew in fwk.DAY_CREWS and not x.fixed and not x.remote and not x.cancelled
+            and x.end < YEAR_DAYS]
+    assert fday and {x.travel for x in fday} == {o.travel_minutes}
+
+
+def test_a_meter_is_read_when_its_service_goes_off():
+    run = _run({"billing": {"disconnect_rule_share": 1.0}})
+    tw, bk = run.town, run.books
+    final = np.argwhere(run.final)
+    assert len(final) > 10
+    for r, m in final.tolist():
+        t = float(run.final_t[r, m])
+        span = run.off_span(r, t)
+        assert span is not None and span[0] == t  # read the moment the service went off
+        assert t <= run.read_t[r, m] and run.off_span(r, float(run.read_t[r, m])) is span  # off at its schedule
+        assert not np.isnan(run.obs[r, m]) and run.status[r, m] != OFF
+        assert views.final_reason(run, r, m) in ("disconnection", "device_removal")
+        for j in range(m + 1, 13):  # later reads in the same span are not taken
+            if span[0] <= run.read_t[r, j] < span[1]:
+                assert run.status[r, j] == OFF and np.isnan(run.obs[r, j])
+    # The final read's period is billed: the bill runs to the disconnection.
+    billed = [(r, m) for r, m in final.tolist() if bk.doc_of[tw.inst_of[r], m] >= 0]
+    assert len(billed) >= 0.8 * len(final)
+    rows = tables.build(run, _master(TOWN), "reads", DAY)[1]
+    col = [c.key for c in rows.cols].index("readType")
+    assert "final" in rows.data[col]
+
+
+def test_renewed_mains_break_less():
+    hot = {"outages": {"incident_factor": 30}}
+    renew = {"main_replacement": {"rate": 1.0}}
+
+    def mains(run):
+        fwk.fieldwork(run)
+        return [x["id"] for x in contact.contacts(run).incidents if x["kind"] in ("water_main_break", "gas_leak")]
+
+    old = mains(_run({**hot, "field": {**renew, "renewed_main_break_factor": 1.0}}))
+    none = mains(_run({**hot, "field": {"main_replacement": {"rate": 0.0}}}))
+    new = mains(_run({**hot, "field": {**renew, "renewed_main_break_factor": 0.0}}))
+    assert old == none  # a renewed main as likely to break as the old one: the same year
+    assert set(new) < set(old)  # renewed mains drop some breaks and leaks; every other keeps its id
+    run = _run({**hot, "field": {**renew, "renewed_main_break_factor": 0.0}})
+    eng = (fwk.fieldwork(run), run.field)[1]
+    assert eng.renewed and all(0 < v <= 1.0 for v in eng.renewed.values())

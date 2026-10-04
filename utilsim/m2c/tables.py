@@ -610,12 +610,15 @@ def b_reads(c) -> list[list]:
     methods = np.array(METHODS, dtype=object)[np.where(released, np.clip(run.method[rr, mm], 0, 4), 0)]
     rel_val = np.where(released & np.isin(status, (2, 3)), run.released[rr, mm], np.nan)
     accounts = [tw.contract_at(int(r), int(d))[1] for r, d in zip(rr.tolist(), day.tolist())]
-    return [read_ids, _days(day), _pick(tw.premise_ids, prem), _pick(tw.address, prem), accounts,
+    at = run.taken_t(rr, mm)
+    taken = np.where(run.final[rr, mm], np.floor(at).astype(np.int64), day)  # a final read: when it was taken
+    return [read_ids, _days(taken), _pick(tw.premise_ids, prem), _pick(tw.address, prem), accounts,
             _pick(tw.meter_ids, tw.meter_of[rr]), reg_ids[rr].tolist(), _strs(tw.commodity[rr]),
             _strs(tw.direction[rr]), _strs(tw.tech[rr]), _pick(tw.mru, rr), _ints(tw.portion[rr]),
-            _days(np.floor(run.prev_t_at_read[rr, mm])), _days(day),
-            _nums(run.read_t[rr, mm] - run.prev_t_at_read[rr, mm], 1), _nums(run.prev_at_read[rr, mm]), _nums(obs),
-            _nums(run.cons[rr, mm]), _strs(tw.unit[rr]), np.where(missing, "missing", "actual").tolist(),
+            _days(np.floor(run.prev_t_at_read[rr, mm])), _days(taken),
+            _nums(at - run.prev_t_at_read[rr, mm], 1), _nums(run.prev_at_read[rr, mm]), _nums(obs),
+            _nums(run.cons[rr, mm]), _strs(tw.unit[rr]),
+            np.where(missing, "missing", np.where(run.final[rr, mm], "final", "actual")).tolist(),
             [x or None if miss else None for x, miss in zip(run.reason[rr, mm].tolist(), missing.tolist())],
             vee.tolist(), _nums(run.conf[rr, mm], 3), codes.tolist(), disps.tolist(),
             np.where(has_case, case_ids[np.maximum(case, 0)] if len(case_ids) else None, None).tolist(),

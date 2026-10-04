@@ -515,6 +515,13 @@ def worklist(run: M2CRun, queue: str | None = None, *, as_of: str | None = None,
 
 
 # ---- reads and decisions -----------------------------------------------------------------------------------------
+def final_reason(run, r: int, m: int) -> str:
+    """``periodic``, or for the final read taken when the service went off: ``disconnection`` or ``device_removal``."""
+    if not run.final[r, m]:
+        return "periodic"
+    return "device_removal" if run.off_reason(r, float(run.final_t[r, m])) == "removed" else "disconnection"
+
+
 def vee_status(run: M2CRun, r: int, m: int, T: float) -> str:
     released = run.release_t[r, m] <= T
     kind = int(run.status[r, m])
@@ -549,8 +556,8 @@ def read_record(run: M2CRun, r: int, m: int, T: float, truth: bool = False) -> d
         "premiseId": tw.premise_ids[p], "servicePointId": tw.service_point[r], "installationId": tw.installation[r],
         "meterId": tw.meter_ids[tw.meter_of[r]], "registerId": tw.reg_ids[r], "contractId": ctr, "accountId": acct,
         "commodity": str(tw.commodity[r]), "direction": str(tw.direction[r]), "unit": str(tw.unit[r]),
-        "periodStart": run.iso(run.prev_t_at_read[r, m]), "periodEnd": run.iso(run.read_t[r, m]),
-        "scheduledReadAt": run.iso(run.read_t[r, m]), "readAt": None if missing else run.iso(run.read_t[r, m]),
+        "periodStart": run.iso(run.prev_t_at_read[r, m]), "periodEnd": run.iso(run.taken_t(r, m)),
+        "scheduledReadAt": run.iso(run.read_t[r, m]), "readAt": None if missing else run.iso(run.taken_t(r, m)),
         "previousReadAt": run.iso(run.prev_t_at_read[r, m]), "previousRegisterValue": _r3(prev),
         "registerValue": None if missing else _r3(run.obs[r, m]),
         # A lower register near the top of the dial is a rollover (consumption wraps); any other lower register went
@@ -563,7 +570,7 @@ def read_record(run: M2CRun, r: int, m: int, T: float, truth: bool = False) -> d
         "deviceId": run.device_at(int(tw.meter_of[r]), float(run.read_t[r, m]), T),
         "deviceChange": device_change_json(run, change, r, base) if change is not None else None,
         "readType": "missing" if missing else "actual", "readStatus": "missing" if missing else "received",
-        "readReason": "periodic", "source": cat.SOURCE[str(tw.tech[r])], "mruId": tw.mru[r],
+        "readReason": final_reason(run, r, m), "source": cat.SOURCE[str(tw.tech[r])], "mruId": tw.mru[r],
         "reasonCode": run.reason[r, m] or None if missing else None, "cause": missing_cause(run, r, m),
         "consecutiveEstimates": int(run.consec_at[r, m]),
         "occupied": bool(tw.occupied[p]), "sapValidationCode": cat.CODE_LIST[code] if code >= 0 else None,
@@ -602,7 +609,7 @@ def decision(run: M2CRun, r: int, m: int) -> dict:
     code = int(run.code[r, m])
     rid = run.read_id(r, m)
     cause = missing_cause(run, r, m) if missing else None
-    days = float(run.read_t[r, m] - run.prev_t_at_read[r, m])
+    days = float(run.taken_t(r, m) - run.prev_t_at_read[r, m])
     unit, consec = str(tw.unit[r]), int(run.consec_at[r, m])
     tests = []
     if missing:  # nothing to validate: each test says what it would have checked, and why it cannot

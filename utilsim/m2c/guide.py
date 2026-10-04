@@ -108,11 +108,13 @@ CAPABILITIES = (
              "capital construction (new services from new-connection calls, then meter sets; service upgrades; "
              "cast-iron main renewal in the construction season). On-call responders work emergencies around the "
              "clock; meter technicians, line, water, gas and construction crews work business days by priority and "
-             "due date, with overtime for customer work due today, inside the replay. What they do changes the year: "
-             "a disconnected or removed meter is not read or billed, an exchange registers a new meter, a converted "
-             "meter is read as AMI, and maintenance left overdue fails (dead batteries miss reads, old and failed-lot "
-             "meters under-register, overdue poles, spans and leaks cause outages and gas leaks). Crews, shifts, "
-             "travel, rates, minutes, targets, costs and failure rates are run settings.",
+             "due date, with overtime for customer work due today, inside the replay. Crews drive the town's streets: "
+             "from the depot, job to job (the nearest of the equally urgent next) and back. What they do changes the "
+             "year: a disconnected or removed meter is read as it goes off (its final read is billed) and then not "
+             "read or billed, an exchange registers a new meter, a converted meter is read as AMI, renewed main "
+             "breaks and leaks less, and maintenance left overdue fails (dead batteries miss reads, old and "
+             "failed-lot meters under-register, overdue poles, spans and leaks cause outages and gas leaks). Crews, "
+             "shifts, routing, rates, minutes, targets, costs and failure rates are run settings.",
      "where": ["Configuration › Field work", "Year", "Data › Field work"]},
     {"id": "weather", "title": "Weather year",
      "text": "Daily temperatures drive usage, flows, state frames and reading conditions through the year.",
@@ -174,10 +176,6 @@ LIMITS = (
 )
 
 GAPS = (
-    {"title": "Field crews on the map", "text": "Crews do not route between jobs (travel is a flat time), a "
-     "disconnection's final read is not taken (use before it is billed after reconnection), and main renewal does "
-     "not yet lower the break and leak rates.", "plan": "Route crews on the street graph, take final reads at "
-     "disconnection, and let renewed main change the network's incident rates."},
     {"title": "Undetected water loss", "text": "No mains leakage fraction and no supplied-versus-billed water "
      "balance.", "plan": "Per-zone unbilled loss that shows in flows but never in bills, and a monthly water-balance "
      "report."},

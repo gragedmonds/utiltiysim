@@ -146,9 +146,10 @@ def consequence(run: M2CRun, ops, kind: str, t0: float, x: float, z: float, *, e
             "odourOwner": owner, "service": util != "ami"}
 
 
-def draw_day(run: M2CRun, ops, d: int) -> tuple[list[dict], bool]:
+def draw_day(run: M2CRun, ops, d: int, keep=None) -> tuple[list[dict], bool]:
     """The background incidents of run day ``d`` (the operations day's draw for that date, scaled by the day's
-    ``outages`` settings) and whether it is a storm day."""
+    ``outages`` settings) and whether it is a storm day. ``keep(item, n)`` may drop drawn items (a renewed main);
+    the others keep their ids."""
     from utilsim.ops import hazards
 
     c = run.cfg_at(d).outages
@@ -164,6 +165,8 @@ def draw_day(run: M2CRun, ops, d: int) -> tuple[list[dict], bool]:
     storm = bool(info.get("stormDay"))
     out = []
     for n, b in enumerate(items, start=1):
+        if keep is not None and not keep(b, n):
+            continue
         kind = b["kind"]
         t0 = d + b["at"] / 86400.0
         edge = b.get("edge") if kind in ("transformer_failure", "line_fault") else None
