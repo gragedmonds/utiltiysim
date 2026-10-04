@@ -21,7 +21,8 @@ kind of easy overrun:
 - **Expensive work runs once.** Cache what can be cached; reuse results instead of recomputing them in a loop.
 
 The repository is public for now (GitHub-hosted runners are free for public repositories). If it goes private again,
-a CI run costs about 5 billed minutes with the engine suite and 1 without.
+a CI run costs about 9 billed minutes with the engine suite and 1 without, and a local runner release (four operating
+systems, Windows billed 2x and macOS 10x) about 230.
 
 ## Checks before pushing
 
