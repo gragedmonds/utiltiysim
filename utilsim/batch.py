@@ -21,8 +21,8 @@ STAFFING = "independent-districts"
 
 
 def district_sizes(homes: int, chunk_size: int = 2000) -> list[int]:
-    if not 20 <= homes <= 500_000 or not 20 <= chunk_size <= 5000:
-        raise ValueError("Choose 20–500,000 total homes and 20–5,000 homes per district.")
+    if not 20 <= homes <= 50_000 or not 20 <= chunk_size <= 5000:
+        raise ValueError("Choose 20–50,000 total homes and 20–5,000 homes per district.")
     count = math.ceil(homes / chunk_size)
     size, extra = divmod(homes, count)
     if size < 20:
@@ -37,6 +37,36 @@ def write_json(path: Path, value):
         f.flush()
         os.fsync(f.fileno())
     os.replace(temporary, path)
+
+
+class StageRecorder:
+    """Disjoint wall-time phases, outside deterministic run archives."""
+
+    def __init__(self, path: Path, clock=time.monotonic):
+        self.path, self.clock = path, clock
+        self.stage = None
+        self.started = clock()
+        self.timings = {}
+
+    def start(self, stage):
+        now = self.clock()
+        if self.stage is not None:
+            self.timings[self.stage] = self.timings.get(self.stage, 0) + now - self.started
+        self.stage, self.started = stage, now
+        write_json(self.path, {"stage": stage, "startedMonotonic": now,
+                              "timingsSeconds": self.timings})
+
+    def finish(self):
+        self.start(None)
+        return {name: round(seconds, 4) for name, seconds in self.timings.items()}
+
+
+def timing_totals(job):
+    totals = {}
+    for district in job["districts"]:
+        for name, seconds in district.get("result", {}).get("timingsSeconds", {}).items():
+            totals[name] = round(totals.get(name, 0) + seconds, 4)
+    return dict(sorted(totals.items(), key=lambda item: -item[1]))
 
 
 @contextmanager
@@ -65,7 +95,7 @@ def job_lock(path: Path):
                 fcntl.flock(f, fcntl.LOCK_UN)
 
 
-def progress(job: dict, elapsed: float = 0) -> dict:
+def progress(job: dict, elapsed: float = 0, stage: dict | None = None) -> dict:
     completed = [d for d in job["districts"] if d.get("result")]
     done_homes = sum(d["homes"] for d in completed)
     remaining = job["homes"] - done_homes
@@ -73,6 +103,11 @@ def progress(job: dict, elapsed: float = 0) -> dict:
     expected = remaining * seconds_per_home if seconds_per_home is not None else None
     return {"status": job["status"], "completed": len(completed), "total": len(job["districts"]),
             "completedHomes": done_homes, "totalHomes": job["homes"], "activeSeconds": round(elapsed),
+            "activeDistrict": job.get("activeDistrict"),
+            "stage": (stage or {}).get("stage"),
+            "stageSeconds": round(max(0, time.monotonic() - stage["startedMonotonic"]), 1) if stage and stage.get("stage") else None,
+            "stageTimingsSeconds": (stage or {}).get("timingsSeconds", {}),
+            "completedStageTotalsSeconds": timing_totals(job),
             "etaSeconds": round(max(0, expected - elapsed)) if expected is not None and job["status"] != "finalizing" else None,
             "overrun": expected is not None and elapsed > expected,
             "etaBasis": "Measured completed districts; includes generation, replay and archive writing."}
@@ -108,7 +143,7 @@ def rollup(job: dict, store: Path) -> dict:
 
 
 def run_batch(cfg, homes: int, store: Path, request: dict | None = None, *,
-              chunk_size: int = 2000, staffing: str, max_batches: int | None = None, on_progress=lambda _: None):
+              chunk_size: int = 2000, staffing: str, map_data: bool = False, max_batches: int | None = None, on_progress=lambda _: None):
     from api._m2c import RunRequest
     from utilsim.io.run_bundle import engine_build, read_manifest
     from utilsim.m2c.run import parse_day, parse_episodes, resolve_episode_days, resolve_settings
@@ -131,7 +166,7 @@ def run_batch(cfg, homes: int, store: Path, request: dict | None = None, *,
     resolve_episode_days(resolved, parse_episodes(resolved, episodes))
     request = {"settings": req.settings, "episodes": episodes, "seed": req.seed, "asOf": req.asOf}
     inputs = {"config": cfg.model_dump(mode="json"), "homes": homes, "sizes": sizes, "request": request,
-              "staffing": staffing, "engineBuild": engine_build(), "schemaVersion": VERSION}
+              "staffing": staffing, "mapData": map_data, "engineBuild": engine_build(), "schemaVersion": VERSION}
     key = hashlib.sha256(orjson.dumps(inputs, option=orjson.OPT_SORT_KEYS)).hexdigest()
     store = Path(store).expanduser().resolve()
     directory = store / "batches" / key
@@ -157,6 +192,8 @@ def run_batch(cfg, homes: int, store: Path, request: dict | None = None, *,
                 job["status"] = "running"
                 job["activeDistrict"] = district["id"]
                 write_json(path, job)
+                stage_path = directory / f"{district['id']}.progress.json"
+                stage_path.unlink(missing_ok=True)
                 started = time.monotonic()
                 on_progress(progress(job))
                 # Process isolation releases all generation/replay memory before the next district.
@@ -164,7 +201,8 @@ def run_batch(cfg, homes: int, store: Path, request: dict | None = None, *,
                 try:
                     while child.poll() is None:
                         time.sleep(1)
-                        on_progress(progress(job, time.monotonic() - started))
+                        stage = orjson.loads(stage_path.read_bytes()) if stage_path.exists() else None
+                        on_progress(progress(job, time.monotonic() - started, stage))
                     if child.returncode:
                         raise RuntimeError(f"{district['id']} failed. Completed districts are saved; rerun to resume.")
                 except BaseException:
@@ -184,7 +222,13 @@ def run_batch(cfg, homes: int, store: Path, request: dict | None = None, *,
             job.pop("activeDistrict", None)
             write_json(path, job)
             on_progress(progress(job))
+            finalizing = time.monotonic()
             write_json(directory / "rollup.json", rollup(job, store))
+            job["finalizationSeconds"] = round(time.monotonic() - finalizing, 4)
+            write_json(directory / "timings.json", {"stagesSeconds": timing_totals(job),
+                       "finalizationSeconds": job["finalizationSeconds"],
+                       "districtWallSeconds": sum(d.get("seconds", 0) for d in job["districts"]),
+                       "note": "Worker phases are disjoint wall times; process startup and parent polling are additional."})
             job["status"] = final_status
         except BaseException:
             job["status"] = "paused"
@@ -204,6 +248,8 @@ def district_worker(path: Path, index: int):
 
     job = orjson.loads(path.read_bytes())
     district = job["districts"][index]
+    recorder = StageRecorder(path.parent / f"{district['id']}.progress.json")
+    recorder.start("worker.prepare")
     config = job["inputs"]["config"]
     config["town"]["houses"] = district["homes"]
     master = config["seeds"]["master"]
@@ -213,12 +259,16 @@ def district_worker(path: Path, index: int):
         config["seeds"][group] = hashlib.sha256(f"{source}:{district['id']}".encode()).hexdigest()[:32]
     config["seeds"]["weather"] = config["seeds"].get("weather") or master
     cfg = SimConfig.model_validate(config)
-    snapshot = build_snapshot(generate(cfg))
+    town = generate(cfg, on_stage=recorder.start)
+    detail = "full" if job["inputs"].get("mapData", False) else "analysis"
+    recorder.start(f"snapshot.{detail}")
+    snapshot = build_snapshot(town, detail=detail)
     request = job["inputs"]["request"]
     if request.get("seed"):
         request["seed"] = hashlib.sha256(f"{request['seed']}:{district['id']}".encode()).hexdigest()[:32]
-    directory, manifest, reused = export_run(snapshot, request, path.parents[2])
+    directory, manifest, reused = export_run(snapshot, request, path.parents[2], on_stage=recorder.start)
     write_json(path.parent / f"{district['id']}.json", {"runKey": manifest["runKey"],
+               "timingsSeconds": recorder.finish(), "mapData": detail == "full",
                "townId": snapshot["id"], "directory": str(directory), "reused": reused,
                "namespace": district["id"], "requestedHomes": district["homes"],
                "generatedHomes": snapshot["stats"]["houses"]})

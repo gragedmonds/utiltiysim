@@ -67,7 +67,11 @@ def _clean(v: Any):
 
 def build_snapshot(town, *, include_reads: bool = True, units: str | None = None, detail: str = "full",
                    embed_state: bool = True) -> dict:
-    """``detail='viewer'`` omits reads and the customer/billing tables (fetch them per premise from the API)."""
+    """Viewer omits customer tables; analysis omits visual geometry, terrain and the initial map frame.
+
+    Analysis keeps the road/network/asset data used by annual incidents and field work.
+    """
+    visual = detail != "analysis"
     cfg, prem, geo, lu = town.cfg, town.prem, town.geo, town.lu
     profile = get_profile(units or cfg.town.units)
     cust = town.customers
@@ -128,14 +132,15 @@ def build_snapshot(town, *, include_reads: bool = True, units: str | None = None
             "meterTechnology": ex.get("meterTechnology"), "moveInAt": ex.get("moveInAt"),
             "moveOutAt": ex.get("moveOutAt"),
         })
-        fp = prem.footprint[i]
-        buildings.append({"id": f"B-{pid}", "premiseIds": [pid],
-                          "footprint": {"widthM": _r(prem.width[i]), "depthM": _r(prem.depth[i]),
-                                        "polygon": _poly(fp)},
-                          "heightM": _r(prem.height[i]), "stories": int(prem.stories[i]), "roof": prem.roof[i],
-                          "roofTone": float(a["roof_tone"][i]), "buildingType": prem.building_type[i]})
-        parcels.append({"id": f"LOT-{pid}", "premiseId": pid, "polygon": _poly(prem.lot[i]),
-                        "areaM2": _r(prem.lot_area[i], 1)})
+        if visual:
+            fp = prem.footprint[i]
+            buildings.append({"id": f"B-{pid}", "premiseIds": [pid],
+                              "footprint": {"widthM": _r(prem.width[i]), "depthM": _r(prem.depth[i]),
+                                            "polygon": _poly(fp)},
+                              "heightM": _r(prem.height[i]), "stories": int(prem.stories[i]), "roof": prem.roof[i],
+                              "roofTone": float(a["roof_tone"][i]), "buildingType": prem.building_type[i]})
+            parcels.append({"id": f"LOT-{pid}", "premiseId": pid, "polygon": _poly(prem.lot[i]),
+                            "areaM2": _r(prem.lot_area[i], 1)})
 
     networks = {}
     for u, net in town.networks.items():
@@ -179,33 +184,35 @@ def build_snapshot(town, *, include_reads: bool = True, units: str | None = None
 
     # roadId/t: where the site meets the street (crews leave the depot there), like premises' roadId/t.
     facilities = [{"id": f.id, "kind": f.kind, "label": f.label, "x": _r(f.xy[0]), "z": _r(-f.xy[1]),
-                   "polygon": _poly(f.poly), "premiseId": f.attrs.get("premise_id"), "roadId": f"R-{int(f.edge)}",
+                   "polygon": _poly(f.poly) if visual else [], "premiseId": f.attrs.get("premise_id"), "roadId": f"R-{int(f.edge)}",
                    "t": round(float(f.s / max(g.length[int(f.edge)], 1e-9)), 5)} for f in lu.facilities]
-    district_ids = sorted(set(int(d) for d in prem.district))
-    dxy = geo.era.district_xy
-    vor = shapely.voronoi_polygons(MultiPoint([tuple(p) for p in dxy]), extend_to=box(minx, miny, maxx, maxy))
-    frame = box(minx, miny, maxx, maxy)
-    cells = {}
-    for cell in getattr(vor, "geoms", [vor]):
-        k = int(geo.era.district_of(np.asarray(cell.representative_point().coords))[0])
-        cells[k] = cell.intersection(frame)
-    districts = []
-    for k in district_ids:
-        yr = int(geo.era.year_at(dxy[k][None, :])[0])
-        poly = cells.get(k)
-        districts.append({"id": f"D-{k + 1:02d}", "x": _r(dxy[k, 0]), "z": _r(-dxy[k, 1]), "eraYear": yr,
-                          "era": ERA_NAMES[int(era_bucket(yr))],
-                          "allElectric": bool(geo.era.district_all_electric[k]),
-                          "electricConstruction": "overhead" if yr < cfg.electric.overhead_before_year
-                          else "underground",
-                          "gasPressure": "lp" if (cfg.gas.scheme == "mp_with_lp_core" and
-                                                  yr < cfg.gas.lp_core_before_year) else "mp",
-                          "polygon": _poly(poly) if poly is not None and not poly.is_empty else []})
-    hm = geo.terrain.heightmap(minx, miny, maxx, maxy)
-    terrain = {"cols": hm["cols"], "rows": hm["rows"], "cellSizeM": hm["cellSizeM"], "originX": hm["originX"],
-               "originZ": round(-hm["originY"], 3), "order": "row-major-z-positive",
-               "values": [round(float(v), 2) for v in np.asarray(hm["values"]).ravel()],
-               "reliefM": cfg.town.terrain_relief_m, "synthetic": True}
+    districts, terrain = [], None
+    if visual:
+        district_ids = sorted(set(int(d) for d in prem.district))
+        dxy = geo.era.district_xy
+        vor = shapely.voronoi_polygons(MultiPoint([tuple(p) for p in dxy]), extend_to=box(minx, miny, maxx, maxy))
+        frame = box(minx, miny, maxx, maxy)
+        cells = {}
+        for cell in getattr(vor, "geoms", [vor]):
+            k = int(geo.era.district_of(np.asarray(cell.representative_point().coords))[0])
+            cells[k] = cell.intersection(frame)
+        districts = []
+        for k in district_ids:
+            yr = int(geo.era.year_at(dxy[k][None, :])[0])
+            poly = cells.get(k)
+            districts.append({"id": f"D-{k + 1:02d}", "x": _r(dxy[k, 0]), "z": _r(-dxy[k, 1]), "eraYear": yr,
+                              "era": ERA_NAMES[int(era_bucket(yr))],
+                              "allElectric": bool(geo.era.district_all_electric[k]),
+                              "electricConstruction": "overhead" if yr < cfg.electric.overhead_before_year
+                              else "underground",
+                              "gasPressure": "lp" if (cfg.gas.scheme == "mp_with_lp_core" and
+                                                      yr < cfg.gas.lp_core_before_year) else "mp",
+                              "polygon": _poly(poly) if poly is not None and not poly.is_empty else []})
+        hm = geo.terrain.heightmap(minx, miny, maxx, maxy)
+        terrain = {"cols": hm["cols"], "rows": hm["rows"], "cellSizeM": hm["cellSizeM"], "originX": hm["originX"],
+                   "originZ": round(-hm["originY"], 3), "order": "row-major-z-positive",
+                   "values": [round(float(v), 2) for v in np.asarray(hm["values"]).ravel()],
+                   "reliefM": cfg.town.terrain_relief_m, "synthetic": True}
     src = dict(geo.source)
     source = {**src, "coordinateSystem": "local metres; x east, z south", "origin": {"lat": geo.origin_lat,
                                                                                      "lon": geo.origin_lon},
@@ -229,7 +236,7 @@ def build_snapshot(town, *, include_reads: bool = True, units: str | None = None
         "center": _pt(*geo.center), "terrain": terrain,
         "roads": roads, "premises": premises, "buildings": buildings, "parcels": parcels,
         "facilities": facilities, "districts": districts,
-        "parks": [{"id": f"PARK-{k + 1:02d}", "polygon": _poly(p)} for k, p in enumerate(lu.parks)],
+        "parks": [{"id": f"PARK-{k + 1:02d}", "polygon": _poly(p)} for k, p in enumerate(lu.parks)] if visual else [],
         "networks": networks,
         "accounts": c.accounts if c else [], "businessPartners": c.business_partners if c else [],
         "servicePoints": c.service_points if c else [], "meters": c.meters if c else [],
@@ -253,11 +260,13 @@ def build_snapshot(town, *, include_reads: bool = True, units: str | None = None
     }
     snap["validation"] = validate_town(town)
     snap["stats"] = town_stats(town)
-    if embed_state:
+    if embed_state and visual:
         from utilsim.sim.state import initial_frame
 
         snap["stateFrame"] = initial_frame(town)
     snap["detail"] = detail
+    if not visual:
+        snap["mapAvailable"] = False
     if detail == "viewer":
         for k in ("sampleReads", "contracts", "tariffAssignments", "installations", "registers", "accounts",
                   "businessPartners", "readSchedules", "parcels"):

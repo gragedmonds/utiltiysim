@@ -128,7 +128,7 @@ and CSV, browser folder import with networking disabled, and desktop/phone navig
 
 ## Sequential district batches
 
-The local CLI can run up to 500,000 residential homes as independent districts, one process at a time.
+The local CLI can run up to 50,000 residential homes as independent districts, one process at a time.
 Each completed district becomes a full verified run bundle. Memory is released before the next district.
 This mode explicitly requires independent teams and networks: analysts/agents are **per district**, and
 per-1,000 crew settings scale within each district. It is not a shared utility-wide queue or connected city.
@@ -138,7 +138,7 @@ Districts inherit the same environment and temperature seed; their geography, cu
 uv run utilsim batch-run --homes 50000 --chunk-size 2000 --staffing independent-districts --store "P:/UtilitySim"
 ```
 
-Use `--homes 500000` for 250 districts at 2,000 homes each. Optional `--config` supplies generation overrides;
+Use `--homes 50000` for 25 districts at 2,000 homes each. Optional `--config` supplies generation overrides;
 `--input` accepts a JSON object containing `settings`, `episodes`, `seed` and `asOf`. Town-specific actions
 and interruptions cannot be copied between districts. The engine still models calendar year 2026 only.
 Use smaller chunks to reduce peak memory. Their size affects network boundaries and per-district staffing,
@@ -147,6 +147,22 @@ so comparisons must keep the same chunk size; chunking is part of the model, not
 Progress reports completed/total districts, homes, elapsed time and remaining ETA. ETA stays unknown until
 one batch finishes, then uses measured time per home including generation, replay and archive writing.
 It is an estimate, not a percentage of internal engine work. A slow batch reports an overrun.
+Each update also names the active stage and its elapsed time. Completed phase times cover roads, land use,
+buildings, each network, customers, snapshot preparation, annual reads/VEE/billing replay, annual analysis,
+each exported table (including compression/writing), month-end views and integrity verification.
+
+Batch exports omit visual map data by default: building/parcel/park/district polygons, display terrain and
+initial power/pressure frame. Roads and network assets remain because outages, meter coverage and field
+maintenance depend on them. This does not skip those simulations. `--map-data` restores a map-capable
+snapshot; changing this option creates a different job. Analysis-only snapshots open in the saved-run
+reader, and the map importer explains why they cannot be displayed as maps.
+
+A same-seed 2,000-home comparison measured 20.0 s with map data and 19.0 s without (single local sample,
+including child startup and one-second polling). Map-free worker phases: generation 4.59 s, snapshot
+0.91 s, annual replay 3.06 s, analysis 1.71 s, and archive preparation/writing/verification 7.69 s.
+The full snapshot phase took 1.28 s. Archive size fell from 12.47 to 12.09 MB; all 60 analysis output files
+matched after excluding the archive identity. Map removal is a modest saving; table exports dominate.
+These timings vary with hardware, configuration and background load.
 
 `--max-batches 2` pauses after two new districts. Run the same command again (without that limit) to resume.
 Identical configuration, engine build and chunk size reuse verified completed archives. A changed build or
@@ -156,6 +172,10 @@ An OS lock prevents two processes writing the same job simultaneously and releas
 Outputs under the chosen store:
 
 - `batches/<jobKey>/job.json`: exact inputs, district identities, archive references, timings and status.
+- `batches/<jobKey>/timings.json`: per-stage totals, completed district wall time and finalization time.
+  Phase timings are disjoint; process startup, parent polling and resumed-archive validation are additional.
+- `batches/<jobKey>/district-NNNN.progress.json`: current worker phase and completed phase timings,
+  replaced atomically while running. Timings stay outside deterministic analysis archives.
 - `batches/<jobKey>/rollup.json`: completed districts' additive monthly billing and case totals, clearly
   marked partial until all districts finish. It never averages percentages or invents shared staffing results.
 - `runs/<runKey>/`: each district's existing full archive, openable in Studio's saved-run folder reader.
@@ -166,7 +186,7 @@ Verification included a 5,000-home, five-district pause/resume run and a full 50
 of 2,000 homes. The latter took 505 seconds and wrote 313 MB of archives (61,104 accounts, 164,985 registers);
 monthly totals were checked against all district files. Reported peak child-process RSS was 744 MiB. These
 are measurements from one development environment, not guaranteed estimates for other hardware or settings.
-A full 500,000-home run remains unbenchmarked.
+Batch runs are capped at 50,000 homes.
 
 ### Shared utility-wide resources
 
