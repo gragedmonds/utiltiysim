@@ -94,5 +94,6 @@ normal Actions token with contents write; no runtime signing secret is uploaded 
 
 Current operational bounds: 100 revisions per workspace; five concurrent five-minute detail requests; metadata
 requests up to 2 MB and detail pages up to 500 KB; full data stays local. Rate limits protect workspace creation and
-pair-code attempts. The model is calendar year 2026; utility-wide shared resources and multi-year campaigns remain
-separate engine work.
+pair-code attempts. This paired-batch workflow uses calendar year 2026 and independent districts. The engine also has shared-workforce,
+connected-network and chained-year modes through the existing CLI and live Studio paths; those are not selected by
+this first paired-job contract.

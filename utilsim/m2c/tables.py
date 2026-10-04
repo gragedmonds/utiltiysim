@@ -23,8 +23,8 @@ import numpy as np
 from utilsim.m2c import catalog as cat
 from utilsim.m2c import collections as colls
 from utilsim.m2c import views
-from utilsim.m2c.base import date_of
-from utilsim.m2c.run import INF, METHODS, M2CRun
+from utilsim.m2c.calendar import FIRST_YEAR, RunCalendar
+from utilsim.m2c.run import INF, METHODS, OFF, M2CRun
 
 TABLE_VERSION = "m2c-table/1.0"
 CATALOG_VERSION = "m2c-tables/1.0"
@@ -103,17 +103,17 @@ GROUPS = (("customers", "Customers"), ("metering", "Meters & reading"), ("billin
 _DATES: dict[int, str] = {}
 
 
-def _d(day) -> str | None:
-    """ISO date of a run day (a float time's local day); None for missing or never."""
+def _d(cal: RunCalendar, day) -> str | None:
+    """ISO date of a run day of ``cal`` (a float time's local day); None for missing or never."""
     if day is None:
         return None
     x = float(day)
     if x != x or x == INF or x == -INF:
         return None
-    k = int(np.floor(x))
+    k = (cal.year, int(np.floor(x)))
     s = _DATES.get(k)
     if s is None:
-        s = _DATES[k] = date_of(k).isoformat()
+        s = _DATES[k] = cal.date_of(k[1]).isoformat()
     return s
 
 
@@ -124,8 +124,8 @@ def _hm(t) -> str | None:
     return f"{int(h):02d}:{int(round((h - int(h)) * 60)) % 60:02d}"
 
 
-def _days(arr) -> list:
-    return [_d(x) for x in np.asarray(arr, dtype=float).tolist()]
+def _days(cal: RunCalendar, arr) -> list:
+    return [_d(cal, x) for x in np.asarray(arr, dtype=float).tolist()]
 
 
 def _nums(arr, nd: int | None = 3) -> list:
@@ -316,7 +316,7 @@ def _account_at(c, A: colls.Account | None, T: float) -> dict:
     return {"invoices": len(invs), "open": sum(1 for inv in invs if not colls.is_paid(inv, T)),
             "overdue": round(sum(colls.owed(inv, T) for inv in invs if colls.is_overdue(inv, T)), 2),
             "phase": _phase(c.col, A, T), "last": cat.EVENTS[last[1]][0] if last else None,
-            "lastAt": _d(last[0]) if last else None, "budget": f["budgetBilling"], "lowIncome": f["lowIncome"]}
+            "lastAt": _d(c.cal, last[0]) if last else None, "budget": f["budgetBilling"], "lowIncome": f["lowIncome"]}
 
 
 def b_accounts(c) -> list[list]:
@@ -421,7 +421,7 @@ def b_registers(c) -> list[list]:
         if r is not None:
             done = run.read_t[r, 1:] <= T
             reads = int(done.sum())
-            last = _d(tw.read_day[r, int(np.flatnonzero(done)[-1]) + 1]) if reads else None
+            last = _d(c.cal, tw.read_day[r, int(np.flatnonzero(done)[-1]) + 1]) if reads else None
         p = int(tw.prem[r]) if r is not None else None
         rows.append([g["id"], g.get("meterId"), tw.premise_ids[p] if p is not None else None,
                      tw.address[p] if p is not None else None, str(tw.commodity[r]) if r is not None else None,
@@ -452,7 +452,7 @@ def b_installations(c) -> list[list]:
     counts = np.bincount(da["inst"][seen], minlength=n) if seen.any() else np.zeros(n, dtype=np.int64)
     good = seen & (da["released"] <= T) & ~(da["reversed"] <= T)
     billed = np.bincount(da["inst"][good], weights=da["total"][good], minlength=n) if good.any() else np.zeros(n)
-    asof = _d(c.day)
+    asof = _d(c.cal, c.day)
     rows = []
     for x in c.master["installations"]:
         k = tw.inst_index.get(x["id"])
@@ -553,6 +553,8 @@ def _billed_use(run: M2CRun, T: float) -> np.ndarray:
         x = run.dev_change[r, m + 1]
         if x is not None and x.t_reg <= T:
             use[r, m] = views.billed_use(run, int(r), int(m) + 1)
+    for r, m in zip(*np.nonzero((run.status[:, :-1] == OFF) & ~np.isnan(rel[:, 1:]))):  # after the service was off
+        use[r, m] = views.billed_use(run, int(r), int(m) + 1)
     done = (run.read_t[:, 1:] <= T) & (run.release_t[:, 1:] <= T)
     return np.where(done, use, np.nan)
 
@@ -582,8 +584,9 @@ def b_reads(c) -> list[list]:
                       ["accepted_after_review", "estimated", "adjusted"], "accepted")
     vee = np.where(~has_case, np.where(released, "accepted", "not_processed"),
                    np.where(~released, np.where(missing, "missing", np.where(held, "held", open_disp)), after))
+    vee = np.where(status == OFF, "service_off", vee)
     reg_ids = np.array(tw.reg_ids, dtype=object)
-    read_ids = [f"READ-{tw.id}-{g}-{_d(d)}" for g, d in zip(reg_ids[rr].tolist(), day.tolist())]
+    read_ids = [f"READ-{tw.id}-{g}-{_d(c.cal, d)}" for g, d in zip(reg_ids[rr].tolist(), day.tolist())]
     da = _doc_arrays(run)
     k = run.books.doc_of[tw.inst_of[rr], mm]
     has_doc = (k >= 0) & (da["created"][np.maximum(k, 0)] <= T)
@@ -593,6 +596,7 @@ def b_reads(c) -> list[list]:
                                                doc_state == "reversed"],
                                               ["billed", "billing_blocked", "rebilled"], "billing"),
                            np.where(released, "released_for_billing", np.where(has_case, "blocked", "pending")))
+    bill_status = np.where(status == OFF, "not_billed", bill_status)
     doc_ids = np.array(da["ids"] + [None], dtype=object)[np.where(has_doc, kk, len(da["ids"]))]
     inv = np.where(has_doc, da["invoice"][kk], -1)
     has_inv = (inv >= 0) & (da["inv_created"][np.maximum(inv, 0)] <= T)
@@ -606,12 +610,15 @@ def b_reads(c) -> list[list]:
     methods = np.array(METHODS, dtype=object)[np.where(released, np.clip(run.method[rr, mm], 0, 4), 0)]
     rel_val = np.where(released & np.isin(status, (2, 3)), run.released[rr, mm], np.nan)
     accounts = [tw.contract_at(int(r), int(d))[1] for r, d in zip(rr.tolist(), day.tolist())]
-    return [read_ids, _days(day), _pick(tw.premise_ids, prem), _pick(tw.address, prem), accounts,
+    at = run.taken_t(rr, mm)
+    taken = np.where(run.final[rr, mm], np.floor(at).astype(np.int64), day)  # a final read: when it was taken
+    return [read_ids, _days(c.cal, taken), _pick(tw.premise_ids, prem), _pick(tw.address, prem), accounts,
             _pick(tw.meter_ids, tw.meter_of[rr]), reg_ids[rr].tolist(), _strs(tw.commodity[rr]),
             _strs(tw.direction[rr]), _strs(tw.tech[rr]), _pick(tw.mru, rr), _ints(tw.portion[rr]),
-            _days(np.floor(run.prev_t_at_read[rr, mm])), _days(day),
-            _nums(run.read_t[rr, mm] - run.prev_t_at_read[rr, mm], 1), _nums(run.prev_at_read[rr, mm]), _nums(obs),
-            _nums(run.cons[rr, mm]), _strs(tw.unit[rr]), np.where(missing, "missing", "actual").tolist(),
+            _days(c.cal, np.floor(run.prev_t_at_read[rr, mm])), _days(c.cal, taken),
+            _nums(at - run.prev_t_at_read[rr, mm], 1), _nums(run.prev_at_read[rr, mm]), _nums(obs),
+            _nums(run.cons[rr, mm]), _strs(tw.unit[rr]),
+            np.where(missing, "missing", np.where(run.final[rr, mm], "final", "actual")).tolist(),
             [x or None if miss else None for x, miss in zip(run.reason[rr, mm].tolist(), missing.tolist())],
             vee.tolist(), _nums(run.conf[rr, mm], 3), codes.tolist(), disps.tolist(),
             np.where(has_case, case_ids[np.maximum(case, 0)] if len(case_ids) else None, None).tolist(),
@@ -642,7 +649,7 @@ def b_usage(c) -> list[list]:
     last = run.read_t[np.arange(R), last_m]
     per_day = ytd / np.maximum(last - first, 1e-9)
     est = ((run.status[:, 1:] == 2) & (run.release_t[:, 1:] <= T)).sum(1)
-    missed = (np.isnan(run.obs[:, 1:]) & seen).sum(1)
+    missed = (np.isnan(run.obs[:, 1:]) & seen & (run.status[:, 1:] != OFF)).sum(1)
     accounts = [tw.contract_at(r, c.day)[1] for r in range(R)]
     rate = [tw.inst_rate[i] for i in tw.inst_of.tolist()]
     return [list(tw.reg_ids), _pick(tw.premise_ids, tw.prem), _pick(tw.address, tw.prem), accounts,
@@ -667,7 +674,7 @@ def b_device_changes(c) -> list[list]:
     for x in sorted((x for x in run.installs if x.t_reg <= T), key=lambda x: -x.t_reg):
         p = int(tw.meter_prem[x.meter])
         rows.append([tw.meter_ids[x.meter], tw.premise_ids[p], tw.address[p], str(tw.meter_commodity[x.meter]),
-                     x.previous, x.device, _d(x.t), _d(x.t_reg), bool(x.physical), x.by, x.order, x.case,
+                     x.previous, x.device, _d(c.cal, x.t), _d(c.cal, x.t_reg), bool(x.physical), x.by, x.order, x.case,
                      " · ".join(f"{tw.reg_ids[r]}: {v:g}" for r, v in x.initial.items()),
                      " · ".join(f"{tw.reg_ids[r]}: {v:g}" for r, v in x.removal.items()) or None, x.note])
     return _rows_to_cols(DEVICE_CHANGES, rows)
@@ -695,13 +702,14 @@ def b_tariffs(c) -> list[list]:
     n_ctr: Counter = Counter(a.get("tariffId") for a in c.master["tariffAssignments"])
     change = str(b.rate_change_date)[:10] if b.rate_change_date else None
     f = 1.0 + float(b.rate_change_pct) / 100.0
-    before = (date_of(views.parse_day(change, 0) - 1).isoformat() if change else None)
+    before = (c.cal.date_of(c.cal.parse_day(change, 0) - 1).isoformat() if change else None)
+    first = f"{FIRST_YEAR}-01-01"  # the town's tariffs are in force from the snapshot's year
     rows = []
     for t in c.master["tariffs"]:
         tf = tw.tariffs.get(t["id"], t)
         blocks = tf.get("energyBlocks") or []
-        for ver, (frm, to, k) in enumerate([("2026-01-01", before, 1.0), (change, None, f)] if change else
-                                           [("2026-01-01", None, 1.0)], start=1):
+        for ver, (frm, to, k) in enumerate([(first, before, 1.0), (change, None, f)] if change else
+                                           [(first, None, 1.0)], start=1):
             sc = _scaler(k)
             rows.append([t["id"], tf.get("commodity"), t.get("basedOn"), ver, frm, to, tf.get("fixedMonthly"),
                          blocks[0].get("up_to") if blocks else None, sc(blocks[0].get("price")) if blocks else None,
@@ -771,14 +779,14 @@ def b_documents(c) -> list[list]:
     accounts = [tw.contract_at(int(r), int(np.floor(s)))[1] for r, s in zip(main.tolist(), start.tolist())]
     return [[da["ids"][k] for k in ks.tolist()], _pick(tw.inst_ids, inst), _pick(tw.premise_ids, prem),
             _pick(tw.address, prem), accounts, _strs(tw.commodity[main]), [d["rate"] for d in docs],
-            months.tolist(), _days(np.floor(start)), _days(np.floor(end)), _nums(end - start, 1),
+            months.tolist(), _days(c.cal, np.floor(start)), _days(c.cal, np.floor(end)), _nums(end - start, 1),
             _nums([d["qImp"] for d in docs]), _nums([d["qExp"] for d in docs]), _strs(tw.unit[main]),
             _nums([d["subtotal"] for d in docs], 2), _nums([d["tax"] for d in docs], 2),
             _nums([d["total"] for d in docs], 2), status.tolist(), [d["version"] for d in docs],
             [da["ids"][d["replaces"]] if d["replaces"] >= 0 else None for d in docs],
-            [bool(d.get("estimated")) for d in docs], _days(da["created"][ks]),
-            [_d(d["released"]) if d["released"] is not None and d["released"] <= T else None for d in docs],
-            [_d(d["reversed"]) if s == "reversed" else None for d, s in zip(docs, status.tolist())],
+            [bool(d.get("estimated")) for d in docs], _days(c.cal, da["created"][ks]),
+            [_d(c.cal, d["released"]) if d["released"] is not None and d["released"] <= T else None for d in docs],
+            [_d(c.cal, d["reversed"]) if s == "reversed" else None for d, s in zip(docs, status.tolist())],
             [run.cases[d["case"]].id if d["case"] >= 0 else None for d in docs], inv_ids.tolist()]
 
 
@@ -813,13 +821,13 @@ def b_invoices(c) -> list[list]:
         due = colls.due_at(inv, T)
         last = max(((t, k) for t, k in inv["dunning"] if t <= T), default=None)
         est = any(bk.docs[k].get("estimated") for k in inv["docs"])
-        rows.append([inv["id"], inv["account"], name, pid, addr, method, _d(inv["issued"]), _d(due),
+        rows.append([inv["id"], inv["account"], name, pid, addr, method, _d(c.cal, inv["issued"]), _d(c.cal, due),
                      _money(inv["total"]), _money(colls.amount_due(inv)), _money(colls.owed(inv, T)),
-                     views.invoice_status(inv, T), _d(inv["paid"]) if colls.is_paid(inv, T) else None,
+                     views.invoice_status(inv, T), _d(c.cal, inv["paid"]) if colls.is_paid(inv, T) else None,
                      max(0, int(np.floor(T - due))) if due < T and not colls.is_paid(inv, T) else 0,
                      len(inv["docs"]), " + ".join(sorted({str(tw.commodity[bk.main[bk.docs[k]["inst"]]])
                                                           for k in inv["docs"]})), est, bool(inv.get("budget")),
-                     cat.EVENTS[last[1]][0] if last else None, _d(last[0]) if last else None,
+                     cat.EVENTS[last[1]][0] if last else None, _d(c.cal, last[0]) if last else None,
                      colls.disconnect_state(inv, T),
                      _money(sum(x for t, f, x in inv.get("fees", []) if f == "late_fee" and t <= T)),
                      _money(sum(x for t, f, x in inv.get("fees", []) if f == "nsf_fee" and t <= T)),
@@ -843,7 +851,7 @@ def b_payments(c) -> list[list]:
         name, _, addr, method = _who(c, inv["account"])
         for p in inv["payments"]:
             if p["at"] <= T:
-                rows.append([_d(p["at"]), inv["id"], inv["account"], name, addr, _money(p["amount"]), p["status"],
+                rows.append([_d(c.cal, p["at"]), inv["id"], inv["account"], name, addr, _money(p["amount"]), p["status"],
                              method, p.get("ref"), views.invoice_status(inv, T), p["at"]])
     rows.sort(key=lambda r: -r[-1])
     return _rows_to_cols(PAYMENTS, [r[:-1] for r in rows])
@@ -864,7 +872,7 @@ def b_ledger(c) -> list[list]:
             if t > T:
                 break
             bal = round(bal + amt, 2)
-            rows.append([_d(t), acct, name, k, _money(amt), ref, bal, t])
+            rows.append([_d(c.cal, t), acct, name, k, _money(amt), ref, bal, t])
     rows.sort(key=lambda r: -r[-1])
     return _rows_to_cols(LEDGER, [r[:-1] for r in rows])
 
@@ -887,7 +895,7 @@ def b_dunning(c) -> list[list]:
         name, _, addr, _ = _who(c, inv["account"])
         for t, k in inv["dunning"]:
             if t <= T:
-                rows.append([_d(t), cat.EVENTS[k][0], k, inv["id"], inv["account"], name, addr, _money(inv["total"]),
+                rows.append([_d(c.cal, t), cat.EVENTS[k][0], k, inv["id"], inv["account"], name, addr, _money(inv["total"]),
                              max(0, int(np.floor(t - inv["due"]))), _money(colls.owed(inv, T)),
                              views.invoice_status(inv, T), colls.disconnect_state(inv, T), t])
     rows.sort(key=lambda r: -r[-1])
@@ -926,8 +934,8 @@ def b_collections_accounts(c) -> list[list]:
                     None)
         rows.append([aid, name, pid, addr, method, A.profile, at["phase"], bk.balance(aid, T),
                      _money(sum(colls.owed(inv, T) for inv in invs)), at["overdue"], len(due),
-                     _d(min(colls.due_at(inv, T) for inv in due)) if due else None, at["last"], at["lastAt"],
-                     (arr["state"] if arr else None), _d(hold["end"]) if hold else None, at["lowIncome"],
+                     _d(c.cal, min(colls.due_at(inv, T) for inv in due)) if due else None, at["last"], at["lastAt"],
+                     (arr["state"] if arr else None), _d(c.cal, hold["end"]) if hold else None, at["lowIncome"],
                      at["budget"], disc, open_cases.get(aid, 0)])
     rows.sort(key=lambda r: (-PHASES.index(r[6]) if r[6] in PHASES else 0, -(r[9] or 0)))
     return _rows_to_cols(COLLECTIONS_ACCOUNTS, rows)
@@ -969,29 +977,29 @@ def b_collections_work(c) -> list[list]:
         for x in A.arrangements:
             if x["start"] <= T:
                 ended = x["end"] is not None and x["end"] <= T
-                rows.append(["payment arrangement", aid, name, addr, _d(x["start"]), _d(x["end"]) if ended else None,
+                rows.append(["payment arrangement", aid, name, addr, _d(c.cal, x["start"]), _d(c.cal, x["end"]) if ended else None,
                              x["state"] if ended else "active", _money(x["amount"]),
                              f"{x.get('instalments')} instalments · {len(x.get('invoices', []))} invoices",
                              "you", None, x["start"]])
         for p in A.plans:
             t0 = p["requested"] if p["requested"] is not None and p["requested"] >= 0 else p["start"]
             if t0 is not None and t0 <= T:
-                rows.append(["budget billing", aid, name, addr, _d(t0), None,
+                rows.append(["budget billing", aid, name, addr, _d(c.cal, t0), None,
                              "active" if p["start"] is not None and p["start"] <= T else "pending",
                              _money(p["instalment"]) if p.get("instalment") is not None else None,
                              "monthly instalment", p.get("source"), p.get("caseId"), t0])
         for h in A.holds:
             if h["start"] <= T:
-                rows.append(["dunning hold", aid, name, addr, _d(h["start"]), _d(h["end"]),
+                rows.append(["dunning hold", aid, name, addr, _d(c.cal, h["start"]), _d(c.cal, h["end"]),
                              "active" if h["start"] <= T < h["end"] else "ended", None, h.get("note"), "you", None,
                              h["start"]])
         for r in A.referrals:
             if r["start"] <= T:
                 decided = r.get("decided") is not None and r["decided"] <= T
-                rows.append(["low-income referral", aid, name, addr, _d(r["start"]), _d(r["decide"]),
+                rows.append(["low-income referral", aid, name, addr, _d(c.cal, r["start"]), _d(c.cal, r["decide"]),
                              ("approved" if r["approved"] else "declined") if decided else "referred",
                              _money(r["grant"]) if decided and r.get("grant") else None,
-                             f"decision due {_d(r['decide'])}", r.get("source"), r.get("caseId"), r["start"]])
+                             f"decision due {_d(c.cal, r['decide'])}", r.get("source"), r.get("caseId"), r["start"]])
     rows.sort(key=lambda r: -r[-1])
     return _rows_to_cols(COLLECTIONS_WORK, [r[:-1] for r in rows])
 
@@ -1048,7 +1056,7 @@ def b_orders(c) -> list[list]:
         p = int(tw.prem[o.r]) if o.r >= 0 else None
         rows.append([o.id, b["stage"], b["systemStatus"], f.get("orderType"), b["shortText"], f.get("priority"),
                      tw.premise_ids[p] if p is not None else None, tw.address[p] if p is not None else None,
-                     b["caseId"], o.source_case, _d(o.created), b["startDate"], o.crew,
+                     b["caseId"], o.source_case, _d(c.cal, o.created), b["startDate"], o.crew,
                      _date10(b["completedAt"]), (b["outcome"] or {}).get("text"), len(b["coveredCaseIds"]),
                      o.created])
     rows.sort(key=lambda r: -r[-1])
@@ -1063,7 +1071,7 @@ INTERRUPTIONS = (Col("outageId", "Interruption", "id", search=True), Col("day", 
 def b_interruptions(c) -> list[list]:
     rows = []
     for o in c.run.outages:
-        day = views.parse_day(o["day"], 0)
+        day = c.cal.parse_day(o["day"], 0)
         if day > c.day:
             continue
         rows.append([o.get("id"), o["day"], o["utility"], _hm(o["start"] / 86400.0), _hm(o["end"] / 86400.0),
@@ -1083,7 +1091,7 @@ CONTACTS = (Col("contactId", "Contact", "id", search=True), Col("date", "Date", 
             Col("attempt", "Attempt", "int"), Col("repeat", "Repeat", "bool"),
             Col("accountId", "Account", "id", link="account", search=True),
             Col("premiseId", "Premise", "id", link="premise", search=True), Col("address", "Address", search=True),
-            Col("trigger", "Because of", search=True))
+            Col("trigger", "Because of", search=True), Col("caseId", "Case opened", "id", link="case", search=True))
 
 
 def b_contacts(c) -> list[list]:
@@ -1100,11 +1108,11 @@ def b_contacts(c) -> list[list]:
         a, p = int(cx.acct[i]), int(cx.prem[i])
         pid = tw.premise_ids[p] if p >= 0 else None
         w = float(cx.wait[i])
-        rows.append([f"CT-{i + 1:06d}", _d(int(t)), _hm(t), labels[cx.reason[i]], groups[cx.reason[i]],
+        rows.append([f"CT-{i + 1:06d}", _d(c.cal, int(t)), _hm(t), labels[cx.reason[i]], groups[cx.reason[i]],
                      CHANNEL_LABEL[contact.CHANNELS[cx.channel[i]]], OUTCOME_LABEL[contact.OUTCOMES[cx.outcome[i]]],
                      None if w != w else round(w, 1), round(float(cx.handle[i]) / 60.0, 2) or None,
                      int(cx.attempt[i]), bool(cx.repeat[i]), cx.accounts[a] if a >= 0 else None, pid,
-                     _address(c, pid) if pid else None, cx.trigger[i]])
+                     _address(c, pid) if pid else None, cx.trigger[i], cx.case[i] if cx.case else None])
     rows.reverse()  # newest first
     return _rows_to_cols(CONTACTS, rows)
 
@@ -1127,7 +1135,7 @@ def b_contact_daily(c) -> list[list]:
     for d in range(min(c.day, len(cfgs) - 1), -1, -1):
         k = (cx.t >= d) & (cx.t < d + 1) & (cx.t <= c.T)
         s = contact._stats(cx, k, cfgs, d, d)
-        rows.append([_d(d), date_of(d).strftime("%a"), int(cx.daily["agents"][d]), s["contacts"], s["selfServed"],
+        rows.append([_d(c.cal, d), c.cal.date_of(d).strftime("%a"), int(cx.daily["agents"][d]), s["contacts"], s["selfServed"],
                      s["toAgents"], s["answered"], s["callbacks"], s["abandoned"],
                      s["abandonedPct"] if s["toAgents"] else None, s["asaS"], s["serviceLevelPct"], s["occupancyPct"],
                      s["emergency"], s["cost"]["total"]])
@@ -1152,14 +1160,15 @@ def b_year_incidents(c) -> list[list]:
             continue
         out = len(x["premises"]) if x["utility"] in ("electric", "water", "gas") else 0
         hours = float((x["restoredAt"] - x["t"]).mean() * 24.0) if out else None
-        rows.append([x["id"], _d(int(x["t"])), _hm(x["t"]), x["label"], x["utility"], x["storm"], out,
+        rows.append([x["id"], _d(c.cal, int(x["t"])), _hm(x["t"]), x["label"], x["utility"], x["storm"], out,
                      None if hours is None else round(hours, 2), len(x["odour"]) + (1 if x["odourOwner"] >= 0 else 0),
                      by_trigger.get(x["id"], 0)])
     rows.reverse()
     return _rows_to_cols(YEAR_INCIDENTS, rows)
 
 
-STATUS_LABEL = {"planned": "Planned", "open": "Open", "in_progress": "In progress", "completed": "Completed"}
+STATUS_LABEL = {"planned": "Planned", "open": "Open", "in_progress": "In progress", "completed": "Completed",
+                "cancelled": "Called off"}
 WORK_ORDERS = (Col("orderId", "Work order", "id", search=True), Col("type", "Work", facet=True, search=True),
                Col("program", "Programme", facet=True), Col("crew", "Crew", facet=True),
                Col("crewId", "Crew id", search=True), Col("priority", "Priority", "int", facet=True),
@@ -1171,7 +1180,9 @@ WORK_ORDERS = (Col("orderId", "Work order", "id", search=True), Col("type", "Wor
                Col("hours", "Crew hours", "num", unit="h"), Col("overtimeHours", "Overtime", "num", unit="h"),
                Col("labour", "Labour", "money"), Col("materials", "Materials", "money"),
                Col("premiseId", "Premise", "id", link="premise", search=True), Col("address", "Address", search=True),
-               Col("asset", "Asset", search=True), Col("cause", "Because of", search=True))
+               Col("asset", "Asset", search=True), Col("cause", "Because of", search=True),
+               Col("outcome", "Outcome", search=True, hint="When it was not simply done: called off, not needed on "
+                   "arrival, skipped, or the asset failed first."))
 
 
 def b_work_orders(c) -> list[list]:
@@ -1189,14 +1200,15 @@ def b_work_orders(c) -> list[list]:
         met = o.arrive if key in fwk.EMERGENCY else o.end
         pid = tw.premise_ids[o.prem] if o.prem >= 0 else None
         rows.append([o.id, label, fwk.PROGRAMS[prog], "Remote (AMI)" if o.remote else fwk.CREWS[o.crew],
-                     o.crew_id or None, o.prio, STATUS_LABEL[st], _d(o.created), _d(o.release) if o.release <= c.T
-                     else _d(o.release), _d(o.due - 1e-6), _d(o.start) if o.start <= c.T else None,
-                     _d(o.end) if done else None, (met <= o.due + 1e-9) if done else None,
+                     o.crew_id or None, o.prio, STATUS_LABEL[st], _d(c.cal, o.created), _d(c.cal, o.release) if o.release <= c.T
+                     else _d(c.cal, o.release), _d(c.cal, o.due - 1e-6), _d(c.cal, o.start) if o.start <= c.T else None,
+                     _d(c.cal, o.end) if done else None, (met <= o.due + 1e-9) if done else None,
                      round((o.arrive - o.created) * 1440.0, 1) if key in fwk.EMERGENCY and o.arrive <= c.T else None,
                      round((o.regular + o.overtime) / 60.0, 2) if done else None,
                      round(o.overtime / 60.0, 2) if done and o.overtime else None,
                      round(o.labour, 2) if done else None, round(o.materials, 2) if done else None, pid,
-                     _address(c, pid) if pid else None, o.asset or None, o.cause or None])
+                     _address(c, pid) if pid else None, o.asset or None, o.cause or None,
+                     (o.outcome or None) if st in ("completed", "cancelled") else None])
     rows.reverse()  # newest first
     return _rows_to_cols(WORK_ORDERS, rows)
 
@@ -1222,7 +1234,7 @@ def b_crew_days(c) -> list[list]:
             k = cols["crew"] == crew
             avail, busy = float(cr["availableMin"][d]), float(cr["busyMin"][d])
             live = k & (cols["release"] <= Td) & (cols["end"] > Td)
-            rows.append([_d(d), date_of(d).strftime("%a"), label, round(float(cr["crews"][d]), 3),
+            rows.append([_d(c.cal, d), c.cal.date_of(d).strftime("%a"), label, round(float(cr["crews"][d]), 3),
                          round(avail / 60.0, 1), round(busy / 60.0, 1), round(float(cr["overtimeMin"][d]) / 60.0, 1),
                          round(busy / avail, 4) if avail else None,
                          int((k & (cols["end"] >= d) & (cols["end"] <= Td)).sum()), int(live.sum()),
@@ -1243,7 +1255,7 @@ PLAN = (Col("work", "Work", facet=True, search=True), Col("program", "Programme"
 def b_plan(c) -> list[list]:
     from utilsim.m2c import fieldwork as fwk
 
-    s = fwk.summary(c.run, _d(c.day))
+    s = fwk.summary(c.run, _d(c.cal, c.day))
     types = {t["id"]: t for t in s["types"]}
     rows = []
     for p in s["plan"]:
@@ -1275,7 +1287,7 @@ SPECS: tuple[Spec, ...] = (
     Spec("mrus", "Meter reading units", "metering", "town", "Reading routes with their portion and billing business "
          "day.", MRUS, b_mrus),
     Spec("readSchedules", "Read schedules", "metering", "town", "The scheduled read and billing date of every MRU for "
-         "each month of 2026.", SCHEDULES, b_schedules),
+         "each month of the year.", SCHEDULES, b_schedules),
     Spec("reads", "Meter reads", "metering", "run", "Every periodic read taken by the view date: registers, "
          "consumption, VEE outcome, release and billing status.", READS, b_reads),
     Spec("usage", "Usage by month", "metering", "run", "Billed consumption per register for each month released by "
@@ -1305,8 +1317,8 @@ SPECS: tuple[Spec, ...] = (
     Spec("collectionsWork", "Arrangements, plans & holds", "collections", "run", "Payment arrangements, budget "
          "billing plans, dunning holds and low-income referrals, by account.", COLLECTIONS_WORK, b_collections_work),
     Spec("contacts", "Contacts", "contact", "run", "Every contact by the view date: why the customer got in touch, "
-         "how (self-service, agent, call back, emergency line), the wait, the handling time, what it resolved and "
-         "what caused it.", CONTACTS, b_contacts),
+         "how (self-service, agent, call back, emergency line), the wait, the handling time, what it resolved, "
+         "what caused it and the case it opened (a bill dispute, a complaint).", CONTACTS, b_contacts),
     Spec("contactDaily", "Contact centre by day", "contact", "run", "Each day's contacts, self-service, answered, "
          "call backs and hang-ups, average wait, service level, agent occupancy and cost.", CONTACT_DAILY,
          b_contact_daily),
@@ -1363,7 +1375,8 @@ def build(run: M2CRun, master: dict, name: str, as_of: str | None = None) -> tup
     if hit is not None:
         cache.move_to_end(key)
         return spec, hit, day
-    c = SimpleNamespace(run=run, tw=run.town, bk=run.books, col=run.books.collections, master=master, T=T, day=day)
+    c = SimpleNamespace(run=run, tw=run.town, bk=run.books, col=run.books.collections, master=master, T=T, day=day,
+                        cal=run.cal)
     data = spec.build(c)
     if len(data) != len(spec.cols):
         raise RuntimeError(f"table {name}: {len(data)} columns built, {len(spec.cols)} declared")
@@ -1469,7 +1482,7 @@ def page(run: M2CRun, master: dict, name: str, *, as_of: str | None = None, page
     size = min(max(1, page_size), PAGE_MAX)
     start = (page - 1) * size
     rows = [[table.data[j][i] for j in js] for i in idx[start:start + size]]
-    return {"schemaVersion": TABLE_VERSION, "simulationId": run.simulation_id, "asOf": date_of(day).isoformat(),
+    return {"schemaVersion": TABLE_VERSION, "simulationId": run.simulation_id, "asOf": run.cal.date_of(day).isoformat(),
             "table": spec.name, "title": spec.title, "group": spec.group, "source": spec.source,
             "description": spec.description, "columns": [table.cols[j].json() for j in js], "rows": rows,
             "total": len(idx), "rowsInTable": table.n, "page": page, "pageSize": size, "sort": sort,

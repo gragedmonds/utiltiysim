@@ -17,8 +17,8 @@ from pathlib import Path
 
 import orjson
 
-from utilsim.m2c import tables, trend, views
-from utilsim.m2c.base import M2CTown, date_of
+from utilsim.m2c import daily, tables, trend, views
+from utilsim.m2c.base import M2CTown
 from utilsim.m2c.run import M2C_GROUPS, M2CRun, run_seed, town_seed
 from utilsim.version import GENERATOR_VERSION
 
@@ -114,10 +114,13 @@ def _open_worklist(run: M2CRun, as_of: str) -> dict:
 def export_run(snapshot: dict, request: dict, store: str | Path, *, on_stage=lambda _: None) -> tuple[Path, dict, bool]:
     """Write ``store/runs/<key>``; identical inputs reuse a verified bundle before replaying.
 
-    ``request`` accepts the Studio's viewer-m2c-run/1.0 export or the usual RunRequest fields.
-    The snapshot digest, effective settings and seed resolve aliases and defaults in the key.
+    ``request`` accepts the Studio's viewer-m2c-run/1.0 export or the usual RunRequest fields (``year`` and
+    ``previous``: a later year of a chain, replayed from the first). The snapshot digest, effective settings and seed
+    resolve aliases and defaults in the key.
     """
-    from api._m2c import RunRequest
+    from api._m2c import RunRequest, chain_of
+    from utilsim.m2c import yearclose
+    from utilsim.m2c.calendar import FIRST_YEAR
 
     on_stage("archive.prepare")
     snapshot = orjson.loads(_json(snapshot))
@@ -125,18 +128,19 @@ def export_run(snapshot: dict, request: dict, store: str | Path, *, on_stage=lam
     # their identity stable when a self-describing town is rebuilt on another machine.
     snapshot.get("stats", {}).pop("timingsS", None)
     req = RunRequest.model_validate({**request, "town": snapshot["id"]})
-    town = M2CTown.from_snapshot(snapshot)
+    chain = chain_of(req)
+    year = FIRST_YEAR + len(chain) - 1
+    town = M2CTown.from_snapshot(snapshot, year)
     # Resolve settings without simulating, using the engine's own validation.
     from utilsim.m2c.run import resolve_settings
 
     cfg = resolve_settings(town.cfg, req.settings)
     as_of = req.asOf or cfg.scenario.date
-    from utilsim.m2c.run import parse_day
-
-    day = parse_day(as_of, -1)
-    if day < 0 or day > 364 or as_of != date_of(day).isoformat():
-        raise ValueError("an export needs a date in 2026")
-    as_of = date_of(day).isoformat()
+    cal = town.cal
+    day = cal.parse_day(as_of, -1)
+    if not cal.in_year(day) or as_of != cal.date_of(day).isoformat():
+        raise ValueError(f"an export needs a date in {cal.year}")
+    as_of = cal.date_of(day).isoformat()
     seed = run_seed(town.cfg, req.seed) or town_seed(town.cfg)
     inputs = {"town": town.id, "snapshotSha256": _sha(_json(snapshot)),
               "settings": {g: getattr(cfg, g).model_dump(mode="json") for g in M2C_GROUPS},
@@ -144,6 +148,12 @@ def export_run(snapshot: dict, request: dict, store: str | Path, *, on_stage=lam
               "actions": [a.model_dump(exclude_none=True) for a in req.actions],
               "outages": [o.model_dump(exclude_none=True) for o in req.outages],
               "episodes": [e.model_dump(by_alias=True, exclude_none=True) for e in req.episodes]}
+    if req.staffing:
+        inputs["staffing"] = req.staffing
+    if req.upstream:
+        inputs["upstream"] = req.upstream
+    if year > FIRST_YEAR:  # a later year: the years it opens on are part of what it is
+        inputs.update(year=year, previous=chain[:-1])
     build = engine_build()
     key = run_key(build, inputs)
     runs = Path(store).expanduser() / "runs"
@@ -153,15 +163,20 @@ def export_run(snapshot: dict, request: dict, store: str | Path, *, on_stage=lam
         return destination, read_manifest(destination), True
 
     on_stage("replay.reads_vee_billing")
-    run = M2CRun(town, inputs["settings"], inputs["actions"], inputs["outages"],
-                 seed=seed, episodes=inputs["episodes"], strict=True)
 
-    def _ops():  # the year's outages and leaks for the contact centre (needs the networks)
+    def _ops():  # the networks: the year's incidents, the field crews' assets, overdue maintenance failing
         from utilsim.ops.opstown import ops_town
 
         return ops_town(snapshot)
 
-    run.ops_factory = _ops
+    if year == FIRST_YEAR:
+        run = M2CRun(town, inputs["settings"], inputs["actions"], inputs["outages"], seed=seed,
+                     episodes=inputs["episodes"], staffing=inputs.get("staffing"), upstream=inputs.get("upstream"),
+                     strict=True, ops_factory=_ops)
+    else:
+        last = {k: inputs[k] for k in ("settings", "actions", "outages", "episodes", "staffing", "upstream")
+                if k in inputs}
+        run = yearclose.replay(snapshot, [*inputs["previous"], last], seed=seed, strict=True, ops_factory=_ops)
     runs.mkdir(parents=True, exist_ok=True)
     staging = Path(tempfile.mkdtemp(prefix=f".tmp-{key}-", dir=runs))
     files = []
@@ -191,6 +206,8 @@ def export_run(snapshot: dict, request: dict, store: str | Path, *, on_stage=lam
         on_stage("archive.aggregates")
         write("aggregates.json", aggregates)
         write("trend.json", yearly)
+        on_stage("analysis.daily")
+        write("daily.json.gz", daily.daily(run))
         write("scorecard.json", scorecard)
         on_stage("archive.snapshot")
         write("snapshot.json.gz", snapshot)

@@ -8,7 +8,10 @@ from __future__ import annotations
 
 from utilsim.config.goals import GOALS
 from utilsim.m2c import scenarios, tables
-from utilsim.m2c.run import EPISODE_MAX, YEAR_DAYS
+from utilsim.m2c.calendar import calendar
+from utilsim.m2c.run import EPISODE_MAX
+
+YEAR_DAYS = calendar().days  # the snapshot's year
 
 GUIDE_VERSION = "engine-guide/1.0"
 MEASURED_ON = "October 2026, one 4-core development container"
@@ -83,13 +86,20 @@ CAPABILITIES = (
              "outage report, gas odour, complaint), each triggered by what happens in the year: invoices, billing "
              "errors, rebills and catch-up bills, dunning, returned debits, move-ins and move-outs, no-access reads, "
              "field visits and the year's outages and leaks. Self-service, an emergency line, and agents in opening "
-             "hours with patience, retries, call backs, repeat contacts and complaints. Every rate, handling time and "
-             "staffing level is a run setting, and episodes can change them from a day.",
+             "hours with patience, retries, call backs, repeat contacts and complaints. It answers inside the replay, "
+             "so what it does changes the year: an answered bill dispute opens a Bill Correction case (a rebill on a "
+             "check read, credited on the next invoice, or an explanation) and pauses dunning; a complaint opens a "
+             "case for the analysts; customers with repeated bad experiences pay later and may cancel automatic "
+             "payments. Every rate, handling time, staffing level and feedback threshold is a run setting, and "
+             "episodes can change them from a day.",
      "where": ["Configuration › Contact centre", "Year", "Data › Contact centre"]},
     {"id": "incidents", "title": "Outages and leaks over the year",
      "text": "The operations day's background incidents drawn for every date of the year (the same storm or leak the "
-             "map shows on that date): who loses power or water, for how long, and who smells gas. Storm, incident "
-             "and restoration factors are run settings, so Storm season can be inflicted from a day.",
+             "map shows on that date): who loses power or water, for how long, and who smells gas. The replay "
+             "applies each as it happens: customers out lose their use until restored, an AMI meter dark at its read "
+             "misses it (VEE sees the outage event), a collector outage mutes the meters behind it, and reliability "
+             "counts it. Storm, incident and restoration factors are run settings, so Storm season can be inflicted "
+             "from a day.",
      "where": ["Configuration › Outages & leaks over the year", "Data › Outages & leaks"]},
     {"id": "fieldwork", "title": "Field work over the year",
      "text": "Work orders in five programmes, each raised by what happens in the year: customer emergencies (gas "
@@ -101,8 +111,13 @@ CAPABILITIES = (
              "capital construction (new services from new-connection calls, then meter sets; service upgrades; "
              "cast-iron main renewal in the construction season). On-call responders work emergencies around the "
              "clock; meter technicians, line, water, gas and construction crews work business days by priority and "
-             "due date, with overtime for customer work due today. Crews, shifts, travel, rates, minutes, targets and "
-             "costs are run settings.",
+             "due date, with overtime for customer work due today, inside the replay. Crews drive the town's streets: "
+             "from the depot, job to job (the nearest of the equally urgent next) and back. What they do changes the "
+             "year: a disconnected or removed meter is read as it goes off (its final read is billed) and then not "
+             "read or billed, an exchange registers a new meter, a converted meter is read as AMI, renewed main "
+             "breaks and leaks less, and maintenance left overdue fails (dead batteries miss reads, old and "
+             "failed-lot meters under-register, overdue poles, spans and leaks cause outages and gas leaks). Crews, "
+             "shifts, routing, rates, minutes, targets, costs and failure rates are run settings.",
      "where": ["Configuration › Field work", "Year", "Data › Field work"]},
     {"id": "weather", "title": "Weather year",
      "text": "Daily temperatures drive usage, flows, state frames and reading conditions through the year.",
@@ -154,36 +169,31 @@ LIMITS = (
              "linear in registers: the reads and VEE side is vectorised, the bills, invoices and collections side is "
              "per-invoice Python. The generator is built for towns up to 10,000 homes."},
     {"title": "Beyond one town",
-     "text": "The local batch-run command plans up to 500,000 homes as independent districts, processed sequentially "
-             "with saved archives, resume, measured ETA, local pairing and additive billing/case totals. A full 500k run is not benchmarked. Each district has its own "
-             "teams and networks. One development run of 50,000 homes in 25 districts completed in 505 seconds "
-             "with 313 MB of archives; this is not a hardware-independent estimate. Shared utility-wide resources are still outstanding."},
+     "text": "The local batch-run command plans up to 500,000 homes as districts of one utility, processed "
+             "sequentially with saved archives, resume, measured ETA and additive billing/case totals. Districts "
+             "can share one workforce (a coordinator sends a float team each working day where the work waits) and "
+             "connected upstream networks (transmission, the treatment plant and mains, gas gates) with one weather. "
+             "One development run of 50,000 independent homes in 25 districts completed in 505 seconds with 313 MB "
+             "of archives; this is not a hardware-independent estimate."},
     {"title": "Calendar",
-     "text": f"One calendar year (2026, {YEAR_DAYS} days), twelve billing cycles, twenty-one portions. Multi-year "
-             "needs chaining (see Gaps)."},
+     "text": "A run replays one calendar year (2026 to 2030; Ontario holidays by rule, 366 days in a leap year), "
+             "twelve billing cycles, twenty-one portions. A later year opens where the one before closed: dials, "
+             "money owed, open cases, bills, field orders, services off, devices and meter faults carry."},
 )
 
 GAPS = (
-    {"title": "Outages in the year's reads", "text": "The year's outages and leaks reach the contact centre, but not "
-     "yet the reads, VEE or bills: only interruptions you carry from a day on the map do.", "plan": "Feed the year's "
-     "incidents into the replay as interruptions (AMI misses, lost use, VEE outage events)."},
-    {"title": "Contact centre feedback", "text": "Contacts do not create back-office work yet: a bill dispute or a "
-     "complaint is answered and counted, but opens no case for the analysts.", "plan": "Disputes and complaints open "
-     "Billing cases; long queues and failed resolutions raise churn and collections risk."},
-    {"title": "Field work feedback", "text": "Field work follows the year but does not change it yet: a late "
-     "disconnect does not move collections, a removal does not end billing, an AMI conversion does not change how "
-     "the meter is read, and crews do not route between jobs (travel is a flat time).", "plan": "Feed completed "
-     "orders back into the replay (disconnection and reconnection times, device changes, technology) and route "
-     "crews on the street graph."},
     {"title": "Undetected water loss", "text": "No mains leakage fraction and no supplied-versus-billed water "
      "balance.", "plan": "Per-zone unbilled loss that shows in flows but never in bills, and a monthly water-balance "
      "report."},
-    {"title": "Multiple years", "text": "One calendar year; nothing carries into a second.", "plan": "Chain years: "
-     "year two starts from year one's balances, arrears, open cases, device ages and backlog."},
-    {"title": "A utility above the town", "text": "Independent district batches and additive archive totals are available locally. "
-     "There is no shared utility-wide workforce, connected cross-district network or live utility dashboard.",
-     "plan": "Coordinate work and staffing daily across districts; add boundary conditions for connected networks "
-     "and paged utility-wide archive views."},
+    {"title": "Operations days in later years", "text": "Years chain from 2026 to 2030 in the engine and the Studio "
+     "(the Command Center's year switcher and Continue), but the map's operations days are 2026's.", "plan": "Run the "
+     "operations day (crews on the map, incidents, frames) in any year of the chain."},
+    {"title": "A utility above the town", "text": "District batches run locally with additive archive totals; "
+     "their districts can share one workforce coordinated daily and connected upstream networks with one weather "
+     "(batch-run --staffing shared --network connected). There is no utility dashboard in the Studio yet, a "
+     "day's work is not pooled within the day, and batches replay one year.",
+     "plan": "A Studio page over a batch's utility rollup, chained years for batches, and paged utility-wide "
+     "archive views."},
     {"title": "Technology mix and rollouts", "text": "The AMI, AMR and manual mix is set per town at generation and "
      "applied per route; no street or district rules, no mid-year AMR-to-AMI rollout.", "plan": "Generator rules "
      "by street class, district and premise type; a rollout episode on the device-exchange machinery."},

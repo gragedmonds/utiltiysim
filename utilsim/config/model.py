@@ -711,6 +711,22 @@ class ContactConfig(BaseModel):
                                            "reconnected after a disconnection you approved.")
     complaint: ContactReason = _reason(0.5, 0.2, 0.0, 14.0, 0.6, "Complaint: after a second unresolved contact "
                                        "about the same thing, or after giving up on hold twice.")
+    # What the contacts change (the contact centre inside the replay).
+    dispute_cases: float = F(1.0, "Share of answered bill-wrong contacts (and unresolved high-bill and back-bill ones) "
+                             "that open a Bill Correction case: an analyst checks the read and rebills, or explains "
+                             "the bill. 0: disputes are only counted.", ge=0, le=1,
+                             effects=["bill disputes", "rebills", "dunning holds"])
+    dispute_hold_days: float = F(30.0, "Collections pauses dunning on a disputed account until the dispute is "
+                                 "decided, at most this long.", unit="d", ge=0, le=120, advanced=True)
+    complaint_cases: bool = F(True, "A complaint the lines take opens a Customer Complaints case for the analysts to "
+                              "answer (one open complaint per account).")
+    frustration_threshold: int = F(3, "Bad experiences (a hang-up after a long wait, an unresolved contact, a wait "
+                                   "past long_wait_s, a complaint) before a customer pays later from then on. 0: "
+                                   "never.", ge=0, le=20, effects=["late payment", "autopay cancellations"])
+    long_wait_s: float = F(600.0, "A wait this long counts as a bad experience even when the call is answered.",
+                           unit="s", ge=30, le=7200, advanced=True)
+    autopay_cancel_share: float = F(0.3, "Share of frustrated customers on pre-authorized debit who cancel it and pay "
+                                    "by hand from then on (later, and sometimes not at all).", ge=0, le=1)
 
     @model_validator(mode="after")
     def _hours(self) -> ContactConfig:
@@ -772,11 +788,20 @@ class FieldConfig(BaseModel):
                          "meter maintenance (seal exchanges, batteries, removals), preventative maintenance on the "
                          "networks and capital construction (new sets, upgrades, main renewal). Work follows the "
                          "year: collections, moves, VEE field visits, the contact centre's calls, the year's outages "
-                         "and leaks, the meters' install years and the town's assets.", applies="run")
+                         "and leaks, the meters' install years and the town's assets. What the crews do changes the "
+                         "year: a disconnected or removed meter is not read or billed, an exchange registers a new "
+                         "meter, and maintenance left overdue fails (dead batteries, drifting meters, outages, gas "
+                         "leaks).", applies="run")
     shift_start_hour: float = F(7.0, "Crews start their day (local time, business days).", unit="h", ge=0, le=20)
     shift_hours: float = F(8.0, "Hours in a crew's working day.", unit="h", ge=1, le=16)
-    travel_minutes: float = F(20.0, "Driving to the job and back, added to every visit.", unit="min", ge=0,
-                              le=240)
+    routing: bool = F(True, "Crews drive the town's streets: from the depot in the morning, job to job by the "
+                      "fastest route (the operations driving speeds), and back at the end of the day. Of the jobs "
+                      "equally urgent and due, a crew takes the nearest next. On-call responders drive from the depot "
+                      "and back. Off, or in a town without streets: every visit adds travel_minutes.")
+    stop_minutes: float = F(5.0, "With routing: parking, walking to the asset and setting up at each stop, added to "
+                            "the drive.", unit="min", ge=0, le=120)
+    travel_minutes: float = F(20.0, "Driving to the job and back, added to every visit without routing (and to the "
+                              "VEE field visits the run times).", unit="min", ge=0, le=240)
     callout_minutes: float = F(30.0, "After hours, the time an on-call responder takes to get on the road.",
                                unit="min", ge=0, le=240)
     overtime_max_hours: float = F(3.0, "Most hours a crew works past its shift to finish same-day and overdue "
@@ -793,6 +818,22 @@ class FieldConfig(BaseModel):
                            "power).", unit="yr", ge=1, le=40)
     water_meter_life_years: int = F(15, "Water meters this old or older are due for replacement.", unit="yr", ge=1,
                                     le=60)
+    dead_battery_miss: float = F(0.9, "Share of reads a radio module misses once its battery has died (past its life "
+                                 "and not replaced): estimates follow.", ge=0, le=1)
+    failed_lot_drift: float = F(0.04, "Under-registration of a failed seal lot's meters, from the failed test until "
+                                "each is exchanged.", ge=0, le=0.5)
+    old_water_meter_drift: float = F(0.03, "Under-registration of water meters at or past their service life, until "
+                                     "replaced (read at the start of the year).", ge=0, le=0.5)
+    deferred_pole_failures: float = F(2.0, "Chance a year that a pole found needing replacement fails once its "
+                                      "replacement is overdue (ten times as likely on a storm day): an outage.",
+                                      ge=0, le=100)
+    deferred_tree_faults: float = F(0.02, "Chance on a storm day that an overhead span overdue for trimming faults: "
+                                    "an outage.", ge=0, le=1)
+    deferred_leak_escalation: float = F(1.0, "Chance a year that a leak found by survey becomes a public gas leak "
+                                        "(odour calls, an emergency) once its repair is overdue.", ge=0, le=100)
+    renewed_main_break_factor: float = F(0.3, "A renewed main's breaks and leaks, as a share of the cast-iron "
+                                         "main's it replaced: from the day the construction crew finishes a "
+                                         "segment.", ge=0, le=1)
     construction_start_month: int = F(4, "First month of the construction season (digging is frost-free).", ge=1,
                                       le=12)
     construction_end_month: int = F(11, "Last month of the construction season.", ge=1, le=12)

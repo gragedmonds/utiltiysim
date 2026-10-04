@@ -7,7 +7,7 @@ from pathlib import Path
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--batch-worker', nargs=2)
+    parser.add_argument('--batch-worker', nargs=3)
     parser.add_argument('--store')
     parser.add_argument('--self-test')
     parser.add_argument('--port', type=int, default=8010)
@@ -25,7 +25,7 @@ def main():
         assert execute(job, Path(args.self_test))['rollup']['complete']
     elif args.batch_worker:
         from utilsim.batch import district_worker
-        district_worker(Path(args.batch_worker[0]), int(args.batch_worker[1]))
+        district_worker(Path(args.batch_worker[0]), int(args.batch_worker[1]), args.batch_worker[2])
     else:
         from utilsim.worker.server import serve
         serve(args.store, args.port)

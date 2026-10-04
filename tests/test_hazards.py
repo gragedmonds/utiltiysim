@@ -12,9 +12,13 @@ import orjson
 import pytest
 from fastapi.testclient import TestClient
 
+from utilsim.m2c.calendar import calendar
 from utilsim.ops.hazards import draw, storm_probability
 from utilsim.ops.opstown import OpsTown
 from utilsim.ops.timeline import DEFAULTS, TOWN_SETTINGS, Run, run_defaults
+
+CAL = calendar(2026)
+date_of = CAL.date_of
 
 ROOT = Path(__file__).resolve().parents[1]
 ONLY = {"waterMainBreaksPer100km": 0, "gasMainLeaksPer100km": 0, "gasServiceLeaksPer1000": 0,
@@ -144,7 +148,6 @@ def test_transformer_failures_and_service_leaks_stay_local(small_town):
 def test_a_collector_outage_silences_its_meters_until_the_day_shift(small_town):
     from api._m2c import RunRequest, run_for
     from utilsim.m2c import views
-    from utilsim.m2c.base import date_of
 
     s, seed = {**small_town.run_defaults, **ONLY, "collectorOutagesPerYear": 50}, small_town.sim_config.seeds.for_("incidents")
     night = next(d for d, items in year(small_town, s, seed)
@@ -173,5 +176,7 @@ def test_a_collector_outage_silences_its_meters_until_the_day_shift(small_town):
     assert np.array_equal(run.truth[r], base.truth[r])  # nothing stopped flowing
     case = run.cases[int(run.case_of[r, m])]
     assert case.type == "COMM_FAIL" and case.events[0][1] == "AMI_COLLECTOR_OUTAGE"
-    assert views.summary(run, "2026-12-31")["reliability"] == {}  # no service was interrupted
+    # No service was interrupted: reliability counts only the year's own outages (none on that day).
+    assert not [o for o in base.outage_log if int(o["t0"]) == d]
+    assert views.summary(run, "2026-12-31")["reliability"] == views.summary(base, "2026-12-31")["reliability"]
     assert views.premise(run, pid, as_of="2026-12-31")["outages"][0]["collectorOutage"]

@@ -25,6 +25,13 @@ availability means a server key is configured, not that provider authentication 
 returns `{schemaVersion, message, proposal: null | validatedProposal}`. Only text history and configuration fields
 are forwarded. `proposal: null` is a follow-up question, not a failed configuration.
 
+With `Accept: text/event-stream` the same request streams server-sent events instead: `{type: "progress", stage:
+"inspect" | "drafting" | "validate" | "repair", labels?}` while Claude reads settings (with the inspected groups'
+titles) or a proposal is drafted and checked, `{type: "delta", text}` as the reply is written, `{type: "reset"}` when
+a rejected reply is about to be rewritten, then `{type: "done", ...ChatResponse}` or `{type: "error", status, detail}`.
+Errors found before streaming starts (missing key, rate limit, invalid request) keep their HTTP status. A host that
+buffers responses delivers the same events at once; without the header the reply is the JSON body above.
+
 In `inflict` mode, `currentRun` holds the current portable `townRef`, base settings, existing episodes (IDs/scenario
 included), `asOf`, selected `startDate`, and optional simulation name/region/purpose. Replies contain only new
 `InflictProposal` periods and a validated `runTo`, never replacement town/base inputs.
@@ -36,8 +43,10 @@ context freshness before appending episodes and restores episodes/date on analys
 
 `GET /api/setup/configuration?preset=small_town` supplies the manual wizard's live `schemas` and `defaults` for
 `town`, `run` and grouped `operations`, the engine `homeLimit`, four illustrative `regions` with explicit generation
-overrides, and `regionalNote`. It accepts only published pack presets and does not generate a town or use a provider
-key. Environment and utility stages use the same proposal validation boundary and editable review as voice.
+overrides, `regionalNote` and `gasDistrictMinHomes`: the smallest town drawn with more than one district (2,251 homes).
+A smaller town is one district that always keeps its gas mains, so the wizard shows Natural gas locked on there; from
+that size `gas.all_electric_district_share` = 1 leaves no gas mains. Electricity and water are always served. It
+accepts only published pack presets and does not generate a town or use a provider key. Environment and utility stages use the same proposal validation boundary and editable review as voice.
 `POST /api/setup/operation-defaults` accepts a `Proposal`, validates it and returns grouped map-day `defaults`
 derived from the edited town. The wizard loads these when opening map-day Advanced so regional storm rates and
 town crew defaults remain consistent with the environment; explicit map overrides are preserved.
@@ -203,8 +212,10 @@ net-exports at noon in July. M2 weather-driven profiles replace them.
 | `GET /api/towns/{id}/render.png` | static render |
 | `GET /api/packs` · `POST /api/sim/timeline` · `POST /api/sim/days` · `POST /api/sim/frame` | operations (below); also served by the hosted engine |
 | `GET /api/m2c/guide` | the engine guide: capabilities, impacts, measured scale and limits, gaps, live status (`utilsim/m2c/guide.py`) |
+| `POST /api/m2c/daily` | `run-daily/1.0`: the year day by day in figures that add up across towns (queues, the analysts' and supervisors' work, field crews, contacts, outages); every meter-to-cash request also takes `staffing` (a day-by-day staffing schedule) and `upstream` (events upstream of the town and a shared storm seed), see [M2C.md](M2C.md) "Staffing day by day" and "Upstream events and shared storms" |
 | `GET /api/m2c/scenarios` · `POST /api/m2c/trend` | the scenario library and the year month by month; every meter-to-cash request also takes `episodes` (scenarios inflicted from a day), see [M2C.md](M2C.md) "Episodes" |
-| `POST /api/m2c/contact` | `m2c-contact/1.0`: the contact centre as of `asOf` (KPIs, the sixteen reasons, groups, the last 60 days, the year's outages and leaks); also served by the hosted engine, see [M2C.md](M2C.md) "Contact centre" |
+| every `POST /api/m2c/*` · `/api/process/*` · `/api/vee/*` request | also takes `year` (2026 to 2030) and `previous` (the inputs of the years before it, one per year from 2026): a later year opens where the one before closed, and its dates, ids and views are that year's; the summary adds `year` and `opening`, see [M2C.md](M2C.md) "Years" |
+| `POST /api/m2c/contact` | `m2c-contact/1.0`: the contact centre as of `asOf` (KPIs, `feedback` (disputes, rebills, credits, complaints, customers paying later, autopay cancelled), the sixteen reasons, groups, the last 60 days, the year's outages and leaks); also served by the hosted engine, see [M2C.md](M2C.md) "Contact centre" |
 | `POST /api/m2c/fieldwork` | `m2c-fieldwork/1.0`: the field crews' year as of `asOf` (work orders by programme and type, on time, emergency response, crews' utilisation and overtime, cost, the maintenance plan, the last 60 days); also served by the hosted engine, see [M2C.md](M2C.md) "Field work" |
 | `GET /api/m2c/tables` · `POST /api/m2c/table` · `POST /api/m2c/table.csv` | flat tables of the town and its meter-to-cash run as of a date, paged (the Studio's Data tab); also served by the hosted engine, see [M2C.md](M2C.md) "Data tables" |
 

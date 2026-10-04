@@ -57,17 +57,22 @@ class EraField:
         return era_bucket(self.year_at(xy))
 
 
-def build_era_field(seed: str, center: tuple[float, float], radius: float, extent: tuple[float, float, float, float],
-                    houses: int, core_year: float, span_years: float, noise_years: float,
-                    all_electric_share: float, gas_scheme_lp_before: int | None = None) -> EraField:
-    """District centres by jittered-grid sampling over the extent, one per ≈ 900 houses' worth of area."""
+def district_grid(extent: tuple[float, float, float, float], houses: int) -> tuple[np.ndarray, np.ndarray, float]:
+    """The grid district centres are jittered from: one per ≈ 900 houses' worth of area, at least 350 m apart.
+    The seed only jitters the centres, so the district count follows from the extent and the house count alone."""
     minx, miny, maxx, maxy = extent
     area = (maxx - minx) * (maxy - miny)
     k_target = max(1, int(round(houses / 900.0)))
     spacing = max(350.0, float(np.sqrt(area / max(k_target, 1))))
+    return np.arange(minx + spacing / 2, maxx, spacing), np.arange(miny + spacing / 2, maxy, spacing), spacing
+
+
+def build_era_field(seed: str, center: tuple[float, float], radius: float, extent: tuple[float, float, float, float],
+                    houses: int, core_year: float, span_years: float, noise_years: float,
+                    all_electric_share: float, gas_scheme_lp_before: int | None = None) -> EraField:
+    """District centres by jittered-grid sampling over the extent, one per ≈ 900 houses' worth of area."""
+    xs, ys, spacing = district_grid(extent, houses)
     rng = stage_rng(seed, "zoning", "districts")
-    xs = np.arange(minx + spacing / 2, maxx, spacing)
-    ys = np.arange(miny + spacing / 2, maxy, spacing)
     gx, gy = np.meshgrid(xs, ys)
     pts = np.column_stack([gx.ravel(), gy.ravel()])
     pts = pts + rng.uniform(-0.3, 0.3, size=pts.shape) * spacing
@@ -76,7 +81,7 @@ def build_era_field(seed: str, center: tuple[float, float], radius: float, exten
     k = len(pts)
     idx = np.arange(k)
     noise = hash_normal(seed, Purpose.ERA_NOISE, idx) * noise_years
-    # All-electric districts: never the core district (closest to centre), chosen by hash rank.
+    # All-electric districts by hash rank, the core district (closest to centre) last: it keeps gas unless the share is 1.
     d = np.hypot(pts[:, 0] - center[0], pts[:, 1] - center[1])
     u = hash_u01(seed, Purpose.DISTRICT_STYLE, idx)
     u[np.argmin(d)] = 2.0

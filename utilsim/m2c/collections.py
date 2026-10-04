@@ -40,19 +40,17 @@ from utilsim.core.ids import str_key
 from utilsim.core.rng import Purpose, hash_u01
 from utilsim.m2c import catalog as cat
 from utilsim.m2c import orders as ords
-from utilsim.m2c import registers as regs
-from utilsim.m2c.base import date_of
+from utilsim.m2c.calendar import RunCalendar
 
 P_BILL = Purpose.M2C_BILL
 INF = float("inf")
-YEAR_DAYS = 365
 ACCOUNT_ACTIONS = ("payment_arrangement", "dunning_hold", "low_income_referral", "budget_billing")
 INVOICE_ACTIONS = ("extend_due", "waive_fee", "disconnect_approve", "disconnect_cancel")
 ACTIONS = (*ACCOUNT_ACTIONS, *INVOICE_ACTIONS)
 FEES = {"late_fee": "late fee", "nsf_fee": "NSF fee"}
 STEPS = ("DUNNING_REMINDER", "DUNNING_NOTICE", "DISCONNECT_NOTICE")
 PAID = ("received", "instalment", "grant")  # payments that settle an invoice (a returned debit does not)
-MAY_1 = regs.day_of(date(2026, 5, 1))  # the default moratorium release (billing.moratorium_end + 1)
+SETTLES = (*PAID, "credit")  # and a rebill's credit (from a disputed bill), which is not cash
 ARRANGEMENT_FIRST_DAYS, ARRANGEMENT_EVERY_DAYS = 7, 30  # first instalment a week after the arrangement, then monthly
 INSTALMENTS = (2, 12)
 EXTEND_DAYS = (1, 60)
@@ -130,17 +128,18 @@ def _winter(d: date, b=None) -> bool:
     return (md >= start or md <= end) if start > end else (start <= md <= end)
 
 
-def moratorium_release(b) -> int:
-    """The run day held notices go out: the day after ``billing.moratorium_end`` in 2026."""
+def moratorium_release(b, cal: RunCalendar, years: int = 0) -> int:
+    """The run day held notices go out: the day after ``billing.moratorium_end`` in the run's year (``years``: that
+    many years later; the default release, 1 May, when the setting names no date of the year)."""
     m, d = _md(b.moratorium_end, (4, 30))
     try:
-        return regs.day_of(date(2026, m, d)) + 1
+        return cal.day_of(date(cal.year + years, m, d)) + 1
     except ValueError:
-        return MAY_1
+        return cal.day_of(date(cal.year + years, 5, 1))
 
 
-def _day(t: float) -> str:
-    return date_of(int(np.floor(t))).isoformat()
+def _day(cal: RunCalendar, t: float) -> str:
+    return cal.date_of(int(np.floor(t))).isoformat()
 
 
 # ---- an invoice as of a date --------------------------------------------------------------------------------------
@@ -159,7 +158,7 @@ def due_at(inv: dict, T: float) -> float:
 
 
 def paid_by(inv: dict, T: float) -> float:
-    return sum(p["amount"] for p in inv["payments"] if p["status"] in PAID and p["at"] <= T)
+    return sum(p["amount"] for p in inv["payments"] if p["status"] in SETTLES and p["at"] <= T)
 
 
 def owed(inv: dict, T: float) -> float:
@@ -217,11 +216,19 @@ class Account:
     waiting: dict = field(default_factory=dict)  # invoice id -> invoice: dunning waiting for an arrangement to end
     referred: bool = False  # the call centre referred it (once a year)
     offered: bool = False  # the call centre enrolled it in budget billing (once a year)
+    bad: int = 0  # bad contact-centre experiences so far (long waits, hang-ups, unresolved contacts, complaints)
+    risk_at: float | None = None  # when bad service tipped it into paying later
+    paused: dict = field(default_factory=dict)  # invoice id -> (invoice, level, ver): a dunning step a hold delayed
 
 
 # ---- the replay ---------------------------------------------------------------------------------------------------
 class Collections:
-    """Payments, dunning and collections work for every account of a run (``run.books.collections``)."""
+    """Payments, dunning and collections work for every account of a run (``run.books.collections``).
+
+    It steps with the run's day loop: ``start`` before the first day, ``issue`` as the 20:00 invoice run creates
+    invoices, ``advance`` to a moment of the day (every event before it, in time order across accounts) and
+    ``finish`` after the last day. Nothing in it looks ahead, so what happens to an account (a disconnection) can
+    change the account's later reads and bills."""
 
     def __init__(self, run) -> None:
         self.run = run
@@ -229,77 +236,199 @@ class Collections:
         self.cfg = run.cfg.billing  # the year's base; the day's values come from bcfg(t)
         self.accounts: dict[str, Account] = {}
         self.invoice = {inv["id"]: inv for inv in run.books.invoices}
-        self.instalment: dict[str, float] = {}
-        self.notes: dict[str, list] = {}
+        self.instalment: dict[str, float | None] = {}
         self._heap: list = []
         self._seq = count()
+        self._cur: Account | None = None
+        self._late: list[tuple[int, dict]] = []  # invoice actions on an invoice not created yet: judged at the end
+        self.dun_new: list[tuple[dict, int]] = []  # (invoice, dunning index) since the contact centre last looked
+        self.later: list[tuple] = []  # (t, account, kind, data): events after the year's end, for the next year
+        self._master: set[str] = set()
 
     def bcfg(self, t: float):
         """The billing settings in force at ``t`` (dunning timings, fees, the moratorium window, rates)."""
         return self.run.cfg_at(int(t)).billing
 
-    def replay(self) -> None:
-        run, bk = self.run, self.books
-        tw = run.town
-        keys = np.array([str_key(inv["id"]) for inv in bk.invoices], dtype=np.int64)
-        draws = hash_u01(run.seed, P_BILL, keys[:, None], np.array(DRAWS)[None, :]) if len(keys) else \
-            np.zeros((0, len(DRAWS)))
-        by_acct: dict[str, list[dict]] = {}
-        for inv, u in zip(bk.invoices, draws.tolist(), strict=True):
-            inv.update(u=u, amountDue=inv["total"], dueChanges=[], fees=[], waived=[], disc=None, level=0, ver=0,
-                       payAt=None, moratorium=None, out=inv["total"])
-            by_acct.setdefault(inv["account"], []).append(inv)
+    def start(self) -> None:
+        """Before the first day: the master-data budget plans and your collections actions (at 09:00 on their day)."""
+        run = self.run
+        self._master = {a for a, meta in run.town.accounts.items() if meta.get("budgetBilling")}
+        if run.__dict__.get("_fixed_instalments") is None:  # the master-data plans' instalments, in one go
+            self.instalment.update(self._instalments(sorted(self._master)))
         acts: dict[str, list] = {}
         for k, a in enumerate(run.actions):
             if a["type"] in ACTIONS:
                 acts.setdefault(a["accountId"], []).append((k, a))
-        # Your notes and assignments on a collections case wait in the day loop (the case is opened here).
-        for k, a, _ in run._unseen:
-            if a["type"] in ("note", "assign") and a.get("caseId"):
-                self.notes.setdefault(a["caseId"], []).append((k, a))
-        self.instalment = self._instalments(by_acct)
-        master = {a for a, meta in tw.accounts.items() if meta.get("budgetBilling")}
-        for acct in sorted(set(by_acct) | set(acts)):
-            A = Account(acct, tw.account_method.get(acct, "online"), tw.account_profile.get(acct, "on_time"),
-                        by_acct.get(acct, []))
-            if acct in master:
-                A.plans.append({"requested": -1.0, "start": -1.0, "instalment": self.instalment.get(acct),
+        for acct in sorted(acts):
+            A = self._account(acct)
+            for k, a in acts[acct]:
+                self._push(A, self.run.cal.parse_day(a["day"], 0) + 9.0 / 24, "action", k, a)
+
+    def _account(self, acct: str) -> Account:
+        A = self.accounts.get(acct)
+        if A is None:
+            tw = self.run.town
+            A = self.accounts[acct] = Account(acct, tw.account_method.get(acct, "online"),
+                                              tw.account_profile.get(acct, "on_time"))
+            if acct in self._master:
+                A.plans.append({"requested": -1.0, "start": -1.0, "instalment": self.instalment_of(acct),
                                 "source": "master_data", "caseId": None})
-            self.accounts[acct] = A
-            self._replay(A, acts.get(acct, []))
-        for led in bk.ledger.values():
+        return A
+
+    def issue(self, invs: list[dict]) -> None:
+        """New invoices (the 20:00 run): their draws, their account, and the issue event."""
+        if not invs:
+            return
+        keys = np.array([str_key(inv["id"]) for inv in invs], dtype=np.int64)
+        draws = hash_u01(self.run.seed, P_BILL, keys[:, None], np.array(DRAWS)[None, :]).tolist()
+        for inv, u in zip(invs, draws, strict=True):
+            inv.update(u=u, amountDue=inv["total"], dueChanges=[], fees=[], waived=[], disc=None, level=0, ver=0,
+                       payAt=None, moratorium=None, out=inv["total"])
+            self.invoice[inv["id"]] = inv
+            A = self._account(inv["account"])
+            A.invs.append(inv)
+            self._push(A, max(float(inv["issued"]), float(inv["created"])), "issue", inv)
+
+    def advance(self, until: float) -> None:
+        """Every collections event before ``until``, in time order."""
+        heap = self._heap
+        while heap and heap[0][0] < until:
+            t, _, acct, kind, data = heapq.heappop(heap)
+            A = self._cur = self.accounts[acct]
+            getattr(self, "_" + kind)(A, t, *data)
+        self._cur = None
+
+    def finish(self) -> None:
+        """After the last day: the rest of the year, invoice actions on invoices that never came, the ledgers."""
+        self.advance(INF)
+        for k, a in self._late:
+            inv = self.invoice.get(a["invoiceId"])
+            iid = a["invoiceId"]
+            self.run._reject(k, a, f"invoice {iid} is issued on {_day(self.run.cal, inv['issued'])}: work it from then"
+                             if inv is not None and inv["account"] == a.get("accountId", inv["account"])
+                             else f"invoice {iid} does not exist in this run")
+        self.accounts = dict(sorted(self.accounts.items()))
+        for led in self.books.ledger.values():
             led.sort(key=lambda e: e[0])
 
-    def _instalments(self, by_acct: dict[str, list[dict]]) -> dict[str, float]:
-        """A budget plan's monthly instalment per account: its average monthly expected bill (prior-year use at
-        current prices, the billing run's ``expectedTotal``), in whole dollars, at least $10."""
-        docs = self.books.docs
-        out = {}
-        for acct, invs in by_acct.items():
-            total, months = 0.0, set()
-            for inv in invs:
-                for k in inv["docs"]:
-                    total += docs[k]["expectedTotal"]
-                    months.add(docs[k]["month"])
-            if months:
-                out[acct] = float(max(10, round(total / len(months))))
+    def note(self, case, k: int, a: dict, t: float) -> None:
+        """Your note or assignment on an open collections case, in time order with its events."""
+        acct = case.ref
+        self._push(self._account(acct), t, "case_note", case, k, a)
+
+    def instalment_of(self, acct: str) -> float | None:
+        """A budget plan's monthly instalment: the account's average monthly expected bill (normal use, with the
+        account's usage history, at current prices) over the months it holds its installations, in whole dollars,
+        at least $10; None for an account with nothing to bill."""
+        if acct not in self.instalment:
+            fixed = self.run.__dict__.get("_fixed_instalments")
+            self.instalment[acct] = fixed.get(acct) if fixed is not None else self._instalments([acct])[acct]
+        return self.instalment[acct]
+
+    def _instalments(self, accts: list[str]) -> dict[str, float | None]:
+        """Expected monthly bills for several accounts at once (one vectorised pricing call)."""
+        run, bk, tw = self.run, self.books, self.run.town
+        out: dict[str, float | None] = {a: None for a in accts}
+        owner, inst, month = [], [], []
+        for a in accts:
+            for i in tw.account_insts.get(a, []):
+                r = int(bk.main[i])
+                if r < 0:
+                    continue
+                for m in range(1, 13):
+                    if tw.contract_at(r, int(tw.read_day[r, m - 1]))[1] == a:  # billed to the holder at its start
+                        owner.append(a)
+                        inst.append(i)
+                        month.append(m)
+        if not owner:
+            return out
+        inst_a, m_a = np.array(inst), np.array(month)
+        q = []
+        for rows in (bk.main[inst_a], bk.export_row[inst_a]):
+            ok = rows >= 0
+            rr = np.where(ok, rows, 0)
+            a0 = tw.true_advance(rr, tw.read_day[rr, m_a - 1], tw.hour[rr])
+            a1 = tw.true_advance(rr, tw.read_day[rr, m_a], tw.hour[rr])
+            q.append(np.where(ok, np.maximum(0.0, a1 - a0) * run.hist[rr, m_a], 0.0))
+        totals = bk.compute([(i, m, tw.inst_rate[i], qi, qe) for i, m, qi, qe in
+                             zip(inst, month, q[0].tolist(), q[1].tolist(), strict=True)])
+        total: dict[str, float] = {}
+        months: dict[str, set] = {}
+        for a, m, (_, _, tot) in zip(owner, month, totals, strict=True):
+            total[a] = total.get(a, 0.0) + tot
+            months.setdefault(a, set()).add(m)
+        for a in total:
+            out[a] = float(max(10, round(total[a] / len(months[a]))))
         return out
 
     def push(self, t: float, kind: str, *data) -> None:
-        if t < YEAR_DAYS:
-            heapq.heappush(self._heap, (t, next(self._seq), kind, data))
+        """An event for the account being handled."""
+        self._push(self._cur, t, kind, *data)
 
-    def _replay(self, A: Account, acts: list) -> None:
-        from utilsim.m2c.run import parse_day
+    def _push(self, A: Account, t: float, kind: str, *data) -> None:
+        if t < self.run.cal.days:
+            heapq.heappush(self._heap, (t, next(self._seq), A.id, kind, data))
+        elif t < INF:
+            self.later.append((t, A.id, kind, data))
 
-        self._heap = []
-        for inv in A.invs:
-            self.push(float(inv["issued"]), "issue", inv)
-        for k, a in acts:
-            self.push(parse_day(a["day"], 0) + 9.0 / 24, "action", k, a)
-        while self._heap:
-            t, _, kind, data = heapq.heappop(self._heap)
-            getattr(self, "_" + kind)(A, t, *data)
+    def _dunning(self, inv: dict, t: float, kind: str) -> None:
+        inv["dunning"].append((t, kind))
+        self.dun_new.append((inv, len(inv["dunning"]) - 1))
+
+    # ---- the contact centre's feedback -----------------------------------------------------------------------------
+    def dispute(self, acct: str, t: float, case_id: str) -> None:
+        """A bill dispute opens: dunning on the account pauses until it is decided (at most dispute_hold_days)."""
+        days = self.run.cfg_at(int(t)).contact.dispute_hold_days
+        if days > 0:
+            A = self._account(acct)
+            A.holds.append({"start": t, "end": t + days, "note": f"bill dispute {case_id}", "caseId": case_id})
+
+    def dispute_done(self, acct: str, case_id: str, t: float) -> None:
+        """The dispute is decided at ``t``: its dunning hold ends and the held dunning goes on."""
+        A = self.accounts.get(acct)
+        if A is None:
+            return
+        for h in A.holds:
+            if h.get("caseId") == case_id and h["end"] > t:
+                h["end"] = t
+                for inv, level, ver in A.paused.values():  # a delayed step resumes now (its later copy is then stale)
+                    if level == inv["level"] and ver == inv["ver"]:
+                        self._push(A, t + 1e-4, "dun", inv, level, ver)
+                A.paused.clear()
+
+    def frustrate(self, acct: str, t: float) -> None:
+        """A bad contact-centre experience. At ``frustration_threshold`` of them the customer pays later from then on
+        (on time → late → at risk), and a pre-authorized debit customer may cancel it (``autopay_cancel_share``)."""
+        c = self.run.cfg_at(int(t)).contact
+        A = self._account(acct)
+        A.bad += 1
+        if c.frustration_threshold <= 0 or A.bad != c.frustration_threshold:
+            return
+        worse = {"on_time": "late", "late": "at_risk"}.get(A.profile)
+        A.risk_at = t
+        if worse:
+            A.log.append((t, "PAYMENT_RISK_RAISED", {"from": A.profile, "to": worse}))
+            A.profile = worse
+        u = float(hash_u01(self.run.seed, P_BILL, str_key(acct), 77))
+        if A.method == "pre_authorized_debit" and u < c.autopay_cancel_share:
+            A.log.append((t, "AUTOPAY_CANCELLED", {"method": "online"}))
+            A.method = "online"
+
+    def _credit(self, A: Account, t: float, inv: dict) -> None:
+        """A credit invoice (a rebill that billed less): it settles the account's open invoices, oldest first; the
+        rest stays on the account as a credit."""
+        left = round(-float(inv["total"]), 2)
+        for x in sorted(A.invs, key=lambda i: (i["issued"], i["n"])):
+            if left <= 0.005:
+                break
+            if x is inv or x["out"] <= 0.005 or x["issued"] > t:
+                continue
+            a = round(min(left, x["out"]), 2)
+            x["payments"].append({"at": t, "amount": a, "status": "credit", "ref": inv["id"]})
+            x["out"] = round(x["out"] - a, 2)
+            left = round(left - a, 2)
+            if x["out"] <= 0.005:
+                x["paid"] = t
 
     # ---- ledger and payments ---------------------------------------------------------------------------------------
     def ledger(self, A: Account, t: float, kind: str, amount: float, ref: str) -> None:
@@ -318,6 +447,7 @@ class Collections:
             if d and d.get("at") is not None and d.get("reconnectAt") is None:  # paid while disconnected
                 d["reconnectAt"] = self.run.next_bday(int(t)) + 10.0 / 24
                 self.push(d["reconnectAt"], "reconnect", inv)
+                self._crew(inv, "reconnect", d["reconnectAt"], t)
             for arr in A.arrangements:
                 if arr["state"] == "active" and inv["id"] in arr["invoices"] and all(
                         self.invoice[x]["out"] <= 0.005 for x in arr["invoices"]):
@@ -327,6 +457,10 @@ class Collections:
 
     def _issue(self, A: Account, t: float, inv: dict) -> None:
         self.ledger(A, t, "invoice", inv["total"], inv["id"])
+        if inv["total"] < 0 and inv.get("credited"):  # a rebill's credit (a disputed bill that billed too much)
+            inv.update(amountDue=0.0, out=0.0, paid=t)
+            self._credit(A, t, inv)
+            return
         plan = self.plan_on(A, t)
         if plan is not None and plan["instalment"] is not None:  # budget billing: the plan's instalment is owed
             inv.update(amountDue=plan["instalment"], out=plan["instalment"], budget=True)
@@ -367,7 +501,7 @@ class Collections:
         fee = self.bcfg(t).nsf_fee
         self.ledger(A, t, "nsf_fee", fee, inv["id"])
         inv["fees"].append((t, "nsf_fee", fee))
-        inv["dunning"].append((t, "PAYMENT_REJECTED"))
+        self._dunning(inv, t, "PAYMENT_REJECTED")
 
     def _pay(self, A: Account, t: float, inv: dict) -> None:
         if not self.covering(A, inv, t):  # a payment arrangement replaces the customer's own payment while it runs
@@ -402,33 +536,36 @@ class Collections:
             if end == INF:
                 A.waiting[inv["id"]] = inv
             else:
+                A.paused[inv["id"]] = (inv, level, ver)
                 self.push(end, "dun", inv, level, ver)
             return
         b = self.bcfg(t)
         if level == 2:
-            if b.winter_moratorium and _winter(date_of(int(t)), b) and self.mains(inv):  # held for the winter
+            if b.winter_moratorium and _winter(self.run.cal.date_of(int(t)), b) and self.mains(inv):  # held for the winter
                 if inv["moratorium"] is None:
                     inv["moratorium"] = t
-                    inv["dunning"].append((t, "MORATORIUM_HOLD"))
+                    self._dunning(inv, t, "MORATORIUM_HOLD")
                     self._call_centre(A, inv, t, "referral")
-                release = moratorium_release(b)
-                self.push(release if t < release else INF, "dun", inv, 2, ver)
+                release = moratorium_release(b, self.run.cal)
+                # Held after this year's release: next spring's (a chained year picks it up).
+                self.push(release if t < release else moratorium_release(b, self.run.cal, 1), "dun", inv, 2, ver)
                 return
-            inv["dunning"].append((t, "DISCONNECT_NOTICE"))
+            self._dunning(inv, t, "DISCONNECT_NOTICE")
             inv["disc"] = {"notice": t}
             inv["level"] = 3
             self._call_centre(A, inv, t, "referral")
             if b.disconnect_rule_share > 0 and inv["u"][8] < b.disconnect_rule_share:  # the collections rule
                 d = inv["disc"]
                 d.update(approved=t, scheduled=int(t) + b.disconnect_notice_days + 10.0 / 24, approvedBy="RULE")
-                inv["dunning"].append((t, "DISCONNECT_APPROVED"))
+                self._dunning(inv, t, "DISCONNECT_APPROVED")
                 self.push(d["scheduled"], "disconnect", inv)
+                self._crew(inv, "disconnect", d["scheduled"], t)
             return
         if level == 1:
             fee = round(amount_due(inv) * b.late_fee_pct / 100.0, 2)
             self.ledger(A, t, "late_fee", fee, inv["id"])
             inv["fees"].append((t, "late_fee", fee))
-        inv["dunning"].append((t, STEPS[level]))
+        self._dunning(inv, t, STEPS[level])
         if level == 1:
             self._call_centre(A, inv, t, "budget")
         inv["level"] = level + 1
@@ -458,7 +595,7 @@ class Collections:
             self._referral(A, t, "call_centre")
 
     def _cc_budget(self, A: Account, t: float) -> None:
-        if self.plan_requested(A, t) is None and self.instalment.get(A.id) is not None:
+        if self.plan_requested(A, t) is None and self.instalment_of(A.id) is not None:
             self._enrol(A, t, "call_centre")
 
     # ---- collections cases ------------------------------------------------------------------------------------------
@@ -471,7 +608,7 @@ class Collections:
         m = max([j for j in range(1, 13) if run.read_t[r, j] <= t], default=0)
         day = int(t)
         if source == "you":
-            cid = f"CASE-{date_of(day).strftime('%y%m%d')}-{'L' if kind == 'LOW_INCOME' else 'B'}{k + 1:04d}"
+            cid = f"CASE-{self.run.cal.date_of(day).strftime('%y%m%d')}-{'L' if kind == 'LOW_INCOME' else 'B'}{k + 1:04d}"
             owner, assignee, by = "you", "you", "studio"
         else:
             cid, owner, assignee, by = run.case_id(day, kind, r, m, t), None, "CC-01", "collections"
@@ -485,12 +622,11 @@ class Collections:
         case.ev(t + 0.0005, "EXCEPTION_QUEUED", {"queue": "COLLECTIONS"}, first)
         case.move(t + 0.0005, "COLLECTIONS", "queued")
         run.series["COLLECTIONS"][day, 0] += 1
-        from utilsim.m2c.run import parse_day
-
-        for k2, a2 in self.notes.get(cid, []):  # your notes and assignments on it, in time order with its events
-            t2 = parse_day(a2["day"], 0) + 9.0 / 24
-            if t2 >= t:
-                self.push(t2, "case_note", case, k2, a2)
+        for k2, a2, _ in run._unseen:  # your notes and assignments on it so far, in time order with its events
+            if a2.get("caseId") == cid and a2["type"] in ("note", "assign"):
+                t2 = self.run.cal.parse_day(a2["day"], 0) + 9.0 / 24
+                if t2 >= t:
+                    self.push(t2, "case_note", case, k2, a2)
         return case
 
     def _case_note(self, A: Account, t: float, case, k: int, a: dict) -> None:
@@ -507,7 +643,7 @@ class Collections:
             case.ev(tt, "CASE_ASSIGNED", {"assignee": a["assignee"], "actionId": a["id"]})
 
     def _close(self, case, t: float, outcome: str, by: str) -> None:
-        self.run.series["COLLECTIONS"][min(int(t), YEAR_DAYS - 1), 1] += 1
+        self.run.series["COLLECTIONS"][min(int(t), self.run.cal.days - 1), 1] += 1
         case.resolved, case.outcome, case.by = t, outcome, by
         case.move(t, None, "resolved")
 
@@ -546,7 +682,7 @@ class Collections:
         lag = p.analyst_queue_days_min + int(u * (p.analyst_queue_days_max - p.analyst_queue_days_min + 1))
         case = self._case(A, t, "BUDGET_BILL", source, k, a)
         plan = {"requested": t, "start": run.next_bday(int(t), lag) + 10.0 / 24,
-                "instalment": self.instalment.get(A.id), "source": source, "caseId": case.id}
+                "instalment": self.instalment_of(A.id), "source": source, "caseId": case.id}
         A.plans.append(plan)
         self.push(plan["start"], "setup", plan, case)
 
@@ -564,7 +700,7 @@ class Collections:
         parts = [cents // n] * n
         parts[-1] += cents - sum(parts)
         d0 = int(t)
-        arr = {"id": f"ARR-{A.id}-{date_of(d0).strftime('%y%m%d')}", "start": t, "end": None, "state": "active",
+        arr = {"id": f"ARR-{A.id}-{self.run.cal.date_of(d0).strftime('%y%m%d')}", "start": t, "end": None, "state": "active",
                "amount": total, "instalments": n, "actionId": a["id"], "note": a.get("note"),
                "invoices": [inv["id"] for inv in covered],
                "schedule": [{"due": float(d0 + ARRANGEMENT_FIRST_DAYS + ARRANGEMENT_EVERY_DAYS * j),
@@ -601,30 +737,78 @@ class Collections:
         A.log.append((t, "ARRANGEMENT_BROKEN", {"arrangementId": arr["id"]}))
         self._wake(A, t, arr["invoices"])
 
+    def _crew(self, inv: dict, kind: str, release: float, now: float) -> None:
+        """Ask the field crews for a disconnect or reconnect at ``release`` (remote for an AMI meter with a switch)."""
+        field = self.run.field
+        o = field.request(kind, inv, release, now) if field is not None else None
+        inv["disc"].setdefault("orders", {})[kind] = None if o is None else o.k  # the field order's index
+
+    def _call_off(self, inv: dict, kind: str, t: float, why: str) -> None:
+        k = (inv["disc"].get("orders") or {}).get(kind)
+        if k is not None and self.run.field is not None:
+            self.run.field.cancel(self.run.field.orders[k], t, why)
+
     def _disconnect(self, A: Account, t: float, inv: dict) -> None:
+        """The earliest disconnection day: still owed and nothing holding it, the crew (or the remote switch) asked
+        for it does it; a payment, a hold or an arrangement calls it off."""
         d = inv["disc"]
         if d.get("cancelled") is not None or d.get("at") is not None or inv["out"] <= 0.005:
+            self._call_off(inv, "disconnect", t, "not needed: paid or cancelled")
             return
         end = self.paused_until(A, inv, t)
         if end == INF:  # a payment arrangement covers the bill: the approval lapses
             d["lapsed"] = t
+            self._call_off(inv, "disconnect", t, "not needed: payment arrangement")
             return
         if end is not None:  # a dunning hold or an open low-income referral: the crew goes when it ends
             d["scheduled"] = end
+            self._call_off(inv, "disconnect", t, "rescheduled: held")
             self.push(end, "disconnect", inv)
+            self._crew(inv, "disconnect", end, t)
             return
-        d["at"] = t
-        inv["dunning"].append((t, "DISCONNECTED"))
-        pay = inv.get("payAt")
-        if (pay is None or pay > t + 7) and inv["u"][6] < self.bcfg(t).disconnect_payment_rate:
-            self.push(t + 2 + 5 * inv["u"][7], "pay_all", inv)
+        if (d.get("orders") or {}).get("disconnect") is None:  # nobody goes (field.disconnect.rate): it never happens
+            d["unworked"] = t
+
+    def _field_done(self, A: Account, t: float, inv: dict, kind: str, k: int) -> None:
+        """A crew (or the remote switch) finished a disconnect or reconnect at ``t``."""
+        run = self.run
+        o = run.field.orders[k]
+        d = inv["disc"]
+        rows = np.flatnonzero(run.town.meter_of == o.meter)
+        if kind == "disconnect":
+            if (d.get("cancelled") is not None or d.get("lapsed") is not None or d.get("at") is not None
+                    or inv["out"] <= 0.005 or float(d.get("scheduled") or 0.0) > t + 1e-6):
+                o.outcome = "not needed on arrival: paid, held or cancelled"
+                return
+            d["at"] = t
+            d["meter"] = o.meter
+            self._dunning(inv, t, "DISCONNECTED")
+            run.service_off(rows, t, "disconnected")
+            pay = inv.get("payAt")
+            if (pay is None or pay > t + 7) and inv["u"][6] < self.bcfg(t).disconnect_payment_rate:
+                self.push(t + 2 + 5 * inv["u"][7], "pay_all", inv)
+        elif d.get("reconnected") is None:
+            self._reconnected(inv, t)
 
     def _reconnect(self, A: Account, t: float, inv: dict) -> None:
-        inv["disc"]["reconnected"] = t
-        inv["dunning"].append((t, "RECONNECTED"))
+        """The reconnection is due (the business day after payment): the crew or the remote switch does it; with no
+        crew asked for (field.reconnect.rate), service comes back now."""
+        d = inv["disc"]
+        if d.get("reconnected") is None and (d.get("orders") or {}).get("reconnect") is None:
+            self._reconnected(inv, t)
+
+    def _reconnected(self, inv: dict, t: float) -> None:
+        d = inv["disc"]
+        d["reconnected"] = t
+        self._dunning(inv, t, "RECONNECTED")
+        if d.get("meter") is not None:
+            self.run.service_on(np.flatnonzero(self.run.town.meter_of == d["meter"]), t)
 
     # ---- your actions -------------------------------------------------------------------------------------------
     def _action(self, A: Account, t: float, k: int, a: dict) -> None:
+        if a["type"] in INVOICE_ACTIONS and a["invoiceId"] not in self.invoice:  # not created yet (or never)
+            self._late.append((k, {**a, "accountId": A.id}))
+            return
         why = self.refusal(A, a, t)
         if why is not None:
             self.run._reject(k, a, why)
@@ -635,7 +819,7 @@ class Collections:
             self._arrange(A, t, k, a)
         elif typ == "dunning_hold":
             A.holds.append({"start": t, "end": t + a["days"], "note": a.get("note"), "actionId": a["id"]})
-            A.log.append((t, "DUNNING_HOLD", {"until": _day(t + a["days"]), "actionId": a["id"], **note}))
+            A.log.append((t, "DUNNING_HOLD", {"until": _day(self.run.cal, t + a["days"]), "actionId": a["id"], **note}))
         elif typ == "low_income_referral":
             self._referral(A, t, "you", k, a)
         elif typ == "budget_billing":
@@ -646,7 +830,7 @@ class Collections:
                 new = due_at(inv, t) + a["days"]
                 inv["dueChanges"].append((t, new))
                 inv["ver"] += 1
-                inv["dunning"].append((t, "DUE_DATE_EXTENDED"))
+                self._dunning(inv, t, "DUE_DATE_EXTENDED")
                 b, level = self.bcfg(t), inv["level"]
                 if level < 3:
                     offset = (b.reminder_days, b.notice_days, b.disconnect_days)[level]
@@ -656,16 +840,17 @@ class Collections:
                 amt = fee_left(inv, a["fee"], t)
                 inv["waived"].append((t, a["fee"], amt))
                 self.ledger(A, t, "fee_waived", -amt, inv["id"])
-                inv["dunning"].append((t, "FEE_WAIVED"))
+                self._dunning(inv, t, "FEE_WAIVED")
             elif typ == "disconnect_approve":
                 d = inv["disc"]
                 d.update(approved=t, scheduled=max(int(d["notice"]) + self.bcfg(t).disconnect_notice_days, int(t))
                          + 10.0 / 24, approvedBy=a["id"])
-                inv["dunning"].append((t, "DISCONNECT_APPROVED"))
+                self._dunning(inv, t, "DISCONNECT_APPROVED")
                 self.push(d["scheduled"], "disconnect", inv)
+                self._crew(inv, "disconnect", d["scheduled"], t)
             else:
                 inv["disc"]["cancelled"] = t
-                inv["dunning"].append((t, "DISCONNECT_CANCELLED"))
+                self._dunning(inv, t, "DISCONNECT_CANCELLED")
             inv.setdefault("work", []).append((t, typ, a["id"], a.get("note")))
 
     # ---- what applies when (refusals, and the actions a row offers) ------------------------------------------------
@@ -696,35 +881,35 @@ class Collections:
 
     def refusal(self, A: Account, a: dict, t: float) -> str | None:
         """Why the collections action ``a`` does not apply at ``t`` (None when it does)."""
-        typ, when = a["type"], _day(t)
+        typ, when = a["type"], _day(self.run.cal, t)
         if typ in INVOICE_ACTIONS:
             inv = self.invoice.get(a["invoiceId"])
             iid = a["invoiceId"]
             if inv is None or inv["account"] != A.id:
                 return f"invoice {iid} does not exist in this run"
             if inv["issued"] > t:
-                return f"invoice {iid} is issued on {_day(inv['issued'])}: work it from then"
+                return f"invoice {iid} is issued on {_day(self.run.cal, inv['issued'])}: work it from then"
             if typ == "waive_fee":
                 fee = a.get("fee") or "late_fee"
                 return None if fee_left(inv, fee, t) > 0.005 else f"invoice {iid} has no {FEES[fee]} to waive on {when}"
             if is_paid(inv, t) or owed(inv, t) <= 0.005:
-                return f"invoice {iid} is paid" + (f" (on {_day(inv['paid'])})" if inv.get("paid") is not None else "")
+                return f"invoice {iid} is paid" + (f" (on {_day(self.run.cal, inv['paid'])})" if inv.get("paid") is not None else "")
             d = inv.get("disc")
             notice = d is not None and d["notice"] <= t
             if typ == "extend_due":
-                return (f"invoice {iid} already has a disconnection notice ({_day(d['notice'])}): approve or cancel "
+                return (f"invoice {iid} already has a disconnection notice ({_day(self.run.cal, d['notice'])}): approve or cancel "
                         "the disconnection instead") if notice else None
             if not notice:
                 held = inv.get("moratorium") is not None and inv["moratorium"] <= t
                 return f"invoice {iid} has no disconnection notice on {when}" + (
                     " (the winter moratorium holds it until May 1)" if held else "")
             if d.get("cancelled") is not None and d["cancelled"] <= t:
-                return f"the disconnection for invoice {iid} was cancelled on {_day(d['cancelled'])}"
+                return f"the disconnection for invoice {iid} was cancelled on {_day(self.run.cal, d['cancelled'])}"
             if d.get("at") is not None and d["at"] <= t:
-                return f"the service on invoice {iid} was disconnected on {_day(d['at'])}"
+                return f"the service on invoice {iid} was disconnected on {_day(self.run.cal, d['at'])}"
             if typ == "disconnect_approve":
                 if d.get("approved") is not None and d["approved"] <= t:
-                    return f"the disconnection for invoice {iid} is already approved (for {_day(d['scheduled'])})"
+                    return f"the disconnection for invoice {iid} is already approved (for {_day(self.run.cal, d['scheduled'])})"
                 arr = self.covering(A, inv, t)
                 if arr is not None:
                     return f"invoice {iid} is in payment arrangement {arr['id']}: no disconnection while it is kept"
@@ -732,27 +917,27 @@ class Collections:
         if typ == "payment_arrangement":
             arr = self.active_arrangement(A, t)
             if arr is not None:
-                return f"account {A.id} already has payment arrangement {arr['id']} (since {_day(arr['start'])})"
+                return f"account {A.id} already has payment arrangement {arr['id']} (since {_day(self.run.cal, arr['start'])})"
             if not any(is_overdue(inv, t) and not self.covering(A, inv, t) for inv in A.invs):
                 return f"account {A.id} has nothing overdue on {when}"
         elif typ == "dunning_hold":
             h = self.hold_on(A, t)
             if h is not None:
-                return f"dunning on account {A.id} is already held until {_day(h['end'])}"
+                return f"dunning on account {A.id} is already held until {_day(self.run.cal, h['end'])}"
         elif typ == "low_income_referral":
             r = self.referral_open(A, t)
             if r is not None:
-                return (f"account {A.id} was referred on {_day(r['start'])} ({r['caseId']}); the agency decides on "
-                        f"{_day(r['decide'])}")
+                return (f"account {A.id} was referred on {_day(self.run.cal, r['start'])} ({r['caseId']}); the agency decides on "
+                        f"{_day(self.run.cal, r['decide'])}")
             if not any(owed(inv, t) > 0.005 for inv in A.invs):
                 return f"account {A.id} owes nothing on {when}"
         elif typ == "budget_billing":
             p = self.plan_requested(A, t)
             if p is not None:
                 return (f"account {A.id} is on budget billing" + (" (master data)" if p["source"] == "master_data" else
-                                                                   f" since {_day(p['start'])}" if p["start"] <= t else
+                                                                   f" since {_day(self.run.cal, p['start'])}" if p["start"] <= t else
                                                                    f": enrolment {p['caseId']} is being set up"))
-            if self.instalment.get(A.id) is None:
+            if self.instalment_of(A.id) is None:
                 return f"account {A.id} has no bills to base a budget plan on"
         return None
 
@@ -785,7 +970,7 @@ def flags(col: Collections, A: Account, T: float) -> dict:
     arr, hold, ref = col.active_arrangement(A, T), col.hold_on(A, T), col.referral_open(A, T)
     last = next((r for r in reversed(A.referrals) if r["decided"] is not None and r["decided"] <= T), None)
     plan = col.plan_requested(A, T)
-    return {"arrangementId": arr["id"] if arr else None, "dunningHoldUntil": _day(hold["end"]) if hold else None,
+    return {"arrangementId": arr["id"] if arr else None, "dunningHoldUntil": _day(col.run.cal, hold["end"]) if hold else None,
             "lowIncome": "referred" if ref else ("approved" if last["approved"] else "declined") if last else None,
             "budgetBilling": None if plan is None else "active" if plan["start"] <= T else "pending",
             "disconnected": any(disconnect_state(inv, T) == "disconnected" for inv in A.invs)}
@@ -798,9 +983,9 @@ def held_by(col: Collections, A: Account, inv: dict, T: float) -> str | None:
         return f"payment arrangement {arr['id']}"
     hold = col.hold_on(A, T)
     if hold is not None:
-        return f"dunning hold until {_day(hold['end'])}"
+        return f"dunning hold until {_day(col.run.cal, hold['end'])}"
     ref = col.referral_open(A, T)
-    return f"low-income referral (decision on {_day(ref['decide'])})" if ref else None
+    return f"low-income referral (decision on {_day(col.run.cal, ref['decide'])})" if ref else None
 
 
 def _who(run, acct: str) -> dict:
@@ -817,7 +1002,7 @@ def _head(run, inv: dict, T: float) -> dict:
     due = due_at(inv, T)
     return {"invoiceId": inv["id"], **_who(run, inv["account"]),
             "commodities": sorted({str(tw.commodity[bk.main[bk.docs[k]["inst"]]]) for k in inv["docs"]}),
-            "issuedAt": _day(inv["issued"]), "dueAt": _day(due), "totalAmount": inv["total"],
+            "issuedAt": _day(run.cal, inv["issued"]), "dueAt": _day(run.cal, due), "totalAmount": inv["total"],
             "amountDue": amount_due(inv), "outstanding": owed(inv, T),
             "daysOverdue": max(0, int(np.floor(T - due))) if due < T else 0,
             "paidAt": _iso(run, inv["paid"]) if is_paid(inv, T) else None}
@@ -837,7 +1022,7 @@ def _items(run, col: Collections, kind: str, T: float) -> list[tuple]:
                         if t <= T and k in (*STEPS, "MORATORIUM_HOLD")), default=None)
             amount = round(sum(owed(inv, T) for inv in due), 2)
             row = {**_who(run, A.id), "overdue": amount, "invoices": len(due),
-                   "invoiceIds": [inv["id"] for inv in due], "oldestDueAt": _day(oldest),
+                   "invoiceIds": [inv["id"] for inv in due], "oldestDueAt": _day(run.cal, oldest),
                    "ageDays": int(np.floor(T - oldest)), "balance": run.books.balance(A.id, T),
                    "lastDunning": {"type": last[1], "label": cat.EVENTS[last[1]][0], "at": run.iso(last[0])}
                    if last else None, "open": True}
@@ -854,7 +1039,7 @@ def _items(run, col: Collections, kind: str, T: float) -> list[tuple]:
                 d = inv["disc"]
                 approved = _at(d, "approved", T)
                 row = {**_head(run, inv, T), "noticeAt": run.iso(d["notice"]), "state": state,
-                       "earliestDisconnectAt": _day(int(d["notice"]) + col.bcfg(d["notice"]).disconnect_notice_days),
+                       "earliestDisconnectAt": _day(run.cal, int(d["notice"]) + col.bcfg(d["notice"]).disconnect_notice_days),
                        "approvedAt": _iso(run, approved), "scheduledAt": _iso(run, d.get("scheduled")) if approved
                        else None, "disconnectedAt": _iso(run, _at(d, "at", T)),
                        "reconnectedAt": _iso(run, _at(d, "reconnected", T)),
@@ -871,7 +1056,7 @@ def _items(run, col: Collections, kind: str, T: float) -> list[tuple]:
                 notice = d["notice"] if d and d["notice"] <= T else None
                 state = "paid" if is_paid(inv, T) else "notice issued" if notice is not None else "held"
                 row = {**_head(run, inv, T), "heldAt": run.iso(t0), "state": state, "open": state == "held",
-                       "heldUntil": date(2026 if date_of(int(t0)).month <= 4 else 2027, 5, 1).isoformat(),
+                       "heldUntil": date(run.cal.year + (run.cal.date_of(int(t0)).month > 4), 5, 1).isoformat(),
                        "noticeAt": _iso(run, notice), "heldBy": held_by(col, A, inv, T) if state == "held" else None}
                 out.append((row, (t0, inv["id"]), (-row["outstanding"], inv["id"]), (-t0, inv["id"]), A, inv))
             elif kind == "rejected":
@@ -929,7 +1114,7 @@ def collections_list(run, kind: str, *, as_of: str | None = None, status: str = 
              **({"fees": {f: fee_left(inv, f, t9) for f in FEES}} if inv is not None else {})}
             for row, _, _, _, A, inv in keep[start:start + page_size]]
     money = "overdue" if kind == "overdue" else "outstanding"
-    return {"schemaVersion": "m2c-collections/1.0", "simulationId": run.simulation_id, "asOf": date_of(day).isoformat(),
+    return {"schemaVersion": "m2c-collections/1.0", "simulationId": run.simulation_id, "asOf": run.cal.date_of(day).isoformat(),
             "list": kind, "status": status, "sort": sort, "total": len(keep), "page": max(1, page),
             "pageSize": page_size, "amount": round(sum(x[0][money] for x in keep), 2),
             "counts": {k: sum(1 for x in v if x[0]["open"]) for k, v in items.items()}, "rows": rows}
@@ -963,7 +1148,7 @@ def account_view(run, account_id: str, *, as_of: str | None = None) -> dict:
                              if t <= T],
                  "actions": col.actions_for(A, inv, t9)} for inv in reversed(invs)]
     return {"schemaVersion": "m2c-collections-account/1.0", "simulationId": run.simulation_id,
-            "asOf": date_of(day).isoformat(), **_who(run, account_id),
+            "asOf": run.cal.date_of(day).isoformat(), **_who(run, account_id),
             "businessPartnerId": tw.accounts[account_id].get("businessPartnerId"),
             "balance": bk.balance(account_id, T),
             "overdue": round(sum(owed(inv, T) for inv in invs if is_overdue(inv, T)), 2),
@@ -977,13 +1162,13 @@ def account_view(run, account_id: str, *, as_of: str | None = None) -> dict:
                               "state": x["state"] if x["end"] is not None and x["end"] <= T else "active",
                               "endedAt": _iso(run, _at(x, "end", T)), "invoiceIds": x["invoices"],
                               "note": x.get("note"),
-                              "schedule": [{"dueAt": _day(s["due"]), "amount": s["amount"],
+                              "schedule": [{"dueAt": _day(run.cal, s["due"]), "amount": s["amount"],
                                             "paidAt": _iso(run, _at(s, "paidAt", T))} for s in x["schedule"]]}
                              for x in A.arrangements if x["start"] <= T],
-            "holds": [{"from": run.iso(h["start"]), "until": _day(h["end"]), "active": h["start"] <= T < h["end"],
+            "holds": [{"from": run.iso(h["start"]), "until": _day(run.cal, h["end"]), "active": h["start"] <= T < h["end"],
                        "note": h.get("note")} for h in A.holds if h["start"] <= T],
             "referrals": [{"caseId": r["caseId"], "referredAt": run.iso(r["start"]), "source": r["source"],
-                           "decideBy": _day(r["decide"]), "outcome": None if _at(r, "decided", T) is None
+                           "decideBy": _day(run.cal, r["decide"]), "outcome": None if _at(r, "decided", T) is None
                            else "approved" if r["approved"] else "declined",
                            "grant": r["grant"] if _at(r, "decided", T) is not None else None}
                           for r in A.referrals if r["start"] <= T],
@@ -1010,19 +1195,20 @@ def case_block(run, case, T: float) -> dict:
     ref = next((r for r in A.referrals if r["caseId"] == case.id), None)
     if ref is not None:
         done = _at(ref, "decided", T) is not None
-        out["referral"] = {"source": ref["source"], "decideBy": _day(ref["decide"]),
+        out["referral"] = {"source": ref["source"], "decideBy": _day(run.cal, ref["decide"]),
                            "outcome": ("approved" if ref["approved"] else "declined") if done else None,
                            "grant": ref["grant"] if done else None}
     plan = next((p for p in A.plans if p["caseId"] == case.id), None)
     if plan is not None:
-        out["plan"] = {"source": plan["source"], "instalment": plan["instalment"], "startsAt": _day(plan["start"]),
+        out["plan"] = {"source": plan["source"], "instalment": plan["instalment"], "startsAt": _day(run.cal, plan["start"]),
                        "active": plan["start"] <= T}
     return out
 
 
 def summary_block(run, T: float) -> dict:
     """Collections to date for the summary's ``billing.collections``: arrangements, holds, low-income referrals and
-    grants, budget plans, disconnections and waived fees; ``events`` counts the account-level work (for costs)."""
+    grants, budget plans, disconnections and waived fees; ``events`` counts the account-level work (for costs). The
+    year's: what a chained year carried (an arrangement made, a notice sent last year) was counted then."""
     col = run.books.collections
     ev: dict[str, int] = {}
     arr = {"made": 0, "active": 0, "completed": 0, "broken": 0, "amount": 0.0}
@@ -1034,16 +1220,18 @@ def summary_block(run, T: float) -> dict:
         for t, k, _ in A.log:
             if t <= T and k in ACCOUNT_LOG:
                 ev[k] = ev.get(k, 0) + 1
-        for x in A.arrangements:
+        for x in A.arrangements:  # made this year; one carried from last year still runs, completes or breaks
             if x["start"] <= T:
-                arr["made"] += 1
-                arr["amount"] += x["amount"]
+                if x["start"] >= 0:
+                    arr["made"] += 1
+                    arr["amount"] += x["amount"]
                 arr[x["state"] if _at(x, "end", T) is not None else "active"] += 1
-        holds += sum(1 for h in A.holds if h["start"] <= T)
+        holds += sum(1 for h in A.holds if 0 <= h["start"] <= T)
         for r in A.referrals:
             if r["start"] <= T:
-                li["referred"] += 1
-                li["byYou"] += r["source"] == "you"
+                if r["start"] >= 0:
+                    li["referred"] += 1
+                    li["byYou"] += r["source"] == "you"
                 if _at(r, "decided", T) is not None:
                     li["approved" if r["approved"] else "declined"] += 1
                     li["grants"] += r["grant"] or 0.0
@@ -1053,16 +1241,18 @@ def summary_block(run, T: float) -> dict:
             if p["source"] == "master_data":
                 plans["masterData"] += 1
             elif p["requested"] <= T:
-                plans["enrolled"] += 1
-                plans["byYou"] += p["source"] == "you"
+                if p["requested"] >= 0:  # enrolled this year (a chained year's carried plan goes on)
+                    plans["enrolled"] += 1
+                    plans["byYou"] += p["source"] == "you"
                 plans["active"] += p["start"] <= T
         for inv in A.invs:
-            s = disconnect_state(inv, T)
+            d = inv.get("disc")
+            s = disconnect_state(inv, T) if d and d["notice"] >= 0 else None
             if s is not None:
                 disc["notices"] += 1
                 if s in disc:
                     disc[s] += 1
-            waived += sum(x for t, _, x in inv["waived"] if t <= T)
+            waived += sum(x for t, _, x in inv["waived"] if 0 <= t <= T)
     arr["amount"] = round(arr["amount"], 2)
     li["grants"] = round(li["grants"], 2)
     return {"arrangements": arr, "dunningHolds": holds, "lowIncome": li, "budgetPlans": plans,

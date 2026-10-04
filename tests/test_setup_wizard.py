@@ -3,7 +3,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from api._agent_config import Proposal, validate_proposal
-from api._setup import REGIONS
+from api._setup import REGIONS, gas_district_min_homes
 from api._towns import config_from_ref
 from api.index import app
 
@@ -21,7 +21,24 @@ def test_wizard_configuration_without_provider_key(monkeypatch):
         assert data["townSizes"] == [500, 5000, 25000, 50000, 500000]
         assert len(data["regions"]) == 4
         assert "illustrative" in data["regionalNote"]
+        assert data["gasDistrictMinHomes"] == 2251
         assert client.get("/api/setup/configuration?preset=../../etc/passwd").status_code == 422
+
+
+def test_gas_can_be_switched_off_only_in_towns_with_more_than_one_district():
+    """The wizard's Natural gas checkbox locks on below gasDistrictMinHomes: the one district keeps its gas mains."""
+    import math
+
+    from utilsim.gen.roads.build import ERA_RADIUS_M2_PER_HOUSE, district_count, synthetic_extent
+    from utilsim.gen.zoning import build_era_field
+
+    edge = gas_district_min_homes()
+    assert district_count(edge - 1) == 1 and district_count(edge) > 1
+    for houses, gas_districts in ((edge - 1, 1), (edge, 0)):
+        era = build_era_field("seed", (0.0, 0.0), math.sqrt(houses * ERA_RADIUS_M2_PER_HOUSE / math.pi),
+                              synthetic_extent(houses), houses, 1925, 85, 6, 1.0)
+        assert len(era.district_all_electric) == district_count(houses)
+        assert int((~era.district_all_electric).sum()) == gas_districts
 
 
 @pytest.mark.parametrize("region", REGIONS, ids=lambda r: r["id"])

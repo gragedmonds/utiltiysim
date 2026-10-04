@@ -33,7 +33,7 @@ def execute(job, store: Path, on_progress=lambda _: None, should_pause=lambda: F
                           'manifestSha256': hashlib.sha256((folder / 'manifest.json').read_bytes()).hexdigest()})
     result = ResultFile(jobId=job['jobId'], recipeKey=job['recipeKey'], revision=job['revision'],
                         engineBuild=batch['inputs']['engineBuild'], districts=districts,
-                        rollup=orjson.loads((directory / 'rollup.json').read_bytes()),
+                        rollup={k: v for k, v in orjson.loads((directory / 'rollup.json').read_bytes()).items() if k != 'daily'},
                         timings=orjson.loads((directory / 'timings.json').read_bytes())).model_dump()
     outbox = store / 'results'
     outbox.mkdir(exist_ok=True)

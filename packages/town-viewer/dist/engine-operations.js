@@ -4,6 +4,7 @@
 // incidents, crew jobs with road routes and timestamps, events and state changes. Frames with the run's outages come
 // from POST /api/sim/frame. Nothing here decides protection, isolation, dispatch, routes or repair times.
 import {simulationKey} from './simulation-library.js';
+import {LOCKED_MESSAGE} from './simulation-lock.js';
 export async function probeEngine(api='/api'){
  try{const r=await fetch(api+'/health',{cache:'no-store'});if(!r.ok)return null;const h=await r.json();return h?.status==='ok'?h:null;}catch{return null;}
 }
@@ -20,7 +21,7 @@ export function toOpsSettings(overrides,schema){const out={},defs=schema?.$defs|
 export function opsFormValues(settings,schema){const out={},defs=schema?.$defs||{};for(const [g,g0] of Object.entries(schema?.properties||{})){const gs=g0?.$ref?{...defs[g0.$ref.split('/').pop()],...g0}:g0;out[g]={};for(const k of Object.keys(gs.properties||{})){const v=gs['x-flat']?settings?.[k]:settings?.[g]?.[k];if(v!==undefined)out[g][k]=v;}}return out;}
 export class EngineOperations{
  // `cycle(meterToCash, timeline)` may adjust the linked run's day for the map (the day's own outages; see m2c.js).
- constructor(town,{api='/api',townRef,simulationId=null,initial=null,date=null,onChange=()=>{},m2c=()=>null,cycle=null,storage=globalThis.localStorage}={}){
+ constructor(town,{api='/api',townRef,simulationId=null,initial=null,date=null,onChange=()=>{},m2c=()=>null,cycle=null,storage=globalThis.localStorage,locked=false}={}){this.locked=!!locked;
   this.engine=true;this.town=town;this.api=api;this.townRef=townRef||town.id;this.date=date;this.onChange=onChange;this.m2c=m2c;this.cycle=cycle;
   this.commands=[];this.jobs=[];this.incidents=[];this.events=[];this.reads=[];this.stateChanges=[];this.time=8*3600;this.sequence=0;this.request=0;this.applied=0;this.error=null;
   const depot=(town.facilities||[]).find(f=>f.kind==='depot');this.depot=depot?{x:depot.x,z:depot.z}:{x:0,z:0};
@@ -28,7 +29,7 @@ export class EngineOperations{
  }
  // Operations settings from Configuration (crews, response times, back-feed limits); only what differs from the
  // engine defaults is sent, so the engine's defaults stay authoritative.
- setSettings(s){this.settings=s&&Object.keys(s).length?s:null;try{this.storage?.setItem(OPS_KEY+this.storageKey,JSON.stringify(this.settings));}catch{}this.dropAhead();return this.refresh();}
+ setSettings(s){if(this.locked)return Promise.reject(Error(LOCKED_MESSAGE));this.settings=s&&Object.keys(s).length?s:null;try{this.storage?.setItem(OPS_KEY+this.storageKey,JSON.stringify(this.settings));}catch{}this.dropAhead();return this.refresh();}
  // ?town= makes the defaults this town's own (its crews, incident rates).
  async schema(){if(!this._schema){const r=await fetch(this.api+'/sim/settings/schema?town='+encodeURIComponent(this.townRef));if(!r.ok)throw Error('Engine '+r.status);this._schema=await r.json();}return this._schema;}
  // The meter-to-cash run (settings, actions) rides along so the day's field orders arrive as crew jobs.
@@ -87,7 +88,8 @@ export function incidentImpact(i,time=0){const u=i?.unsupplied||{},n=x=>Number(x
 // The next job of the day that has not started yet (a reading round, a field order), for an empty operations list.
 export function nextJob(jobs,time){return (jobs||[]).filter(j=>j.startAt>time).sort((a,b)=>a.startAt-b.startAt)[0]||null;}
 // Run-day arithmetic (YYYY-MM-DD). A month on is the same day of the next month, clamped to its length (31 Jan →
-// 28 Feb). The simulated year ends on 31 December 2026; `clampDay` holds a day there.
+// 28 Feb). The map's operations days are 2026's (the operations engine runs 2026 only, whichever meter-to-cash year is
+// active): they end on 31 December 2026, and `clampDay` holds a day there.
 export const YEAR_END='2026-12-31';
 export const addDays=(day,n)=>new Date(Date.parse(day+'T12:00:00Z')+n*86400000).toISOString().slice(0,10);
 export function addMonths(day,n=1){const [y,m,d]=day.split('-').map(Number),t=new Date(Date.UTC(y,m-1+n,1)),last=new Date(Date.UTC(t.getUTCFullYear(),t.getUTCMonth()+1,0)).getUTCDate();t.setUTCDate(Math.min(d,last));return t.toISOString().slice(0,10);}

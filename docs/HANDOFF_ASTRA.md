@@ -318,7 +318,7 @@ Pure helpers (`parseDataRoute`, `fmtCell`, `linkTarget`, `facetMarkup`, `stitchC
 
 ## 13. The Year tab: inflict a scenario from a day
 
-A fourth primary tab, **Year** (`#/year`, `year-page.js`), shows the simulated year as a chronological calendar.
+A primary tab, **Command Center** (formerly Year; still `#/year`, `year-page.js`), shows the simulated year as a chronological calendar.
 Clicking a day opens the scenario library (`GET /api/m2c/scenarios`: staffing, meter reading, VEE, billing,
 collections, meters and anomalies, the contact centre and storm season; undetected water loss listed as coming) and "Inflict" turns the
 scenario's episode templates into the run's **episodes** (`EngineM2C.addEpisode`): dated setting overrides from that
@@ -330,6 +330,15 @@ by month (backlog by queue, cases opened and resolved, missed and estimated read
 invoiced and collected, overdue and receivable, dunning steps, accounts by collections phase) with the episodes shaded,
 so the before and after of a scenario is visible. The engine side (per-day configuration, the library, the trend) is
 described in [M2C.md](M2C.md) "Episodes"; the page's pure helpers are tested in `tests/year-page.test.mjs`.
+
+**Years.** A simulation starts in 2026 and goes on a year at a time to 2030. The Command Center's year switcher shows
+the years opened so far, and on the last one **Continue into {next year}** (after a confirmation) opens the next year
+on this year's close: balances, open cases, bills, field orders, services off and devices carry (engine:
+[M2C.md](M2C.md) "Years"). A later year shows what it opened with (the summary's `opening`). `EngineM2C` keeps each
+year's own actions, episodes, outages and view date (settings and seed are the simulation's), sends `year` and
+`previous` with every request of a later year (2026's requests are unchanged), and refuses new work in a closed
+(earlier) year, which stays viewable. Every page's date bounds follow the active year. The map's operations days are
+2026's: in a later year the map shows a note, and once 2027 is opened the map records nothing more into 2026.
 
 ## 14. The engine guide (Configuration › Engine guide)
 
@@ -496,3 +505,31 @@ the map are the natural next steps.
 ## 16. Paired local revisions
 
 Large sizes route to local-runs.html. It provides device pairing, immutable job revisions, Year rollups, manual files, scenario/voice tweaks and on-demand saved table pages. The runner.html loopback UI owns storage status, pairing and offline import. See LOCAL_RUNNER.md for deployment and current bounds.
+## 20. Field work feeds back into the year
+
+The field crews now work inside the replay, day by day with the reads, bills and collections (collections steps day
+by day too). What they do changes the year ([M2C.md](M2C.md) "What field work changes"):
+
+- **Disconnects and removals stop reads and bills.** A disconnection happens when the crew (or the remote switch of
+  an AMI electric meter) gets there; a customer who paid first is not disconnected. While the service is off its
+  scheduled reads are not taken and no bill is made; a reconnection brings it back, and the next bill runs from the
+  last read before the gap. A removed meter is never read again.
+- **Exchanges register new meters** (seal, water meter replacement, AMI conversion): a converted meter is read as AMI.
+- **Maintenance left overdue fails:** dead module batteries miss reads, failed seal lots and old water meters
+  under-register until exchanged, overdue poles, spans and leaks cause outages and gas leaks.
+
+What the Studio shows:
+
+- **Reads:** a read whose service was off has status `off` (reason `SIM_DISCONNECTED` or `SIM_REMOVED`); in Data ›
+  Meter reads its VEE status is `service_off` and its billing status `not_billed`. A dead battery's miss has reason
+  `SIM_BATTERY_DEAD`.
+- **Billing documents** carry `from`, the read month the period starts at (the previous month, or the last read
+  before a disconnection); `periodStart` in the document view follows it.
+- **Year:** a fifth field chart, **What field work changed** (reads not taken because the service was off, reads a
+  dead battery missed; disconnections, reconnections, exchanges, drifting meters and failures in the detail). The
+  trend's `field` block carries `effects`.
+- **Data › Work orders** gains an `outcome` column (called off, not needed on arrival, skipped, failed first).
+- **Configuration › Field work** gains `dead_battery_miss`, `failed_lot_drift`, `old_water_meter_drift`,
+  `deferred_pole_failures`, `deferred_tree_faults` and `deferred_leak_escalation`; the scenario library adds **Line
+  crews short**.
+- `POST /api/m2c/fieldwork` adds `effects` and `failures`; order status may be `cancelled`.

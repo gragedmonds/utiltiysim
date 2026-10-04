@@ -7,8 +7,8 @@
 workspace links, expiring pairing, leased worker execution, baseline reuse, receipt sync, manual files,
 small on-demand table pages and cross-platform launcher/release builds. See [LOCAL_RUNNER.md](LOCAL_RUNNER.md)
 for the shipped workflow and its exact limits. Automatic hosted sync requires Upstash Redis configuration.
-The sections below retain the broader target architecture: shared utility-wide staffing, automatic library moves,
-platform publisher signing, comparisons and multi-year campaigns are not implemented.
+The sections below retain the broader target architecture: automatic library moves, platform publisher signing and comparisons are not implemented here. Newer engine
+shared-workforce, connected-network and chained-year paths remain available separately.
 
 ## The user flow: open the link, choose or configure, launch, pair
 

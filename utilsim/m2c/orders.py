@@ -25,8 +25,8 @@ from dataclasses import dataclass, field
 from datetime import date
 from typing import Any
 
-from utilsim.m2c.base import M2CTown, date_of
-from utilsim.m2c.registers import day_of
+from utilsim.m2c.base import M2CTown
+from utilsim.m2c.calendar import RunCalendar
 
 STAGES = ("Draft", "Ready for dispatch", "Dispatched", "En route", "On site", "Completed")
 SYSTEM_STATUS = {"Draft": "CRTD", "Ready for dispatch": "REL", "Dispatched": "REL DISP", "En route": "REL DISP ENRT",
@@ -36,7 +36,6 @@ TEXT, LONG = 120, 1600
 NOTE_MAX = 600
 MAX_COMPONENTS = 50
 MAX_MINUTES = 1440
-YEAR = 2026
 
 # name: (label, form tab, required, kind, max length). Mirrors the Studio's ``fieldRequirements`` and form controls.
 FIELDS: dict[str, tuple[str, str, bool, str, int]] = {
@@ -114,7 +113,8 @@ def vocabulary(plants: list[str]) -> dict:
         if kind == "minutes":
             f.update(unit="min", exclusiveMinimum=0, maximum=MAX_MINUTES)
         if kind == "date":
-            f.update(format="YYYY-MM-DD", rule="start on or after the action day, in 2026; finish on or after start")
+            f.update(format="YYYY-MM-DD", rule="start on or after the action day, in the run's year; finish on or after "
+                     "start")
         if name == "plant":
             f["choices"] = plants
         elif name in CHOICES:
@@ -193,20 +193,21 @@ def shape_errors(fields: dict, components: list | None) -> dict[str, str]:
     return errors
 
 
-def validate(fields: dict, components: list, day: int, plants: tuple[str, ...]) -> dict[str, str]:
-    """Release rules (the Studio's ``validateFieldOrder``), checked on the action's ``day``: field → message."""
+def validate(fields: dict, components: list, day: int, plants: tuple[str, ...], cal: RunCalendar) -> dict[str, str]:
+    """Release rules (the Studio's ``validateFieldOrder``), checked on the action's ``day`` of ``cal``'s year: field →
+    message."""
     errors: dict[str, str] = {}
     for name in REQUIRED:
         if _blank(fields.get(name)):
             errors[name] = f"{FIELDS[name][0]} is required."
-    today = date_of(day)
+    today = cal.date_of(day)
     start, finish = fields.get("startDate"), fields.get("finishDate")
     s, f = _date(start), _date(finish)
     if not _blank(start):
         if s is None or s < today:
             errors["startDate"] = "Choose a date on or after the run date."
-        elif s.year != YEAR:
-            errors["startDate"] = f"Choose a start date in the run year ({YEAR})."
+        elif s.year != cal.year:
+            errors["startDate"] = f"Choose a start date in the run year ({cal.year})."
     if not _blank(finish) and (f is None or (s is not None and f < s)):
         errors["finishDate"] = "Finish must be on or after the start date."
     duration = fields.get("duration")
@@ -249,14 +250,14 @@ def register_value(v, what: str, required: bool = True) -> float | None:
     return round(x, 3)
 
 
-def day_in(v, what: str, lo: int, hi: int) -> int:
-    """A ``YYYY-MM-DD`` date from day ``lo`` to day ``hi`` (day indices); ValueError otherwise."""
+def day_in(v, what: str, lo: int, hi: int, cal: RunCalendar) -> int:
+    """A ``YYYY-MM-DD`` date from day ``lo`` to day ``hi`` (day indices of ``cal``); ValueError otherwise."""
     d = _date(v)
     if d is None:
         raise ValueError(f"{what} is a date (YYYY-MM-DD)")
-    k = day_of(d)
+    k = cal.day_of(d)
     if not lo <= k <= hi:
-        raise ValueError(f"{what} must be from {date_of(lo).isoformat()} to {date_of(hi).isoformat()}")
+        raise ValueError(f"{what} must be from {cal.date_of(lo).isoformat()} to {cal.date_of(hi).isoformat()}")
     return k
 
 
@@ -267,7 +268,7 @@ def device_id(v) -> str:
         raise ValueError(f"the new device id (serial) is required, at most {DEVICE_ID} characters") from None
 
 
-def check_outcome(outcome, lo: int, hi: int) -> dict:
+def check_outcome(outcome, lo: int, hi: int, cal: RunCalendar) -> dict:
     """A structured field outcome, normalised (dates ``lo``–``hi``: the order's start to the completion day); raises
     ValueError with what is wrong."""
     if not isinstance(outcome, dict) or outcome.get("kind") not in OUTCOMES:
@@ -280,10 +281,12 @@ def check_outcome(outcome, lo: int, hi: int) -> dict:
     out: dict[str, Any] = {"kind": kind}
     if kind == "read_taken":
         out["value"] = register_value(outcome.get("value"), "outcome.value (the read taken)")
-        out["date"] = date_of(day_in(outcome.get("date"), "outcome.date (when the read was taken)", lo, hi)).isoformat()
+        out["date"] = cal.date_of(day_in(outcome.get("date"), "outcome.date (when the read was taken)", lo, hi,
+                                         cal)).isoformat()
     elif kind == "meter_exchanged":
         out["deviceId"] = device_id(outcome.get("deviceId"))
-        out["installDate"] = date_of(day_in(outcome.get("installDate"), "outcome.installDate", lo, hi)).isoformat()
+        out["installDate"] = cal.date_of(day_in(outcome.get("installDate"), "outcome.installDate", lo, hi,
+                                                cal)).isoformat()
         out["initialRead"] = register_value(outcome.get("initialRead"), "outcome.initialRead (the new register)")
         removal = register_value(outcome.get("removalRead"), "outcome.removalRead (the old register)", False)
         if removal is not None:
@@ -333,6 +336,7 @@ class Order:
     crew: str | None = None
     done_t: float | None = None  # when the crew's visit ends (set when it rolls)
     case_outcomes: dict[str, tuple[dict, int]] = field(default_factory=dict)  # case id -> (outcome, register read)
+    cal: Any = None  # the run's calendar (set by the ledger)
 
     @property
     def stage(self) -> str:
@@ -348,7 +352,7 @@ class Order:
 
     @property
     def start_day(self) -> int:
-        return day_of(date.fromisoformat(self.fields["startDate"]))
+        return self.cal.day_of(date.fromisoformat(self.fields["startDate"]))
 
     @property
     def minutes(self) -> float:
@@ -369,6 +373,7 @@ class Ledger:
 
     def __init__(self, town: M2CTown):
         self.town = town
+        self.cal = town.cal
         self.plants = (plant(town.name),)
         self.orders: dict[str, Order] = {}
         self.by_source: dict[tuple[str, str], str] = {}
@@ -415,15 +420,15 @@ class Ledger:
                         except KeyError:
                             raise ActionError(f"{where}: unknown read {src_read!r}") from None
                         if self.town.read_day[r, m] + self.town.hour[r] / 24.0 > t:
-                            raise ActionError(f"{where}: read {src_read} is not taken yet on {date_of(day)}")
+                            raise ActionError(f"{where}: read {src_read} is not taken yet on {self.cal.date_of(day)}")
                     cover = a.get("coverCaseIds") or []
                     if not isinstance(cover, list) or len(cover) > MAX_COVER or not all(
                             isinstance(x, str) and x for x in cover) or (src_case and src_case in cover):
                         raise ActionError(f"{where}: coverCaseIds lists up to {MAX_COVER} other case ids at the "
                                           "same premise")
                     n = len(self.orders) + 1
-                    o = Order(f"WO-{date_of(day).strftime('%y%m%d')}-{n:04d}", n, src_case, src_read, t, r, m,
-                              cover_ids=list(dict.fromkeys(cover)))
+                    o = Order(f"WO-{self.cal.date_of(day).strftime('%y%m%d')}-{n:04d}", n, src_case, src_read, t, r,
+                              m, cover_ids=list(dict.fromkeys(cover)), cal=self.cal)
                     o.stages.append((t, "Draft", aid, None))
                     self.orders[o.id] = o
                     self.by_source[key] = o.id
@@ -444,7 +449,7 @@ class Ledger:
         if typ == "order_release":
             if o.stage != "Draft":
                 raise ActionError(f"{where}: order {o.id} is already {o.stage}")
-            errors = validate(o.fields, o.components, day, self.plants)
+            errors = validate(o.fields, o.components, day, self.plants, self.cal)
             if errors:
                 raise ActionError(f"{where}: order {o.id} cannot be released: {len(errors)} field(s) need attention",
                                   actionIndex=k, actionId=aid, orderId=o.id, fieldErrors=errors)
@@ -467,7 +472,7 @@ class Ledger:
                                   "that day")
             try:
                 if a.get("outcome") is not None:
-                    outcome = check_outcome(a["outcome"], o.start_day, day)
+                    outcome = check_outcome(a["outcome"], o.start_day, day, self.cal)
                     note = text(a["note"], "the note") if a.get("note") is not None else None
                 else:
                     outcome = {"kind": REMARK, "text": text(a.get("note"), "the field outcome (outcome, or a note)")}

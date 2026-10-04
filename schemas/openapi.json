@@ -88,7 +88,7 @@
             "title": "Covercaseids"
           },
           "day": {
-            "description": "Local date of the decision (YYYY-MM-DD), in 2026, never before the previous action.",
+            "description": "Local date of the decision (YYYY-MM-DD), in the run's year, never before the previous action.",
             "title": "Day",
             "type": "string"
           },
@@ -382,7 +382,7 @@
           },
           "ramp": {
             "default": 0,
-            "maximum": 365.0,
+            "maximum": 366.0,
             "minimum": 0.0,
             "title": "Ramp",
             "type": "integer"
@@ -434,7 +434,7 @@
           },
           "ramp": {
             "default": 0,
-            "maximum": 365.0,
+            "maximum": 366.0,
             "minimum": 0.0,
             "title": "Ramp",
             "type": "integer"
@@ -518,6 +518,22 @@
             "title": "Outages",
             "type": "array"
           },
+          "previous": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/YearInputs"
+                },
+                "maxItems": 4,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The inputs of the years before ``year``, from 2026 on, one each. Omitted: the earlier years run with this request's settings and nothing else.",
+            "title": "Previous"
+          },
           "seed": {
             "anyOf": [
               {
@@ -547,6 +563,19 @@
             "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field); see GET /api/m2c/settings.",
             "title": "Settings"
           },
+          "staffing": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A day-by-day staffing schedule (staff-schedule/1.0): {pools: {pool: [[date, n], ...]}}, pools analysts, supervisors, agents (people) and crew_meter, crew_electric, crew_water, crew_gas, crew_construction, crew_emergency (crews); from each date the pool has n until the next entry, and the settings hold before the first. A utility pooling its people across districts gives each its people per day.",
+            "title": "Staffing"
+          },
           "town": {
             "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
@@ -556,6 +585,33 @@
             "default": false,
             "title": "Truth",
             "type": "boolean"
+          },
+          "upstream": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Events upstream of the town (upstream/1.0): {stormSeed?, events: [{id, utility, day, start, end, label?, storm?}]}: its supply lost in the utility's wider networks (an outage here without a repair order; tanks and line pack carry water and gas for a while, gas premises are relit after); stormSeed shares storm days with the utility's other towns.",
+            "title": "Upstream"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "maximum": 2030.0,
+                "minimum": 2026.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The calendar year to replay (2026-2030; default: the year after ``previous``, else 2026). A later year opens on the years before it, each where the one before closed (dials, money owed, open work, services off, devices). ``actions``, ``outages``, ``episodes`` and ``asOf`` are the year's own.",
+            "title": "Year"
           }
         },
         "required": [
@@ -693,6 +749,22 @@
             "title": "Outages",
             "type": "array"
           },
+          "previous": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/YearInputs"
+                },
+                "maxItems": 4,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The inputs of the years before ``year``, from 2026 on, one each. Omitted: the earlier years run with this request's settings and nothing else.",
+            "title": "Previous"
+          },
           "seed": {
             "anyOf": [
               {
@@ -722,10 +794,50 @@
             "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field); see GET /api/m2c/settings.",
             "title": "Settings"
           },
+          "staffing": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A day-by-day staffing schedule (staff-schedule/1.0): {pools: {pool: [[date, n], ...]}}, pools analysts, supervisors, agents (people) and crew_meter, crew_electric, crew_water, crew_gas, crew_construction, crew_emergency (crews); from each date the pool has n until the next entry, and the settings hold before the first. A utility pooling its people across districts gives each its people per day.",
+            "title": "Staffing"
+          },
           "town": {
             "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
             "type": "string"
+          },
+          "upstream": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Events upstream of the town (upstream/1.0): {stormSeed?, events: [{id, utility, day, start, end, label?, storm?}]}: its supply lost in the utility's wider networks (an outage here without a repair order; tanks and line pack carry water and gas for a while, gas premises are relit after); stormSeed shares storm days with the utility's other towns.",
+            "title": "Upstream"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "maximum": 2030.0,
+                "minimum": 2026.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The calendar year to replay (2026-2030; default: the year after ``previous``, else 2026). A later year opens on the years before it, each where the one before closed (dials, money owed, open work, services off, devices). ``actions``, ``outages``, ``episodes`` and ``asOf`` are the year's own.",
+            "title": "Year"
           }
         },
         "required": [
@@ -815,6 +927,22 @@
             "title": "Pagesize",
             "type": "integer"
           },
+          "previous": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/YearInputs"
+                },
+                "maxItems": 4,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The inputs of the years before ``year``, from 2026 on, one each. Omitted: the earlier years run with this request's settings and nothing else.",
+            "title": "Previous"
+          },
           "search": {
             "anyOf": [
               {
@@ -868,6 +996,19 @@
             "title": "Sort",
             "type": "string"
           },
+          "staffing": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A day-by-day staffing schedule (staff-schedule/1.0): {pools: {pool: [[date, n], ...]}}, pools analysts, supervisors, agents (people) and crew_meter, crew_electric, crew_water, crew_gas, crew_construction, crew_emergency (crews); from each date the pool has n until the next entry, and the settings hold before the first. A utility pooling its people across districts gives each its people per day.",
+            "title": "Staffing"
+          },
           "status": {
             "default": "open",
             "enum": [
@@ -882,6 +1023,33 @@
             "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
             "type": "string"
+          },
+          "upstream": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Events upstream of the town (upstream/1.0): {stormSeed?, events: [{id, utility, day, start, end, label?, storm?}]}: its supply lost in the utility's wider networks (an outage here without a repair order; tanks and line pack carry water and gas for a while, gas premises are relit after); stormSeed shares storm days with the utility's other towns.",
+            "title": "Upstream"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "maximum": 2030.0,
+                "minimum": 2026.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The calendar year to replay (2026-2030; default: the year after ``previous``, else 2026). A later year opens on the years before it, each where the one before closed (dials, money owed, open work, services off, devices). ``actions``, ``outages``, ``episodes`` and ``asOf`` are the year's own.",
+            "title": "Year"
           }
         },
         "required": [
@@ -964,6 +1132,22 @@
             "title": "Pagesize",
             "type": "integer"
           },
+          "previous": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/YearInputs"
+                },
+                "maxItems": 4,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The inputs of the years before ``year``, from 2026 on, one each. Omitted: the earlier years run with this request's settings and nothing else.",
+            "title": "Previous"
+          },
           "seed": {
             "anyOf": [
               {
@@ -993,6 +1177,19 @@
             "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field); see GET /api/m2c/settings.",
             "title": "Settings"
           },
+          "staffing": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A day-by-day staffing schedule (staff-schedule/1.0): {pools: {pool: [[date, n], ...]}}, pools analysts, supervisors, agents (people) and crew_meter, crew_electric, crew_water, crew_gas, crew_construction, crew_emergency (crews); from each date the pool has n until the next entry, and the settings hold before the first. A utility pooling its people across districts gives each its people per day.",
+            "title": "Staffing"
+          },
           "status": {
             "default": "open",
             "enum": [
@@ -1006,6 +1203,33 @@
             "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
             "type": "string"
+          },
+          "upstream": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Events upstream of the town (upstream/1.0): {stormSeed?, events: [{id, utility, day, start, end, label?, storm?}]}: its supply lost in the utility's wider networks (an outage here without a repair order; tanks and line pack carry water and gas for a while, gas premises are relit after); stormSeed shares storm days with the utility's other towns.",
+            "title": "Upstream"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "maximum": 2030.0,
+                "minimum": 2026.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The calendar year to replay (2026-2030; default: the year after ``previous``, else 2026). A later year opens on the years before it, each where the one before closed (dials, money owed, open work, services off, devices). ``actions``, ``outages``, ``episodes`` and ``asOf`` are the year's own.",
+            "title": "Year"
           }
         },
         "required": [
@@ -1270,6 +1494,22 @@
             "title": "Outages",
             "type": "array"
           },
+          "previous": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/YearInputs"
+                },
+                "maxItems": 4,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The inputs of the years before ``year``, from 2026 on, one each. Omitted: the earlier years run with this request's settings and nothing else.",
+            "title": "Previous"
+          },
           "readId": {
             "title": "Readid",
             "type": "string"
@@ -1303,10 +1543,50 @@
             "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field); see GET /api/m2c/settings.",
             "title": "Settings"
           },
+          "staffing": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A day-by-day staffing schedule (staff-schedule/1.0): {pools: {pool: [[date, n], ...]}}, pools analysts, supervisors, agents (people) and crew_meter, crew_electric, crew_water, crew_gas, crew_construction, crew_emergency (crews); from each date the pool has n until the next entry, and the settings hold before the first. A utility pooling its people across districts gives each its people per day.",
+            "title": "Staffing"
+          },
           "town": {
             "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
             "type": "string"
+          },
+          "upstream": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Events upstream of the town (upstream/1.0): {stormSeed?, events: [{id, utility, day, start, end, label?, storm?}]}: its supply lost in the utility's wider networks (an outage here without a repair order; tanks and line pack carry water and gas for a while, gas premises are relit after); stormSeed shares storm days with the utility's other towns.",
+            "title": "Upstream"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "maximum": 2030.0,
+                "minimum": 2026.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The calendar year to replay (2026-2030; default: the year after ``previous``, else 2026). A later year opens on the years before it, each where the one before closed (dials, money owed, open work, services off, devices). ``actions``, ``outages``, ``episodes`` and ``asOf`` are the year's own.",
+            "title": "Year"
           }
         },
         "required": [
@@ -1426,6 +1706,22 @@
             "title": "Outages",
             "type": "array"
           },
+          "previous": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/YearInputs"
+                },
+                "maxItems": 4,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The inputs of the years before ``year``, from 2026 on, one each. Omitted: the earlier years run with this request's settings and nothing else.",
+            "title": "Previous"
+          },
           "seed": {
             "anyOf": [
               {
@@ -1455,10 +1751,50 @@
             "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field); see GET /api/m2c/settings.",
             "title": "Settings"
           },
+          "staffing": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A day-by-day staffing schedule (staff-schedule/1.0): {pools: {pool: [[date, n], ...]}}, pools analysts, supervisors, agents (people) and crew_meter, crew_electric, crew_water, crew_gas, crew_construction, crew_emergency (crews); from each date the pool has n until the next entry, and the settings hold before the first. A utility pooling its people across districts gives each its people per day.",
+            "title": "Staffing"
+          },
           "town": {
             "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
             "type": "string"
+          },
+          "upstream": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Events upstream of the town (upstream/1.0): {stormSeed?, events: [{id, utility, day, start, end, label?, storm?}]}: its supply lost in the utility's wider networks (an outage here without a repair order; tanks and line pack carry water and gas for a while, gas premises are relit after); stormSeed shares storm days with the utility's other towns.",
+            "title": "Upstream"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "maximum": 2030.0,
+                "minimum": 2026.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The calendar year to replay (2026-2030; default: the year after ``previous``, else 2026). A later year opens on the years before it, each where the one before closed (dials, money owed, open work, services off, devices). ``actions``, ``outages``, ``episodes`` and ``asOf`` are the year's own.",
+            "title": "Year"
           }
         },
         "required": [
@@ -1530,6 +1866,22 @@
             "title": "Pagesize",
             "type": "integer"
           },
+          "previous": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/YearInputs"
+                },
+                "maxItems": 4,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The inputs of the years before ``year``, from 2026 on, one each. Omitted: the earlier years run with this request's settings and nothing else.",
+            "title": "Previous"
+          },
           "query": {
             "default": "",
             "description": "Case-insensitive text in the id or its short text.",
@@ -1566,10 +1918,50 @@
             "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field); see GET /api/m2c/settings.",
             "title": "Settings"
           },
+          "staffing": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A day-by-day staffing schedule (staff-schedule/1.0): {pools: {pool: [[date, n], ...]}}, pools analysts, supervisors, agents (people) and crew_meter, crew_electric, crew_water, crew_gas, crew_construction, crew_emergency (crews); from each date the pool has n until the next entry, and the settings hold before the first. A utility pooling its people across districts gives each its people per day.",
+            "title": "Staffing"
+          },
           "town": {
             "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
             "type": "string"
+          },
+          "upstream": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Events upstream of the town (upstream/1.0): {stormSeed?, events: [{id, utility, day, start, end, label?, storm?}]}: its supply lost in the utility's wider networks (an outage here without a repair order; tanks and line pack carry water and gas for a while, gas premises are relit after); stormSeed shares storm days with the utility's other towns.",
+            "title": "Upstream"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "maximum": 2030.0,
+                "minimum": 2026.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The calendar year to replay (2026-2030; default: the year after ``previous``, else 2026). A later year opens on the years before it, each where the one before closed (dials, money owed, open work, services off, devices). ``actions``, ``outages``, ``episodes`` and ``asOf`` are the year's own.",
+            "title": "Year"
           }
         },
         "required": [
@@ -1583,7 +1975,7 @@
         "description": "A scenario inflicted from a day: setting overrides in force from ``from`` to ``to`` (inclusive; null = the\nyear's end), sliding from the base to the target over ``ramp`` days. A value is a number or boolean, or an\noperator on the value in force before the episode: ``\"*0.5\"``, ``\"+2\"``, ``\"-1\"`` (numeric settings).",
         "properties": {
           "from": {
-            "description": "First day (YYYY-MM-DD, in 2026).",
+            "description": "First day (YYYY-MM-DD, in the run's year).",
             "title": "From",
             "type": "string"
           },
@@ -1602,7 +1994,7 @@
           "ramp": {
             "default": 0,
             "description": "Days over which numeric values slide to the target (0: a step).",
-            "maximum": 365.0,
+            "maximum": 366.0,
             "minimum": 0.0,
             "title": "Ramp",
             "type": "integer"
@@ -1676,7 +2068,7 @@
           },
           "ramp": {
             "default": 0,
-            "maximum": 365.0,
+            "maximum": 366.0,
             "minimum": 0.0,
             "title": "Ramp",
             "type": "integer"
@@ -1954,6 +2346,22 @@
             "title": "Outages",
             "type": "array"
           },
+          "previous": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/YearInputs"
+                },
+                "maxItems": 4,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The inputs of the years before ``year``, from 2026 on, one each. Omitted: the earlier years run with this request's settings and nothing else.",
+            "title": "Previous"
+          },
           "seed": {
             "anyOf": [
               {
@@ -1983,6 +2391,19 @@
             "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field); see GET /api/m2c/settings.",
             "title": "Settings"
           },
+          "staffing": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A day-by-day staffing schedule (staff-schedule/1.0): {pools: {pool: [[date, n], ...]}}, pools analysts, supervisors, agents (people) and crew_meter, crew_electric, crew_water, crew_gas, crew_construction, crew_emergency (crews); from each date the pool has n until the next entry, and the settings hold before the first. A utility pooling its people across districts gives each its people per day.",
+            "title": "Staffing"
+          },
           "town": {
             "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
@@ -1992,6 +2413,33 @@
             "default": false,
             "title": "Truth",
             "type": "boolean"
+          },
+          "upstream": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Events upstream of the town (upstream/1.0): {stormSeed?, events: [{id, utility, day, start, end, label?, storm?}]}: its supply lost in the utility's wider networks (an outage here without a repair order; tanks and line pack carry water and gas for a while, gas premises are relit after); stormSeed shares storm days with the utility's other towns.",
+            "title": "Upstream"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "maximum": 2030.0,
+                "minimum": 2026.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The calendar year to replay (2026-2030; default: the year after ``previous``, else 2026). A later year opens on the years before it, each where the one before closed (dials, money owed, open work, services off, devices). ``actions``, ``outages``, ``episodes`` and ``asOf`` are the year's own.",
+            "title": "Year"
           }
         },
         "required": [
@@ -2086,6 +2534,22 @@
             "description": "Billing portion (export pages); default: all.",
             "title": "Portion"
           },
+          "previous": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/YearInputs"
+                },
+                "maxItems": 4,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The inputs of the years before ``year``, from 2026 on, one each. Omitted: the earlier years run with this request's settings and nothing else.",
+            "title": "Previous"
+          },
           "seed": {
             "anyOf": [
               {
@@ -2115,10 +2579,50 @@
             "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field); see GET /api/m2c/settings.",
             "title": "Settings"
           },
+          "staffing": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A day-by-day staffing schedule (staff-schedule/1.0): {pools: {pool: [[date, n], ...]}}, pools analysts, supervisors, agents (people) and crew_meter, crew_electric, crew_water, crew_gas, crew_construction, crew_emergency (crews); from each date the pool has n until the next entry, and the settings hold before the first. A utility pooling its people across districts gives each its people per day.",
+            "title": "Staffing"
+          },
           "town": {
             "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
             "type": "string"
+          },
+          "upstream": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Events upstream of the town (upstream/1.0): {stormSeed?, events: [{id, utility, day, start, end, label?, storm?}]}: its supply lost in the utility's wider networks (an outage here without a repair order; tanks and line pack carry water and gas for a while, gas premises are relit after); stormSeed shares storm days with the utility's other towns.",
+            "title": "Upstream"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "maximum": 2030.0,
+                "minimum": 2026.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The calendar year to replay (2026-2030; default: the year after ``previous``, else 2026). A later year opens on the years before it, each where the one before closed (dials, money owed, open work, services off, devices). ``actions``, ``outages``, ``episodes`` and ``asOf`` are the year's own.",
+            "title": "Year"
           }
         },
         "required": [
@@ -2179,6 +2683,22 @@
             "title": "Outages",
             "type": "array"
           },
+          "previous": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/YearInputs"
+                },
+                "maxItems": 4,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The inputs of the years before ``year``, from 2026 on, one each. Omitted: the earlier years run with this request's settings and nothing else.",
+            "title": "Previous"
+          },
           "readId": {
             "anyOf": [
               {
@@ -2232,10 +2752,50 @@
             "description": "The order raised from this case (or a Field Work case's own order).",
             "title": "Sourcecaseid"
           },
+          "staffing": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A day-by-day staffing schedule (staff-schedule/1.0): {pools: {pool: [[date, n], ...]}}, pools analysts, supervisors, agents (people) and crew_meter, crew_electric, crew_water, crew_gas, crew_construction, crew_emergency (crews); from each date the pool has n until the next entry, and the settings hold before the first. A utility pooling its people across districts gives each its people per day.",
+            "title": "Staffing"
+          },
           "town": {
             "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
             "type": "string"
+          },
+          "upstream": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Events upstream of the town (upstream/1.0): {stormSeed?, events: [{id, utility, day, start, end, label?, storm?}]}: its supply lost in the utility's wider networks (an outage here without a repair order; tanks and line pack carry water and gas for a while, gas premises are relit after); stormSeed shares storm days with the utility's other towns.",
+            "title": "Upstream"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "maximum": 2030.0,
+                "minimum": 2026.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The calendar year to replay (2026-2030; default: the year after ``previous``, else 2026). A later year opens on the years before it, each where the one before closed (dials, money owed, open work, services off, devices). ``actions``, ``outages``, ``episodes`` and ``asOf`` are the year's own.",
+            "title": "Year"
           }
         },
         "required": [
@@ -2247,7 +2807,7 @@
       "Outage": {
         "properties": {
           "day": {
-            "description": "Local date the interruption began (YYYY-MM-DD), in 2026.",
+            "description": "Local date the interruption began (YYYY-MM-DD), in the run's year.",
             "title": "Day",
             "type": "string"
           },
@@ -2387,6 +2947,22 @@
             "title": "Pagesize",
             "type": "integer"
           },
+          "previous": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/YearInputs"
+                },
+                "maxItems": 4,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The inputs of the years before ``year``, from 2026 on, one each. Omitted: the earlier years run with this request's settings and nothing else.",
+            "title": "Previous"
+          },
           "search": {
             "anyOf": [
               {
@@ -2428,6 +3004,19 @@
             "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field); see GET /api/m2c/settings.",
             "title": "Settings"
           },
+          "staffing": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A day-by-day staffing schedule (staff-schedule/1.0): {pools: {pool: [[date, n], ...]}}, pools analysts, supervisors, agents (people) and crew_meter, crew_electric, crew_water, crew_gas, crew_construction, crew_emergency (crews); from each date the pool has n until the next entry, and the settings hold before the first. A utility pooling its people across districts gives each its people per day.",
+            "title": "Staffing"
+          },
           "status": {
             "default": "all",
             "description": "open: rows whose missed-read case is still open.",
@@ -2442,6 +3031,19 @@
             "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
             "type": "string"
+          },
+          "upstream": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Events upstream of the town (upstream/1.0): {stormSeed?, events: [{id, utility, day, start, end, label?, storm?}]}: its supply lost in the utility's wider networks (an outage here without a repair order; tanks and line pack carry water and gas for a while, gas premises are relit after); stormSeed shares storm days with the utility's other towns.",
+            "title": "Upstream"
           },
           "utility": {
             "anyOf": [
@@ -2459,6 +3061,20 @@
               }
             ],
             "title": "Utility"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "maximum": 2030.0,
+                "minimum": 2026.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The calendar year to replay (2026-2030; default: the year after ``previous``, else 2026). A later year opens on the years before it, each where the one before closed (dials, money owed, open work, services off, devices). ``actions``, ``outages``, ``episodes`` and ``asOf`` are the year's own.",
+            "title": "Year"
           }
         },
         "required": [
@@ -2511,6 +3127,22 @@
             "title": "Premiseid",
             "type": "string"
           },
+          "previous": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/YearInputs"
+                },
+                "maxItems": 4,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The inputs of the years before ``year``, from 2026 on, one each. Omitted: the earlier years run with this request's settings and nothing else.",
+            "title": "Previous"
+          },
           "seed": {
             "anyOf": [
               {
@@ -2540,6 +3172,19 @@
             "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field); see GET /api/m2c/settings.",
             "title": "Settings"
           },
+          "staffing": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A day-by-day staffing schedule (staff-schedule/1.0): {pools: {pool: [[date, n], ...]}}, pools analysts, supervisors, agents (people) and crew_meter, crew_electric, crew_water, crew_gas, crew_construction, crew_emergency (crews); from each date the pool has n until the next entry, and the settings hold before the first. A utility pooling its people across districts gives each its people per day.",
+            "title": "Staffing"
+          },
           "town": {
             "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
@@ -2550,6 +3195,33 @@
             "description": "Include simulation ground truth (never send it to a VEE engine).",
             "title": "Truth",
             "type": "boolean"
+          },
+          "upstream": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Events upstream of the town (upstream/1.0): {stormSeed?, events: [{id, utility, day, start, end, label?, storm?}]}: its supply lost in the utility's wider networks (an outage here without a repair order; tanks and line pack carry water and gas for a while, gas premises are relit after); stormSeed shares storm days with the utility's other towns.",
+            "title": "Upstream"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "maximum": 2030.0,
+                "minimum": 2026.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The calendar year to replay (2026-2030; default: the year after ``previous``, else 2026). A later year opens on the years before it, each where the one before closed (dials, money owed, open work, services off, devices). ``actions``, ``outages``, ``episodes`` and ``asOf`` are the year's own.",
+            "title": "Year"
           }
         },
         "required": [
@@ -2807,6 +3479,22 @@
             "title": "Pagesize",
             "type": "integer"
           },
+          "previous": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/YearInputs"
+                },
+                "maxItems": 4,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The inputs of the years before ``year``, from 2026 on, one each. Omitted: the earlier years run with this request's settings and nothing else.",
+            "title": "Previous"
+          },
           "queue": {
             "anyOf": [
               {
@@ -2878,6 +3566,19 @@
             "title": "Sort",
             "type": "string"
           },
+          "staffing": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A day-by-day staffing schedule (staff-schedule/1.0): {pools: {pool: [[date, n], ...]}}, pools analysts, supervisors, agents (people) and crew_meter, crew_electric, crew_water, crew_gas, crew_construction, crew_emergency (crews); from each date the pool has n until the next entry, and the settings hold before the first. A utility pooling its people across districts gives each its people per day.",
+            "title": "Staffing"
+          },
           "status": {
             "default": "open",
             "enum": [
@@ -2903,6 +3604,33 @@
               }
             ],
             "title": "Type"
+          },
+          "upstream": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Events upstream of the town (upstream/1.0): {stormSeed?, events: [{id, utility, day, start, end, label?, storm?}]}: its supply lost in the utility's wider networks (an outage here without a repair order; tanks and line pack carry water and gas for a while, gas premises are relit after); stormSeed shares storm days with the utility's other towns.",
+            "title": "Upstream"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "maximum": 2030.0,
+                "minimum": 2026.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The calendar year to replay (2026-2030; default: the year after ``previous``, else 2026). A later year opens on the years before it, each where the one before closed (dials, money owed, open work, services off, devices). ``actions``, ``outages``, ``episodes`` and ``asOf`` are the year's own.",
+            "title": "Year"
           }
         },
         "required": [
@@ -2951,6 +3679,22 @@
             "title": "Outages",
             "type": "array"
           },
+          "previous": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/YearInputs"
+                },
+                "maxItems": 4,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The inputs of the years before ``year``, from 2026 on, one each. Omitted: the earlier years run with this request's settings and nothing else.",
+            "title": "Previous"
+          },
           "readId": {
             "description": "Meter-reading document id: READ-{townId}-{registerId}-{YYYY-MM-DD}.",
             "title": "Readid",
@@ -2985,6 +3729,19 @@
             "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field); see GET /api/m2c/settings.",
             "title": "Settings"
           },
+          "staffing": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A day-by-day staffing schedule (staff-schedule/1.0): {pools: {pool: [[date, n], ...]}}, pools analysts, supervisors, agents (people) and crew_meter, crew_electric, crew_water, crew_gas, crew_construction, crew_emergency (crews); from each date the pool has n until the next entry, and the settings hold before the first. A utility pooling its people across districts gives each its people per day.",
+            "title": "Staffing"
+          },
           "town": {
             "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
@@ -2994,6 +3751,33 @@
             "default": false,
             "title": "Truth",
             "type": "boolean"
+          },
+          "upstream": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Events upstream of the town (upstream/1.0): {stormSeed?, events: [{id, utility, day, start, end, label?, storm?}]}: its supply lost in the utility's wider networks (an outage here without a repair order; tanks and line pack carry water and gas for a while, gas premises are relit after); stormSeed shares storm days with the utility's other towns.",
+            "title": "Upstream"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "maximum": 2030.0,
+                "minimum": 2026.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The calendar year to replay (2026-2030; default: the year after ``previous``, else 2026). A later year opens on the years before it, each where the one before closed (dials, money owed, open work, services off, devices). ``actions``, ``outages``, ``episodes`` and ``asOf`` are the year's own.",
+            "title": "Year"
           }
         },
         "required": [
@@ -3103,6 +3887,22 @@
             "title": "Outages",
             "type": "array"
           },
+          "previous": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/YearInputs"
+                },
+                "maxItems": 4,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The inputs of the years before ``year``, from 2026 on, one each. Omitted: the earlier years run with this request's settings and nothing else.",
+            "title": "Previous"
+          },
           "seed": {
             "anyOf": [
               {
@@ -3132,10 +3932,50 @@
             "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field); see GET /api/m2c/settings.",
             "title": "Settings"
           },
+          "staffing": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A day-by-day staffing schedule (staff-schedule/1.0): {pools: {pool: [[date, n], ...]}}, pools analysts, supervisors, agents (people) and crew_meter, crew_electric, crew_water, crew_gas, crew_construction, crew_emergency (crews); from each date the pool has n until the next entry, and the settings hold before the first. A utility pooling its people across districts gives each its people per day.",
+            "title": "Staffing"
+          },
           "town": {
             "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
             "type": "string"
+          },
+          "upstream": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Events upstream of the town (upstream/1.0): {stormSeed?, events: [{id, utility, day, start, end, label?, storm?}]}: its supply lost in the utility's wider networks (an outage here without a repair order; tanks and line pack carry water and gas for a while, gas premises are relit after); stormSeed shares storm days with the utility's other towns.",
+            "title": "Upstream"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "maximum": 2030.0,
+                "minimum": 2026.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The calendar year to replay (2026-2030; default: the year after ``previous``, else 2026). A later year opens on the years before it, each where the one before closed (dials, money owed, open work, services off, devices). ``actions``, ``outages``, ``episodes`` and ``asOf`` are the year's own.",
+            "title": "Year"
           }
         },
         "required": [
@@ -3210,6 +4050,22 @@
             "title": "Outages",
             "type": "array"
           },
+          "previous": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/YearInputs"
+                },
+                "maxItems": 4,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The inputs of the years before ``year``, from 2026 on, one each. Omitted: the earlier years run with this request's settings and nothing else.",
+            "title": "Previous"
+          },
           "seed": {
             "anyOf": [
               {
@@ -3251,10 +4107,50 @@
             "description": "Start of a period (YYYY-MM-DD): adds ``window``, the figures between that day and asOf (this month, the last 30 days, since your first action, ...).",
             "title": "Since"
           },
+          "staffing": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A day-by-day staffing schedule (staff-schedule/1.0): {pools: {pool: [[date, n], ...]}}, pools analysts, supervisors, agents (people) and crew_meter, crew_electric, crew_water, crew_gas, crew_construction, crew_emergency (crews); from each date the pool has n until the next entry, and the settings hold before the first. A utility pooling its people across districts gives each its people per day.",
+            "title": "Staffing"
+          },
           "town": {
             "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
             "type": "string"
+          },
+          "upstream": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Events upstream of the town (upstream/1.0): {stormSeed?, events: [{id, utility, day, start, end, label?, storm?}]}: its supply lost in the utility's wider networks (an outage here without a repair order; tanks and line pack carry water and gas for a while, gas premises are relit after); stormSeed shares storm days with the utility's other towns.",
+            "title": "Upstream"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "maximum": 2030.0,
+                "minimum": 2026.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The calendar year to replay (2026-2030; default: the year after ``previous``, else 2026). A later year opens on the years before it, each where the one before closed (dials, money owed, open work, services off, devices). ``actions``, ``outages``, ``episodes`` and ``asOf`` are the year's own.",
+            "title": "Year"
           }
         },
         "required": [
@@ -3352,6 +4248,22 @@
             "title": "Pagesize",
             "type": "integer"
           },
+          "previous": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/YearInputs"
+                },
+                "maxItems": 4,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The inputs of the years before ``year``, from 2026 on, one each. Omitted: the earlier years run with this request's settings and nothing else.",
+            "title": "Previous"
+          },
           "search": {
             "anyOf": [
               {
@@ -3407,6 +4319,19 @@
             "description": "A column key; rows with no value sort last.",
             "title": "Sort"
           },
+          "staffing": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A day-by-day staffing schedule (staff-schedule/1.0): {pools: {pool: [[date, n], ...]}}, pools analysts, supervisors, agents (people) and crew_meter, crew_electric, crew_water, crew_gas, crew_construction, crew_emergency (crews); from each date the pool has n until the next entry, and the settings hold before the first. A utility pooling its people across districts gives each its people per day.",
+            "title": "Staffing"
+          },
           "table": {
             "description": "A table name from GET /api/m2c/tables.",
             "maxLength": 40,
@@ -3417,6 +4342,33 @@
             "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
             "type": "string"
+          },
+          "upstream": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Events upstream of the town (upstream/1.0): {stormSeed?, events: [{id, utility, day, start, end, label?, storm?}]}: its supply lost in the utility's wider networks (an outage here without a repair order; tanks and line pack carry water and gas for a while, gas premises are relit after); stormSeed shares storm days with the utility's other towns.",
+            "title": "Upstream"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "maximum": 2030.0,
+                "minimum": 2026.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The calendar year to replay (2026-2030; default: the year after ``previous``, else 2026). A later year opens on the years before it, each where the one before closed (dials, money owed, open work, services off, devices). ``actions``, ``outages``, ``episodes`` and ``asOf`` are the year's own.",
+            "title": "Year"
           }
         },
         "required": [
@@ -3515,6 +4467,22 @@
             "title": "Pagesize",
             "type": "integer"
           },
+          "previous": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/YearInputs"
+                },
+                "maxItems": 4,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The inputs of the years before ``year``, from 2026 on, one each. Omitted: the earlier years run with this request's settings and nothing else.",
+            "title": "Previous"
+          },
           "search": {
             "anyOf": [
               {
@@ -3570,6 +4538,19 @@
             "description": "A column key; rows with no value sort last.",
             "title": "Sort"
           },
+          "staffing": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A day-by-day staffing schedule (staff-schedule/1.0): {pools: {pool: [[date, n], ...]}}, pools analysts, supervisors, agents (people) and crew_meter, crew_electric, crew_water, crew_gas, crew_construction, crew_emergency (crews); from each date the pool has n until the next entry, and the settings hold before the first. A utility pooling its people across districts gives each its people per day.",
+            "title": "Staffing"
+          },
           "table": {
             "description": "A table name from GET /api/m2c/tables.",
             "maxLength": 40,
@@ -3580,6 +4561,33 @@
             "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
             "type": "string"
+          },
+          "upstream": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Events upstream of the town (upstream/1.0): {stormSeed?, events: [{id, utility, day, start, end, label?, storm?}]}: its supply lost in the utility's wider networks (an outage here without a repair order; tanks and line pack carry water and gas for a while, gas premises are relit after); stormSeed shares storm days with the utility's other towns.",
+            "title": "Upstream"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "maximum": 2030.0,
+                "minimum": 2026.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The calendar year to replay (2026-2030; default: the year after ``previous``, else 2026). A later year opens on the years before it, each where the one before closed (dials, money owed, open work, services off, devices). ``actions``, ``outages``, ``episodes`` and ``asOf`` are the year's own.",
+            "title": "Year"
           }
         },
         "required": [
@@ -3979,6 +4987,80 @@
         ],
         "title": "ValidationError",
         "type": "object"
+      },
+      "YearInputs": {
+        "additionalProperties": false,
+        "description": "An earlier year of a chain: what that year ran with (its own settings, scenarios, Studio work and outages).",
+        "properties": {
+          "actions": {
+            "items": {
+              "$ref": "#/components/schemas/Action"
+            },
+            "maxItems": 2000,
+            "title": "Actions",
+            "type": "array"
+          },
+          "episodes": {
+            "items": {
+              "$ref": "#/components/schemas/Episode"
+            },
+            "maxItems": 40,
+            "title": "Episodes",
+            "type": "array"
+          },
+          "outages": {
+            "items": {
+              "$ref": "#/components/schemas/Outage"
+            },
+            "maxItems": 500,
+            "title": "Outages",
+            "type": "array"
+          },
+          "settings": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "That year's run settings (as ``settings``).",
+            "title": "Settings"
+          },
+          "staffing": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "That year's staffing schedule (as ``staffing``).",
+            "title": "Staffing"
+          },
+          "upstream": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "That year's upstream events (as ``upstream``).",
+            "title": "Upstream"
+          }
+        },
+        "title": "YearInputs",
+        "type": "object"
       }
     }
   },
@@ -4259,6 +5341,43 @@
           }
         },
         "summary": "Post Contact"
+      }
+    },
+    "/api/m2c/daily": {
+      "post": {
+        "description": "``run-daily/1.0``: the run day by day in figures that add up across towns: cases opened, closed and in the\nbacklog per queue; the analysts' and supervisors' day (people, work waiting and done, the oldest waiting); each\nfield crew type (crews, minutes available and busy, overtime, work waiting); the contact centre (agents, time,\ncontacts by how they ended); customers and customer-hours without service.",
+        "operationId": "post_daily_api_m2c_daily_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Daily"
       }
     },
     "/api/m2c/fieldwork": {
@@ -4995,9 +6114,10 @@
                 "schema": {
                   "$ref": "#/components/schemas/ChatResponse"
                 }
-              }
+              },
+              "text/event-stream": {}
             },
-            "description": "Successful Response"
+            "description": "With Accept: text/event-stream, progress and reply-text events, then {type: done, ...ChatResponse} or {type: error, status, detail}."
           },
           "422": {
             "content": {

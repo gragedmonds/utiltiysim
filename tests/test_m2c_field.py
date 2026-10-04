@@ -14,8 +14,12 @@ from api.index import app
 from utilsim.m2c import catalog as cat
 from utilsim.m2c import lookups, views
 from utilsim.m2c import orders as ords
-from utilsim.m2c.base import date_of
-from utilsim.m2c.run import ActionError, M2CRun, add_bdays
+from utilsim.m2c.calendar import calendar
+from utilsim.m2c.run import ActionError, M2CRun
+
+CAL = calendar(2026)
+add_bdays = CAL.add_bdays
+date_of = CAL.date_of
 
 SLOW = {"process": {"analysts": 0, "rpa_coverage": 0}}  # nothing resolves cases but you (and supervisors, crews)
 
@@ -300,9 +304,10 @@ def test_a_meter_exchanged_outcome_installs_the_new_device(town, swapped):
 def test_the_simulated_crews_register_the_meters_they_exchange():
     run = run_for(RunRequest(town="small_town"))
     exchanged = [(c, e) for c in run.cases for e in c.events if e[1] == "METER_EXCHANGE"]
-    assert exchanged and len(run.installs) == len(exchanged)
+    corrective = [x for x in run.installs if not x.planned]  # planned exchanges (seal, age, AMI) have no case
+    assert exchanged and len(corrective) == len(exchanged)
     for _, e in exchanged:
-        assert e[2]["deviceId"] in {x.device for x in run.installs}
+        assert e[2]["deviceId"] in {x.device for x in corrective}
     # No register went backwards after its exchange: later reads are diffed against the new register.
     for x in run.installs:
         for r, m in x.period.items():

@@ -7,7 +7,8 @@ append-only and dated; an action never changes anything before its day. It may a
 interruptions from the operations simulator (who lost which service, and when). Consumption stops during an outage,
 an AMI meter without power misses its read, and VEE knows about the outage (``vee.oms_events``).
 
-The run simulates calendar 2026 one local day at a time. Each business day goes:
+The run simulates one calendar year (``town.cal``: 2026, or a later year of a chain) one local day at a time.
+Each business day goes:
 1. your actions (09:00);
 2. RPA (robotic process automation) carry-over from the previous evening;
 3. analysts, then supervisors, then field orders, within their daily capacity;
@@ -21,7 +22,6 @@ time never re-runs anything.
 from __future__ import annotations
 
 import hashlib
-from bisect import bisect_left, bisect_right
 from dataclasses import dataclass, field
 from datetime import date
 
@@ -32,22 +32,25 @@ from utilsim.config.impact import REACHES
 from utilsim.config.model import SimConfig, annotate_group
 from utilsim.core.ids import str_key
 from utilsim.core.rng import Purpose, hash_normal, hash_u01
-from utilsim.customers.calendar import business_days, to_utc_iso
+from utilsim.customers.calendar import to_utc_iso
 from utilsim.m2c import catalog as cat
 from utilsim.m2c import collections as colls
 from utilsim.m2c import orders as ords
 from utilsim.m2c import registers as regs
 from utilsim.m2c import vee as vee_mod
-from utilsim.m2c.base import M2CTown, date_of
+from utilsim.m2c.base import M2CTown
 from utilsim.m2c.books import Books
+from utilsim.m2c.calendar import FIRST_YEAR, RunCalendar, calendar
 
+# A day of the analysts' or supervisors' work (``work_log``): minutes of work waiting for them that day, minutes
+# done, cases done, cases still waiting after the day, the oldest still waiting (days since it was raised).
+WORK_LOG = ("offeredMin", "doneMin", "done", "waiting", "oldestDays")
 M2C_GROUPS = ("process", "anomalies", "reading", "vee", "billing", "contact", "outages", "field")
 SUMMARY_VERSION = "m2c-summary/1.0"
 CASE_VERSION = "work-case/1.0"
 DECISION_VERSION = "vee-decision/1.0"
 P_READ, P_ANOM, P_WORK = Purpose.M2C_READ, Purpose.M2C_ANOMALY, Purpose.M2C_WORK
 INF = float("inf")
-YEAR_DAYS = 365
 # An analyst's decision on a case. ``check_read`` releases the read with the check read a completed field order took.
 DECISIONS = ("accept", "override", "estimate", "field_order", "escalate", "check_read")
 ORDER_ACTIONS = ("order_save", "order_release", "order_dispatch", "order_complete")
@@ -56,7 +59,8 @@ COLLECTION_ACTIONS = colls.ACTIONS  # collections work on an account or an invoi
 DEVICE_ACTIONS = ("device_replace",)  # a new device (meter) and register on an installation
 ACTION_TYPES = (*DECISIONS, "field_read", *ORDER_ACTIONS, *CASE_WORK, *COLLECTION_ACTIONS, *DEVICE_ACTIONS)
 ActionError = ords.ActionError
-STATUS = ("pending", "released", "estimated", "adjusted", "held", "missing")
+STATUS = ("pending", "released", "estimated", "adjusted", "held", "missing", "off")
+OFF = 6  # the service was off at the read (disconnected or the meter removed): no read, so no bill for the period
 # How a released register value was obtained (``released.method`` in case views, ``method`` in read histories).
 METHODS = (None, "as_read", "estimated", "corrected", "field_read")
 ACTUAL = (1, 3, 4)  # methods that give a real register value (an estimate is not one)
@@ -64,6 +68,7 @@ CODE_ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"  # Crockford base 32 (no I, L
 UTILITIES = ("electric", "water", "gas")
 OUTAGE_KINDS = (*UTILITIES, "ami")  # "ami": a collector outage (no service lost; AMI meters cannot report)
 OUTAGE_REASON = "SIM_POWER_OUTAGE"
+BATTERY_REASON = "SIM_BATTERY_DEAD"
 COLLECTOR_REASON = "SIM_COLLECTOR_OUTAGE"
 MAX_OUTAGE_DAYS = 7
 MAX_SEED = 64
@@ -128,10 +133,11 @@ def _episode_value(base, target, path: str):
     return target
 
 
-def parse_episodes(cfg: SimConfig, episodes: list[dict] | None) -> list[dict]:
+def parse_episodes(cfg: SimConfig, episodes: list[dict] | None, cal: RunCalendar | None = None) -> list[dict]:
     """Dated setting overrides, checked and normalised: ``{id, title, scenario, start, end, ramp, settings}`` with
-    ``start``/``end`` as inclusive run days. A setting is a run-scoped group's field; its value is absolute or an
-    operator on the value in force before the episode. ValueError says what is wrong."""
+    ``start``/``end`` as inclusive run days of ``cal``'s year (default 2026). A setting is a run-scoped group's field;
+    its value is absolute or an operator on the value in force before the episode. ValueError says what is wrong."""
+    cal = cal or calendar()
     out = []
     for k, ep in enumerate(episodes or []):
         if k >= EPISODE_MAX:
@@ -139,16 +145,16 @@ def parse_episodes(cfg: SimConfig, episodes: list[dict] | None) -> list[dict]:
         if not isinstance(ep, dict):
             raise ValueError(f"episode {k + 1}: expected an object")
         eid = str(ep.get("id") or f"EP-{k + 1}")
-        start = parse_day(ep.get("from"), -1)
-        if not 0 <= start < YEAR_DAYS:
-            raise ValueError(f"episode {eid}: 'from' must be a day of 2026")
-        end = parse_day(ep.get("to"), YEAR_DAYS - 1) if ep.get("to") else YEAR_DAYS - 1
+        start = cal.parse_day(ep.get("from"), -1)
+        if not 0 <= start < cal.days:
+            raise ValueError(f"episode {eid}: 'from' must be a day of {cal.year}")
+        end = cal.parse_day(ep.get("to"), cal.days - 1) if ep.get("to") else cal.days - 1
         if end < start:
             raise ValueError(f"episode {eid}: 'to' is before 'from'")
-        end = min(end, YEAR_DAYS - 1)
+        end = min(end, cal.days - 1)
         ramp = int(ep.get("ramp") or 0)
-        if not 0 <= ramp <= YEAR_DAYS:
-            raise ValueError(f"episode {eid}: ramp must be 0–{YEAR_DAYS} days")
+        if not 0 <= ramp <= cal.days:
+            raise ValueError(f"episode {eid}: ramp must be 0–{cal.days} days")
         settings = ep.get("settings") or {}
         if not isinstance(settings, dict) or not settings:
             raise ValueError(f"episode {eid}: settings must name at least one setting")
@@ -207,31 +213,6 @@ def _merge_spans(spans: dict[int, list[tuple[float, float]]], n: int) -> tuple[n
             t1s.append(b)
         ptr[r + 1] = len(t0s)
     return ptr, np.array(t0s), np.array(t1s)
-
-
-# ---- calendar ---------------------------------------------------------------------------------------------------
-_BDAYS = sorted(regs.day_of(d) for y, m in [(2025, 12), *((2026, k) for k in range(1, 13)), (2027, 1), (2027, 2)]
-                for d in business_days(y, m))
-_BSET = set(_BDAYS)
-
-
-def add_bdays(day: int, k: int) -> int:
-    """The k-th business day after ``day`` (k = 0: ``day`` itself if a business day, else the next one)."""
-    i = bisect_left(_BDAYS, day) if k == 0 else bisect_right(_BDAYS, day) + k - 1
-    return _BDAYS[min(i, len(_BDAYS) - 1)]
-
-
-def bdays_between(a: float, b: float) -> int:
-    return max(0, bisect_right(_BDAYS, int(b)) - bisect_right(_BDAYS, int(a)))
-
-
-def parse_day(s: str | None, default: int) -> int:
-    if not s:
-        return default
-    try:
-        return regs.day_of(date.fromisoformat(str(s)[:10]))
-    except ValueError as exc:
-        raise ValueError(f"bad date {s!r} (use YYYY-MM-DD)") from exc
 
 
 # ---- cases ------------------------------------------------------------------------------------------------------
@@ -302,6 +283,7 @@ class Install:
     order: str | None = None
     case: str | None = None
     note: str | None = None
+    planned: bool = False  # a planned exchange by the field crews (seal, age, AMI conversion)
 
     def carry(self, r: int, value: float, normal: float) -> float:
         """A register value read before the change, on the new register's scale: the initial read less the old
@@ -324,15 +306,21 @@ def run_seed(cfg: SimConfig, seed: str | None) -> str | None:
     return s if s and s != town_seed(cfg) else None
 
 
-def resolve_episode_days(cfg: SimConfig, episodes: list[dict]) -> list[SimConfig]:
-    """The configuration in force on each day of the year: the base, then every active episode in date order
-    (later episodes see earlier ones' values); a ramp slides a numeric value from the base to the target over
-    ``ramp`` days from the episode's first day. Distinct configurations are validated once and shared."""
+def resolve_episode_days(cfg: SimConfig, episodes: list[dict], cal: RunCalendar | None = None,
+                         staffing: dict | None = None, premises: int = 0) -> list[SimConfig]:
+    """The configuration in force on each day of ``cal``'s year (default 2026): the base, then every active episode
+    in date order (later episodes see earlier ones' values); a ramp slides a numeric value from the base to the target
+    over ``ramp`` days from the episode's first day; then the day's staffing (a parsed ``staff-schedule/1.0``,
+    utilsim/m2c/staffing.py; crews per the town's ``premises``). Distinct configurations are validated once and
+    shared."""
+    from utilsim.m2c import staffing as staff
+
+    cal = cal or calendar()
     full = cfg.model_dump(mode="json")
     base = {g: dict(full[g]) for g in M2C_GROUPS}
     cache: dict[bytes, SimConfig] = {}
     out: list[SimConfig] = []
-    for day in range(YEAR_DAYS):
+    for day in range(cal.days):
         cur = {g: dict(v) for g, v in base.items()}
         for ep in episodes:
             if not ep["start"] <= day <= ep["end"]:
@@ -348,13 +336,16 @@ def resolve_episode_days(cfg: SimConfig, episodes: list[dict]) -> list[SimConfig
                         cur[g][key] = int(round(v)) if isinstance(was, int) else v
                     else:
                         cur[g][key] = tgt
+        if staffing:
+            staff.overlay(cur, staffing, day, premises)
         sig = orjson.dumps(cur, option=orjson.OPT_SORT_KEYS)
         cfg = cache.get(sig)
         if cfg is None:
             try:
                 cfg = SimConfig.model_validate({**full, **cur})
             except Exception as exc:  # pydantic: a target outside the field's bounds
-                raise ValueError(f"episode settings on {date_of(day).isoformat()}: {exc}") from exc
+                what = "episode or staffing settings" if staffing else "episode settings"
+                raise ValueError(f"{what} on {cal.date_of(day).isoformat()}: {exc}") from exc
             cache[sig] = cfg
         out.append(cfg)
     return out
@@ -363,47 +354,72 @@ def resolve_episode_days(cfg: SimConfig, episodes: list[dict]) -> list[SimConfig
 class M2CRun:
     def __init__(self, town: M2CTown, settings: dict | None = None, actions: list[dict] | None = None,
                  outages: list[dict] | None = None, *, strict: bool = True, seed: str | None = None,
-                 episodes: list[dict] | None = None):
+                 episodes: list[dict] | None = None, ops_factory=None, opening=None, staffing: dict | None = None,
+                 upstream: dict | None = None):
         self.town = town
+        self.cal = town.cal  # the calendar year the run replays
+        # A chained year opens on the previous year's close (utilsim/m2c/yearclose.py; its town from open_town).
+        self.opening = opening
+        # The town's operations model (networks, incidents), built on demand: the field crews and the year's
+        # outages need it during the replay. None: a run without networks (no incidents, no network assets).
+        self.ops_factory = ops_factory
         self.strict = strict  # refuse (raise) when the newest action does not apply; else skip it with a warning
         self.cfg = resolve_settings(town.cfg, settings)  # the year's base settings
         # Episodes: dated overrides on the base (a scenario inflicted from a day); the day's config is cfg_at(day).
-        self.episodes = parse_episodes(self.cfg, episodes)
-        self._cfg_day: list[SimConfig] | None = self._resolve_days() if self.episodes else None
+        self.episodes = parse_episodes(self.cfg, episodes, self.cal)
+        # A day-by-day staffing schedule (utilsim/m2c/staffing.py): headcounts over the settings' team sizes.
+        from utilsim.m2c import staffing as staff
+
+        self.staffing = staff.parse(staffing, self.cal)
+        self._cfg_day: list[SimConfig] | None = self._resolve_days() if self.episodes or self.staffing else None
         # A run seed re-rolls every draw of the run (reads, anomalies, work, bill checks); the town stays the same.
         self.run_seed = run_seed(town.cfg, seed)
         groups = {g: self.cfg.model_dump(mode="json")[g] for g in M2C_GROUPS}
         if self.episodes:
             groups["episodes"] = self.episodes
+        if self.staffing:
+            groups["staffing"] = staff.as_json(self.staffing, self.cal)
         self.settings_hash = _hash(groups if self.run_seed is None else {**groups, "seed": self.run_seed})
         self.warnings: list[str] = []
         self.meter_index = {mid: i for i, mid in enumerate(town.meter_ids)}
         self.actions = self._check_actions(actions or [])
         self.outages = self._check_outages(outages or [])
+        # Events upstream of the town (utilsim/m2c/upstream.py): its supply lost in the utility's wider networks.
+        from utilsim.m2c import upstream as up
+
+        self.upstream = up.parse(upstream, self.cal)
+        if self.upstream and self.upstream["events"] and ops_factory is None:
+            raise ValueError("upstream events need the town's networks (a run with its operations model)")
+        self.storm_seed = self.upstream["stormSeed"] if self.upstream else None
         inputs = _hash([self.actions, self.outages]) if self.outages else (_hash(self.actions) if self.actions else "0")
-        self.simulation_id = f"m2c-{town.id}-{self.settings_hash}-{inputs}"
-        self.seed = f"{self.run_seed or town_seed(town.cfg)}:m2c"
+        if self.upstream:
+            inputs = _hash([inputs, upstream])
+        year = "" if self.cal.year == FIRST_YEAR else f"{self.cal.year}-"
+        chain = f"-{_hash(opening.simulation_id)}" if opening is not None else ""
+        self.simulation_id = f"m2c-{town.id}-{year}{self.settings_hash}-{inputs}{chain}"
+        # Each year draws anew: a later year's draws are salted with it (the snapshot's year keeps the town's own).
+        self.seed = f"{self.run_seed or town_seed(town.cfg)}:m2c" + (f":{self.cal.year}" if year else "")
         self._setup()
         self._setup_outages()
         self._simulate()
 
     # ---- the day's configuration -----------------------------------------------------------------------------------
     def _resolve_days(self) -> list[SimConfig]:
-        return resolve_episode_days(self.cfg, self.episodes)
+        return resolve_episode_days(self.cfg, self.episodes, self.cal, self.staffing, len(self.town.premise_ids))
 
     def cfg_at(self, day) -> SimConfig:
         """The configuration in force on run day ``day`` (the base when the run has no episodes)."""
         if self._cfg_day is None:
             return self.cfg
-        return self._cfg_day[min(max(int(day), 0), YEAR_DAYS - 1)]
+        return self._cfg_day[min(max(int(day), 0), self.cal.days - 1)]
 
     def month_rate(self, group: str, key: str) -> np.ndarray:
-        """A numeric setting averaged over the days of each month of 2026 ((12,); the base value everywhere when the
+        """A numeric setting averaged over the days of each month of the year ((12,); the base value everywhere when the
         run has no episodes)."""
         if self._cfg_day is None:
             return np.full(12, float(getattr(getattr(self.cfg, group), key)))
         vals = np.array([float(getattr(getattr(c, group), key)) for c in self._cfg_day])
-        return np.array([vals[regs.MONTH_START[m]:regs.MONTH_START[m + 1]].mean() for m in range(1, 13)])
+        return np.array([vals[self.cal.month_start[m]:self.cal.month_start[m + 1]].mean() for m in range(1, 13)])
 
     def rpa_types_at(self, day) -> set[str]:
         """The exception types an RPA rule covers on ``day`` (``process.rpa_coverage``, the first types in order)."""
@@ -419,9 +435,9 @@ class M2CRun:
         for k, a in enumerate(actions):
             if a.get("type") not in ACTION_TYPES:
                 raise ValueError(f"action {k}: type must be one of {', '.join(ACTION_TYPES)}")
-            day = parse_day(a.get("day"), -1)
-            if not 0 <= day < YEAR_DAYS:
-                raise ValueError(f"action {k}: day must be in 2026")
+            day = self.cal.parse_day(a.get("day"), -1)
+            if not 0 <= day < self.cal.days:
+                raise ValueError(f"action {k}: day must be in {self.cal.year}")
             if day < last:
                 raise ValueError(f"action {k}: actions are append-only (day {a.get('day')} is before the previous one)")
             if a["type"] == "override":
@@ -448,7 +464,7 @@ class M2CRun:
             else:
                 extra = self._check_case_work(k, a)
             last = day
-            out.append({"id": a.get("id") or f"ACT-{k + 1}", "day": date_of(day).isoformat(), "type": a["type"],
+            out.append({"id": a.get("id") or f"ACT-{k + 1}", "day": self.cal.date_of(day).isoformat(), "type": a["type"],
                         "caseId": a.get("caseId"), **extra, **({"value": float(a["value"])} if "value" in a else {})})
         return out
 
@@ -494,7 +510,8 @@ class M2CRun:
             if not isinstance(mid, str) or mid not in self.meter_index:
                 raise ValueError(f"unknown meterId {mid!r} (a meter on the installation)")
             out = {"meterId": mid, "deviceId": ords.device_id(a.get("deviceId")),
-                   "installDate": date_of(ords.day_in(a.get("installDate"), "installDate", 0, day)).isoformat(),
+                   "installDate": self.cal.date_of(ords.day_in(a.get("installDate"), "installDate", 0, day,
+                                                                self.cal)).isoformat(),
                    "initialRead": ords.register_value(a.get("initialRead"), "initialRead (the new register)")}
             removal = ords.register_value(a.get("removalRead"), "removalRead (the old register)", False)
             if removal is not None:
@@ -511,9 +528,9 @@ class M2CRun:
         is an AMI collector outage: the premises keep their service, but their AMI meters cannot report."""
         out, unknown = [], 0
         for k, o in enumerate(outages):
-            day = parse_day(o.get("day"), -1)
-            if not 0 <= day < YEAR_DAYS:
-                raise ValueError(f"outage {k}: day must be in 2026")
+            day = self.cal.parse_day(o.get("day"), -1)
+            if not 0 <= day < self.cal.days:
+                raise ValueError(f"outage {k}: day must be in {self.cal.year}")
             if o.get("utility") not in OUTAGE_KINDS:
                 raise ValueError(f"outage {k}: utility must be one of {', '.join(OUTAGE_KINDS)}")
             start, end = o.get("start"), o.get("end")
@@ -526,7 +543,7 @@ class M2CRun:
                 raise ValueError(f"outage {k}: premiseIds lists the premises that lost service")
             known = sorted({p for p in pids if p in self.town.premise_index})
             unknown += len(set(pids)) - len(known)
-            out.append({"id": o.get("id") or f"OUT-{k + 1}", "day": date_of(day).isoformat(), "utility": o["utility"],
+            out.append({"id": o.get("id") or f"OUT-{k + 1}", "day": self.cal.date_of(day).isoformat(), "utility": o["utility"],
                         "start": float(start), "end": float(end), "premiseIds": known})
         if unknown:
             self.warnings.append(f"{unknown} outage premise id(s) are not in this town and were ignored")
@@ -614,8 +631,8 @@ class M2CRun:
             u = self._u(P_ANOM, mk[:, None], type_id, months[None, :])
             hit = (u < p) & mask[:, None]
             first = np.where(hit.any(1), hit.argmax(1) + 1, 0)
-            start = regs.MONTH_START[first]
-            length = regs.MONTH_START[np.minimum(first + 1, 13)] - start
+            start = self.cal.month_start[first]
+            length = self.cal.month_start[np.minimum(first + 1, 13)] - start
             t = start + np.floor(self._u(P_ANOM, mk, type_id, 99) * length) + 0.5
             return np.where(first > 0, t, INF)
 
@@ -638,14 +655,14 @@ class M2CRun:
         self.vac_q = np.where(comm == "electric", 6.0 + 9.0 * self._u(P_ANOM, mk, 9), 0.15 + 0.25 * self._u(P_ANOM, mk, 9))
         self.vac_end = np.full(M, INF)
         cest = onset(10, monthly("consecutive_estimates", np.where(tech == "MANUAL", 2.0, 1.0)), anyc)
-        self.cest_from = np.where(np.isfinite(cest), np.searchsorted(regs.MONTH_START, cest, side="right") - 1, 99)
+        self.cest_from = np.where(np.isfinite(cest), np.searchsorted(self.cal.month_start, cest, side="right") - 1, 99)
         self.cest_len = 2 + np.floor(3 * self._u(P_ANOM, mk, 11)).astype(int)
         manual = tech == "MANUAL"
 
         def per_read(type_id: int, name: str, mask: np.ndarray) -> np.ndarray:
             p = monthly(name) / 1000.0 / 12.0 * on
             hit = (self._u(P_ANOM, mk[:, None], type_id, months[None, :]) < p) & mask[:, None]
-            return np.hstack([np.zeros((M, 1), dtype=bool), hit])  # column = month index (0 = Dec 2025)
+            return np.hstack([np.zeros((M, 1), dtype=bool), hit])  # column = month index (0 = the December before)
 
         self.transposed = per_read(12, "transposed_digits", manual)
         self.misread = per_read(13, "misread", manual)
@@ -658,11 +675,13 @@ class M2CRun:
             for d in np.unique(col):
                 self.batches[int(d)] = (m, np.flatnonzero(col == d))
         self.rpa_due: dict[int, list[Case]] = {}
-        self.series = {q: np.zeros((YEAR_DAYS, 3), dtype=np.int64) for q in cat.QUEUES}  # opened, closed, backlog
-        self.read_counts = np.zeros((YEAR_DAYS, 3), dtype=np.int64)  # AMI, AMR, MANUAL reads per day
-        self.auto_accepted = np.zeros(YEAR_DAYS, dtype=np.int64)
+        self.series = {q: np.zeros((self.cal.days, 3), dtype=np.int64) for q in cat.QUEUES}  # opened, closed, backlog
+        # The analysts' and supervisors' day (WORK_LOG columns): the work waiting for them and what they did.
+        self.work_log = {k: np.zeros((self.cal.days, len(WORK_LOG))) for k in ("analysts", "supervisors")}
+        self.read_counts = np.zeros((self.cal.days, 3), dtype=np.int64)  # AMI, AMR, MANUAL reads per day
+        self.auto_accepted = np.zeros(self.cal.days, dtype=np.int64)
         self._rpa_later: list[tuple[Case, float]] = []
-        self.bday_set = _BSET
+        self.bday_set = self.cal.bset
         self.books = Books(self)
         self.orders = self.ledger.orders  # field service orders by id (ords.Order)
         self.order_rolls: dict[int, list[ords.Order]] = {}  # day -> dispatched orders whose crew rolls that day
@@ -674,9 +693,32 @@ class M2CRun:
         # with a device change, the new register's base for billing.
         self.installs: list[Install] = []
         self.installs_of: dict[int, list[Install]] = {}  # register row -> its device changes, in time order
+        self._read_done = -1  # the last day whose read batch has run
+        self._carry_later: dict[int, list[Install]] = {}  # a change after a read still waiting for its batch
         self.swaps: dict[int, list[tuple[float, float]]] = {}
         self.has_swap = np.zeros(R, dtype=bool)
         self.dev_change = np.full(shape, None, dtype=object)  # (r, m) -> the Install inside read period m
+        # Field work's effects on the meters (utilsim/m2c/fieldwork.py): service switched off (disconnected or
+        # removed) per register, the technology a meter has now (AMI conversion), a module battery that died
+        # (past its life, not replaced), and under-registration (a failed seal lot, a water meter past its life).
+        self.off_spans: dict[int, list[list]] = {}  # register -> [[off at, back at (INF), why], ...]
+        self.off_any = np.zeros(R, dtype=bool)
+        self.final = np.zeros((R, 13), dtype=bool)  # the read was the final read when the service went off
+        self.final_t = np.full((R, 13), np.nan)  # when that final read was taken (read_t keeps the schedule)
+        self._final_taken: set[tuple[int, float]] = set()  # (register, off at) whose final read is taken
+        self.meter_tech_now = tw.meter_tech.copy()
+        self.battery_dead = np.full(M, INF)  # when the module's battery died (INF: alive)
+        self.battery_new = np.full(M, INF)  # when a new battery went in after it died
+        self.drift_k = np.zeros(M)  # share the meter under-registers by
+        self.drift_t = np.full(M, INF)  # from when
+        self.drift_end = np.full(M, INF)  # until the meter was exchanged
+        self._drift_base: dict[int, float] = {}
+        self.field = None  # the field engine, from the first day (_simulate)
+        self.contact = None  # the contact centre, from the first day (_simulate)
+        if self.opening is not None:
+            from utilsim.m2c import yearclose
+
+            yearclose.open_registers(self, self.opening)
 
     def _setup_outages(self) -> None:
         """Per register, the merged spans (start, end as day + fraction) during which it had no service, and those
@@ -691,7 +733,7 @@ class M2CRun:
         spans: dict[str, dict[int, list[tuple[float, float]]]] = {"supply": {}, "comms": {}}
         self.outage_log = []
         for o in self.outages:
-            d = parse_day(o["day"], 0)
+            d = self.cal.parse_day(o["day"], 0)
             t0, t1 = d + o["start"] / 86400.0, d + o["end"] / 86400.0
             prem = np.array([tw.premise_index[p] for p in o["premiseIds"]], dtype=np.int64)
             rows = [r for p in prem.tolist() for r in by_prem.get((p, o["utility"]), [])]
@@ -702,6 +744,42 @@ class M2CRun:
         self.o_ptr, self.o_t0, self.o_t1 = _merge_spans(spans["supply"], R)
         self.c_ptr, self.c_t0, self.c_t1 = _merge_spans(spans["comms"], R)
         self.outage_h = np.zeros((R, 13), dtype=np.float32)  # outage hours inside each read's period
+        self._by_prem, self._span_raw = by_prem, spans
+        self._ops_days = {self.cal.parse_day(o["day"], 0) for o in self.outages}  # days carried in from operations
+
+    def incident_outage(self, inc: dict, background: bool = True) -> None:
+        """A year incident as it happens in the replay (a storm fault, a transformer, a main break, a failure of
+        overdue maintenance, a collector outage): the premises it cuts lose supply until each is restored, so their use
+        stops and their AMI electric meters go dark; a collector outage mutes the AMI meters behind it. A background
+        incident on a day whose operations interruptions the run carries is that day's own incident: not counted
+        twice."""
+        prem, restored = inc.get("premises"), inc.get("restoredAt")
+        if prem is None or not len(prem):  # a gas main leak: an odour, no outage
+            return
+        t0 = float(inc["t"])
+        if background and int(t0) in self._ops_days:
+            return
+        util = inc["utility"]
+        comms = util == "ami"
+        raw = self._span_raw["comms" if comms else "supply"]
+        restored = np.broadcast_to(np.asarray(restored, dtype=float), len(prem))
+        for k, t1 in enumerate(np.unique(restored).tolist()):  # back-fed sections come back first
+            ps = prem[restored == t1]
+            rows = [r for p in ps.tolist() for r in self._by_prem.get((int(p), util), ())]
+            for r in rows:
+                raw.setdefault(r, []).append((t0, t1))
+            d = int(t0)
+            self.outage_log.append({"id": inc["id"] if k == 0 else f"{inc['id']}-{k + 1}", "day": self.cal.date_of(d).isoformat(),
+                                    "utility": util, "start": round((t0 - d) * 86400.0),
+                                    "end": round((t1 - d) * 86400.0), "premiseIds": [self.town.premise_ids[p] for p in
+                                                                                     ps.tolist()],
+                                    "t0": t0, "t1": t1, "prem": ps, "rows": np.array(rows, dtype=np.int64),
+                                    "incident": inc["id"], "kind": inc["kind"]})
+        R = self.town.n_registers
+        if comms:
+            self.c_ptr, self.c_t0, self.c_t1 = _merge_spans(raw, R)
+        else:
+            self.o_ptr, self.o_t0, self.o_t1 = _merge_spans(raw, R)
 
     def _spans(self, rows: np.ndarray, comms: bool = False) -> tuple[np.ndarray, np.ndarray]:
         """(position in ``rows``, span index) for every outage span (collector outage span) of the registers."""
@@ -717,7 +795,7 @@ class M2CRun:
         return pos, span
 
     def _outage_loss(self, rows: np.ndarray, t: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-        """(normal consumption lost, hours without service) between 2026 and ``t``, per register."""
+        """(normal consumption lost, hours without service) between 1 January and ``t``, per register."""
         loss, hours = np.zeros(len(rows)), np.zeros(len(rows))
         pos, span = self._spans(rows)
         if not len(pos):
@@ -750,6 +828,108 @@ class M2CRun:
             out[pos[hit]] = t0[span[hit]]
         return out
 
+    # ---- service switched off by the field crews (disconnections, removals) -------------------------------------
+    def service_off(self, rows, t: float, why: str) -> None:
+        """Registers ``rows`` lose service at ``t`` (``disconnected`` or ``removed``): nothing flows, and their reads
+        are not taken (so no bill) until service_on."""
+        for r in np.atleast_1d(rows).tolist():
+            spans = self.off_spans.setdefault(int(r), [])
+            if not spans or spans[-1][1] <= t:
+                spans.append([float(t), INF, why])
+            self.off_any[r] = True
+
+    def service_on(self, rows, t: float) -> None:
+        for r in np.atleast_1d(rows).tolist():
+            spans = self.off_spans.get(int(r))
+            if spans and spans[-1][1] == INF and spans[-1][0] <= t:
+                spans[-1][1] = float(t)
+
+    def off_reason(self, r: int, t: float) -> str | None:
+        """Why register ``r`` has no service at ``t`` (``disconnected``, ``removed``), or None."""
+        span = self.off_span(r, t)
+        return span[2] if span else None
+
+    def taken_t(self, rr, mm):
+        """When reads were taken: the schedule (``read_t``), or a final read's own time."""
+        return np.where(self.final[rr, mm], self.final_t[rr, mm], self.read_t[rr, mm])
+
+    def off_span(self, r: int, t: float) -> list | None:
+        """The ``[off at, back at, why]`` span of register ``r`` covering ``t``, or None."""
+        for span in self.off_spans.get(int(r), ()):
+            if span[0] <= t < span[1]:
+                return span
+        return None
+
+    def _off_loss(self, rows: np.ndarray, t: np.ndarray) -> np.ndarray:
+        """Normal use that did not flow while each register's service was off, from 1 January to ``t`` (a service
+        already off when the year began counts from 1 January: the year's dial starts where it stood). Hours of an
+        outage while off are the outage's loss already (``_outage_loss``), not counted twice."""
+        out = np.zeros(len(rows))
+        if not self.off_any.any():
+            return out
+        tt = np.broadcast_to(t, len(rows))
+        ptr = getattr(self, "o_ptr", None)
+        for k in np.flatnonzero(self.off_any[rows]).tolist():
+            r = int(rows[k])
+            for a, b, _ in self.off_spans[r]:
+                a = max(a, 0.0)
+                if tt[k] <= a:
+                    continue
+                c = min(float(tt[k]), b)
+                out[k] += self._advance(r, a, c)
+                if ptr is not None:
+                    for s in range(int(ptr[r]), int(ptr[r + 1])):
+                        x0, x1 = max(a, float(self.o_t0[s])), min(c, float(self.o_t1[s]))
+                        if x1 > x0:
+                            out[k] -= self._advance(r, x0, x1)
+        return out
+
+    def _advance(self, r: int, a: float, c: float) -> float:
+        """Register ``r``'s normal use from ``a`` to ``c`` (day + fraction)."""
+        da, dc = int(np.floor(a)), int(np.floor(c))
+        adv = self.town.true_advance(np.array([r, r]), np.array([da, dc]), np.array([(a - da) * 24.0, (c - dc) * 24.0]))
+        return float(adv[1] - adv[0])
+
+    def period_start(self, r: int, m: int) -> int:
+        """The read month a bill for register ``r``'s period ending at month ``m`` starts from: the previous month,
+        or the last month read before the service was off."""
+        j = m - 1
+        while j > 0 and self.status[r, j] == OFF:
+            j -= 1
+        return j
+
+    # ---- planned meter work (the field crews) ---------------------------------------------------------------------
+    def exchange_meter(self, meter: int, t: float, by: str, note: str, order: str | None = None,
+                       tech: str | None = None) -> Install | None:
+        """A crew swaps the meter on slot ``meter`` at ``t`` for a new one (its registers start at zero): reads are
+        diffed against the new register, a fault (or drift) on the old meter ends, and an AMI conversion changes how
+        the meter is read. None when it cannot apply (the slot is off, a read after ``t`` is already out, or the meter
+        on site is an unregistered swap: that mismatch is VEE's to find, not a planned order's to paper over)."""
+        rows = np.flatnonzero(self.town.meter_of == meter)
+        if any(self.off_reason(int(r), t) for r in rows):
+            return None
+        if self.fault_type[meter] == 3 and self.fault_t[meter] <= t:
+            return None
+        device = self.new_device_id(meter)
+        if self.install_check(meter, t, t, device) is not None:
+            return None
+        x = self._install(meter, t, t, device, {}, by=by, order=order, note=note, planned=True)
+        if t < self.fault_t[meter] < INF:  # a fault drawn for later was the old meter's: the new one does not carry it
+            self.fault_t[meter], self.fault_type[meter] = INF, -1
+        if self.drift_t[meter] < INF:
+            self.drift_end[meter] = min(self.drift_end[meter], t)
+        if tech:
+            self.meter_tech_now[meter] = tech
+            if tech != "MANUAL":  # nobody reads it by hand from here: no misread or transposed digits
+                later = self.read_t[rows[0]] >= t
+                self.transposed[meter, later] = self.misread[meter, later] = False
+        return x
+
+    def set_drift(self, meter: int, k: float, t: float) -> None:
+        """The meter under-registers by ``k`` from ``t`` (until it is exchanged)."""
+        if k > 0 and self.drift_k[meter] == 0 and not self.has_swap[np.flatnonzero(self.town.meter_of == meter)].any():
+            self.drift_k[meter], self.drift_t[meter] = float(k), float(t)
+
     # ---- physics of a register ----------------------------------------------------------------------------------
     def _extras(self, rows: np.ndarray, t: np.ndarray) -> np.ndarray:
         tw = self.town
@@ -759,7 +939,7 @@ class M2CRun:
                         self.leak_q[m] * np.clip(np.minimum(t, self.leak_end[m]) - self.leak_t[m], 0, None), 0.0)
         vac = np.where(np.isfinite(self.vac_t[m]) & imp,
                        self.vac_q[m] * np.clip(np.minimum(t, self.vac_end[m]) - self.vac_t[m], 0, None), 0.0)
-        return np.nan_to_num(leak) + np.nan_to_num(vac) - self._outage_loss(rows, t)[0]
+        return np.nan_to_num(leak) + np.nan_to_num(vac) - self._outage_loss(rows, t)[0] - self._off_loss(rows, t)
 
     def _true(self, rows: np.ndarray, t: np.ndarray) -> np.ndarray:
         """Physical register (everything that flowed, anomalies included) at times ``t``."""
@@ -784,6 +964,14 @@ class M2CRun:
                             [at, at + kk * (true_now[k] - at), at + kk * (true_now[k] - at), true_now[k] - at + kk],
                             true_now[k])
             out[k] = val
+        drift = (self.drift_k[m] > 0) & (t > self.drift_t[m]) & (t < self.drift_end[m]) & ~active
+        for k in np.flatnonzero(drift).tolist():  # an old meter that under-registers (a failed lot, past its life)
+            r = int(rows[k])
+            base = self._drift_base.get(r)
+            if base is None:
+                tb = float(self.drift_t[m[k]])
+                base = self._drift_base[r] = float(self._true(np.array([r]), np.array([tb]))[0])
+            out[k] = base + (1.0 - self.drift_k[m[k]]) * (true_now[k] - base)
         for k in np.flatnonzero(self.has_swap[rows]):  # a meter swapped by a crew: the new meter
             off = next((o for ts, o in reversed(self.swaps[int(rows[k])]) if ts <= t[k]), None)
             if off is not None:
@@ -802,20 +990,38 @@ class M2CRun:
     def _simulate(self) -> None:
         by_day: dict[int, list[tuple[int, dict]]] = {}
         for k, a in enumerate(self.actions):
-            by_day.setdefault(parse_day(a["day"], 0), []).append((k, a))
+            by_day.setdefault(self.cal.parse_day(a["day"], 0), []).append((k, a))
         self.case_index: dict[str, Case] = {}
         self.open: list[Case] = []
         self._unseen: list[tuple[int, dict, float]] = []  # actions on a case id the run has not raised (yet)
-        self._handled: set[int] = set()  # of those, the ones a collections case opened after the year took
-        for day in range(YEAR_DAYS):
+        self._handled: set[int] = set()  # of those, the ones a collections case took when it opened
+        from utilsim.m2c.contact import ContactEngine
+        from utilsim.m2c.fieldwork import FieldEngine
+
+        opening = self.opening
+        if opening is not None:
+            from utilsim.m2c import yearclose
+
+            yearclose.open_work(self, opening)
+        self.books.start_collections(
+            None if opening is None else lambda col: yearclose.open_collections(self, opening, col))
+        col = self.books.collections
+        self.field = FieldEngine(self)
+        self.contact = ContactEngine(self)
+        if opening is not None:
+            yearclose.open_field(self, opening)
+            yearclose.open_contact(self, opening)
+        self.contact.start()
+        for day in range(self.cal.days):
             acts = by_day.get(day, [])
             self._roll_orders(day)  # crews for your dispatched orders that start today (07:00-09:00)
-            if day not in _BSET:  # your decisions and field visits count on any day
+            if day not in self.cal.bset:  # your decisions and field visits count on any day
                 for k, a in acts:
                     self._act(day, k, a)
                 self._crew_complete(day)
                 self.open = [c for c in self.open if c.resolved is None]
-            if day in _BSET:
+                self.field.step(day)  # the year's incidents, emergencies and overdue-maintenance failures
+            if day in self.cal.bset:
                 for k, a in acts:
                     if a["type"] != "field_read":
                         self._act(day, k, a)
@@ -828,14 +1034,26 @@ class M2CRun:
                 for _, a in acts:
                     if a["type"] == "field_read":
                         self._field_read(day, a)
+                col.advance(day + self.cfg_at(day).field.shift_start_hour / 24.0)
+                self.field.step(day)  # the field crews' day: their disconnections, removals and exchanges
+                col.advance(day + 18.0 / 24)  # before the read batch: what the crews did today
                 if day in self.batches:
                     self._evening(day, *self.batches[day])
+                self._read_done = day
+                for r, xs in self._carry_later.items():  # devices changed after today's reads: onto the new register
+                    for x in xs:
+                        self.prev_val[r] = x.carry(r, float(self.prev_val[r]), float(self.prev_normal[r]))
+                self._carry_later.clear()
                 self._same_day_rpa()
                 self.books.bill(day)
                 self._same_day_rpa()
                 self.books.invoice(day)
                 self.open = [c for c in self.open if c.resolved is None]
-        self.books.collect()  # payments, dunning and collections; opens the collections cases (notes on them too)
+            col.advance(day + 1)  # the day's payments, dunning and collections work
+            self.contact.step(day)  # the day's contacts: disputes, complaints and bad experiences feed back
+        self.books.collect()  # the rest of the year's collections events
+        self.field.finish()
+        self.contact.finish()
         for k, a, t in self._unseen:  # raised later (that evening, or a later day), or never: say which
             if k in self._handled:
                 continue
@@ -843,28 +1061,49 @@ class M2CRun:
             self._reject(k, a, self.not_open(case, a.get("caseId"), t) or (
                 self.decision_refusal(case, a["type"], t, None) if case is not None and case.work else None)
                 or f"case {a.get('caseId')} is opened by a later action")
-        diff = {q: np.zeros(YEAR_DAYS + 2, dtype=np.int64) for q in cat.QUEUES}
+        diff = {q: np.zeros(self.cal.days + 2, dtype=np.int64) for q in cat.QUEUES}
         for case in self.cases:  # backlog at the end of each day, from each case's queue moves
             for (t0, q, _), nxt in zip(case.moves, [*case.moves[1:], None], strict=True):
                 if q is None:
                     continue
                 a = int(np.floor(t0))
-                b = int(np.floor(nxt[0])) if nxt else YEAR_DAYS
-                diff[q][min(a, YEAR_DAYS)] += 1
-                diff[q][min(b, YEAR_DAYS)] -= 1
+                b = int(np.floor(nxt[0])) if nxt else self.cal.days
+                diff[q][min(max(a, 0), self.cal.days)] += 1
+                diff[q][min(b, self.cal.days)] -= 1
         for q in cat.QUEUES:
-            self.series[q][:, 2] = np.cumsum(diff[q])[:YEAR_DAYS]
+            self.series[q][:, 2] = np.cumsum(diff[q])[:self.cal.days]
 
     def _evening(self, day: int, m: int, rows: np.ndarray) -> None:
         tw, c = self.town, self.cfg_at(day)
         t = self.read_t[rows, m]
+        final = np.zeros(len(rows), dtype=bool)
+        if self.off_any[rows].any():  # service off at the read (disconnected, removed): no read, no bill
+            spans = [self.off_span(int(r), float(x)) if self.off_any[r] else None for r, x in zip(rows, t)]
+            off = np.array([s is not None for s in spans])
+            if off.any():
+                # Except the first: the meter was read when its service went off (the crew reads it, or the remote
+                # switch reports it), so that read is the period's, and the bill runs to the disconnection.
+                t = t.copy()
+                for k in np.flatnonzero(off).tolist():
+                    key = (int(rows[k]), float(spans[k][0]))
+                    if key not in self._final_taken:
+                        self._final_taken.add(key)
+                        final[k], off[k], t[k] = True, False, spans[k][0]
+                for k in np.flatnonzero(off).tolist():
+                    self.status[rows[k], m] = OFF
+                    self.reason[rows[k], m] = "SIM_DISCONNECTED" if spans[k][2] == "disconnected" else "SIM_REMOVED"
+                self.final_t[rows[final], m] = t[final]
+                self.final[rows[final], m] = True
+                rows, t, final = rows[~off], t[~off], final[~off]
+                if not len(rows):
+                    return
         meters = tw.meter_of[rows]
-        tech = tw.tech[rows]
+        tech = self.meter_tech_now[meters]
         for k, name in enumerate(("AMI", "AMR", "MANUAL")):
             self.read_counts[day, k] += int((tech == name).sum())
         # Did we get a read? One draw per meter and month; a walker who cannot get in misses every meter there.
         mm = np.unique(meters)
-        mt = tw.meter_tech[mm]
+        mt = self.meter_tech_now[mm]
         u = np.where(mt == "MANUAL", self._u(P_READ, self.prem_keys[tw.meter_prem[mm]], m, 1),
                      self._u(P_READ, tw.meter_keys[mm], m, 1))
         p = np.select([mt == "AMI", mt == "AMR"], [c.reading.ami_missed_read, c.reading.amr_missed_read],
@@ -881,15 +1120,27 @@ class M2CRun:
         first = np.unique(meters, return_index=True)[1]
         dark_m = ~np.isnan(dark[first])
         mute_m = ~np.isnan(mute[first])
-        miss_m = (u < p) | episode | self.no_doc[mm, m] | dark_m | mute_m
+        # A radio module whose battery died (past its life, not replaced) misses most reads.
+        tm = t[first]
+        dead_m = (self.battery_dead[mm] <= tm) & (tm < self.battery_new[mm]) & (
+            hash_u01(self.seed, Purpose.FIELD, tw.meter_keys[mm], m, 1) < c.field.dead_battery_miss)
+        miss_m = (u < p) | episode | self.no_doc[mm, m] | dark_m | mute_m | dead_m
+        if final.any():  # a final read is taken on site (or reported by the switch)
+            miss_m &= ~np.isin(mm, meters[final])
         self.missed_last[mm] = miss_m & (mt == "MANUAL")
+        dead_of = dict(zip(mm.tolist(), dead_m.tolist(), strict=True))
         miss_of = dict(zip(mm.tolist(), miss_m.tolist(), strict=True))
         nodoc_of = dict(zip(mm.tolist(), self.no_doc[mm, m].tolist(), strict=True))
         dark_of = dict(zip(mm.tolist(), dark[first].tolist(), strict=True))
         mute_of = dict(zip(mm.tolist(), mute[first].tolist(), strict=True))
         missed = np.array([miss_of[x] for x in meters.tolist()], dtype=bool)
         # Physical and observed registers (exact read day and hour, as the generator's sample reads).
-        normal = tw.true_advance(rows, tw.read_day[rows, m], tw.hour[rows])
+        rd, hr = tw.read_day[rows, m], tw.hour[rows]
+        if final.any():  # read when the service went off, not at the scheduled hour
+            rd, hr = rd.copy(), hr.astype(float)
+            rd[final] = np.floor(t[final])
+            hr[final] = (t[final] - np.floor(t[final])) * 24.0
+        normal = tw.true_advance(rows, rd, hr)
         true_now = tw.base[rows] + normal + self._extras(rows, t)
         meter_now = self._meter(rows, t, true_now)
         digits = tw.digits[rows]
@@ -897,8 +1148,9 @@ class M2CRun:
         self.meter_true[rows, m] = shown
         imp = tw.direction[rows] == "import"
         obs = shown.copy()
-        tr = self.transposed[meters, m] & imp
-        mr = self.misread[meters, m] & imp & ~tr
+        by_hand = tech == "MANUAL"  # a person reads it (a meter converted to AMI is not misread any more)
+        tr = self.transposed[meters, m] & imp & by_hand
+        mr = self.misread[meters, m] & imp & ~tr & by_hand
         for k in np.flatnonzero(tr | mr):
             obs[k] = _transpose(shown[k], int(digits[k]), int(self.reg_keys[rows[k]])) if tr[k] else \
                 _misread(shown[k], int(digits[k]), int(self.reg_keys[rows[k]]))
@@ -914,6 +1166,7 @@ class M2CRun:
         lost_prev, h_prev = self._outage_loss(rows, self.prev_t[rows])
         self.outage_h[rows, m] = h_now - h_prev
         known = (lost_now - lost_prev) if c.vee.oms_events else 0.0  # outage events (OMS, AMI last gasps) lower it
+        known = known + self._off_loss(rows, t) - self._off_loss(rows, self.prev_t[rows])  # the utility switched it off
         expected = np.maximum(0.0, (normal - self.prev_normal[rows] - known) * self._hist(rows, m))
         self.expected[rows, m] = expected
         mod = 10.0 ** digits
@@ -952,7 +1205,9 @@ class M2CRun:
         self.disp[rows, m] = np.where(missed, -1, res.disposition)
         self.reason[rows, m] = np.where(missed, [("NO_READ" if nodoc_of[x] else OUTAGE_REASON if dark_of[x] == dark_of[x]
                                                   else COLLECTOR_REASON if mute_of[x] == mute_of[x]
-                                                  else cat.REASON[str(tw.meter_tech[x])]) for x in meters.tolist()], "")
+                                                  else BATTERY_REASON if dead_of[x]
+                                                  else cat.REASON[str(self.meter_tech_now[x])]) for x in meters.tolist()],
+                                        "")
         clean = ~missed & (res.disposition == 0) & (self.open_case[rows] < 0)
         acc = rows[clean]
         if len(acc):
@@ -976,14 +1231,15 @@ class M2CRun:
                 continue
             if missed[k]:
                 self.status[r, m] = 5
+                tech_r = str(self.meter_tech_now[tw.meter_of[r]])
                 kind = "CONSECUTIVE_ESTIMATES" if self.consec[r] + 1 > c.vee.max_consecutive_estimates else \
                     ("NO_READ" if self.reason[r, m] == "NO_READ" else
-                     ("NO_ACCESS" if tw.tech[r] == "MANUAL" else "COMM_FAIL"))
+                     ("NO_ACCESS" if tech_r == "MANUAL" else "COMM_FAIL"))
                 gasp, down = dark_of[int(tw.meter_of[r])], mute_of[int(tw.meter_of[r])]
                 pre = (gasp, "AMI_LAST_GASP", OUTAGE_REASON) if gasp == gasp else \
                     (down, "AMI_COLLECTOR_OUTAGE", COLLECTOR_REASON) if down == down else None
                 by = "vee_batch" if kind in ("CONSECUTIVE_ESTIMATES", "NO_READ") else \
-                    ("ami_head_end" if tw.tech[r] == "AMI" else "meter_reading_route")
+                    ("ami_head_end" if tech_r == "AMI" else "meter_reading_route")
                 self._raise(day, r, m, kind, disposition=-1, impact=float(expected[k] * self.price[r]),
                             confidence=float("nan"), truth="clean", queue="ESTIMATION", precursor=pre, created_by=by)
             else:
@@ -997,7 +1253,7 @@ class M2CRun:
         """``CASE-{yymmdd}-{code}``: the code hashes what the case is about (exception type, register, read period,
         creation minute), so a case keeps its id when anything else in the run changes (an outage on an earlier day,
         a setting), and stored actions keep naming the same case. A collision takes the next salt (deterministic)."""
-        stamp = date_of(day).strftime("%y%m%d")
+        stamp = self.cal.date_of(day).strftime("%y%m%d")
         key = (kind, self.town.reg_ids[r], m, int(round(t * 1440)))
         salt = 0
         while (cid := f"CASE-{stamp}-{case_code(*key, salt)}") in self.case_index:
@@ -1030,14 +1286,14 @@ class M2CRun:
         key = self.reg_keys[r] + (7 if queue == "BILLING" else 0)
         u = self._u(P_WORK, key, m, 1)
         lag = p.analyst_queue_days_min + int(u * (p.analyst_queue_days_max - p.analyst_queue_days_min + 1))
-        case.eligible = add_bdays(day, lag if queue != "SUPERVISOR" else p.supervisor_queue_days_min)
+        case.eligible = self.cal.add_bdays(day, lag if queue != "SUPERVISOR" else p.supervisor_queue_days_min)
         self.series[queue][day, 0] += 1
         if kind in self.rpa_types_at(day) and disposition != 2 and rpa:
             if float(self._u(P_WORK, key, m, 2)) < 0.5:
                 case.rpa_at = None
                 self._rpa_later.append((case, t + 1.0 / 24))
             else:
-                case.rpa_at = add_bdays(day, 1) + 7.0 / 24
+                case.rpa_at = self.cal.add_bdays(day, 1) + 7.0 / 24
                 self.rpa_due.setdefault(int(case.rpa_at), []).append(case)
         return case
 
@@ -1056,6 +1312,8 @@ class M2CRun:
     # ---- resolution ---------------------------------------------------------------------------------------------
     def _proposal(self, case: Case) -> str:
         """What a careful analyst concludes after review (wrong with probability 1 − accuracy)."""
+        if case.work == "complaint":
+            return "respond"
         if case.doc >= 0:
             return self.books.proposal(case)
         if case.type == "CONSECUTIVE_ESTIMATES":
@@ -1103,7 +1361,7 @@ class M2CRun:
         self.series[case.queue][int(t), 1] += 1
         case.ev(t, "FIELD_ORDER", {"reason": case.type})
         case.move(t, "FIELD", "field_pending")
-        case.eligible = add_bdays(int(t), self.cfg_at(t).process.field_days_min)
+        case.eligible = self.cal.add_bdays(int(t), self.cfg_at(t).process.field_days_min)
         self.series["FIELD"][int(t), 0] += 1
         others = cover if cover is not None else (self.related(case, t, lambda c: self.unclaimed(c) and c.queue in (
             "VEE_REVIEW", "ESTIMATION")) if bundle else [])
@@ -1134,25 +1392,37 @@ class M2CRun:
         case.move(t, "SUPERVISOR", "escalated")
         u = float(self._u(P_WORK, self.reg_keys[case.r], case.month, 4))
         lo, hi = p.supervisor_queue_days_min, p.supervisor_queue_days_max
-        case.eligible = add_bdays(int(t), lo + int(u * (hi - lo + 1)))
+        case.eligible = self.cal.add_bdays(int(t), lo + int(u * (hi - lo + 1)))
         self.series["SUPERVISOR"][int(t), 0] += 1
+
+    def review_minutes(self, case: Case, p) -> float:
+        """An analyst's review of ``case`` (minutes; the same draw whoever works it, whenever)."""
+        return p.review_minutes_min + float(self._u(P_WORK, self.reg_keys[case.r], case.month, 5)) * \
+            (p.review_minutes_max - p.review_minutes_min)
+
+    def _log_work(self, who: str, day: int, todo: list, minutes: list[float], done: int) -> None:
+        log = self.work_log[who][day]
+        log[:] = (sum(minutes), sum(minutes[:done]), done, len(todo) - done,
+                  max((day - c.created for c in todo[done:]), default=0.0))
 
     def _analysts(self, day: int) -> None:
         c = self.cfg_at(day)
         p = c.process
-        if p.analysts <= 0:
-            return
-        cap = p.analysts * p.analyst_hours_per_day * 60.0
-        used = 0.0
         queues = ("VEE_REVIEW", "ESTIMATION", "BILLING") if c.billing.billing_queue_worked_by == "analysts" \
             else ("VEE_REVIEW", "ESTIMATION")  # billing blocks wait for you
         todo = [c for c in self.open if c.resolved is None and c.queue in queues
                 and c.eligible <= day and c.rpa_at is None and c.owner is None]
-        for case in todo:
-            minutes = p.review_minutes_min + float(self._u(P_WORK, self.reg_keys[case.r], case.month, 5)) * \
-                (p.review_minutes_max - p.review_minutes_min)
+        need = [self.review_minutes(case, p) for case in todo]
+        if p.analysts <= 0:
+            self._log_work("analysts", day, todo, need, 0)
+            return
+        cap = p.analysts * p.analyst_hours_per_day * 60.0
+        used = 0.0
+        done = 0
+        for case, minutes in zip(todo, need, strict=True):
             if used + minutes > cap:
                 break
+            done += 1
             t0 = day + (8.0 + used / 60.0 / p.analysts) / 24
             used += minutes
             case.assignee = f"AN-{(case.idx % p.analysts) + 1:02d}"
@@ -1167,14 +1437,19 @@ class M2CRun:
                 self._to_field(case, t1)
             else:
                 self._resolve(case, t1, case.proposal, actor=case.assignee)
+        self._log_work("analysts", day, todo, need, done)
 
     def _supervisors(self, day: int) -> None:
         p = self.cfg_at(day).process
+        waiting = [c for c in self.open if c.resolved is None and c.queue == "SUPERVISOR" and c.eligible <= day
+                   and c.owner is None]
+        need = [float(p.supervisor_minutes)] * len(waiting)
         if p.supervisors <= 0:
+            self._log_work("supervisors", day, waiting, need, 0)
             return
         n = int(p.supervisors * p.supervisor_hours_per_day * 60.0 // p.supervisor_minutes)
-        todo = [c for c in self.open if c.resolved is None and c.queue == "SUPERVISOR" and c.eligible <= day
-                and c.owner is None][:n]
+        todo = waiting[:n]
+        self._log_work("supervisors", day, waiting, need, len(todo))
         for k, case in enumerate(todo):
             t0 = day + (9.0 + k * p.supervisor_minutes / 60.0 / p.supervisors) / 24
             sup = f"SUP-{(k % p.supervisors) + 1:02d}"
@@ -1205,6 +1480,8 @@ class M2CRun:
             cases += self.related(lead, t0, lambda c, ids=ids: c.id not in ids and self.unclaimed(c) and c.queue in (
                 "VEE_REVIEW", "ESTIMATION", "FIELD"))
             lead.ev(t0, "TRUCK_ROLL", {"crew": crew, **({"caseIds": [c.id for c in cases]} if len(cases) > 1 else {})})
+            if self.field is not None:
+                self.field.vee_visit(lead, t0, crew)
             for c in cases[1:]:
                 c.ev(max(t0, c.events[-1][0]), "VISIT_SHARED", {"crew": crew, "caseId": lead.id})
                 c.rpa_at = INF if c.rpa_at is not None else None
@@ -1212,30 +1489,32 @@ class M2CRun:
                 self._visit_case(c, max(t0 + 1.0 / 24, c.events[-1][0]), actor=crew)
 
     def new_device_id(self, meter: int) -> str:
-        return f"{self.town.meter_ids[meter]}-X{sum(1 for x in self.installs if x.meter == meter) + 1}"
+        before = int(self.town.device_count[meter]) if len(self.town.device_count) else 0  # earlier years' changes
+        return f"{self.town.meter_ids[meter]}-X{before + sum(1 for x in self.installs if x.meter == meter) + 1}"
 
     def device_at(self, meter: int, t: float, T: float = INF) -> str:
         """The device on meter slot ``meter`` at ``t``, as registered by ``T``."""
         return next((x.device for x in reversed(self.installs) if x.meter == meter and x.t <= t and x.t_reg <= T),
-                    self.town.meter_ids[meter])
+                    self.town.meter_device[meter] if self.town.meter_device else self.town.meter_ids[meter])
 
     def install_check(self, meter: int, t_inst: float, t_reg: float, device: str) -> str | None:
         """Why a device replacement on ``meter`` from ``t_inst`` (registered at ``t_reg``) does not apply, or None:
         the device id is taken, or a read on or after the install date was already released on the old register."""
         tw = self.town
-        if device in self.meter_index or any(x.device == device for x in self.installs):
+        if device in self.meter_index or any(x.device == device for x in self.installs) or \
+                device in self.town.meter_device:
             return f"device {device} is already in use; give the new device's own serial"
         for r in np.flatnonzero(tw.meter_of == meter).tolist():
             late = [m for m in range(13) if self.read_t[r, m] >= t_inst and self.release_t[r, m] <= t_reg]
             if late:
-                d = date_of(int(tw.read_day[r, late[-1]])).isoformat()
+                d = self.cal.date_of(int(tw.read_day[r, late[-1]])).isoformat()
                 return (f"the read of {d} on {tw.reg_ids[r]} was already released on device "
                         f"{self.device_at(meter, self.read_t[r, late[-1]])}; install the new device on or after {d}")
         return None
 
     def _install(self, meter: int, t_inst: float, t_reg: float, device: str, initial: dict[int, float], *, by: str,
                  removal: dict[int, float] | None = None, order: str | None = None, case: str | None = None,
-                 note: str | None = None) -> Install:
+                 note: str | None = None, planned: bool = False) -> Install:
         """Register a new device on ``meter`` from ``t_inst`` with its registers' ``initial`` reads (0 for a register
         not named; a swap made earlier keeps its dial). A meter that shows a failed registration's swap is registered
         as found (no swap now); otherwise the meter is swapped at ``t_reg``, and its new dial reads the initial read
@@ -1250,7 +1529,8 @@ class M2CRun:
         day = np.floor(t_inst)
         normal = tw.true_advance(rows, np.full(len(rows), int(day)), np.full(len(rows), (t_inst - day) * 24.0))
         x = Install(meter, t_inst, t_reg, device, self.device_at(meter, t_inst), init, rem,
-                    dict(zip(rows.tolist(), normal.tolist(), strict=True)), {}, by, physical, order, case, note)
+                    dict(zip(rows.tolist(), normal.tolist(), strict=True)), {}, by, physical, order, case, note,
+                    planned)
         if self.fault_t[meter] <= t_reg < self.fix_t[meter]:
             self.fix_t[meter] = t_reg  # the fault (or the unregistered swap) ends with the new device
         if physical:  # from t_reg the dial is the new meter's: initial + what flowed since t_inst
@@ -1264,8 +1544,13 @@ class M2CRun:
             if m < 13:
                 self.dev_change[r, m] = x
             self.installs_of.setdefault(r, []).append(x)
-            self.prev_val[r] = x.carry(r, float(self.prev_val[r]), float(self.prev_normal[r]))
+            if any(self.read_t[r, j] < t_inst and tw.read_day[r, j] > self._read_done for j in range(1, 13)):
+                self._carry_later.setdefault(r, []).append(x)  # today's read was on the old meter: diff it first
+            else:
+                self.prev_val[r] = x.carry(r, float(self.prev_val[r]), float(self.prev_normal[r]))
         self.installs.append(x)
+        if physical and self.field is not None and not planned:  # a corrective exchange: the meter crew's time
+            self.field.exchanged(x)
         return x
 
     def change_between(self, r: int, t0: float, t1: float, T: float = INF) -> Install | None:
@@ -1326,7 +1611,7 @@ class M2CRun:
         """``HH:MM on YYYY-MM-DD`` (local)."""
         day = int(np.floor(t))
         minutes = min(int(round((t - day) * 1440)), 1439)
-        return f"{minutes // 60:02d}:{minutes % 60:02d} on {date_of(day).isoformat()}"
+        return f"{minutes // 60:02d}:{minutes % 60:02d} on {self.cal.date_of(day).isoformat()}"
 
     @staticmethod
     def actor_label(actor: str | None) -> str:
@@ -1345,7 +1630,7 @@ class M2CRun:
             return f"case {case_id} does not exist in this run"
         if case.created > t:
             return (f"{case.id} was raised at {self.clock(case.created)}; work it from "
-                    f"{date_of(self.actionable_from(case)).isoformat()}")
+                    f"{self.cal.date_of(self.actionable_from(case)).isoformat()}")
         if case.resolved is not None and case.resolved <= t:
             return f"{case.id} was already completed by {self.actor_label(case.by)} at {self.clock(case.resolved)}"
         return None
@@ -1354,6 +1639,9 @@ class M2CRun:
                          order_id: str | None = None) -> str | None:
         """Why the decision ``typ`` does not apply to the open ``case`` at ``t`` (``hold``: the account's invoice
         hold in force), or None. Case views offer only the decisions this lets through."""
+        if case.work == "complaint":
+            return None if typ in ("accept", "escalate") else \
+                f"{typ} does not apply to {case.id}, a complaint (accept answers it, or escalate)"
         if case.work is not None:
             return f"{typ} does not apply to {case.id}, " + (
                 f"the Field Work case of order {case.ref} (use order_complete)" if case.work == "order" else
@@ -1361,11 +1649,14 @@ class M2CRun:
                 f"the low-income referral of account {case.ref} (the agency decides it)" if case.work == "low_income"
                 else f"the budget billing enrolment of account {case.ref} (billing sets the plan up)")
         if case.doc >= 0:
+            if case.type == "BILL_DISPUTE" and typ not in ("accept", "estimate", "escalate"):
+                return (f"{typ} does not apply to {case.id}, a disputed bill (accept: the bill stands and is explained; "
+                        "estimate: rebill it on a check read; or escalate)")
             if typ in ("override", "field_order"):
                 return f"{typ} does not apply to {case.id}, a billing block (use accept, estimate or escalate)"
             if typ in ("accept", "estimate") and hold is not None:
                 return (f"account {hold[2].ref} has an invoice hold ({hold[2].id}, since "
-                        f"{date_of(int(hold[0])).isoformat()}): remove it with invoice_unhold before releasing this "
+                        f"{self.cal.date_of(int(hold[0])).isoformat()}): remove it with invoice_unhold before releasing this "
                         "outsort")
             return None
         if typ == "accept":
@@ -1402,7 +1693,7 @@ class M2CRun:
                 continue
             out, at = got[0], o.outcome["at"]
             if out["kind"] == "read_taken":
-                tc = at if out["date"] == date_of(int(at)).isoformat() else ords.day_of(
+                tc = at if out["date"] == self.cal.date_of(int(at)).isoformat() else self.cal.day_of(
                     date.fromisoformat(out["date"])) + 0.5
                 d = int(np.floor(tc))
                 since = float(self.town.true_advance(np.array([r]), np.array([d]), np.array([(tc - d) * 24.0]))[0]) \
@@ -1443,9 +1734,9 @@ class M2CRun:
         if j == BELOW_DEVICE:
             jj = self.last_actual(r, m, t)
             x = self.change_between(r, float(self.read_t[r, jj]) if jj >= 0 else -INF, float(self.read_t[r, m]), t)
-            return f"the initial read {x.initial[r]:,.3f} of device {x.device} (installed {date_of(int(x.t))})"
+            return f"the initial read {x.initial[r]:,.3f} of device {x.device} (installed {self.cal.date_of(int(x.t))})"
         return (f"the last actual read {self.released[r, j]:,.3f} on "
-                f"{date_of(int(self.town.read_day[r, j])).isoformat()}")
+                f"{self.cal.date_of(int(self.town.read_day[r, j])).isoformat()}")
 
     def _apply_action(self, day: int, a: dict, k: int = -1) -> None:
         case = self.case_index.get(a.get("caseId") or "")
@@ -1482,7 +1773,9 @@ class M2CRun:
                     self.warnings.append(f"{a['id']} (notice): {case.id} was completed while field service order "
                                          f"{oid} is still {stage}; the order goes on")
         if case.doc >= 0 and typ in ("accept", "estimate"):
-            self._resolve(case, t, "release" if typ == "accept" else "rebill", actor="you")
+            dispute = case.type == "BILL_DISPUTE"
+            self._resolve(case, t, ("explain" if dispute else "release") if typ == "accept" else
+                          ("check_rebill" if dispute else "rebill"), actor="you")
         elif typ == "field_order":
             for c in cover:
                 c.assignee, c.owner = "you", None
@@ -1509,7 +1802,7 @@ class M2CRun:
         elif typ in ("note", "assign"):
             self._note_or_assign(day, k, a)
         elif typ in COLLECTION_ACTIONS:
-            return  # replayed with the account's payments and dunning after the year (books.collect)
+            return  # replayed with the account's payments and dunning (books.collections, 09:00 on its day)
         else:
             self._hold(day, k, a)
 
@@ -1625,7 +1918,7 @@ class M2CRun:
             outcome = {**outcome, "deviceId": self.new_device_id(mi), "initialRead": 0.0}
         dev = outcome.get("deviceId")
         if dev is not None:
-            day = ords.day_of(date.fromisoformat(outcome["installDate"])) if "installDate" in outcome else int(t)
+            day = self.cal.day_of(date.fromisoformat(outcome["installDate"])) if "installDate" in outcome else int(t)
             t_inst = t if day == int(t) else day + 0.5
             why = self.install_check(mi, t_inst, t, dev)
             if why is not None:
@@ -1683,10 +1976,10 @@ class M2CRun:
             ft = int(self.fault_type[mi])
             if exchange and act in ("meter_exchange", "meter_investigation"):
                 return {"kind": "meter_exchanged", "deviceId": self.new_device_id(mi),
-                        "installDate": date_of(int(t)).isoformat(), "initialRead": shown if ft == 3 else 0.0}
+                        "installDate": self.cal.date_of(int(t)).isoformat(), "initialRead": shown if ft == 3 else 0.0}
             return {"kind": "defect_found", "text": DEFECTS[ft]}
         if m < 0 or np.isnan(self.obs[r, m]) or self.truth_cls[r, m] in (1, 2):
-            return {"kind": "read_taken", "value": shown, "date": date_of(int(t)).isoformat()}
+            return {"kind": "read_taken", "value": shown, "date": self.cal.date_of(int(t)).isoformat()}
         return {"kind": "read_confirmed"}
 
     def _device_replace(self, day: int, k: int, a: dict) -> None:
@@ -1694,7 +1987,7 @@ class M2CRun:
         initial read), registered at 09:00. A case named with it records the step."""
         t = day + 9.0 / 24
         mi = self.meter_index[a["meterId"]]
-        d = ords.day_of(date.fromisoformat(a["installDate"]))
+        d = self.cal.day_of(date.fromisoformat(a["installDate"]))
         t_inst = t if d == day else d + 0.5
         case = None
         if a.get("caseId"):
@@ -1755,7 +2048,7 @@ class M2CRun:
                 return
             covered.append(c)
         fw = self._work_case(t, o.r, o.m, "FIELD_SERVICE", "FIELD", "order", o.id,
-                             f"CASE-{date_of(int(t)).strftime('%y%m%d')}-F{o.n:04d}",
+                             f"CASE-{self.cal.date_of(int(t)).strftime('%y%m%d')}-F{o.n:04d}",
                              {"orderId": o.id, "sourceCaseId": src.id if src else None,
                               "readId": self.read_id(o.r, o.m), "actionId": a["id"],
                               **({"coveredCaseIds": [c.id for c in covered]} if covered else {})}, "draft")
@@ -1795,6 +2088,8 @@ class M2CRun:
         arrive = t + TRAVEL_MIN / 1440.0
         o.done_t = min(arrive + o.minutes / 1440.0, int(t) + 0.999)
         o.case.ev(t, "TRUCK_ROLL", {"crew": o.crew, "orderId": o.id})
+        if self.field is not None:
+            self.field.vee_visit(o.case, t, o.crew)
         o.case.move(t, "FIELD", "en_route")
         o.case.ev(arrive, "ON_SITE", {"crew": o.crew, "orderId": o.id})
         o.case.move(arrive, "FIELD", "on_site")
@@ -1804,6 +2099,9 @@ class M2CRun:
     def _note_or_assign(self, day: int, k: int, a: dict) -> None:
         case = self._open_case(k, a, day + 9.0 / 24)
         if case is None:
+            return
+        if case.work in ("low_income", "budget_bill"):  # a collections case: in time order with its own events
+            self.books.collections.note(case, k, a, day + 9.0 / 24)
             return
         t = self._user_t(case, day)
         if a["type"] == "note":
@@ -1846,7 +2144,7 @@ class M2CRun:
         if a["type"] == "invoice_hold":
             if held is not None:
                 self._reject(k, a, f"account {acct} is already on hold ({held[2].id}, since "
-                                   f"{date_of(int(held[0])).isoformat()})")
+                                   f"{self.cal.date_of(int(held[0])).isoformat()})")
                 return
             if case is not None:
                 r, m = case.r, case.month
@@ -1855,7 +2153,7 @@ class M2CRun:
                 r = int(self.books.main[insts[0]]) if insts else 0
                 m = max([j for j in range(1, 13) if self.read_t[r, j] <= t], default=0)
             hc = self._work_case(t, r, m, "INVOICE_HOLD", "BILLING", "hold", acct,
-                                 f"CASE-{date_of(day).strftime('%y%m%d')}-H{k + 1:04d}",
+                                 f"CASE-{self.cal.date_of(day).strftime('%y%m%d')}-H{k + 1:04d}",
                                  {"accountId": acct, "note": a["note"], "sourceCaseId": case.id if case else None,
                                   "actionId": a["id"]}, "held")
             self.holds.setdefault(acct, []).append([t, None, hc])
@@ -1882,6 +2180,12 @@ class M2CRun:
         r = case.r
         self.series[case.queue][int(t), 1] += 1
         case.by = actor
+        if case.work == "complaint":  # answered in writing; nothing on the reads
+            case.ev(t, "COMPLAINT_ANSWERED", {"accountId": case.ref, "by": actor}, len(case.events) - 1)
+            case.resolved = t
+            case.outcome = "respond"
+            case.move(t, None, "resolved")
+            return
         if case.doc >= 0:
             self.books.resolve(case, t, action, actor)
             case.resolved = t
@@ -1970,22 +2274,21 @@ class M2CRun:
 
     # ---- identities -----------------------------------------------------------------------------------------
     def temp(self, day: int) -> float:
-        k = day + 31  # the weather series starts 2025-12-01
+        k = day + 31  # the town's weather series starts on 1 December of the year before
         return float(self.town.temps[min(max(k, 0), len(self.town.temps) - 1)])
 
     def next_bday(self, day: int, k: int = 1) -> int:
-        return add_bdays(day, k)
+        return self.cal.add_bdays(day, k)
 
-    @staticmethod
-    def date_of(day: int):
-        return date_of(day)
+    def date_of(self, day: int):
+        return self.cal.date_of(day)
 
     def read_id(self, r: int, m: int) -> str:
-        return f"READ-{self.town.id}-{self.town.reg_ids[r]}-{date_of(int(self.town.read_day[r, m])).isoformat()}"
+        return f"READ-{self.town.id}-{self.town.reg_ids[r]}-{self.cal.date_of(int(self.town.read_day[r, m])).isoformat()}"
 
     def iso(self, t: float) -> str:
         day = int(np.floor(t))
-        return to_utc_iso(date_of(day), (t - day) * 24.0, self.town.timezone)
+        return to_utc_iso(self.cal.date_of(day), (t - day) * 24.0, self.town.timezone)
 
 
 # ---- read-error helpers -----------------------------------------------------------------------------------------

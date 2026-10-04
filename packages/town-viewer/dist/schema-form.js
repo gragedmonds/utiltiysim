@@ -1,7 +1,7 @@
 // Engine settings rendered from the engine's JSON Schema: groups (in x-order), defaults, bounds, units, effects and
 // advanced flags (x-unit, x-effects, x-advanced). A field is one compact row (short title, input, unit); its
-// description, default, effects and path sit behind an (i) button, and the fields of a group lay out in two columns. Nested objects (a value per era, a season's temperatures) render as
-// labelled sub-rows, lists as a checked JSON box, and settings the engine marks x-status "not-modelled" or
+// description, default, effects and path sit behind an (i) button, and the fields of a group lay out in two columns. Nested objects (a value per era, a season's temperatures, a crew) render as
+// one compound row (class schema-compound): the title line, then a compact row of captioned sub-inputs with their units, lists as a checked JSON box, and settings the engine marks x-status "not-modelled" or
 // x-deprecated stay visible but disabled with the reason. The form reports only values that differ from a base (the
 // schema defaults, or a town's own configuration), so the engine stays authoritative. Every engine setting also says
 // where its effect reaches (x-reach: year, town, shape, operations, display) and how it changes the results
@@ -24,6 +24,10 @@ const SUB_LABEL={per_event:'Per event',per_1000:'Per 1,000 a month',per_1000_pre
 export const prettyKey=k=>SUB_LABEL[k]||(s=>s.charAt(0).toUpperCase()+s.slice(1))(String(k).replaceAll('_',' '));
 // Field titles read as sentences: a generated Title Case title ("Analyst Queue Days Max") becomes "Analyst queue days
 // max", and the utility acronyms keep their capitals ("Rpa Coverage" → "RPA coverage"). A title someone wrote stays.
+// Numbers show at most six significant digits (1/24 reads 0.0416667); an input left alone keeps its exact value.
+export const shownNumber=v=>typeof v==='number'&&Number.isFinite(v)&&!Number.isInteger(v)?String(Number(v.toPrecision(6))):v==null?'':String(v);
+function setNum(i,v){i.value=shownNumber(v);i.dataset.exact=v==null?'':String(v);i.dataset.shown=i.value;}
+function exact(i){return i.dataset.shown!==undefined&&i.value===i.dataset.shown?i.dataset.exact:i.value;}
 const ACRONYMS=new Set(['AMI','AMR','VEE','RPA','OSM','PV','EV','HST','AC','DC','GJ','NSF','PAD','ANSI','CT','SAP','KV','KVA','KW','KWH','ID','IDS','API','CSV','JSON','YAML','UTC','GIS','HV','LV','MV','PRV','SAIDI','SAIFI','COM','RES','MRU','VPN','AMP']);
 export function sentenceTitle(title){const t=String(title||'');if(!/^[A-Z][a-z0-9]*( [A-Z0-9][a-z0-9]*)*$/.test(t))return t;
  return t.split(' ').map((w,i)=>{const up=w.toUpperCase();if(ACRONYMS.has(up))return up;return i?w.toLowerCase():w;}).join(' ');}
@@ -121,12 +125,12 @@ export function renderSchemaForm(el,schema,{values={},base=null,groups=null,show
    else if(f.type==='enum'){input=mk('select');for(const o of f.options){const opt=mk('option',null,String(o).replaceAll('_',' '));opt.value=o;input.append(opt);}input.value=current;}
    else if(f.type==='json'){input=mk('textarea','schema-json');input.spellcheck=false;input.value=jsonText(current);input.rows=Math.min(8,input.value.split('\n').length+(input.value.length>60?1:0));row.classList.add('schema-wide');}
    else if(f.type==='object'){input=mk('div','schema-subs');row.setAttribute('role','group');row.setAttribute('aria-label',f.description||f.title);
-    for(const c of f.children){const lab=mk('label','schema-sub'),cap=mk('span',null,c.title),i=mk('input');i.type='number';i.step=c.type==='integer'?'1':'any';if(c.min!=null)i.min=c.min;if(c.max!=null)i.max=c.max;i.value=current?.[c.key]??'';i.dataset.key=c.key;i.name=f.path+'.'+c.key;i.disabled=f.disabled;lab.append(cap,i);input.append(lab);inputs.push(i);}row.classList.add('schema-wide');}
-   else{input=mk('input');input.type=f.type==='text'?'text':'number';if(f.min!=null)input.min=f.min;if(f.max!=null)input.max=f.max;if(f.maxLength!=null)input.maxLength=f.maxLength;if(f.type!=='text')input.step=f.type==='integer'?'1':'any';input.value=current??'';if(f.nullable)input.placeholder='none';}
+    for(const c of f.children){const lab=mk('label','schema-sub'),cap=mk('span','schema-sub-cap',c.title),i=mk('input');if(c.unit)cap.append(mk('span','schema-sub-unit',c.unit));lab.title=c.description||c.title;i.type='number';i.step=c.type==='integer'?'1':'any';if(c.min!=null)i.min=c.min;if(c.max!=null)i.max=c.max;setNum(i,current?.[c.key]);i.dataset.key=c.key;i.name=f.path+'.'+c.key;i.disabled=f.disabled;lab.append(cap,i);input.append(lab);inputs.push(i);}row.classList.add('schema-compound');}
+   else{input=mk('input');input.type=f.type==='text'?'text':'number';if(f.min!=null)input.min=f.min;if(f.max!=null)input.max=f.max;if(f.maxLength!=null)input.maxLength=f.maxLength;if(f.type!=='text')input.step=f.type==='integer'?'1':'any';if(f.type==='text')input.value=current??'';else setNum(input,current);if(f.nullable)input.placeholder='none';}
    if(f.type!=='object'){input.name=f.path;input.dataset.group=f.group;input.dataset.key=f.key;input.disabled=f.disabled;inputs=[input];}
    const finfo=info(sentenceTitle(f.title),infoLines(f,schema?.['x-reaches']));const rc=REACH[f.reach];if(rc){const chip=mk('span','schema-reach reach-'+f.reach,rc.chip);chip.title=(schema?.['x-reaches']?.[f.reach])||rc.text;name.append(chip);}if(finfo){row.classList.add('has-pop');name.append(finfo[0]);}
    err.setAttribute('role','alert');
-   const read=()=>f.type==='boolean'?input.checked:f.type==='object'?Object.fromEntries(inputs.map(i=>[i.dataset.key,i.value])):input.value;
+   const read=()=>f.type==='boolean'?input.checked:f.type==='object'?Object.fromEntries(inputs.map(i=>[i.dataset.key,exact(i)])):exact(input);
    const check=()=>{const res=parseField(f,read());for(const i of inputs)i.setAttribute('aria-invalid',String(!res.ok));err.textContent=res.ok?'':res.error;return res;};
    for(const i of inputs){i.onchange=()=>{const res=check();if(res.ok)commit(f,res.value);};if(f.type==='json')i.oninput=check;}
    const ctl=mk('span','schema-control');ctl.append(input);if(f.unit&&f.type!=='json'&&f.type!=='object')ctl.append(mk('span','schema-unit',f.unit));if(f.status)ctl.append(mk('span','schema-status',f.status==='deprecated'?'Deprecated':f.status==='not-modelled'?'Not modelled':'Unavailable'));
@@ -135,7 +139,7 @@ export function renderSchemaForm(el,schema,{values={},base=null,groups=null,show
   el.append(card);}
  // Sets a value from outside the form (a seed button, a reset), updating its inputs.
  function set(path,value,{silent=false}={}){const f=fields.find(x=>x.path===path);if(!f)return false;(state[f.group]||={})[f.key]=value;const r=rows.get(path);
-  if(r){if(f.type==='boolean')r.input.checked=!!value;else if(f.type==='object')for(const i of r.inputs)i.value=value?.[i.dataset.key]??'';else r.input.value=f.type==='json'?jsonText(value):value??'';for(const i of r.inputs)i.setAttribute('aria-invalid','false');}
+  if(r){if(f.type==='boolean')r.input.checked=!!value;else if(f.type==='object')for(const i of r.inputs)setNum(i,value?.[i.dataset.key]);else if(f.type==='json')r.input.value=jsonText(value);else if(f.type==='text'||f.type==='enum')r.input.value=value??'';else setNum(r.input,value);for(const i of r.inputs)i.setAttribute('aria-invalid','false');}
   mark(f);if(!silent)onChange(overridesFrom(fields,state,base),changes());return true;}
  // Shows only matching settings; cards with a match open while a search is active. Returns the number of matches.
  function filter(query){let n=0;for(const {row,f} of rows.values()){const hit=fieldMatches(f,query)&&(showAdvanced||!f.advanced||!!query);row.hidden=!hit;if(hit)n++;}

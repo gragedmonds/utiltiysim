@@ -10,7 +10,7 @@ const NEEDS={voltage:'Needs the live engine: service voltage and loading come fr
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const count=n=>Number(n||0).toLocaleString('en-CA');
 // The meter-to-cash run a summary belongs to (town, view date, actions, settings, the map's outages).
-export function m2cRunKey(m){return m?[m.townId,m.asOf,m.actions?.length||0,JSON.stringify(m.settings||null),m.outageKey?.()||''].join('|'):null;}
+export function m2cRunKey(m){return m?[m.townId,...(m.year>2026?[m.year]:[]),m.asOf,m.actions?.length||0,JSON.stringify(m.settings||null),m.outageKey?.()||''].join('|'):null;}
 export function frameClock(frame){const c=frame?.clock,at=c?.simTime||frame?.simTime;if(!at)return null;try{return new Intl.DateTimeFormat('en-GB',{timeZone:c?.timezone||'America/Toronto',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(new Date(at));}catch{return null;}}
 // getContext() → {town, flow, utility, m2c, ops, engine, frame}
 export function installMapLens({scene,getContext,panel=globalThis.document?.getElementById('lens-panel'),storage=globalThis.localStorage}){

@@ -331,6 +331,8 @@
 .studio-pill{background:#f0ecfc;color:#684bc5;font-size:12px;font-weight:650;border-radius:6px;padding:5px 9px;white-space:nowrap}
 @media (max-width:600px){.studio-config-tabs{gap:14px;overflow-x:auto}.studio-config-tabs button{font-size:13px;white-space:nowrap}}
 /* Map lenses: one analytic view at a time, with its legend. */
+.map-year-note{position:absolute;left:50%;transform:translateX(-50%);top:84px;z-index:3;margin:0;max-width:min(560px,calc(100% - 150px));background:#fffbeeee;border:1px solid #ecd9a3;border-radius:8px;box-shadow:0 3px 15px #18231c12;padding:6px 12px;font-size:12px;line-height:1.4;color:#5c4a12}
+@media (max-width:600px){.map-year-note{top:auto;bottom:150px;max-width:calc(100% - 32px)}}
 .lens-panel{position:absolute;right:16px;top:126px;z-index:8;background:#ffffffee;border:1px solid #dde2da;border-radius:9px;box-shadow:0 3px 15px #18231c12;padding:5px;min-width:0;max-width:300px}
 .lens-tabs{display:flex;gap:2px}
 .lens-tabs button{border:0;background:none;padding:7px 10px;border-radius:6px;font-size:12.5px;color:#56645a;cursor:pointer}
@@ -399,9 +401,12 @@ details.schema-group>.schema-field:last-child{margin-bottom:10px}
 .schema-group h3 .schema-badge{margin-left:8px;vertical-align:middle}
 .schema-field.schema-wide{grid-template-columns:minmax(0,1fr)}
 .schema-hint,.schema-was,.schema-status,.schema-name,.schema-error{overflow-wrap:anywhere;min-width:0}
+.schema-field.schema-compound{grid-template-columns:minmax(0,1fr)}
 .schema-subs{display:flex;flex-wrap:wrap;gap:8px 12px}
-.schema-sub{display:flex;flex-direction:column;gap:3px;font-size:12px;color:#5f6b5c;flex:1 1 84px;min-width:0;max-width:150px}
-.schema-sub input{min-height:36px;font-size:14px;border:1px solid #cdd5c9;border-radius:6px;padding:4px 8px;background:#fff;width:100%;min-width:0}
+.schema-sub{display:flex;flex-direction:column;justify-content:flex-end;gap:3px;font-size:12px;color:#5f6b5c;flex:1 1 84px;min-width:0;max-width:150px}
+.schema-sub-cap{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.schema-sub-unit{margin-left:4px;color:#9a95ad}
+.schema-sub input{flex:none;min-height:36px;font-size:14px;border:1px solid #cdd5c9;border-radius:6px;padding:4px 8px;background:#fff;width:100%;min-width:0}
 .schema-json{width:100%;min-height:40px;font:12.5px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace;border:1px solid #cdd5c9;border-radius:6px;padding:8px;background:#fff;resize:vertical}
 .schema-json[aria-invalid=true],.schema-sub input[aria-invalid=true]{border-color:#c96f4a}
 .schema-field input,.schema-field select{min-width:0;max-width:100%}
@@ -533,9 +538,21 @@ details.schema-group>.schema-field:last-child{margin-bottom:10px}
 #settings-page .schema-was{grid-column:1/-1;font-size:11px;margin:-2px 0 2px}
 #settings-page .schema-error{grid-column:1/-1;font-size:11px}
 #settings-page .schema-error:empty{display:none}
-#settings-page .schema-subs{gap:6px 10px}
-#settings-page .schema-sub{font-size:11px;flex:1 1 72px;max-width:130px}
-#settings-page .schema-sub input{min-height:30px;font-size:12.5px}
+/* A compound setting (a crew, a work type, a contact reason, a value per era or season) is one row-group across both
+   columns: a quiet card whose title line reads like the other rows, and a compact row of captioned sub-inputs the size
+   of the scalar inputs, pushed to the right edge. When the title and inputs do not fit on one line, the inputs wrap
+   under the title. */
+#settings-page .schema-field.schema-compound{grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:flex-end;gap:4px 18px;margin:6px 0 0;padding:7px 10px 8px 12px;border:1px solid #ecebf3;border-radius:9px;background:#fbfafd}
+#settings-page .schema-field.schema-compound+.schema-field:not(.schema-compound){margin-top:6px}
+#settings-page .schema-compound>.schema-name{flex:1 1 210px;min-height:30px}
+#settings-page .schema-compound>.schema-control{flex:0 1 auto;width:auto;justify-self:auto;overflow:visible;min-width:0}
+#settings-page .schema-compound>.schema-was,#settings-page .schema-compound>.schema-error{flex:1 0 100%}
+#settings-page .schema-subs{display:flex;flex-wrap:wrap;gap:6px 10px}
+#settings-page .schema-sub{flex:0 0 118px;max-width:none;font-size:10.5px;line-height:1.2;color:#77728c;gap:3px}
+#settings-page .schema-compound .schema-sub input{flex:none;width:100%;height:30px;min-height:30px;font-size:12.5px;padding:2px 7px;border-color:#d5d3e2;border-radius:6px}
+#settings-page .schema-field.schema-compound.is-changed{box-shadow:inset 3px 0 0 #7357d8;padding-left:12px}
+#settings-page .schema-compound.is-disabled .schema-sub-cap{color:#a3a0b2}
+@media (max-width:600px){#settings-page .schema-field.schema-compound{padding:7px 9px 9px 10px}#settings-page .schema-compound>.schema-control{flex:1 1 100%}#settings-page .schema-subs{display:grid;grid-template-columns:repeat(auto-fill,minmax(86px,1fr));gap:6px 8px;width:100%}#settings-page .schema-sub{flex:none;min-width:0}}
 #settings-page .schema-json{font-size:12px;min-height:34px}
 #settings-page .schema-count{font-size:11px;color:#9a95ad}
 .schema-info{flex:0 0 auto;width:16px;height:16px;border-radius:50%;border:1px solid #b9b4cc;background:#fff;color:#6b6585;font:italic 700 10.5px/1 Georgia,serif;cursor:pointer;padding:0;display:inline-flex;align-items:center;justify-content:center}
@@ -649,6 +666,26 @@ details.schema-group>.schema-field:last-child{margin-bottom:10px}
 .year-confirm{font-size:12px;color:#b3261e;display:flex;gap:8px;align-items:center}
 .year-status{font-size:12px;color:#737f94;margin:0 0 10px;min-height:16px}
 .year-error{color:#b3261e;font-size:12.5px;margin:0 0 10px}
+/* Years: the switcher (2026 … the last year opened), Continue into the next year, and what a later year opened with. */
+.year-years{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;margin:2px 0 10px;font-size:12.5px;color:#5d5870}
+.year-switch{display:inline-flex;border:1px solid #d7d4e3;border-radius:7px;overflow:hidden;background:#fff}
+.year-switch button{border:0;background:none;font:inherit;font-size:12.5px;padding:5px 13px;min-height:0;color:#3d3750;cursor:pointer;font-variant-numeric:tabular-nums}
+.year-switch button+button{border-left:1px solid #e4e2ee}
+.year-switch button:hover{background:#f0ecfc;color:#5d43b8}
+.year-switch button[aria-pressed=true]{background:#7357d8;color:#fff;font-weight:650}
+.year-switch button:focus-visible{outline:2px solid #7357d8;outline-offset:-2px}
+.year-years .outline-btn{width:auto;margin:0;min-height:30px;padding:4px 12px;font-size:12.5px;border-color:#cfc8ea;color:#5d43b8;border-radius:7px;background:#fff}
+.year-years .outline-btn:hover{background:#f0ecfc}
+.year-years-note{font-size:12px;color:#737f94}
+.year-years-note.is-closed{color:#8a5a00}
+.year-continue-confirm{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center;font-size:12.5px;color:#3d3750;background:#f7f5fd;border:1px solid #e4def8;border-radius:8px;padding:6px 10px}
+.year-continue-confirm .primary-btn{width:auto;margin:0;padding:6px 14px;background:#7357d8;border-radius:7px;font-weight:650;font-size:12.5px}
+.year-continue-confirm .primary-btn:hover{background:#5d43b8}
+.year-continue-confirm .small-link{font-size:12px;color:#5d43b8}
+.year-opening{display:flex;flex-wrap:wrap;gap:4px 6px;align-items:center;margin:0 0 10px;font-size:12px;color:#3d3750}
+.year-opening strong{font-weight:650;margin-right:2px}
+.year-opening span{background:#fff;border:1px solid #e4e2ee;border-radius:6px;padding:2px 8px;font-variant-numeric:tabular-nums}
+.year-opening.is-loading{color:#737f94}
 .year-calendar{background:#fff;border:1px solid #e4e2ee;border-radius:10px;padding:14px 16px 10px;margin-bottom:14px}
 .year-months{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px 16px}
 .year-month h2{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#5d5870;margin:0 0 4px;font-weight:700}
@@ -663,6 +700,7 @@ details.schema-group>.schema-field:last-child{margin-bottom:10px}
 .year-day.is-today{box-shadow:inset 0 0 0 2px #7357d8;font-weight:700;color:#5d43b8}
 .year-day.is-selected,.year-day.is-selected:hover{background:#7357d8;color:#fff}
 .year-day:focus-visible{outline:2px solid #7357d8;outline-offset:1px;z-index:1;position:relative}
+.year-day:disabled{cursor:default;pointer-events:none}
 .year-strip{position:relative;margin-top:4px;min-height:8px}
 .year-bar{position:absolute;height:4px;min-width:3px;border:0;padding:0;border-radius:2px;cursor:pointer;min-height:0}
 .year-bar:not(.starts){border-top-left-radius:0;border-bottom-left-radius:0}
@@ -798,3 +836,23 @@ details.schema-group>.schema-field:last-child{margin-bottom:10px}
 .schema-reach{display:inline-block;margin-left:6px;padding:0 5px;border-radius:4px;font-size:10px;line-height:16px;font-weight:600;letter-spacing:.2px;vertical-align:1px;white-space:nowrap}
 .reach-year{background:#e3f1ec;color:#1f6b52}.reach-town{background:#e6eef8;color:#2f5687}.reach-shape{background:#efeef2;color:#6b6780}
 .reach-operations{background:#fbf0de;color:#8a5a12}.reach-display{background:#f2f2f2;color:#7b7b7b}
+/* Locking a simulation's settings (simulation-lock.js). Before it starts: a lock-in bar at the top of Config and the
+   other tabs disabled. After: a banner, and Config shows the settings without editing controls. */
+.cfg-lock-bar{position:sticky;top:0;z-index:4;display:flex;align-items:center;gap:12px 20px;flex-wrap:wrap;margin:0 0 14px;padding:14px 18px;background:linear-gradient(120deg,#fff 30%,#f3effd);border:1px solid #d9d0f5;border-radius:12px;box-shadow:0 8px 24px #20183a14}
+.cfg-lock-text{flex:1 1 320px;min-width:0}.cfg-lock-text strong{font-size:14.5px;color:#2c2448}
+.cfg-lock-text p{margin:3px 0 0;font-size:12.5px;line-height:1.5;color:#5d5876}.cfg-lock-text .cfg-lock-note{font-size:11.5px;color:#8a849c}
+.cfg-lock-bar .primary-btn{width:auto;margin:0;padding:12px 20px;background:#7357d8;border-radius:8px;font-weight:650;box-shadow:0 4px 12px #7357d840}
+.cfg-lock-bar .primary-btn:hover{background:#5f45c4}.cfg-lock-bar .primary-btn:disabled{background:#b9b5c8;box-shadow:none;cursor:wait}
+.cfg-locked-banner{position:sticky;top:0;z-index:4;display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap;margin:0 0 14px;padding:10px 14px;background:#f6f4fb;border:1px solid #e1dced;border-radius:10px;box-shadow:0 4px 14px #20183a12;font-size:13px;color:#3c3752}
+#settings-page:has(#cfg-lock-bar:not([hidden])) .cfg-main :is(section,.schema-group){scroll-margin-top:120px}
+#settings-page.is-locked .cfg-main :is(section,.schema-group){scroll-margin-top:68px}
+.cfg-locked-banner p{flex:1 1 260px;margin:0;line-height:1.5}.cfg-locked-banner a{font-weight:650;color:#5d43b8;white-space:nowrap}
+.cfg-lock-glyph{position:relative;flex:0 0 auto;width:14px;height:16px}
+.cfg-lock-glyph::before{content:'';position:absolute;left:1px;bottom:0;width:12px;height:9px;border-radius:2px;background:#7357d8}
+.cfg-lock-glyph::after{content:'';position:absolute;left:3.5px;top:0;width:7px;height:8px;border:2px solid #7357d8;border-bottom:0;border-radius:4px 4px 0 0;box-sizing:border-box}
+#settings-page.is-locked :is(#town-config-reset,#town-new-seed,#m2c-new-seed,#m2c-seed-clear,#m2c-settings-reset,#reset-seed,#generate-btn,#import-btn,#settings-load-snapshot,#load-state-btn,#return-demo,#presets-card,#frequency-card),#settings-page.is-locked .town-config-bar,#settings-page.is-locked .settings-card:has(#generator-section){display:none!important}
+#settings-page.is-locked .cfg-main :is(input,select,textarea)[data-locked-input]{background:#f6f5f9;color:#2c2448;-webkit-text-fill-color:#2c2448;opacity:1;border-color:#eceaf2;cursor:default}
+#settings-page.is-locked .cfg-main input[type=checkbox][data-locked-input]{accent-color:#8f86b5}
+#settings-page.is-locked .cfg-main select[data-locked-input]{appearance:none;background-image:none}
+.studio-tabs a.is-disabled{color:#b3afc2;cursor:not-allowed}.studio-tabs a.is-disabled:hover{color:#b3afc2;background:none}
+@media (max-width:720px){.cfg-lock-bar{padding:10px 12px;gap:8px;top:0}.cfg-lock-text strong,.cfg-lock-text .cfg-lock-note{display:none}.cfg-lock-text p{margin:0}.cfg-lock-bar .primary-btn{flex:1 1 100%;padding:10px 14px}.cfg-locked-banner{top:0;padding:8px 12px;font-size:12px}#settings-page:has(#cfg-lock-bar:not([hidden])) .cfg-main :is(section,.schema-group){scroll-margin-top:112px}#settings-page.is-locked .cfg-main :is(section,.schema-group){scroll-margin-top:86px}}

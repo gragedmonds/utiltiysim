@@ -3,17 +3,18 @@
 // costs (POST /api/process/costs). The engine decides events, causes, costs and days; this module indexes and renders.
 import {escapeText as e} from './customer-view.js';
 import {money,num} from './worklists.js';
+import {FIRST_YEAR,activeYear} from './m2c.js';
 export const DOMAINS={ami:'AMI',read:'Reads',vee:'VEE',wm:'Work management',field:'Field',cx:'Customer',billing:'Billing',invoice:'Invoicing',payment:'Payments',collections:'Collections'};
 export const EDGES={caused_by:'caused by',triggered:'triggered',resulted_in:'resulted in',blocked_by:'blocked by',resolved_by:'resolved by',escalated_to:'escalated to',required_for:'required for',compensated_by:'compensated by'};
 const MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'],FEED_CAP=150,STACK_CAP=30;
 const ROUTE=/^#\/process(?:\/([1-9]|1[0-2])(?:\/([\w.:-]+))?)?$/;
 export function parseRoute(hash){const m=String(hash||'').match(ROUTE);return m?{month:m[1]?Number(m[1]):null,eventId:m[2]||null}:null;}
 export function routeHash({month=null,eventId=null}={}){return '#/process'+(month?'/'+month+(eventId?'/'+eventId:''):'');}
-// Node time in days since 1 Jan 2026, town local time (the engine's day index plus the hour).
+// Node time in days since 1 January of the run's year, town local time (the engine's day index plus the hour).
 export const at=n=>n.day+(n.hour||0)/24;
 export const dayDelta=(from,to)=>to.day-from.day;
 export const costTotal=c=>(c?.labor||0)+(c?.system||0)+(c?.cx||0);
-export const localDate=day=>new Date(Date.UTC(2026,0,1+day)).toISOString().slice(0,10);
+export const localDate=(day,year=FIRST_YEAR)=>new Date(Date.UTC(year,0,1+day)).toISOString().slice(0,10);
 export function clock(hour){const m=Math.floor((hour||0)*60+1e-6);return String(Math.floor(m/60)%24).padStart(2,'0')+':'+String(m%60).padStart(2,'0');}
 const share=v=>v>0&&v<.1?(v*100).toFixed(1)+'%':Math.round(v*100)+'%';
 const cents=v=>Math.round(v*100)/100;
@@ -58,12 +59,12 @@ export function sequenceMix(types,nodes=[]){const total=(types||[]).reduce((a,t)
    split:{human:sum?h/sum:0,rpa:sum?r/sum:0,field:sum?f/sum:0},inMonth:month.get(t.type)?.size||0};}).sort((a,b)=>b.count-a.count||String(a.label).localeCompare(String(b.label)))};}
 export function installProcess({getClient,toast=()=>{}}){
  const $=id=>document.getElementById(id);let route={month:null,eventId:null},month=null,graph=null,costs=null,loaded=null,busy=0,stack=[],reveal=false;const filters={domain:'',type:'',sequence:'',search:''};
- const client=()=>getClient(),monthName=m=>MONTHS[m-1]+' 2026',dataKey=m=>JSON.stringify(m.body());
+ let year=FIRST_YEAR;const client=()=>getClient(),monthName=m=>MONTHS[m-1]+' '+year,dataKey=m=>JSON.stringify(m.body());
  $('wl-settings')?.insertAdjacentHTML('beforebegin','<a id="wl-process" class="small-link" href="#/process">Activity sequences</a>');
  function setStatus(text){$('pr-status').textContent=text||'';}
  async function load(){const m2c=client();
   if(!m2c){busy++;graph=costs=loaded=null;$('pr-mix').innerHTML='';$('pr-feed-note').textContent='';$('pr-trace').innerHTML='';setStatus('');$('pr-feed').innerHTML=`<div class="wl-empty"><h2>Activity sequences need the engine</h2><p>Open an engine town (for example <code>?town=small_town</code> on the hosted site), or run <code>uv run utilsim serve</code> locally and add <code>?engine=http://127.0.0.1:8010</code>. The engine replays a year of reads, VEE and work queues for the town.</p></div>`;return;}
-  const ticket=++busy;setStatus('Running the engine…');
+  const ticket=++busy;setStatus('Running the engine…');year=activeYear(m2c);for(const o of $('pr-month').options)o.textContent=monthName(Number(o.value));
   try{const pending=m2c.costs(),asOf=m2c.asOf||(await pending).asOf,m=route.month||Number(asOf.slice(5,7));$('pr-month').value=String(m);const [c,g]=await Promise.all([pending,m2c.graph(m)]);if(ticket!==busy)return;month=m;costs=c;graph=g;loaded={client:m2c,key:dataKey(m2c)};}
   catch(err){if(ticket===busy&&!err.superseded){setStatus(err.message);toast(err.message);}return;}
   const sequences=indexGraph(graph).series.size;
@@ -79,7 +80,7 @@ export function installProcess({getClient,toast=()=>{}}){
  function renderFeed(){const {rows,total}=filterFeed(graph.nodes,filters),seq=filters.sequence&&costs.types.find(t=>t.type===filters.sequence);
   $('pr-feed-note').innerHTML=`<span>Newest first · ${total>rows.length?`${num(rows.length)} of `:''}${num(total)} event${total===1?'':'s'}</span>${seq?`<span>${e(seq.icon)} ${e(seq.label)} only</span><button class="small-link" id="pr-seq-clear">Show every type</button>`:''}`;
   if($('pr-seq-clear'))$('pr-seq-clear').onclick=()=>{filters.sequence='';document.querySelectorAll('[data-pr-seq]').forEach(x=>x.setAttribute('aria-pressed','false'));renderFeed();};
-  $('pr-feed').innerHTML=rows.length?`<ol>${rows.map(n=>`<li><button data-pr-event="${e(n.id)}"><span class="pr-icon" aria-hidden="true">${e(n.i)}</span><span class="pr-ev"><strong>${e(n.l)}</strong><small>${localDate(n.day)} ${clock(n.hour)} · <span class="mono">${e(n.acctId)}</span></small></span><span class="pr-cost">${money(costTotal(n.cost))}</span></button></li>`).join('')}</ol>`
+  $('pr-feed').innerHTML=rows.length?`<ol>${rows.map(n=>`<li><button data-pr-event="${e(n.id)}"><span class="pr-icon" aria-hidden="true">${e(n.i)}</span><span class="pr-ev"><strong>${e(n.l)}</strong><small>${localDate(n.day,year)} ${clock(n.hour)} · <span class="mono">${e(n.acctId)}</span></small></span><span class="pr-cost">${money(costTotal(n.cost))}</span></button></li>`).join('')}</ol>`
    :`<div class="wl-empty"><p>${graph.nodes.length?'No events match these filters.':`No events in ${monthName(month)}.`}</p></div>`;
   $('pr-feed').querySelectorAll('[data-pr-event]').forEach(b=>b.onclick=()=>{reveal=true;select(b.dataset.prEvent);});markFeed();}
  // Selection only re-tints the feed (no re-render, so its scroll position and focus stay).
@@ -90,12 +91,12 @@ export function installProcess({getClient,toast=()=>{}}){
   else{const t=buildTrace(graph,route.eventId);
    if(!t)el.innerHTML=back+`<div class="wl-empty"><p>Event <code>${e(route.eventId)}</code> is not in the Activity Sequences raised in ${monthName(month)} as of ${e(costs.asOf)}.</p></div>`;
    else{const x=indexGraph(graph),type=costs.types.find(k=>k.type===t.variantId),init=t.steps[0].node;
-    el.innerHTML=`${back}<div class="eyebrow">ACTIVITY SEQUENCE · ${e(t.seriesKey)}</div><h2>${e(type?.icon||init.i)} ${e(type?.label||init.l)}</h2><div class="wl-case-sub">Account <span class="mono">${e(t.acctId)}</span> · ${t.steps.length} steps from ${localDate(init.day)}</div>
+    el.innerHTML=`${back}<div class="eyebrow">ACTIVITY SEQUENCE · ${e(t.seriesKey)}</div><h2>${e(type?.icon||init.i)} ${e(type?.label||init.l)}</h2><div class="wl-case-sub">Account <span class="mono">${e(t.acctId)}</span> · ${t.steps.length} steps from ${localDate(init.day,year)}</div>
      <div class="pr-totals">${[['Labour',money(t.cost.labor)],['System',money(t.cost.system)],['CX',money(t.cost.cx)],['Total',money(t.cost.total)],['Elapsed',t.elapsedDays.toFixed(1)+' d']].map(([k,v])=>`<div><span>${k}</span><strong>${v}</strong></div>`).join('')}</div>
      <a class="outline-btn pr-open" href="#/worklists/ALL/case/${e(t.seriesKey)}">Open case</a>
      <p class="pr-key"><span><i class="up"></i>${num(t.upstream.size)} led to the selected event</span><span><i class="down"></i>${num(t.downstream.size)} followed from it</span></p>
      <ol class="pr-pipe">${t.steps.map(s=>{const n=s.node,tint=s.role==='downstream'?'down':s.role==='upstream'||s.role==='selected'&&t.upstream.has(s.from)?'up':'',cls={selected:'sel',upstream:'up',downstream:'down'}[s.role]||'';
-      return `${s.index?`<li class="pr-edge ${tint}"><span>${e(s.edge?EDGES[s.edge]||s.edge.replaceAll('_',' '):'then')}${s.adjacent||!s.edge?'':` · from ${e(x.byId.get(s.from)?.l)}`}</span><b>+${s.delay}d</b></li>`:''}<li class="pr-step ${cls}"><button data-pr-step="${e(n.id)}" ${s.role==='selected'?'aria-current="true"':''}><span class="pr-day">D+${s.dayN}</span><span class="pr-icon" aria-hidden="true">${e(n.i)}</span><span class="pr-ev"><strong>${e(n.l)}</strong>${s.initiating&&!s.index?'<em>Initiating Event</em>':''}<small>${localDate(n.day)} ${clock(n.hour)} · ${e(DOMAINS[n.d]||n.d)} · ${money(costTotal(n.cost))}</small></span></button></li>`;}).join('')}</ol>`;
+      return `${s.index?`<li class="pr-edge ${tint}"><span>${e(s.edge?EDGES[s.edge]||s.edge.replaceAll('_',' '):'then')}${s.adjacent||!s.edge?'':` · from ${e(x.byId.get(s.from)?.l)}`}</span><b>+${s.delay}d</b></li>`:''}<li class="pr-step ${cls}"><button data-pr-step="${e(n.id)}" ${s.role==='selected'?'aria-current="true"':''}><span class="pr-day">D+${s.dayN}</span><span class="pr-icon" aria-hidden="true">${e(n.i)}</span><span class="pr-ev"><strong>${e(n.l)}</strong>${s.initiating&&!s.index?'<em>Initiating Event</em>':''}<small>${localDate(n.day,year)} ${clock(n.hour)} · ${e(DOMAINS[n.d]||n.d)} · ${money(costTotal(n.cost))}</small></span></button></li>`;}).join('')}</ol>`;
     el.querySelectorAll('[data-pr-step]').forEach(b=>b.onclick=()=>select(b.dataset.prStep));}}
   if($('pr-back'))$('pr-back').onclick=()=>{const p=stack.pop();if(p)go({month:p.month,eventId:p.eventId});};
   if(reveal&&route.eventId&&matchMedia('(max-width:1100px)').matches)el.scrollIntoView({block:'start'});reveal=false;}

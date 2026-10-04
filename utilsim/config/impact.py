@@ -206,10 +206,11 @@ IMPACT: dict[str, tuple[str, str]] = {
     "electric.voltage_max_pu": ("operations", "High-voltage limit for the voltage readings on the map."),
     # ---- gas ----------------------------------------------------------------------------------------------------------
     "gas.all_electric_district_share": ("town", "Share of districts without gas mains, counted in whole "
-                                                "districts and never the core: those homes heat with "
-                                                "electricity, mostly heat pumps. Gas accounts and usage "
-                                                "fall, winter electric usage rises. One-district towns "
-                                                "(village, small_town) have none whatever the share."),
+                                                "districts, the core last (1: no gas mains at all): those "
+                                                "homes heat with electricity, mostly heat pumps. Gas accounts "
+                                                "and usage fall, winter electric usage rises. One-district "
+                                                "towns (under 2,251 homes: village, small_town) have none "
+                                                "whatever the share."),
     "gas.scheme": ("operations", "Medium pressure everywhere or a legacy low-pressure core: regulators and pressures "
                                  "on the map."),
     "gas.transmission_kpa": ("operations", "Pressure into the city gate: gas pressures on the operations day."),
@@ -512,9 +513,9 @@ IMPACT: dict[str, tuple[str, str]] = {
                                                "disconnection. Acts only on disconnections you approve: the "
                                                "engine never disconnects on its own."),
     "billing.disconnect_rule_share": ("year", "Disconnection notices a collections rule approves as they are "
-                                             "issued: disconnections, reconnections, disconnected contacts and the "
-                                             "field crews' disconnects and reconnects follow. 0 (the default): every "
-                                             "disconnection waits for your approval."),
+                                             "issued: the crews' disconnects and reconnects follow, disconnected "
+                                             "meters are not read or billed until reconnected, and disconnected "
+                                             "contacts come in. 0 (the default): every disconnection waits for you."),
     "billing.disconnect_payment_rate": ("year", "Disconnected customers who pay within a week and are "
                                                 "reconnected the next business day. Acts only on "
                                                 "disconnections you approve in the Collections worklist."),
@@ -534,13 +535,14 @@ IMPACT: dict[str, tuple[str, str]] = {
 
     # ---- contact centre (run) ----------------------------------------------------------------------------------------
     "contact.agents": ("year", "Agents answering during opening hours. Fewer: longer waits, more hang-ups, call backs "
-                               "and repeat calls; more: shorter waits but more idle time and staffing cost."),
+                               "and repeat calls, and customers who give up pay later (more overdue bills); fewer "
+                               "disputes get through to become cases. More: shorter waits but more idle time and cost."),
     "contact.open_hour": ("year", "When the lines open on business days. Later opening squeezes the same contacts "
                                   "into fewer hours: longer waits at peaks."),
     "contact.close_hour": ("year", "When the lines close. Earlier closing squeezes contacts into fewer hours; callers "
                                    "who find the lines closed try again the next day."),
     "contact.patience_s": ("year", "How long callers hold before hanging up. Less patience: more hang-ups and retries "
-                                   "at the same waits."),
+                                   "at the same waits, and more customers who pay later after bad service."),
     "contact.retry_share": ("year", "Callers who hung up or found the lines closed and try again: retries add load "
                                     "at busy times; the rest give up unanswered."),
     "contact.repeat_share": ("year", "Customers whose problem was not resolved who contact again: repeat contacts, "
@@ -554,7 +556,7 @@ IMPACT: dict[str, tuple[str, str]] = {
                                          "service level, not who waits."),
     "contact.volume_factor": ("year", "Multiplies every reason's rates: a quick way to test a busier or quieter year."),
     "contact.handle_factor": ("year", "Multiplies every handling time: slower handling fills the agents' day, so waits "
-                                      "and hang-ups rise."),
+                                      "and hang-ups rise, and frustrated customers pay later."),
     "contact.self_serve_factor": ("year", "Multiplies the share the IVR and website handle; zero sends every contact to "
                                           "an agent."),
     "contact.agent_cost_per_hour": ("year", "Prices the agents' open hours in the contact cost. No contact changes."),
@@ -566,7 +568,8 @@ IMPACT: dict[str, tuple[str, str]] = {
     "contact.bill_question": ("year", "Questions about bills: more with estimated bills, first bills after a move-in "
                                       "and bills just after a rate change."),
     "contact.bill_wrong": ("year", "Disputes over bills that overcharge against the truth: VEE misses, rate-class "
-                                   "errors and misreads drive them."),
+                                   "errors and misreads drive them. Answered, they open Bill Correction cases (rebills "
+                                   "on a check read, dunning paused)."),
     "contact.back_bill": ("year", "Contacts about catch-up bills: rebills, and the first actual bill after a run of "
                                   "estimates (no-access and missed reads drive them)."),
     "contact.balance": ("year", "Balance enquiries around due dates; the IVR answers most."),
@@ -586,22 +589,42 @@ IMPACT: dict[str, tuple[str, str]] = {
     "contact.disconnection": ("year", "Reconnection requests after disconnections you approve."),
     "contact.complaint": ("year", "Complaints after a second unresolved contact or giving up on hold twice: long waits "
                                   "and low first-contact resolution drive them."),
+    "contact.dispute_cases": ("year", "Bill disputes become Bill Correction cases: wrong bills are rebilled on a "
+                                      "check read (a credit on the next invoice), dunning pauses while they wait."),
+    "contact.dispute_hold_days": ("year", "How long a dispute can pause dunning: longer holds, fewer notices while the "
+                                          "billing queue is behind."),
+    "contact.complaint_cases": ("year", "Complaints become cases on the billing analysts' queue: less time for other "
+                                        "billing work."),
+    "contact.frustration_threshold": ("year", "Lower: more customers pay later after bad service (more overdue bills, "
+                                              "notices and disconnections); 0 switches it off."),
+    "contact.long_wait_s": ("year", "Shorter: more answered calls count as bad experiences, so more customers pay "
+                                    "later."),
+    "contact.autopay_cancel_share": ("year", "More frustrated customers leave pre-authorized debit and pay by hand: "
+                                             "later payments, more reminders."),
     # ---- outages & leaks over the year (run) ------------------------------------------------------------------------
-    "outages.enabled": ("year", "Draw the operations day's incidents for every day of the year. Off: outage and gas "
-                                "odour contacts are background only."),
-    "outages.storm_factor": ("year", "Multiplies the chance of a storm day: more overhead line faults, outages and "
-                                     "outage reports, mostly May to September."),
-    "outages.incident_factor": ("year", "Multiplies every incident rate: more outages, main breaks and gas leaks, and "
-                                        "the contacts they bring."),
-    "outages.restore_factor": ("year", "Multiplies the time to restore service: longer outages bring twice the outage "
-                                       "reports past two hours."),
+    "outages.enabled": ("year", "Draw the operations day's incidents for every day of the year: customers out lose "
+                                "their use and AMI meters go dark. Off: no outages, and outage and gas odour contacts "
+                                "are background only."),
+    "outages.storm_factor": ("year", "Multiplies the chance of a storm day: more overhead line faults, outages (use "
+                                     "lost, a read missed when one falls inside) and outage reports, mostly May to "
+                                     "September."),
+    "outages.incident_factor": ("year", "Multiplies every incident rate: more outages, main breaks and gas leaks, the "
+                                        "use they cut and the contacts they bring."),
+    "outages.restore_factor": ("year", "Multiplies the time to restore service: more use lost, more AMI reads falling "
+                                       "inside an outage, and twice the outage reports past two hours."),
     # ---- field work (run) ---------------------------------------------------------------------------------------------
     "field.shift_start_hour": ("year", "When the business-day crews start. It moves when work is done in the day and "
                                        "which emergencies fall after hours (call-out and overtime)."),
     "field.shift_hours": ("year", "Hours in a crew's day: every business-day crew's capacity. Shorter days build "
                                   "backlog, overdue work and overtime."),
-    "field.travel_minutes": ("year", "Driving to each job and back: more travel fills the crews' day with fewer "
-                                     "jobs, and slows emergency response."),
+    "field.routing": ("year", "Crews drive the streets from the depot, job to job, nearest first: travel follows "
+                              "the town's size and layout. Off: a flat travel time per visit (usually more crew "
+                              "time, later work and slower emergency response)."),
+    "field.stop_minutes": ("year", "Time at each stop on top of the drive (with routing): more fills the crews' day "
+                                   "with fewer jobs."),
+    "field.travel_minutes": ("year", "Without routing, driving to each job and back: more travel fills the crews' "
+                                     "day with fewer jobs, and slows emergency response. VEE field visits use it "
+                                     "always."),
     "field.callout_minutes": ("year", "Time for an on-call responder to get on the road after hours: emergency "
                                       "response times at night and on weekends."),
     "field.overtime_max_hours": ("year", "Overtime per crew for customer work due today or overdue: more keeps "
@@ -622,6 +645,21 @@ IMPACT: dict[str, tuple[str, str]] = {
                                                "conversion and main renewal wait for it."),
     "field.construction_end_month": ("year", "Last month of the construction season: work not built by then waits "
                                              "for next year."),
+    "field.dead_battery_miss": ("year", "Reads a module misses once its battery died (not replaced by its "
+                                        "anniversary): estimates, estimation cases and contacts follow."),
+    "field.failed_lot_drift": ("year", "How much a failed seal lot's meters under-register until exchanged: less "
+                                       "billed against the truth while the exchanges wait."),
+    "field.old_water_meter_drift": ("year", "How much water meters past their life under-register until replaced: "
+                                            "the revenue a replacement programme recovers."),
+    "field.deferred_pole_failures": ("year", "How likely an overdue pole replacement fails: an outage (use lost, AMI "
+                                             "meters dark), outage reports and repairs on the line crews."),
+    "field.deferred_tree_faults": ("year", "How likely a span overdue for trimming faults on a storm day: an outage "
+                                           "(use lost, AMI meters dark) and outage reports."),
+    "field.renewed_main_break_factor": ("year", "How much less a renewed main breaks and leaks than the cast iron "
+                                                "it replaced: fewer main breaks and gas leaks (outages, contacts, "
+                                                "repairs) after the construction crews renew it."),
+    "field.deferred_leak_escalation": ("year", "How likely a surveyed leak overdue for repair becomes a public gas "
+                                               "leak: odour calls and emergency response."),
     "field.crew_emergency": ("year", "On-call responders: fewer stretch emergency response when emergencies "
                                      "overlap; the cost prices their time."),
     "field.crew_meter": ("year", "Meter technicians: service orders, VEE visits, exchanges, batteries and meter sets "
@@ -637,8 +675,9 @@ IMPACT: dict[str, tuple[str, str]] = {
                                 "outage reports."),
     "field.outage_repair": ("year", "Outage and leak repairs on the utilities' crews, timed by the incident model; "
                                     "follows the outages settings."),
-    "field.disconnect": ("year", "Disconnect orders: follow the disconnections approved in Collections."),
-    "field.reconnect": ("year", "Reconnect orders: follow the reconnections after payment."),
+    "field.disconnect": ("year", "Disconnections the crews carry out (approved in Collections). A disconnected "
+                                 "meter is not read and not billed until it is reconnected."),
+    "field.reconnect": ("year", "Reconnections the crews do after payment; the rest come back without a visit."),
     "field.move_out": ("year", "Move-out visits: account closings at premises without AMI."),
     "field.move_in": ("year", "Move-in visits: account openings at premises without AMI (not the day after a "
                               "move-out there)."),
@@ -646,12 +685,14 @@ IMPACT: dict[str, tuple[str, str]] = {
                                           "settings (field orders a day, field days) and the anomalies."),
     "field.corrective_exchange": ("year", "Faulty meters exchanged on field visits: follows the anomalies (stuck, "
                                           "slow, tamper) and the field visits that find them."),
-    "field.seal_exchange": ("year", "Seal-expiry exchanges: the samples and failed lots due this year."),
+    "field.seal_exchange": ("year", "Seal-expiry exchanges: the samples and failed lots due this year, each a new "
+                                    "meter on the installation (reads and bills on the new register)."),
     "field.ami_battery": ("year", "Module battery replacements due this year."),
-    "field.water_meter_replacement": ("year", "Over-age water meters replaced this year; the rest stay due."),
-    "field.removal": ("year", "Meter removals at vacant premises."),
-    "field.ami_conversion": ("year", "AMR and manually read meters converted to AMI, route by route in the season. "
-                                     "Off by default."),
+    "field.water_meter_replacement": ("year", "Over-age water meters replaced this year (new meters, no more drift); "
+                                              "the rest keep under-registering."),
+    "field.removal": ("year", "Meter removals at vacant premises: the removed meters are not read or billed again."),
+    "field.ami_conversion": ("year", "AMR and manually read meters converted to AMI, route by route in the season: "
+                                     "fewer missed reads and no-access visits after. Off by default."),
     "field.pole_inspection": ("year", "Poles inspected a year; inspections find poles to replace."),
     "field.pole_replacement": ("year", "Inspected poles found needing replacement: long, costly line crew jobs."),
     "field.tree_trimming": ("year", "Overhead spans trimmed a year."),

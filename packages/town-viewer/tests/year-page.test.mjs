@@ -15,9 +15,9 @@ function fakeTrend(){return [month(1,{cases:{opened:210,resolved:190,backlog:45,
  month(3,{cases:{opened:150,resolved:160,backlog:60,byQueue:{VEE_REVIEW:35,ESTIMATION:15,FIELD:10}},reads:{missedPct:.03,estimatedPct:.021},cost:{total:900,carry:150},billing:{blocked:20,invoiced:400000,collected:390000,overdue:10000,receivable:55000},collections:{reminders:40,notices:10,disconnectNotices:2,disconnected:0,phases:{current:2015,overdue:30,reminder:20,'overdue notice':0,'winter moratorium':0,'dunning hold':0,'payment arrangement':0,'disconnection notice':0,disconnected:0}}},{partial:true,end:'2026-03-15'}),
  ...Array.from({length:9},(_,i)=>month(i+4,null))];}
 
-test('the year route round-trips and matches nothing else',()=>{
- assert.deepEqual(parseYearRoute('#/year'),{year:2026});assert.equal(parseYearRoute('#/year/3'),null);assert.equal(parseYearRoute('#/data'),null);assert.equal(parseYearRoute(''),null);
- assert.equal(yearHash(),'#/year');assert.deepEqual(parseYearRoute(yearHash()),{year:2026});assert.ok(ROUTE.test('#/year'));
+test('the year route round-trips and matches nothing else (the year shown is the client\'s active year)',()=>{
+ assert.deepEqual(parseYearRoute('#/year'),{});assert.equal(parseYearRoute('#/year/3'),null);assert.equal(parseYearRoute('#/data'),null);assert.equal(parseYearRoute(''),null);
+ assert.equal(yearHash(),'#/year');assert.deepEqual(parseYearRoute(yearHash()),{});assert.ok(ROUTE.test('#/year'));
 });
 
 test('episodeDates turns a scenario into concrete episodes for the inflict day',()=>{
@@ -131,6 +131,9 @@ test('the field work charts read the trend field block',()=>{
  assert.deepEqual(c.fieldOnTime.detail(months[0])[0],['Emergency response (min)',34]);
  assert.deepEqual(c.fieldBacklog.detail(months[0]),[['Overdue',4],['Crew utilisation','61%']]);
  assert.equal(chartModel(c.fieldDone,[{month:1,label:'Jan',start:'2026-01-01',end:'2026-01-31',complete:true,field:null}]).latest,-1);
+ const eff=[{month:1,label:'Jan',start:'2026-01-01',end:'2026-01-31',complete:true,field:{effects:{readsOff:12,deadBatteryMisses:30,disconnected:4,reconnected:3,exchanged:40,driftingMeters:90,failures:2}}}];
+ assert.deepEqual(chartModel(c.fieldEffects,eff).series.map(s=>s.values[0]),[12,30]);
+ assert.deepEqual(c.fieldEffects.detail(eff[0]).at(-1),['Overdue work that failed',2]);
 });
 
 test('inflicting runs to the last period end, including open-ended and year-clamped periods',async()=>{
@@ -168,4 +171,36 @@ test('the contact centre charts read the trend contact block',()=>{
  const svc=chartModel(c.service,months);assert.deepEqual(svc.series.map(s=>s.values[0]),[0.95,0.04]);
  assert.equal(chartModel(c.contactCost,months).series[0].values[0],7200);
  const none=chartModel(c.contacts,[{month:1,label:'Jan',start:'2026-01-01',end:'2026-01-31',complete:true,contact:null}]);assert.equal(none.latest,-1);
+});
+
+test('the calendar, drafts, spans, charts and labels follow the active year (2028 is a leap year)',async()=>{
+ const {episodeRunEnd,modelYear}=await import('../dist/year-page.js');
+ const cal=calendarModel(2028);assert.equal(cal[1].days,29);assert.equal(cal[1].end,'2028-02-29');assert.equal(cal.reduce((n,m)=>n+m.days,0),366);assert.equal(cal[0].offset,5,'1 Jan 2028 is a Saturday');
+ assert.equal(calendarModel(2027)[1].days,28);assert.equal(calendarModel(2027)[0].start,'2027-01-01');
+ assert.deepEqual(draftEpisode({from:'2028-02-29',to:'',settings:{a:{b:'1'}}},2028).episode.from,'2028-02-29');
+ assert.equal(draftEpisode({from:'2028-03-01',to:'2028-12-31',settings:{a:{b:'1'}}},2028).episode.to,null,'its own year end is the year end');
+ assert.match(draftEpisode({from:'2026-03-01',settings:{a:{b:'1'}}},2027).error,/Start must be a 2027 date/);assert.match(draftEpisode({from:'2027-03-01',to:'2028-01-02',settings:{a:{b:'1'}}},2027).error,/End must be a 2027 date/);
+ assert.equal(rangeLabel({from:'2027-03-01',to:'2027-12-31'}),'1 Mar – year end');assert.equal(rangeLabel({from:'2027-03-01',to:'2027-04-09'}),'1 Mar – 9 Apr');
+ assert.deepEqual(episodeSpans([{id:'EP-1',from:'2028-02-20',to:null}],2,2028),[{id:'EP-1',index:0,lane:0,from:20,to:29,startsHere:true,endsHere:false}]);
+ assert.deepEqual(episodeSpans([{id:'EP-1',from:'2027-11-20',to:null}],calendarModel(2027)[11]).map(s=>[s.from,s.to,s.endsHere]),[[1,31,true]],'an open end runs to its own year end');
+ assert.equal(episodeRunEnd([{from:'2027-05-01',to:null}]),'2027-12-31');assert.equal(episodeRunEnd([{from:'2027-05-01',to:'2027-06-30'}],2027),'2027-06-30');
+ const months=[{month:1,label:'Jan',start:'2027-01-01',end:'2027-01-31',complete:true,cases:{backlog:12}},{month:2,label:'Feb',start:'2027-02-01',end:'2027-02-14',complete:false,cases:{backlog:15}}];
+ const model=chartModel(CHARTS[0],months);assert.equal(modelYear(model),2027);assert.match(describeChart(model),/Jan to Feb 2027/);
+ const svg=chartSvg(model,{asOf:'2027-02-14',episodes:[{id:'EP-1',title:'Cold',from:'2027-02-01',to:null}],id:'y'});assert.match(svg,/class="yr-run"/,'the run date of the active year is drawn');assert.match(svg,/class="yr-band"/);
+ assert.doesNotMatch(chartSvg(model,{asOf:'2026-02-14',id:'z'}),/class="yr-run"/,'a date in another year is not');
+});
+
+test('the year bar: a switcher of the years opened, Continue on the last one (with a confirm step), a closed year, the opening',async()=>{
+ const {yearsBar,openingFigures}=await import('../dist/year-page.js');
+ const m=new EngineM2C({townRef:'village',townId:'t',storage:memory()});
+ let html=yearsBar(m);assert.match(html,/<button type="button" data-year="2026" aria-pressed="true" aria-current="true">2026<\/button>/);
+ assert.match(html,/data-act="continue">Continue into 2027<\/button>/);assert.match(html,/2027 opens where 2026 closes: balances, open cases, bills, field orders, services off and devices carry\./);assert.doesNotMatch(html,/year-opening/);
+ assert.match(yearsBar(m,{confirm:true}),/Open 2027 on 2026's close\? 2026 then closes: its actions and episodes stay as they are\..*data-act="continue-yes">Continue into 2027<\/button>.*data-act="continue-no">Not yet/);
+ m.continueYear();html=yearsBar(m);assert.match(html,/data-year="2026" aria-pressed="false">2026<\/button><button type="button" data-year="2027" aria-pressed="true"/);assert.match(html,/Continue into 2028/);assert.match(html,/Opened on 2026's close/);
+ const opening={year:2027,figures:{year:2026,openCases:3,unbilledDocuments:0,unpaidInvoices:471,receivable:255295.01,openOrders:1,servicesOff:3,deadBatteries:0,faultyMeters:2}};
+ assert.deepEqual(openingFigures(opening.figures),['3 open cases','$255,295 receivable','471 unpaid invoices','0 unbilled documents','1 open field order','3 services off','0 dead batteries','2 faulty meters']);
+ assert.match(yearsBar(m,{opening}),/<p class="year-opening"><strong>Opened with<\/strong> <span>3 open cases<\/span><span>\$255,295 receivable<\/span>/);
+ m.setYear(2026);html=yearsBar(m);assert.doesNotMatch(html,/Continue into/);assert.match(html,/2026 is closed: 2027 opened on it\. Work in 2027, or switch years to look back\./);assert.doesNotMatch(html,/year-opening/);
+ const archive={readOnly:true,year:2027,years:[2027],asOf:'2027-03-31'};assert.equal(yearsBar(archive),'<p class="year-opening is-loading">Opened on 2026\'s close</p>','an archived run has no switcher');
+ const last=new EngineM2C({townRef:'village',townId:'t2',storage:memory()});for(let i=0;i<4;i++)last.continueYear();assert.match(yearsBar(last),/The simulation runs to 2030\./);
 });

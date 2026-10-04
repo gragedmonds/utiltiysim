@@ -1,7 +1,7 @@
 # Meter-to-cash (M2C)
 
 Reads, VEE, exception work queues, billing, invoicing, payments and collections for every premise, replayed by the
-engine for calendar 2026.
+engine one calendar year at a time (2026 to 2030, each year opening on the one before it: see "Years" below).
 
 ## Run model
 
@@ -47,11 +47,60 @@ A run is stateless and deterministic: `(town, settings, actions, outages, seed)`
   (`utility` `electric`, `water`, `gas`, or `ami` for an AMI collector outage), with
   start and end in seconds since local midnight of `day` (end may pass midnight, up to a week). An operations
   timeline reports them as `interruptions`. See "Outages from the map" below.
-- Views read the finished year *as of* a date (`asOf`, default: the town's scenario date).
+- `staffing` (optional, `staff-schedule/1.0`) gives the people and crews the run has day by day instead of the
+  settings' team sizes; see "Staffing day by day" below.
+- `upstream` (optional, `upstream/1.0`) gives events upstream of the town (its supply lost in the utility's wider
+  networks) and a storm seed the utility's towns share; see "Upstream events and shared storms" below.
+- `year` (2026 to 2030, default 2026) is the calendar year the run replays, and `previous` gives the inputs of the
+  years before it (`[{settings, episodes, actions, outages}]`, one per year from 2026; omitted: the earlier years
+  run with the request's settings and nothing else). See "Years" below.
+- Views read the finished year *as of* a date (`asOf`, default: the town's scenario date in the run's year).
 
 The engine (`utilsim/m2c/`, numpy only) runs locally (`utilsim serve`) and on the hosted Vercel function. A
 5,500-home town (16k registers) replays its year, every bill and collection included, in about 15 s on one core,
 and warm instances keep the last four runs.
+
+## Years: the calendar and chained years
+
+A run replays one calendar year, 2026 (the snapshot's own) to 2030 (`utilsim/m2c/calendar.py`). Day 0 is its
+1 January, and every date comes from its calendar: Ontario's statutory holidays by rule (Easter, Victoria Day, the
+Monday after a weekend holiday), the business days, read days, usage noise and weather of that year. A leap year
+has 366 days.
+
+A year can open on the one before it (`utilsim/m2c/yearclose.py`, `next_year(run, snapshot)`). The closed year
+hands over, with its times shifted so that the next year counts from its own 1 January (earlier is negative):
+
+- **Registers.** Every dial goes on from where it stood at midnight. Column 0 of the next year is the last read
+  whose period was billed, so the first bill runs from it. VEE measures from the last released read, and the
+  estimate streak and trend memory carry. A service still off (disconnected or removed) stays off and is not read
+  until it is reconnected.
+- **Meters.** Technology (AMI conversions), install years (exchanges), module batteries (replaced, or dead) and
+  the device on each slot carry; new devices number on from the earlier years' changes. A meter still stuck,
+  slow, tampered, drifting, leaking or consuming at a vacant premise at midnight goes on from the first day.
+- **Work.** Open cases go back into their queues with their history, and a case that held a register's reads
+  holds the next year's until it is worked. Bills released but not invoiced go out on the first invoice run. Field
+  orders still open keep their ids, and a seal lot still being sampled passes or fails on its carried samples.
+- **Money.** Unpaid invoices carry with their dunning stage, fees and disconnection, and so does each account's
+  balance, budget plan, hold, payment arrangement and referral. Payer profiles and payment methods the year
+  changed, and collections events already scheduled for the next year (a notice the winter moratorium holds until
+  1 May), carry too.
+- **The networks.** Main renewed so far still breaks less.
+
+Over the API a request names its year (`year`) and what the years before it ran with (`previous`); `actions`,
+`outages`, `episodes` and `asOf` are the year's own, dated in that year. The engine replays the earlier years once
+and keeps their closes (eight per warm instance), so moving on to the next year replays only that year; a cold
+instance replays the chain from 2026 (about 4 s a year for a 300-home village, 15 s for 5,500 homes). An earlier
+year's error names its year (`2026: …`). The summary carries `year` and `opening` (the year before's close: its
+simulation id, open cases, unbilled documents, unpaid invoices, receivable, open orders, services off, dead
+batteries, faulty meters; null for 2026), and `GET /api/m2c/settings` gives `years: {first, last}`. A run bundle
+(`utilsim export-run`) of a later year keeps `year` and `previous` in its inputs and run key. The map's operations
+days are still the snapshot's year.
+
+The next year draws its own anomalies, misses, payments and calls: its seed is salted with the year
+(`"{seed}:m2c:2027"`), and its simulation id carries the year and the chain
+(`m2c-{town}-2027-{settings}-{inputs}-{chain}`). Its cases, invoices and field orders carry the year in their
+ids (`CASE-27…`, `INV-…-2027…`, `WO-27-…`). Studio work (orders, invoice holds) belongs to its year: an open one
+is not carried.
 
 ## Episodes: a scenario inflicted from a day
 
@@ -393,7 +442,7 @@ the reason ("account CA-… has nothing overdue on 2026-01-02", "the disconnecti
 | `low_income_referral` | `{day, accountId, note?}` | Opens a Low Income Process case `CASE-{yymmdd}-L{nnnn}`. Dunning waits until the agency decides, `low_income_review_days` business days later at 14:00; it approves with `low_income_approval_rate` and credits a grant (up to `low_income_grant_max`) to the oldest unpaid bills |
 | `budget_billing` | `{day, accountId, note?}` | Opens a Budget Bill Cases case `CASE-{yymmdd}-B{nnnn}`. A collections agent sets the plan up after the analyst pickup lag (10:00); invoices issued after that owe the plan's instalment (the account's average monthly expected bill: prior-year use at current prices, whole dollars, at least $10) and the difference goes to `budget_deferral` on the ledger. Refused for an account already on a plan (master data `budgetBilling`, or enrolled) |
 | `waive_fee` | `{day, invoiceId, fee: late_fee \| nsf_fee, note?}` | Credits the invoice's posted late fee (or NSF fee) back (`fee_waived` on the ledger) |
-| `disconnect_approve` | `{day, invoiceId, note?}` | After a disconnection notice: a crew disconnects at 10:00 on the earliest disconnection day (notice + `disconnect_notice_days`), or the next morning, if the bill is still unpaid. A dunning hold or an open referral moves it to their end; under a payment arrangement the approval lapses. A customer who would not have paid within a week pays the overdue bills 2–7 days later with `disconnect_payment_rate` and is reconnected the next business day at 10:00 |
+| `disconnect_approve` | `{day, invoiceId, note?}` | After a disconnection notice: the meter technicians (or the remote switch of an AMI electric meter) disconnect from 10:00 on the earliest disconnection day (notice + `disconnect_notice_days`), or the next morning, if the bill is still unpaid when they get there (see "Field work"). A dunning hold or an open referral moves it to their end; under a payment arrangement the approval lapses. A customer who would not have paid within a week pays the overdue bills 2–7 days later with `disconnect_payment_rate` and is reconnected the next business day at 10:00 |
 | `disconnect_cancel` | `{day, invoiceId, note}` | No disconnection for that notice |
 
 The engine never disconnects without your approval, unless you set a collections rule: `disconnect_rule_share`
@@ -465,8 +514,11 @@ Who is affected, and for how long:
 - **AMI collector outage:** recorded; nobody loses service.
 
 This is a consequence model, not the operations day's crew dispatch: travel is a flat 20 minutes and crews are never
-busy elsewhere. The year's reads do not see these outages yet (the operations day's interruptions you carry into a run
-do). A run without a network (a town with no `ops` data) draws none and says so in the contact summary's `notes`.
+busy elsewhere. The replay applies each outage as it happens, like the operations day's interruptions you carry into a
+run: the premises lose their use until restored (reads and bills show less), an AMI electric meter that is dark at its
+read misses it (`SIM_POWER_OUTAGE`), a collector outage mutes the AMI meters behind it (`SIM_COLLECTOR_OUTAGE`), and the
+reliability KPIs (customers interrupted, customer-minutes, SAIDI, use lost) count them. A day whose operations
+interruptions the run carries in keeps those instead of its background incidents, so nothing is counted twice. A run without a network (a town with no `ops` data) draws none and says so in the contact summary's `notes`.
 
 ## Contact centre
 
@@ -510,8 +562,28 @@ How the lines answer them:
 `volume_factor` scales every reason's shares. Costs are agents' paid hours (`agent_cost_per_hour`, whether busy or not),
 `self_serve_cost` per self-served contact, `abandon_cx_cost` per hang-up and the emergency line's handling time. Every
 draw is a counter-based hash of the run seed and the contact's identity, so one reason never moves another's draws,
-and episodes on `contact` or `outages` settings apply from their day. The contact settings never change the rest of
-the year: reads, cases, bills and collections are byte-identical (`tests/test_m2c_contact.py`).
+and episodes on `contact` or `outages` settings apply from their day.
+
+### What the contact centre changes
+
+The contact centre answers inside the replay (`ContactEngine`, `run.contact`). At the end of each day it takes what the
+replay made that day (invoices as they go out, their bills, dunning, no-access reads, cases sent to the field, the
+day's incidents) and answers the day's contacts. What it does changes the rest of the year:
+
+| Contact | What it changes |
+|---|---|
+| An answered bill-wrong contact, or an unresolved high-bill or back-bill one (`dispute_cases` of them) | Opens a **Bill Correction** case (`BILL_DISPUTE`, queue `BILLING`, no RPA) on the bill, and pauses dunning on the account until it is decided (at most `dispute_hold_days`). The analyst checks the read: a bill off against the truth is reversed and rebilled on the quantities a check read finds (`CHECK_READ`, `REBILL`; the next invoice credits the reversed version, and a credit invoice settles the account's open bills); a right bill is explained (`DISPUTE_EXPLAINED`). Escalated above `vee.escalate_impact` like any billing block |
+| An answered complaint (`complaint_cases`) | Opens a **Customer Complaints** case (`COMPLAINT`, account work, queue `BILLING`) the analysts answer (`COMPLAINT_ANSWERED`); one open complaint per account |
+| A bad experience: a hang-up, an unresolved contact, an answered wait over `long_wait_s`, a complaint | Counts against the customer. At `frustration_threshold` of them the customer pays later from then on (on time → late → at risk; `PAYMENT_RISK_RAISED` on the account), and a pre-authorized debit customer cancels it at `autopay_cancel_share` and pays by hand (`AUTOPAY_CANCELLED`) |
+
+You can decide a dispute yourself: `accept` (the bill stands and is explained) or `estimate` (rebill on a check read),
+or `escalate`; a complaint takes `accept` (answered) or `escalate`. With `frustration_threshold` 0, `dispute_cases` 0
+and `complaint_cases` off, how the lines answer never changes the year (a test checks it).
+
+The summary's `feedback` (and each trend month's `contact.feedback`) counts disputes (rebilled, explained, open), the
+credit invoices and what they gave back, complaints, and customers who pay later or cancelled their automatic
+payments. The contacts table names the case each contact opened; the Year page's **What the contact centre changed**
+chart draws them by month.
 
 **Summary** (`POST /api/m2c/contact`, `m2c-contact/1.0`): as of `asOf`, the settings in force, `kpis` (contacts,
 self-served, to agents, answered, call backs, abandoned, closed, gave up, emergency, repeats, resolved first time,
@@ -524,10 +596,10 @@ Measured on the default settings, year to 31 December:
 
 | Town | Accounts | Contacts | To agents | Hung up | In target | ASA | Occupancy | Cost |
 |---|---|---|---|---|---|---|---|---|
-| `village` | 635 | 798 | 458 | 1.5% | 99% | 2.7 s | 2.3% | $86k |
-| `small_town` | 2,368 | 2,634 | 1,476 | 4.5% | 97% | 3.9 s | 6.9% | $87k |
-| `town` | 3,969 | 4,706 | 2,542 | 7.4% | 95% | 8.5 s | 12% | $88k |
-| `large_town` | 6,598 | 8,227 | 4,258 | 12% | 91% | 14 s | 19% | $91k |
+| `village` | 635 | 817 | 451 | 0.9% | 99% | 2.6 s | 2.3% | $86k |
+| `small_town` | 2,368 | 2,592 | 1,448 | 4.0% | 96% | 5.8 s | 7.0% | $87k |
+| `town` | 3,969 | 4,600 | 2,552 | 7.4% | 94% | 8.5 s | 12% | $88k |
+| `large_town` | 6,598 | 8,222 | 4,296 | 12% | 91% | 15 s | 19% | $91k |
 
 The year draws 10 incidents on the village, 21 on the small town, 32 on the town and 57 on the large town. One
 agent is the default: a town of a few thousand accounts keeps
@@ -535,8 +607,6 @@ one person busy for a tenth of the day, and storm days or a week of disconnectio
 The scenario library's **Contact centre** group tries the levers (lines open mornings only, IVR and website down, hire
 a second agent), and **Storm season** (operations) triples the storm days for three months.
 
-Not yet modelled: contacts do not open back-office cases (a bill-wrong call does not raise a billing exception), and
-the year's outages do not reach the reads.
 
 ## Field work
 
@@ -575,18 +645,42 @@ scheduled day decides whether it is ordered, so an episode on a rate applies fro
 How the crews work:
 1. **On-call responders** (`crew_emergency`, whole crews, at least one) work emergencies around the clock, first come
    first served, several at once. After hours a responder takes `callout_minutes` to get on the road; the response is
-   from the report to on site (half of `travel_minutes` each way).
+   from the report to on site: the drive from the depot (with `routing`; half of `travel_minutes` without).
 2. **Business-day crews** (`crew_meter`, `crew_electric`, `crew_water`, `crew_gas`, `crew_construction`) have
    `per_1000_premises` crews per 1,000 premises (a fraction is a crew's share of the day on this work) for
    `shift_hours` from `shift_start_hour` on business days. Work timed elsewhere (VEE visits, outage repairs) takes their
    time on its day first; then they work released orders by priority (1 emergencies, 2 customer work, 3 maintenance, 4
    capital and conversion) and due date. A long job carries over to the next day. Customer work due today or overdue
    may run into overtime, up to `overtime_max_hours` per crew.
-3. **Cost** is crew time at `cost_per_hour` (times `overtime_factor` after hours) plus each order's `materials`.
+3. **Routing** (`routing`, on by default): the crews drive the town's streets at the operations driving speeds
+   (`operations.speed_kmh_*`). Each crew leaves the depot in the morning and, of the jobs as urgent as the most
+   pressing and due within a day of it, drives to the nearest next; each stop adds `stop_minutes` (parking, walking to
+   the asset, setting up), and the crew drives back to the depot at the end of the day (its last job carries that
+   drive). On-call responders drive from the depot and back. Without routing, or in a town without streets, every
+   visit adds `travel_minutes`; VEE field visits, which the run times, always do.
+4. **Cost** is crew time at `cost_per_hour` (times `overtime_factor` after hours) plus each order's `materials`.
 
-Field settings never change the rest of the year (reads, cases, bills, collections and contacts are identical, which
-`tests/test_m2c_fieldwork.py` checks). Field work does not yet feed back: a late disconnect does not move the
-collections timeline, a removal does not end billing, and an AMI conversion does not change how the meter is read.
+### What field work changes
+
+The crews work inside the replay (`FieldEngine`, `run.field`), day by day with the reads, bills and collections:
+collections steps day by day too, and each business day runs the crews before the 18:00 read batch. So what a crew
+does changes the rest of the year from that moment:
+
+| Field work | What it changes |
+|---|---|
+| Disconnect (crew, or the remote switch of an AMI electric meter) | Collections asks for it on the earliest disconnection day; the service is off when the crew finishes, and a customer who paid first is not disconnected ("not needed on arrival"). The meter is read as it goes off: the first scheduled read in the off period is that **final read** (taken at the disconnection, `readReason` `disconnection`, read type `final` in the reads table), so that month's bill runs to the disconnection. While off nothing flows and the later scheduled reads are not taken (read status `off`, reason `SIM_DISCONNECTED`), so no bill is made for those months |
+| Reconnect | After payment, the next business day: service back when the crew (or switch) is done. The next bill runs from the last read, the final read when the service was still off at a scheduled read (the billing document's `from` month), and holds only the use since reconnection |
+| Removal | A final read (`device_removal`) and its bill, then the premise's meters are off for good (`SIM_REMOVED`): no more reads or bills |
+| Seal exchange, water meter replacement, AMI conversion | A new meter on the installation (a device change, registers from zero): reads and bills on the new register, an old meter's fault or drift ends, a converted meter is read as AMI from then on |
+| Module battery | Replaced before its anniversary, the module keeps reading; otherwise it dies on the anniversary and misses `dead_battery_miss` of its reads (`SIM_BATTERY_DEAD`) until replaced: estimates and estimation cases follow |
+| Failed seal lot, water meters past their life | Under-register by `failed_lot_drift` (from the failed test) or `old_water_meter_drift` (all year) until exchanged: billed below the truth |
+| Main renewal | A renewed 100 m segment of cast-iron main breaks and leaks at `renewed_main_break_factor` of the old main's rate from the day the construction crew finishes it: the year's drawn breaks and leaks on a renewed main are dropped at that share, and every other incident keeps its id |
+| Overdue pole replacement, tree trimming, gas leak repair | Can fail (`deferred_pole_failures` a year, ten times as likely on storm days; `deferred_tree_faults` per storm day; `deferred_leak_escalation` a year): an incident whose customers lose supply until the repair (no use, an AMI electric meter dark at its read misses it) or gas odour reports, contacts, emergency response and repair. A failed pole or leak is fixed by the emergency repair (the planned order is called off) |
+
+The summary's `effects` (and each trend month's `field.effects`) count it: reads not taken because the service was
+off, disconnections, reconnections, remote switches, removals, meters exchanged and converted, batteries replaced,
+reads a dead battery missed, meters drifting, and failures by kind; `failures` lists the latest with their incident.
+The Year page's **What field work changed** chart draws the reads it stopped.
 
 **Summary** (`POST /api/m2c/fieldwork`, `m2c-fieldwork/1.0`): as of `asOf`, `kpis` (created, completed, open,
 planned, overdue, `onTimePct`, remote, `responseMin` and `responseP90Min` for gas odour and no-supply calls, hours,
@@ -601,22 +695,85 @@ Measured on the default settings, year to 31 December (the field year itself tak
 
 | Town | Premises | Orders | Emergency · service · meter · maintenance · construction | On time | Emergency response | Crew utilisation | Overtime | Cost (labour + materials) |
 |---|---|---|---|---|---|---|---|---|
-| `village` | 570 | 442 | 14 · 75 · 169 · 175 · 9 | 79% | 40 min | 52% | 19 h | $124k ($58k + $65k) |
-| `small_town` | 2,103 | 1,399 | 34 · 270 · 508 · 513 · 74 | 100% | 35 min | 49% | 44 h | $682k ($209k + $474k) |
-| `town` | 3,570 | 1,975 | 52 · 409 · 645 · 764 · 105 | 100% | 34 min | 43% | 72 h | $830k ($309k + $521k) |
-| `large_town` | 5,864 | 3,252 | 88 · 670 · 1,039 · 1,236 · 219 | 100% | 32 min | 42% | 116 h | $1.25M ($513k + $739k) |
+| `village` | 570 | 438 | 15 · 73 · 169 · 174 · 7 | 99.8% | 25 min | 41% | 21 h | $117k ($47k + $70k) |
+| `small_town` | 2,103 | 1,398 | 34 · 266 · 508 · 515 · 75 | 100% | 27 min | 42% | 47 h | $668k ($184k + $484k) |
+| `town` | 3,570 | 1,967 | 50 · 406 · 645 · 763 · 103 | 100% | 26 min | 37% | 75 h | $787k ($269k + $518k) |
+| `large_town` | 5,864 | 3,236 | 85 · 659 · 1,039 · 1,239 · 214 | 100% | 27 min | 37% | 118 h | $1.19M ($450k + $738k) |
 
-The village's fifth of a meter technician is fully booked from January to April by the seal samples (a lot's sample is
-the same size in any town), so a fifth of its orders finish late. On the small town, half the meter technicians from
-March to April drop meter maintenance on time to 73% with 33 orders overdue at the end of May, while service orders
-stay on time (they go first, with overtime); a meter crew of 0.2 per 1,000 premises all year runs at 88% and leaves 53
-orders overdue in May. With the collections rule approving every notice, the year has 145 disconnects and reconnects
-on the village (82 remote), 286 on the small town (160), 483 on the town (229) and 922 on the large town (508).
+The crews drive the streets: a business-day job averages a 1.4-minute drive in the village and 3.7 minutes in the large
+town, plus the 5 minutes at the stop (the flat 20 minutes a visit before routing left the village's fifth of a meter
+technician booked from January to April by the seal samples, with a fifth of its orders late, and took 12% more crew
+time). On the small town, half the meter technicians from March to April drop meter maintenance on time to 89% by the
+end of May (93% for the year); a meter crew of 0.2 per 1,000 premises all year runs at 72% and keeps up. With the
+collections rule approving every notice, the year has 170 disconnects and reconnects on the village (94 remote), 336 on
+the small town (188), 558 on the town (273) and 1,110 on the large town (614).
 
 The scenario library's **Field work** group tries the levers: meter technicians short (half for two months), an AMI
 conversion programme, seal lots that fail sampling, and construction crews off the job for six weeks. **Storm
 season** loads the line crews with outage repairs, and **Collections rule approves disconnections** gives the meter
 technicians disconnects and reconnects.
+
+## Staffing day by day
+
+A run's teams come from its settings: `process.analysts`, `process.supervisors`, `contact.agents` and each field
+crew's `per_1000_premises`. A `staffing` schedule (`utilsim/m2c/staffing.py`) gives headcounts by date instead, so a
+utility can staff a town the way it actually works: holidays and sick days, a hiring wave, a strike, or people
+shared with other districts.
+
+```json
+{"pools": {"analysts": [["2026-03-02", 0], ["2026-03-30", 2]], "crew_meter": [["2026-06-01", 0.5]]}}
+```
+
+From each date the pool has that many until the next entry; before the first, the settings (and episodes) hold.
+Pools are `analysts`, `supervisors` and `agents` (people, whole numbers) and `crew_meter`, `crew_electric`,
+`crew_water`, `crew_gas`, `crew_construction` and `crew_emergency` (crews: a fraction is part of a crew's day; on-call
+responders are whole crews). The schedule overrides each day's settings after any episode, so the queues, the field
+crews, the contact centre, costs and every view follow it; a value outside a setting's bounds is refused (HTTP 422
+naming the date). It is part of the run's identity (`simulationId`) only when given. A schedule equal to the settings
+replays the same year.
+
+`POST /api/m2c/daily` (`run-daily/1.0`, `utilsim/m2c/daily.py`) shows the year day by day in figures that add up
+across towns (ratios come as their numerator and denominator):
+- `queues`: cases opened, closed and in the backlog at the day's end, per work queue;
+- `staff.analysts` and `staff.supervisors`: people, `offeredMin` (work waiting for them that day), `doneMin`,
+  `done`, `waiting` (cases still waiting after the day) and `oldestDays` (the oldest still waiting, days since it was
+  raised); on a day off the last working day's waiting work carries, a day older;
+- `crews`: per crew type, crews, `availableMin`, `busyMin`, `overtimeMin`, `waitingMin` (released work still waiting
+  at the day's end) and `oldestDays`;
+- `contact`: agents, seconds available and busy, staff cost, and the day's contacts by how they ended (answered,
+  abandoned, self-served, callbacks, emergencies, closed);
+- `outages`: customers interrupted and customer-hours without service, per utility.
+
+Run bundles save it as `daily.json.gz`.
+
+## Upstream events and shared storms
+
+A town's own incidents start inside its networks. A utility's towns also share what feeds them: transmission
+circuits and bulk substations, the treatment plant and transmission mains, the gas gate stations. `upstream`
+(`utilsim/m2c/upstream.py`) hands a town the events that reach it:
+
+```json
+{"stormSeed": "UTILITY-2026",
+ "events": [{"id": "UP-1", "utility": "electric", "day": "2026-03-10", "start": 36000, "end": 43200,
+             "label": "Transmission circuit T2 tripped", "storm": false}]}
+```
+
+`start` and `end` are seconds since local midnight of `day` (the end may pass midnight, up to a week). The town's
+networks decide what its customers see:
+- **electric:** every premise fed from the town's supply points is off from `start` to `end` (its normally-open ties
+  join its own feeders, not another supply);
+- **water:** each elevated tank keeps the mains up for 12 hours; a shorter loss goes unnoticed, a longer one leaves
+  the town dry from when the tanks empty until the supply is back;
+- **gas:** line pack carries the town for 2 hours; after that every gas premise is off until the supply is back and
+  then until a crew relights it (40 premises an hour, nearest the gate first).
+
+The outage is the town's like any other (no use, dark AMI electric meters, estimated reads, outage calls to the
+contact centre, and the same `outages` in `POST /api/m2c/daily`), but the town raises no repair order: the repair
+is upstream. Its own incidents that day still happen.
+
+`stormSeed` makes the town's storm days and hours the utility's: towns on the same storm seed share their weather
+(the storm days, and when the storms blow), each with its own faults on its own lines. Without it a town draws its
+own storms, as before. Events and the storm seed are part of the run's identity (`simulationId`) only when given.
 
 ## Run statistics for a period
 

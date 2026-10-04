@@ -75,7 +75,8 @@ than Python's `0.0`; its value, selection and order are the same.
 `towns`, `files: [{name, bytes, sha256, uploaded}]`, `tableDates`, `worklistDates`, `aggregates` and `readOnly`.
 `engineBuild` hashes the packaged engine and run-validation sources plus the numpy, pydantic and orjson versions.
 The run key is BLAKE2b-256 of the build identifier, a NUL separator and sorted-key JSON of the inputs. Inputs include
-the snapshot's SHA-256, effective settings and seed, ordered episodes/actions/interruptions and export date. Aliases
+the snapshot's SHA-256, effective settings and seed, ordered episodes/actions/interruptions and export date (and for
+a later year, `year` and `previous`: the inputs of the years it opens on, replayed from 2026). Aliases
 and omitted settings defaults therefore do not create different keys for the same inputs. A different build or
 snapshot cannot silently reuse an old result. There are no timestamps or output-directory paths in the identity.
 Generation timing measurements are omitted from the saved snapshot so rebuilding the same town on another machine
@@ -87,6 +88,7 @@ store/runs/<runKey>/
   inputs.json
   aggregates.json               # run-aggregates/1.0; small summary, trend, scorecard, episodes
   trend.json
+  daily.json.gz                 # run-daily/1.0; the year day by day (queues, staff, crews, contacts, outages)
   scorecard.json
   snapshot.json.gz              # matching town for reproducibility and later live use
   tables/catalog.json
@@ -123,10 +125,11 @@ and CSV, browser folder import with networking disabled, and desktop/phone navig
 
 ## Sequential district batches
 
-The local CLI can run up to 500,000 residential homes as independent districts, one process at a time.
+The local CLI can run up to 500,000 residential homes as districts, one process at a time.
 Each completed district becomes a full verified run bundle. Memory is released before the next district.
-This mode explicitly requires independent teams and networks: analysts/agents are **per district**, and
-per-1,000 crew settings scale within each district. It is not a shared utility-wide queue or connected city.
+With `--staffing independent-districts` every district has its own teams: analysts/agents are **per district**,
+and per-1,000 crew settings scale within each district. `--staffing shared` and `--network connected` put a
+utility above them (see "A utility above its districts" below).
 Districts inherit the same environment and temperature seed; their geography, customers and incident seeds differ.
 
 ```sh
@@ -135,7 +138,7 @@ uv run utilsim batch-run --homes 50000 --chunk-size 2000 --staffing independent-
 
 Use `--homes 50000` for 25 districts at 2,000 homes each. Optional `--config` supplies generation overrides;
 `--input` accepts a JSON object containing `settings`, `episodes`, `seed` and `asOf`. Town-specific actions
-and interruptions cannot be copied between districts. The engine still models calendar year 2026 only.
+and interruptions cannot be copied between districts. District batches replay calendar year 2026.
 Use smaller chunks to reduce peak memory. Their size affects network boundaries and per-district staffing,
 so comparisons must keep the same chunk size; chunking is part of the model, not only a performance setting.
 
@@ -183,11 +186,49 @@ monthly totals were checked against all district files. Reported peak child-proc
 are measurements from one development environment, not guaranteed estimates for other hardware or settings.
 The local-only cap is now 500,000 homes. A full 500k run has not been benchmarked.
 
-### Shared utility-wide resources
+### A utility above its districts
 
-A fully shared utility requires a daily coordinator: district workers produce reads and candidate work;
-the coordinator allocates analyst, contact and field capacity once across all eligible work; districts then
-apply the assigned outcomes before advancing the day. Independent annual replay cannot reproduce this by
-summing results. Resume checkpoints must include queues, balances, device state and deterministic ordering.
-Connected electric/water/gas simulations additionally need boundary conditions between network partitions.
-Full map detail should load only for a selected district, while the utility view pages archived records.
+```sh
+uv run utilsim batch-run --homes 50000 --chunk-size 2000 --staffing shared --float-share 0.3 \
+  --network connected --store "P:/UtilitySim"
+```
+
+**One workforce** (`--staffing shared`, `utilsim/utility/coordinator.py`). Every district's team (the settings'
+analysts, supervisors, contact agents and crews) joins one pool:
+1. A first pass replays each district at its own staffing and saves its days (`<district>.daily.json.gz`,
+   `run-daily/1.0`) and its generated town (reused by the final pass).
+2. The coordinator splits each pool: a home team in every district (`1 - float_share` of the pool by premises,
+   at least one person of each kind a district had) and a float team. Each working day it steps a light model of
+   every district's queue together (the work waiting is the carry plus the day's measured arrivals), sends the
+   float team one person, or a quarter crew, at a time to the district with the most work still waiting (within
+   the settings' bounds), and carries what is not worked to the next day. `staffing.json`
+   (`utility-staffing/1.0`) holds each district's schedule, the pools, the staff per district and day and the
+   model's predicted work waiting.
+3. The final pass replays each district with its schedule (`staffing`, see [M2C.md](M2C.md) "Staffing day by
+   day") and archives it.
+
+Arrivals (reads, anomalies, incidents, moves, programmes) hardly depend on who works them, so one plan holds; a
+day's work is not pooled within the day (a person works in one district that day). On-call responders stay local.
+
+**Connected networks** (`--network connected`, `utilsim/utility/network.py`). Transmission circuits (one per four
+districts), the treatment plant with its transmission mains (one per four) and gas gate stations (one per six)
+feed runs of neighbouring districts. Their events of the year (per asset-year rates, log-uniform durations) reach
+every district they feed as its `upstream` input, and the districts share one weather (storm days and hours), each
+with its own faults; see [M2C.md](M2C.md) "Upstream events and shared storms". `network.json` holds the layout,
+the seed and each district's events.
+
+`rollup.json` adds `daily`: the utility day by day, every district's `daily.json.gz` added up (queues, staff and
+work waiting, crews, contacts, outages; the oldest waiting work is the oldest anywhere). Shared staffing takes two
+replays per district (about twice the time); resume works in either pass.
+
+**Utility page.** `UTILSIM_RUN_STORE=out/store node web/serve.mjs` also serves `<store>/batches/`; open
+`http://localhost:5175/utility.html?batch=/batches/<jobKey>/` to see the batch as one utility (read-only, no engine):
+the utility's and the year's key figures (homes, districts, accounts, registers, staffing and network modes; billed,
+collected, receivable and case backlog at year end, cases opened, contacts and the share answered, outage
+customer-hours per utility), its days as small multiples (work waiting and the oldest waiting, crew work waiting,
+calls answered and abandoned, outage customer-hours, backlog by queue), the staff allocation of a chosen pool
+(shared staffing: staff per district and day for the eight districts with the most staff-days and "Other", home
+teams, float days, the predicted work waiting), the districts (50 a page, accounts and registers from each run's
+manifest, an **Open run** link to `runs.html?run=/runs/<runKey>/`) and the upstream events once each with the
+network layout (connected networks). A paused batch shows the finished districts; a missing `rollup.json`,
+`staffing.json` or `network.json` leaves a message in its section rather than failing the page.

@@ -15,10 +15,15 @@ from viewer_contract import validate_frame
 
 from utilsim.io import schemas
 from utilsim.io.snapshot import build_snapshot
+from utilsim.m2c.calendar import calendar
 from utilsim.ops.opstown import OpsTown
 from utilsim.ops.routing import Router, access_point
 from utilsim.ops.timeline import Run
 from utilsim.sim.state import FrameBuilder, local_time
+
+CAL = calendar(2026)
+date_of = CAL.date_of
+parse_day = CAL.parse_day
 
 ROOT = Path(__file__).resolve().parents[1]
 # Most tests follow one incident they cause: background incidents (on by default) are switched off for them.
@@ -269,7 +274,6 @@ def test_reading_rounds_show_the_meter_to_cash_outcome_of_each_read(small_town):
 
     from api._m2c import RunRequest, run_for
     from api.index import app
-    from utilsim.m2c.base import date_of
 
     run = run_for(RunRequest(town="small_town"))
     tw = run.town
@@ -310,7 +314,6 @@ def test_m2c_field_orders_become_crew_jobs_and_field_visits_settle_cases(small_t
 
     from api._m2c import RunRequest, run_for
     from api.index import app
-    from utilsim.m2c.base import date_of
 
     client = TestClient(app)
     run = run_for(RunRequest(town="small_town"))
@@ -375,8 +378,6 @@ def test_outages_from_operations_reach_meter_to_cash(small_town):
     from api._m2c import RunRequest, run_for
     from api.index import app
     from utilsim.m2c import views
-    from utilsim.m2c.base import date_of
-    from utilsim.m2c.run import parse_day
 
     pole = fused_pole(small_town)
     base = run_for(RunRequest(town="small_town"))
@@ -395,7 +396,8 @@ def test_outages_from_operations_reach_meter_to_cash(small_town):
     outages = [{"day": day, **{k: i[k] for k in ("utility", "start", "end", "premiseIds")}} for i in tl["interruptions"]]
     run = run_for(RunRequest(town="small_town", outages=outages))
     before = tw.read_day[:, 1:] < parse_day(day, 0)  # nothing changes before the outage
-    assert np.array_equal(np.where(before, run.truth[:, 1:], 0), np.where(before, base.truth[:, 1:], 0))
+    assert np.array_equal(np.where(before, run.truth[:, 1:], 0), np.where(before, base.truth[:, 1:], 0),
+                          equal_nan=True)  # a meter the crews removed has no read (NaN)
     p = tw.premise_index[tw.premise_ids[tw.prem[ami]]]
     rows = np.flatnonzero((tw.prem == p) & (tw.commodity == "electric") & (tw.direction == "import"))
     assert (run.truth[rows, 12] < base.truth[rows, 12]).all()  # the outage's use never flowed
@@ -403,8 +405,10 @@ def test_outages_from_operations_reach_meter_to_cash(small_town):
     assert gasps and all(c.type == "COMM_FAIL" and c.events[1][3] == 0 for c in gasps)
     assert all(run.reason[c.r, c.month] == "SIM_POWER_OUTAGE" for c in gasps)
     assert not any(c.events[0][1] == "AMI_LAST_GASP" for c in base.cases)
+    carried = [o for o in run.outage_log if "incident" not in o]  # the day carried in; the year's incidents too
+    assert {tw.premise_ids[q] for o in carried for q in o["prem"].tolist()} == hit
     rel = views.summary(run, "2026-12-31")["reliability"]["electric"]
-    assert rel["customersInterrupted"] == len(hit) and rel["customerMinutes"] > 0 and rel["lost"] > 0
+    assert rel["customersInterrupted"] >= len(hit) and rel["customerMinutes"] > 0 and rel["lost"] > 0
     assert rel["lastGasps"] > 0 and "reliability" in views.summary(base, "2026-12-31")
     pv = views.premise(run, tw.premise_ids[p], as_of="2026-12-31")
     assert pv["outages"] and pv["outages"][0]["lastGasp"] and pv["outages"][0]["lost"] > 0

@@ -1,4 +1,6 @@
 """Manual wizard inputs and illustrative regional starting points; no provider calls or town generation."""
+from functools import lru_cache
+
 from api._agent_config import Proposal, grouped_ops_defaults, preset_config, schemas, validate_proposal
 from api._towns import MAX_HOUSES
 from utilsim.config.goals import GOALS
@@ -54,12 +56,25 @@ REGIONS = [
 ]
 
 
+@lru_cache(maxsize=1)
+def gas_district_min_homes() -> int | None:
+    """The smallest town drawn with more than one district. A smaller town is one district, which always keeps its gas
+    mains, so gas cannot be switched off there; from this size ``gas.all_electric_district_share`` = 1 leaves no gas
+    mains at all. None when this function cannot import the generation stack."""
+    try:
+        from utilsim.gen.roads.build import district_count
+    except ImportError:
+        return None
+    return next((n for n in range(1, MAX_HOUSES + 1) if district_count(n) > 1), None)
+
+
 def configuration(preset: str) -> dict:
     cfg = preset_config(preset)
     values = cfg.model_dump(mode="json")
     return {"schemas": schemas(), "defaults": {"town": values,
             "run": {k: values[k] for k in RUN_GROUPS}, "operations": grouped_ops_defaults(cfg)},
-            "goals": GOALS, "homeLimit": MAX_HOUSES, "townSizes": TOWN_SIZES, "regions": REGIONS, "regionalNote": REGIONAL_NOTE}
+            "goals": GOALS, "homeLimit": MAX_HOUSES, "townSizes": TOWN_SIZES, "regions": REGIONS, "regionalNote": REGIONAL_NOTE,
+            "gasDistrictMinHomes": gas_district_min_homes()}
 
 
 def operation_defaults(proposal: Proposal) -> dict:

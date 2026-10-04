@@ -3,6 +3,7 @@
 // nothing here invents a record. Query context (what you executed) is session state, kept apart from engine data.
 import {escapeText as e} from './customer-view.js';
 import {scorecardMarkup} from './worklists.js';
+import {activeYear,dayYear,yearStart,yearEnd} from './m2c.js';
 import {COLLECTION_TRANSACTIONS,parseCollectionsRoute,collectionsHash,isCollectionsRoute,installCollections} from './workspace-collections.js';
 
 export const TRANSACTIONS=[
@@ -11,7 +12,7 @@ export const TRANSACTIONS=[
  ['Display','billing-query','Display Billing'],
  ['Display','read-query','Display Meter Reading Results']
 ];
-export const CATEGORIES=['My Assigned Cases','AMP','Bill Correction','Bill Print Errors','Billing Errors','Billing Outsorts','Billing- see IT Supp','Budget Bill Cases','Invoice Errors','Invoice Outsorts','Low Income Process','MR Implausibles','Meter Read Follow-Up','Escalations','Field Work'];
+export const CATEGORIES=['My Assigned Cases','AMP','Bill Correction','Bill Print Errors','Billing Errors','Billing Outsorts','Billing- see IT Supp','Budget Bill Cases','Customer Complaints','Invoice Errors','Invoice Outsorts','Low Income Process','MR Implausibles','Meter Read Follow-Up','Escalations','Field Work'];
 const MISSING=['COMM_FAIL','NO_ACCESS','NO_READ','CONSECUTIVE_ESTIMATES'];
 const VALUE_QUEUES=['VEE_REVIEW','SUPERVISOR'];
 const SUBSTATUS={queued:['001','Awaiting pickup'],assigned:['002','In analyst review'],escalated:['003','Supervisor review'],field:['010','Field visit'],held:['004','Held'],resolved:['009','Completed']};
@@ -22,6 +23,8 @@ export function categoryOf(row){
  if(row.category)return row.category;
  if(row.queue==='FIELD')return 'Field Work';
  if(row.queue==='SUPERVISOR')return 'Escalations'; // escalated by VEE, an analyst or you: a supervisor works it unless you take it
+ if(row.type==='BILL_DISPUTE')return 'Bill Correction';
+ if(row.type==='COMPLAINT')return 'Customer Complaints';
  if(row.type==='RATE_CLASS')return 'Billing Errors';
  if(['HIGH_BILL','BILL_CREDIT'].includes(row.type))return 'Billing Outsorts';
  if(MISSING.includes(row.type)||row.queue==='ESTIMATION')return 'Meter Read Follow-Up';
@@ -160,7 +163,7 @@ export function installWorkspace({getClient,getEngineState=()=>({state:'idle',to
   const groups=[...new Set(ALL.map(t=>t[0]))],current=title||ALL.find(t=>t[1]===tx)?.[2]||'';
   return `<header class="sap-transaction-header ${title?'sap-transaction-classic':''}"><span class="sap-emblem">SAP</span><select id="ws-transaction" aria-label="SAP transaction">${title?`<option value="" selected disabled>${e(title)}</option>`:''}${groups.map(g=>`<optgroup label="${g}">${ALL.filter(t=>t[0]===g).map(([,id,label])=>`<option value="${id}" ${!title&&id===tx?'selected':''}>${label}</option>`).join('')}</optgroup>`).join('')}</select><span class="spacer"></span><small>100</small></header>`;
  }
- function statusbar(text){const m=client();return `<footer class="fiori-status"><span class="sap-square ${ui.acting?'amber':'green'}"></span><span role="status" aria-live="polite">${e(ui.acting?'Recording with the engine… (2–5 s while it replays the run)':text)}</span><span class="spacer"></span><label class="ws-asof">Run date <input type="date" id="ws-asof" min="2026-01-01" max="2026-12-31" value="${e(m?.asOf||ui.asOf||'')}"></label>${btn('+1 day','next-day','class="ws-next-day" title="Fast-forward the run one day"')}<span>Engine data</span></footer>`;}
+ function statusbar(text){const m=client();return `<footer class="fiori-status"><span class="sap-square ${ui.acting?'amber':'green'}"></span><span role="status" aria-live="polite">${e(ui.acting?'Recording with the engine… (2–5 s while it replays the run)':text)}</span><span class="spacer"></span><label class="ws-asof">Run date <input type="date" id="ws-asof" min="${yearStart(activeYear(m))}" max="${yearEnd(activeYear(m))}" value="${e(m?.asOf||ui.asOf||'')}"></label>${btn('+1 day','next-day','class="ws-next-day" title="Fast-forward the run one day"')}<span>Engine data</span></footer>`;}
  function empty(text){return `<section class="fiori-shell">${header(ui.route.tx)}<div class="fiori-empty ws-empty">${text}</div>${statusbar('Workspace')}</section>`;}
 
  // ---- Clarification Case List ----------------------------------------------------------------------------------
@@ -173,7 +176,7 @@ export function installWorkspace({getClient,getEngineState=()=>({state:'idle',to
  function moreButton(){const left=(ui.total||0)-ui.rows.length;return left>0&&ui.pages?.[ui.pageIdx]?`<div class="ws-more">${btn(ui.loadingMore?'Loading…':`Load more (${Math.min(PAGE,left)} of ${left} left)`,'more-cases',ui.loadingMore?'disabled':'')}</div>`:'';}
  function casesPage(){const sortLabel=newestMode()?'Newest first':ui.sort==='age'?'Oldest first':'Case number',label=c=>`${c}${ui.counts&&ui.counts[c]?` (${ui.counts[c]})`:''}`;return `<section class="fiori-shell clarification-shell">${header('exceptions')}<div class="clarification-main-toolbar">${btn(ui.compact?'Comfortable layout':'Compact layout','layout')}${btn('Update Clarification Case List','refresh')}${btn('Export list','export-cases')}${btn('Run statistics','statistics')}</div><div class="clarification-layout"><aside class="clarification-sidebar"><div>Billing</div><nav aria-label="Clarification categories">${CATEGORIES.map(c=>`<button data-category="${c}" class="${ui.category===c?'active':''}" ${ui.category===c?'aria-current="page"':''}>${c}${ui.counts&&ui.counts[c]?`<span class="ws-count">${ui.counts[c]}</span>`:''}</button>`).join('')}</nav>${col.nav()}</aside><section class="clarification-main"><label class="ws-category-pick"><span>Billing</span><select id="ws-category" aria-label="Clarification category">${CATEGORIES.map(c=>`<option value="${c}" ${ui.category===c?'selected':''}>${e(label(c))}</option>`).join('')}</select></label><div class="clarification-title">${e(ui.category)}</div><div class="clarification-table-toolbar">${btn(sortLabel,'sort',`class="native-tool sort-tool" ${newestMode()?'disabled title="Completed and All list the newest cases first"':'title="Change sort order"'}`)}<label class="sr-only" for="ws-status">Status</label><select id="ws-status">${['Open','Completed','All'].map(v=>`<option ${ui.status===v?'selected':''}>${v}</option>`).join('')}</select><input type="search" id="ws-query" placeholder="Case, text, account…" value="${e(ui.query)}" aria-label="Find clarification case">${ui.query||ui.status!=='Open'?btn('Clear filters','clear-filters','class="native-tool" title="Show open cases without a search"'):''}<span class="spacer"></span><span id="ws-count">${countText()}</span></div>${ui.category==='Meter Read Follow-Up'?col.collectorStrip():''}<div class="clarification-table-scroll ${ui.compact?'compact':''}"><table class="clarification-table"><thead><tr><th></th><th>Overdue</th><th>Case</th><th>Clarification Case Text</th><th>Status</th><th>Substatus</th><th>Substatus Text</th><th>Job</th><th>Interval</th><th>Logical system</th><th>Assignee</th></tr></thead><tbody id="ws-cases">${caseBody()}</tbody></table>${moreButton()}</div></section></div>${statusbar('Clarification Case List')}</section>`;}
  // Open cases per category: the engine's total for each (one small page each), so a long list cannot hide a category.
- const COUNTED=['My Assigned Cases','Billing Errors','Billing Outsorts','Invoice Outsorts','MR Implausibles','Meter Read Follow-Up','Escalations','Field Work','Low Income Process','Budget Bill Cases'];
+ const COUNTED=['My Assigned Cases','Bill Correction','Customer Complaints','Billing Errors','Billing Outsorts','Invoice Outsorts','MR Implausibles','Meter Read Follow-Up','Escalations','Field Work','Low Income Process','Budget Bill Cases'];
  async function loadCounts(){const m=client();if(!m)return;try{const totals=await Promise.all(COUNTED.map(c=>m.post('/process/queue',{status:'open',category:c,page:1,pageSize:1},'count:'+c).then(r=>r.total||0)));ui.counts=Object.fromEntries(COUNTED.map((c,i)=>[c,totals[i]]));if(ui.route.tx==='exceptions'&&!ui.route.caseId)render();}catch(err){if(!err.superseded)ui.counts=null;}}
  function fetchCases(page){const status=ui.status==='Completed'?'resolved':ui.status==='All'?'all':'open';return client().queue({status,sort:newestMode()||ui.sort!=='age'?'created':'age',page,pageSize:PAGE,...(ui.category?{category:ui.category}:{})});}
  // Newest first: when the engine's "created" order runs oldest first, the last page holds the newest cases.
@@ -196,7 +199,7 @@ export function installWorkspace({getClient,getEngineState=()=>({state:'idle',to
   const runNote=col.state.period==='run'&&!sum.window?'<p class="gui-processing-hint">No actions yet: the run has been yours since January 1, so this is the year to date.</p>':'';
   return `<section class="fiori-shell gui-case-shell">${header('exceptions','Run Statistics')}<nav class="gui-transaction-toolbar">${btn('‹ Back to List','back')}${btn(ui.scorecard?'Hide VEE scorecard':'VEE scorecard','scorecard')}${col.periodSelect()}</nav><div class="gui-case-scroll"><div class="gui-case-content">
    ${runNote}${sum.window?col.periodBody(sum)+group('Work Queues (now)',`<table class="gui-history-table"><thead><tr><th>Queue</th><th>Open</th><th>0–1 d</th><th>2–3 d</th><th>4–7 d</th><th>8+ d</th><th>Oldest</th></tr></thead><tbody>${queues}</tbody></table>`):ytd}
-   ${relRows?group('Service Interruptions (from the map)',`<table class="gui-history-table"><thead><tr><th>Utility</th><th>Interruptions</th><th>Customers</th><th>Customer-minutes</th><th>SAIDI min</th><th>Use lost</th></tr></thead><tbody>${relRows}</tbody></table>`):''}
+   ${relRows?group('Service Interruptions',`<table class="gui-history-table"><thead><tr><th>Utility</th><th>Interruptions</th><th>Customers</th><th>Customer-minutes</th><th>SAIDI min</th><th>Use lost</th></tr></thead><tbody>${relRows}</tbody></table>`):''}
    ${group('VEE against Simulation Truth',grid([[['Precision',pct(k.vee.precision)],['Recall',pct(k.vee.recall)]],[['True positives',num(k.vee.truePositives,0)],['False positives',num(k.vee.falsePositives,0)]]])+(ui.scorecard?`<div class="ws-scorecard">${ui.scorecard===true?'<p class="small-note">Scoring VEE…</p>':scorecardMarkup(ui.scorecard)}</div>`:''))}
   </div></div>${statusbar('Run statistics · '+(sum.window?`${sum.window.since} to ${sum.asOf}`:'year to date, as of '+sum.asOf))}</section>`;}
  async function loadSummary(){const m=client();if(!m)return;const ticket=++ui.busy;try{const sum=await m.summary(col.since());if(ticket!==ui.busy)return;ui.summary=sum;ui.asOf=sum.asOf;}catch(err){if(!err.superseded)toast('Engine: '+err.message);}finally{if(ticket===ui.busy){ui.busy=0;render();}}}
@@ -293,14 +296,14 @@ export function installWorkspace({getClient,getEngineState=()=>({state:'idle',to
  function setOrder(o,tab='header'){ui.order={...o,fields:{...blankFields(),...o.fields},components:(o.components||[]).map(c=>({...c})),errors:{},tab};}
  function foField(name,wide=false){const d=ui.order,spec=foSpec(name),value=d.fields[name]??'',err=d.errors[name],id='fo-'+name;
   const attrs=`id="${id}" data-fo-field="${name}" ${d.editable?'':'disabled'} ${spec.required?'aria-required="true"':''} ${err?`aria-invalid="true" aria-describedby="fo-error-${name}"`:''}`;
-  const control=spec.kind==='choice'?`<select ${attrs}><option value=""> </option>${(spec.choices||[]).map(v=>`<option ${v===value?'selected':''}>${e(v)}</option>`).join('')}</select>`:spec.kind==='textarea'?`<textarea ${attrs} rows="${name==='longText'?9:4}" maxlength="${spec.maxLength||1600}">${e(value)}</textarea>`:spec.kind==='date'?`<input ${attrs} type="date" value="${e(value)}" min="${e(client()?.asOf||'2026-01-01')}" max="2026-12-31">`:spec.kind==='minutes'?`<input ${attrs} type="number" min="1" max="${spec.maximum||1440}" step="1" value="${e(value)}">`:`<input ${attrs} type="${name==='contactPhone'?'tel':'text'}" maxlength="${spec.maxLength||120}" value="${e(value)}">`;
+  const control=spec.kind==='choice'?`<select ${attrs}><option value=""> </option>${(spec.choices||[]).map(v=>`<option ${v===value?'selected':''}>${e(v)}</option>`).join('')}</select>`:spec.kind==='textarea'?`<textarea ${attrs} rows="${name==='longText'?9:4}" maxlength="${spec.maxLength||1600}">${e(value)}</textarea>`:spec.kind==='date'?`<input ${attrs} type="date" value="${e(value)}" min="${e(client()?.asOf||yearStart(activeYear(client())))}" max="${yearEnd(activeYear(client()))}">`:spec.kind==='minutes'?`<input ${attrs} type="number" min="1" max="${spec.maximum||1440}" step="1" value="${e(value)}">`:`<input ${attrs} type="${name==='contactPhone'?'tel':'text'}" maxlength="${spec.maxLength||120}" value="${e(value)}">`;
   return `<div class="fo-field ${wide?'fo-wide':''}"><label for="${id}">${e(FO_LABELS[name]||spec.label)}${spec.required?' <span class="fo-required">*</span>':''}</label>${control}${err?`<small id="fo-error-${name}" class="fo-field-error">${e(err)}</small>`:''}</div>`;}
  const foFlag=name=>`<label><input type="checkbox" data-fo-field="${name}" ${ui.order.fields[name]?'checked':''} ${ui.order.editable?'':'disabled'}> ${e(foSpec(name).label)}</label>`;
  // The release rules, checked here first so the form can point at the fields; the engine checks them again.
  function validateOrder(d){const v=ui.vocab.order,errors={},asOf=client()?.asOf||'',f=d.fields,label=n=>foSpec(n).label,max=foSpec('duration').maximum||1440,units=v.components?.units||['EA','M'];
   for(const n of v.required||[])if(!String(f[n]??'').trim())errors[n]=label(n)+' is required.';
   for(const [n,ch] of Object.entries(v.choices||{}))if(f[n]&&!ch.includes(f[n]))errors[n]='Choose a valid '+label(n).toLowerCase()+'.';
-  if(f.startDate&&(!validDay(f.startDate)||f.startDate<asOf||!f.startDate.startsWith('2026')))errors.startDate=`Choose a date in 2026 on or after the run date (${asOf}).`;
+  const year=activeYear(client());if(f.startDate&&(!validDay(f.startDate)||f.startDate<asOf||dayYear(f.startDate)!==year))errors.startDate=`Choose a date in ${year} on or after the run date (${asOf}).`;
   if(f.finishDate&&(!validDay(f.finishDate)||f.finishDate<(f.startDate||'')))errors.finishDate='Finish must be on or after the start date.';
   if(String(f.duration??'')!==''&&!(Number(f.duration)>0&&Number(f.duration)<=max))errors.duration=`Enter a duration from 1 to ${max} minutes.`;
   if(d.components.some(c=>!String(c.description||'').trim()||!(Number(c.quantity)>0)||!units.includes(c.unit)))errors.components='Each component needs a description, a positive quantity and a unit.';
@@ -400,6 +403,7 @@ export function installWorkspace({getClient,getEngineState=()=>({state:'idle',to
   else if(t.id==='ws-vee-utility'){ui.veeUtility=t.value;render();}
   else if(t.dataset.readSelect){const r=ui.veeRows.find(x=>x.caseId===t.dataset.readSelect);if(t.checked&&r&&canWork(r,client()?.asOf))ui.selected.add(r.caseId);else ui.selected.delete(t.dataset.readSelect);render();}
   else if(t.id==='ws-select-all'){const asOf=client()?.asOf,open=veeRows().filter(r=>!r.resolvedAt&&canWork(r,asOf));if(t.checked)open.forEach(r=>ui.selected.add(r.caseId));else ui.selected.clear();render();}
+  else if(t.id==='ws-asof'&&t.value&&dayYear(t.value)!==activeYear(client())){toast(`Choose a date in ${activeYear(client())}.`);render();}
   else if(t.id==='ws-asof'&&t.value){setRunDate(t.value).then(()=>toast(`Run date ${t.value}: actions are recorded on this day.`));}
   else if(t.dataset.foField||t.dataset.foComponent!=null)captureOrder(t);
  });
@@ -416,7 +420,7 @@ export function installWorkspace({getClient,getEngineState=()=>({state:'idle',to
   if(act==='related'){ui.relatedOpen=ui.relatedOpen===b.dataset.case?null:b.dataset.case;const body=root.querySelector('#ws-cases');if(body)body.innerHTML=caseBody();return;}
   if(act==='open-case'){go({caseId:b.dataset.case});return;}
   if(act==='layout'){ui.compact=!ui.compact;render();}
-  else if(act==='next-day'){const from=m?.asOf||ui.asOf;if(!from)return;const day=addDays(from,1);if(day>'2026-12-31'){toast('The simulated year ends on 31 December 2026.');return;}await setRunDate(day);toast(`Run date ${day}.`);}
+  else if(act==='next-day'){const from=m?.asOf||ui.asOf;if(!from)return;const day=addDays(from,1),year=activeYear(m);if(day>yearEnd(year)){toast(`${year} ends on 31 December.${m?.canContinue?.()?` Continue into ${year+1} from the Command Center.`:''}`);return;}await setRunDate(day);toast(`Run date ${day}.`);}
   else if(act==='refresh'){loadCases();loadCounts();}
   else if(act==='statistics')go({tx:'statistics'});
   else if(act==='scorecard'){if(ui.scorecard){ui.scorecard=null;render();return;}ui.scorecard=true;render();try{ui.scorecard=await m.scorecard();}catch(err){ui.scorecard=null;if(!err.superseded)toast('Engine: '+err.message);}render();}

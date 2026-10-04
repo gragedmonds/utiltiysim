@@ -4,4 +4,4 @@ Choose storage (for example `P:\UtilitySim`), let the launcher install its verif
 
 The runtime has a pinned SHA-256 digest and Ed25519 signature verified by the launcher. These builds do not have Apple notarization or a Windows publisher certificate; operating systems may show an unidentified-publisher prompt. Linux needs a desktop browser and glibc 2.35 or newer. Measured launcher/runtime sizes are in each platform's manifest JSON.
 
-Full archives remain on your selected drive. Manual job import and result-summary export work without portal storage. Automatic sync requires the Studio host's Upstash Redis integration. The current engine models 2026 and independent district teams; a shared utility-wide workforce is not implemented.
+Full archives remain on your selected drive. Manual job import and result-summary export work without portal storage. Automatic sync requires the Studio host's Upstash Redis integration. The paired-job contract currently uses 2026 and independent district teams. Existing live/CLI engine paths also support later years, shared-workforce coordination and connected utility networks.
