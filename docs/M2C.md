@@ -547,10 +547,10 @@ Measured on the default settings, year to 31 December:
 
 | Town | Accounts | Contacts | To agents | Hung up | In target | ASA | Occupancy | Cost |
 |---|---|---|---|---|---|---|---|---|
-| `village` | 635 | 798 | 458 | 1.5% | 99% | 2.7 s | 2.3% | $86k |
-| `small_town` | 2,368 | 2,634 | 1,476 | 4.5% | 97% | 3.9 s | 6.9% | $87k |
-| `town` | 3,969 | 4,706 | 2,542 | 7.4% | 95% | 8.5 s | 12% | $88k |
-| `large_town` | 6,598 | 8,227 | 4,258 | 12% | 91% | 14 s | 19% | $91k |
+| `village` | 635 | 817 | 451 | 0.9% | 99% | 2.6 s | 2.3% | $86k |
+| `small_town` | 2,368 | 2,592 | 1,448 | 4.0% | 96% | 5.8 s | 7.0% | $87k |
+| `town` | 3,969 | 4,600 | 2,552 | 7.4% | 94% | 8.5 s | 12% | $88k |
+| `large_town` | 6,598 | 8,222 | 4,296 | 12% | 91% | 15 s | 19% | $91k |
 
 The year draws 10 incidents on the village, 21 on the small town, 32 on the town and 57 on the large town. One
 agent is the default: a town of a few thousand accounts keeps
