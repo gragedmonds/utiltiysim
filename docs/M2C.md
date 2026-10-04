@@ -1,7 +1,7 @@
 # Meter-to-cash (M2C)
 
 Reads, VEE, exception work queues, billing, invoicing, payments and collections for every premise, replayed by the
-engine for calendar 2026.
+engine one calendar year at a time (2026 to 2030, each year opening on the one before it: see "Years" below).
 
 ## Run model
 
@@ -52,6 +52,38 @@ A run is stateless and deterministic: `(town, settings, actions, outages, seed)`
 The engine (`utilsim/m2c/`, numpy only) runs locally (`utilsim serve`) and on the hosted Vercel function. A
 5,500-home town (16k registers) replays its year, every bill and collection included, in about 15 s on one core,
 and warm instances keep the last four runs.
+
+## Years: the calendar and chained years
+
+A run replays one calendar year, 2026 (the snapshot's own) to 2030 (`utilsim/m2c/calendar.py`). Day 0 is its
+1 January, and every date comes from its calendar: Ontario's statutory holidays by rule (Easter, Victoria Day, the
+Monday after a weekend holiday), the business days, read days, usage noise and weather of that year. A leap year
+has 366 days.
+
+A year can open on the one before it (`utilsim/m2c/yearclose.py`, `next_year(run, snapshot)`). The closed year
+hands over, with its times shifted so that the next year counts from its own 1 January (earlier is negative):
+
+- **Registers.** Every dial goes on from where it stood at midnight. Column 0 of the next year is the last read
+  whose period was billed, so the first bill runs from it. VEE measures from the last released read, and the
+  estimate streak and trend memory carry. A service still off (disconnected or removed) stays off and is not read
+  until it is reconnected.
+- **Meters.** Technology (AMI conversions), install years (exchanges), module batteries (replaced, or dead) and
+  the device on each slot carry; new devices number on from the earlier years' changes. A meter still stuck,
+  slow, tampered, drifting, leaking or consuming at a vacant premise at midnight goes on from the first day.
+- **Work.** Open cases go back into their queues with their history, and a case that held a register's reads
+  holds the next year's until it is worked. Bills released but not invoiced go out on the first invoice run. Field
+  orders still open keep their ids, and a seal lot still being sampled passes or fails on its carried samples.
+- **Money.** Unpaid invoices carry with their dunning stage, fees and disconnection, and so does each account's
+  balance, budget plan, hold, payment arrangement and referral. Payer profiles and payment methods the year
+  changed, and collections events already scheduled for the next year (a notice the winter moratorium holds until
+  1 May), carry too.
+- **The networks.** Main renewed so far still breaks less.
+
+The next year draws its own anomalies, misses, payments and calls: its seed is salted with the year
+(`"{seed}:m2c:2027"`), and its simulation id carries the year and the chain
+(`m2c-{town}-2027-{settings}-{inputs}-{chain}`). Its cases, invoices and field orders carry the year in their
+ids (`CASE-27…`, `INV-…-2027…`, `WO-27-…`). Studio work (orders, invoice holds) belongs to its year: an open one
+is not carried.
 
 ## Episodes: a scenario inflicted from a day
 

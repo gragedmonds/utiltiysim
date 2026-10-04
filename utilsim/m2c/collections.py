@@ -128,14 +128,14 @@ def _winter(d: date, b=None) -> bool:
     return (md >= start or md <= end) if start > end else (start <= md <= end)
 
 
-def moratorium_release(b, cal: RunCalendar) -> int:
-    """The run day held notices go out: the day after ``billing.moratorium_end`` in the run's year (the default
-    release, 1 May, when the setting names no date of the year)."""
+def moratorium_release(b, cal: RunCalendar, years: int = 0) -> int:
+    """The run day held notices go out: the day after ``billing.moratorium_end`` in the run's year (``years``: that
+    many years later; the default release, 1 May, when the setting names no date of the year)."""
     m, d = _md(b.moratorium_end, (4, 30))
     try:
-        return cal.day_of(date(cal.year, m, d)) + 1
+        return cal.day_of(date(cal.year + years, m, d)) + 1
     except ValueError:
-        return cal.day_of(date(cal.year, 5, 1))
+        return cal.day_of(date(cal.year + years, 5, 1))
 
 
 def _day(cal: RunCalendar, t: float) -> str:
@@ -242,6 +242,7 @@ class Collections:
         self._cur: Account | None = None
         self._late: list[tuple[int, dict]] = []  # invoice actions on an invoice not created yet: judged at the end
         self.dun_new: list[tuple[dict, int]] = []  # (invoice, dunning index) since the contact centre last looked
+        self.later: list[tuple] = []  # (t, account, kind, data): events after the year's end, for the next year
         self._master: set[str] = set()
 
     def bcfg(self, t: float):
@@ -367,6 +368,8 @@ class Collections:
     def _push(self, A: Account, t: float, kind: str, *data) -> None:
         if t < self.run.cal.days:
             heapq.heappush(self._heap, (t, next(self._seq), A.id, kind, data))
+        elif t < INF:
+            self.later.append((t, A.id, kind, data))
 
     def _dunning(self, inv: dict, t: float, kind: str) -> None:
         inv["dunning"].append((t, kind))
@@ -544,7 +547,8 @@ class Collections:
                     self._dunning(inv, t, "MORATORIUM_HOLD")
                     self._call_centre(A, inv, t, "referral")
                 release = moratorium_release(b, self.run.cal)
-                self.push(release if t < release else INF, "dun", inv, 2, ver)
+                # Held after this year's release: next spring's (a chained year picks it up).
+                self.push(release if t < release else moratorium_release(b, self.run.cal, 1), "dun", inv, 2, ver)
                 return
             self._dunning(inv, t, "DISCONNECT_NOTICE")
             inv["disc"] = {"notice": t}
@@ -1203,7 +1207,8 @@ def case_block(run, case, T: float) -> dict:
 
 def summary_block(run, T: float) -> dict:
     """Collections to date for the summary's ``billing.collections``: arrangements, holds, low-income referrals and
-    grants, budget plans, disconnections and waived fees; ``events`` counts the account-level work (for costs)."""
+    grants, budget plans, disconnections and waived fees; ``events`` counts the account-level work (for costs). The
+    year's: what a chained year carried (an arrangement made, a notice sent last year) was counted then."""
     col = run.books.collections
     ev: dict[str, int] = {}
     arr = {"made": 0, "active": 0, "completed": 0, "broken": 0, "amount": 0.0}
@@ -1215,16 +1220,18 @@ def summary_block(run, T: float) -> dict:
         for t, k, _ in A.log:
             if t <= T and k in ACCOUNT_LOG:
                 ev[k] = ev.get(k, 0) + 1
-        for x in A.arrangements:
+        for x in A.arrangements:  # made this year; one carried from last year still runs, completes or breaks
             if x["start"] <= T:
-                arr["made"] += 1
-                arr["amount"] += x["amount"]
+                if x["start"] >= 0:
+                    arr["made"] += 1
+                    arr["amount"] += x["amount"]
                 arr[x["state"] if _at(x, "end", T) is not None else "active"] += 1
-        holds += sum(1 for h in A.holds if h["start"] <= T)
+        holds += sum(1 for h in A.holds if 0 <= h["start"] <= T)
         for r in A.referrals:
             if r["start"] <= T:
-                li["referred"] += 1
-                li["byYou"] += r["source"] == "you"
+                if r["start"] >= 0:
+                    li["referred"] += 1
+                    li["byYou"] += r["source"] == "you"
                 if _at(r, "decided", T) is not None:
                     li["approved" if r["approved"] else "declined"] += 1
                     li["grants"] += r["grant"] or 0.0
@@ -1234,16 +1241,18 @@ def summary_block(run, T: float) -> dict:
             if p["source"] == "master_data":
                 plans["masterData"] += 1
             elif p["requested"] <= T:
-                plans["enrolled"] += 1
-                plans["byYou"] += p["source"] == "you"
+                if p["requested"] >= 0:  # enrolled this year (a chained year's carried plan goes on)
+                    plans["enrolled"] += 1
+                    plans["byYou"] += p["source"] == "you"
                 plans["active"] += p["start"] <= T
         for inv in A.invs:
-            s = disconnect_state(inv, T)
+            d = inv.get("disc")
+            s = disconnect_state(inv, T) if d and d["notice"] >= 0 else None
             if s is not None:
                 disc["notices"] += 1
                 if s in disc:
                     disc[s] += 1
-            waived += sum(x for t, _, x in inv["waived"] if t <= T)
+            waived += sum(x for t, _, x in inv["waived"] if 0 <= t <= T)
     arr["amount"] = round(arr["amount"], 2)
     li["grants"] = round(li["grants"], 2)
     return {"arrangements": arr, "dunningHolds": holds, "lowIncome": li, "budgetPlans": plans,

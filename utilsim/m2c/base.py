@@ -100,6 +100,10 @@ class M2CTown:
     premise_street: list[str] = field(default_factory=list)
     premise_attrs: dict[str, np.ndarray] = field(default_factory=dict)  # yearBuilt, hasEV, electricHeat, residential
     cal: RunCalendar = field(default_factory=calendar)  # the calendar year the town's days count in
+    # A chained year (utilsim/m2c/yearclose.py): the device on each meter slot at the year's start and the device
+    # changes made on it so far (empty: the snapshot's own meters, none changed).
+    meter_device: list[str] = field(default_factory=list)
+    device_count: np.ndarray = field(default_factory=lambda: np.zeros(0, dtype=np.int64))
 
     def collector_of(self, r: int) -> str | None:
         """The AMI collector register row ``r``'s meter reports through, if any."""

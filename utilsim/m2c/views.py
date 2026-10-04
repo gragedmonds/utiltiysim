@@ -87,15 +87,18 @@ def summary(run: M2CRun, as_of: str | None = None, since: str | None = None) -> 
     days_to_release = []
     opened = resolved = open_now = field = rolls = 0
     by_type: dict[str, dict] = {}
-    for case in run.cases:
+    for case in run.cases:  # the year's flows: a case carried from last year was opened (and cost) then
         if case.created > T:
             continue
-        opened += 1
+        mine = case.created >= 0
+        opened += mine
         bt = by_type.setdefault(case.type, {"count": 0, "open": 0})
-        bt["count"] += 1
+        bt["count"] += mine
         for t, kind, _, _ in case.events:
             if t > T:
                 break
+            if t < 0:
+                continue
             for k, v in cat.cost(kind).items():
                 costs[k] += v
             field += kind == "FIELD_ORDER"
@@ -103,7 +106,7 @@ def summary(run: M2CRun, as_of: str | None = None, since: str | None = None) -> 
         read_day = float(tw.read_day[case.r, case.month])
         end = case.resolved if case.resolved is not None and case.resolved <= T else T
         if case.work is None:  # your orders and holds hold no read back from billing: no carry
-            carry += max(0.0, end - read_day) * c.process.carry_rate_per_day
+            carry += max(0.0, end - max(read_day, 0.0)) * c.process.carry_rate_per_day
         if case.resolved is not None and case.resolved <= T:
             resolved += 1
             if case.work is None:
@@ -1046,7 +1049,7 @@ def scorecard(run: M2CRun, *, as_of: str | None = None) -> dict:
         rows.append(row)
     by_type: dict[str, list[int]] = {}
     for case in run.cases:
-        if case.created > T or case.doc >= 0 or case.type in cat.MISSING_TYPES or case.work is not None:
+        if not 0 <= case.created <= T or case.doc >= 0 or case.type in cat.MISSING_TYPES or case.work is not None:
             continue
         c = by_type.setdefault(case.type, [0, 0])
         c[0] += 1
@@ -1107,7 +1110,7 @@ def costs(run: M2CRun, *, as_of: str | None = None) -> dict:
     tw, rate = run.town, run.cfg.process.carry_rate_per_day
     out: dict[str, dict] = {}
     for case in run.cases:
-        if case.created > T:
+        if not 0 <= case.created <= T:  # the year's cases (a chained year's carried ones cost last year)
             continue
         o = out.setdefault(case.type, {"count": 0, "labor": 0.0, "system": 0.0, "cx": 0.0, "carry": 0.0,
                                        "daysToRelease": [], "rpa": 0, "human": 0, "field": 0})
@@ -1213,7 +1216,7 @@ def invoice_json(run: M2CRun, inv: dict, T: float) -> dict:
 def billing_kpis(run: M2CRun, T: float) -> tuple[dict, dict[str, float]]:
     bk, c = run.books, run.cfg
     rate = c.process.carry_rate_per_day
-    docs = [d for d in bk.docs if d["created"] <= T]
+    docs = [d for d in bk.docs if 0 <= d["created"] <= T]  # the year's (a chained year's carried bills were made then)
     released = [d for d in docs if doc_status(run, d, T) == "released"]
     costs = {"labor": 0.0, "system": 0.0, "cx": 0.0}
 
@@ -1221,29 +1224,34 @@ def billing_kpis(run: M2CRun, T: float) -> tuple[dict, dict[str, float]]:
         for k, v in cat.cost(kind).items():
             costs[k] += v * n
 
-    issued = [inv for inv in bk.invoices if inv["created"] <= T]
+    # The year's invoices; one carried from last year (unpaid) still collects, duns and carries this year.
+    every = [inv for inv in bk.invoices if inv["created"] <= T]
+    issued = [inv for inv in every if inv["created"] >= 0]
     days_to_invoice, days_to_pay, carry, recv_carry, collected, overdue = [], [], 0.0, 0.0, 0.0, 0.0
     dunning: dict[str, int] = {}
     tw = run.town
-    for inv in issued:
-        charge("INVOICE_CREATED")
-        read_day = max(float(tw.read_day[bk.main[bk.docs[k]["inst"]], bk.docs[k]["month"]]) for k in inv["docs"])
-        days_to_invoice.append(inv["created"] - read_day)
-        carry += max(0.0, inv["created"] - read_day) * rate
+    for inv in every:
+        mine = inv["created"] >= 0
+        if mine:
+            charge("INVOICE_CREATED")
+            read_day = max(float(tw.read_day[bk.main[bk.docs[k]["inst"]], bk.docs[k]["month"]]) for k in inv["docs"])
+            days_to_invoice.append(inv["created"] - read_day)
+            carry += max(0.0, inv["created"] - read_day) * rate
         paid = inv.get("paid")
         end = paid if paid is not None and paid <= T else T
         if inv["issued"] <= T:
-            recv_carry += max(0.0, end - inv["issued"]) * rate * c.process.receivable_carry_ratio
+            recv_carry += max(0.0, end - max(inv["issued"], 0.0)) * rate * c.process.receivable_carry_ratio
         for p in inv["payments"]:
-            if p["at"] <= T:  # instalments and low-income grants are cash in too; a returned debit is not
+            if 0 <= p["at"] <= T:  # instalments and low-income grants are cash in too; a returned debit is not
                 charge("PAYMENT_REJECTED" if p["status"] == "rejected" else "PAYMENT_RECEIVED")
                 collected += p["amount"] if p["status"] in colls.PAID else 0.0
         if paid is not None and paid <= T:
-            days_to_pay.append(paid - inv["issued"])
+            if mine:
+                days_to_pay.append(paid - inv["issued"])
         elif colls.is_overdue(inv, T):
             overdue += colls.owed(inv, T)
         for t, k in inv["dunning"]:
-            if t <= T:
+            if 0 <= t <= T:
                 dunning[k] = dunning.get(k, 0) + 1
                 if k != "PAYMENT_REJECTED":
                     charge(k)
