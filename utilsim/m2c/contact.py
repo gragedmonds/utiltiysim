@@ -181,7 +181,7 @@ class _Builder:
         a = self.acct_index.get(inv["account"], -1)
         if a < 0:
             return
-        issued, n = float(inv["issued"]), int(inv["n"])
+        issued, n = float(inv["issued"]), str_key(inv["id"])  # keyed by what it is, not its place in the run
         docs = [bk.docs[k] for k in inv["docs"]]
         expected = sum(float(x.get("expectedTotal") or 0.0) for x in docs)
         total = float(inv["total"])
@@ -206,7 +206,7 @@ class _Builder:
         a = self.acct_index.get(inv["account"], -1)
         if a < 0:
             return
-        n, ref = int(inv["n"]), inv["id"]
+        n, ref = str_key(inv["id"]), inv["id"]
         t, kind = inv["dunning"][j]
         if kind in ("DUNNING_REMINDER", "DUNNING_NOTICE", "DISCONNECT_NOTICE"):
             mult = {"DUNNING_REMINDER": 0.25, "DUNNING_NOTICE": 1.0, "DISCONNECT_NOTICE": 2.5}[kind]
@@ -227,19 +227,19 @@ class _Builder:
         after estimates (``last``: the installation's previous original bill)."""
         run, bk = self.run, self.run.books
         truth, total = float(doc.get("truthTotal") or 0.0), float(doc["total"])
-        k = int(doc["k"])
+        k = str_key(bk.doc_id(doc))  # keyed by what it is, not its place in the run
         off = total - truth
         if abs(off) > max(15.0, 0.15 * abs(truth)):
             mult = 1.0 if off > 0 else 1.0 / 6.0
             if _u(run, IDX["bill_wrong"], k, 0) < self.share("bill_wrong", when, mult):
                 a = self.acct_index.get(bk.account(doc), -1)
-                self.add(self.lagged("bill_wrong", when, 3, 12, k), "bill_wrong", a, -1, bk.doc_id(doc), k, doc=k)
+                self.add(self.lagged("bill_wrong", when, 3, 12, k), "bill_wrong", a, -1, bk.doc_id(doc), k, doc=int(doc["k"]))
         r = int(doc.get("replaces", -1))
         if r >= 0:
             if total - float(bk.docs[r]["total"]) >= 25.0 and _u(run, IDX["back_bill"], k, 0) < \
                     self.share("back_bill", when):
                 a = self.acct_index.get(bk.account(doc), -1)
-                self.add(self.lagged("back_bill", when, 2, 10, k), "back_bill", a, -1, bk.doc_id(doc), k, doc=k)
+                self.add(self.lagged("back_bill", when, 2, 10, k), "back_bill", a, -1, bk.doc_id(doc), k, doc=int(doc["k"]))
             return
         # A catch-up bill: the first actual read after estimates bills the use the estimates missed.
         prev = last.get(int(doc["inst"]))
@@ -250,7 +250,7 @@ class _Builder:
             if total - exp >= max(25.0, 0.5 * exp) and _u(run, IDX["back_bill"], k, 3) < self.share("back_bill", when):
                 a = self.acct_index.get(bk.account(doc), -1)
                 self.add(self.lagged("back_bill", when, 2, 10, k, 3), "back_bill", a, -1,
-                         f"{bk.doc_id(doc)} catch-up after estimates", k, "catch-up", doc=k)
+                         f"{bk.doc_id(doc)} catch-up after estimates", k, "catch-up", doc=int(doc["k"]))
 
     def moves(self) -> None:
         run = self.run
