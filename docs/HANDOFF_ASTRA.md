@@ -318,7 +318,7 @@ Pure helpers (`parseDataRoute`, `fmtCell`, `linkTarget`, `facetMarkup`, `stitchC
 
 ## 13. The Year tab: inflict a scenario from a day
 
-A fourth primary tab, **Year** (`#/year`, `year-page.js`), shows the simulated year as a chronological calendar.
+A primary tab, **Command Center** (formerly Year; still `#/year`, `year-page.js`), shows the simulated year as a chronological calendar.
 Clicking a day opens the scenario library (`GET /api/m2c/scenarios`: staffing, meter reading, VEE, billing,
 collections, meters and anomalies, the contact centre and storm season; undetected water loss listed as coming) and "Inflict" turns the
 scenario's episode templates into the run's **episodes** (`EngineM2C.addEpisode`): dated setting overrides from that

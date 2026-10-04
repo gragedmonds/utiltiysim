@@ -2532,7 +2532,7 @@
             "electric heat share",
             "winter electric peak"
           ],
-          "x-impact": "Share of districts without gas mains, counted in whole districts and never the core: those homes heat with electricity, mostly heat pumps. Gas accounts and usage fall, winter electric usage rises. One-district towns (village, small_town) have none whatever the share.",
+          "x-impact": "Share of districts without gas mains, counted in whole districts, the core last (1: no gas mains at all): those homes heat with electricity, mostly heat pumps. Gas accounts and usage fall, winter electric usage rises. One-district towns (under 2,251 homes: village, small_town) have none whatever the share.",
           "x-reach": "town"
         },
         "base_pressure_kpa": {

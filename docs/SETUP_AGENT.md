@@ -4,7 +4,15 @@ Choose **Talk it through** at the start of the wizard or while choosing a scenar
 questions across location, service area, utility type/scale, metering, normal staffing/workflow, billing and
 starting pressures before shaping the experiment. It inspects the engine's current configuration definitions, and proposes a complete setup. The proposal
 shows its summary, dated episodes, assumptions, model limits and exact setting changes. **Use this setup** validates
-it again and fills in the draft; **Open simulation** opens Year with those settings. Manual starters remain available.
+it again and fills in the draft; **Continue to Config** opens the simulation's full Config page, unlocked. Manual starters remain available.
+
+**Lock in before the simulation starts.** A new simulation (record `locked: false`) opens on Config with every setting
+editable, the other Studio tabs disabled and a bar that says how many settings differ from the defaults. **Lock in
+settings and start simulation** saves the run settings, map-day settings and seed into the record with `locked: true`
+and `lockedAt`, and opens the Command Center (`#/year`), or the map for an operations-only experiment. From then on Config only displays the settings (inputs
+disabled, reset and generate controls hidden, a banner links to a new simulation) and the client stores refuse setting
+and seed changes (`simulation-lock.js`). Dated episodes from the Command Center remain allowed: they are run input,
+not base settings. A record saved before this flag existed counts as locked and opens as before.
 
 ## Environment and utility wizard
 
@@ -18,6 +26,13 @@ The manual wizard has four steps:
 3. **Utility & operations**: services, billing analysts, contact-centre agents and Year field crews, followed by
    scenario intensity and view date. Advanced contains utility networks and metering, Year workflows and costs,
    and a separately labelled map-day operations section. Year field crews are expressed per 1,000 total premises.
+   Services are three checkbox cards. Electricity and water are always served (locked on). Natural gas maps to
+   `gas.all_electric_district_share` (off = 1, no gas mains); it is locked on below the engine's
+   `gasDistrictMinHomes` (2,251), where the town is one district that keeps its gas mains. Analysts and agents start
+   from a suggestion that scales the engine defaults (2 and 1, fitted to the 1,900-home small town) linearly with
+   homes, rounded, at least one (`suggestedStaffing` in `setup-utility.js`). Changing the size updates the values
+   nobody typed, including ones the chosen focus hides; a typed value is kept (`draft.staffing.edited`) and "Use n"
+   returns it to the suggestion.
 4. **Review & open**: the editable per-input summary, validation and links back to either setup stage.
 
 Town-size starters are **500, 5,000, 25,000 and 50,000 residential homes**. New drafts start at 500.
@@ -28,7 +43,7 @@ counts within the connected engine’s limit; existing saved sizes are preserved
 Focused setup shows relevant controls and Advanced groups. **Show all settings for this step** reveals the rest,
 without changing any values. Switching focus preserves hidden edits. Test everything exposes all groups.
 These are presentation profiles; generation and replay still include their full dependencies. Operations-only
-setups open the map and expose map-day controls first; other setups open Year. Claude receives the same goal
+setups open the map (after the lock-in page) and expose map-day controls first; other setups open the Command Center. Claude receives the same goal
 catalogue and focuses its interview on the chosen experiment. Existing drafts retain their stage and settings.
 
 Basic and advanced controls edit the same values. Region changes preserve home count and utility settings;
@@ -44,6 +59,23 @@ Tariffs and regulations retain the engine defaults unless edited. Claude receive
 Every town currently includes electricity and water. The service selector adds gas districts or chooses
 all-electric heating through `gas.all_electric_district_share`; Advanced exposes the exact coverage share.
 Pool activity still follows the engine's May–September model even in the warm-region starter.
+
+## Chat
+
+The guide works like a messaging thread. Claude's messages sit on the left, yours on the right, and the thread
+keeps the newest message in view unless you scroll back. **Enter** sends and **Shift+Enter** starts a new line. Your
+message appears straight away, the box clears and keeps focus, and typing dots show until Claude answers. Replies
+stream in as they are written. While Claude reads settings or checks a proposal, short notes appear in the thread
+("Hey, I'll look into those knobs — meter reading and billing & collections…", then "Great — okay, here's what
+I'll tweak:" above the proposal card, and "Done — your settings are in." after applying). The wording varies by turn
+but is never random. Notes stay in the saved conversation and are never sent to Claude.
+
+Replies render bold, italics, inline code, lists and paragraphs; text is escaped first, so a reply cannot add markup.
+A failed reply shows as a small message with **Retry**; your message stays in the thread and is sent again.
+**Just use sensible defaults** (or **Skip ahead**, once you've answered something) asks Claude to fill the gaps and
+propose a baseline. Streaming needs the server-sent-events form of `POST /api/setup-agent/chat` (see
+`docs/CONTRACT.md`); a host that buffers the response shows the whole reply at once, and an older server's JSON
+reply still works.
 
 ## Editable input summary
 
@@ -141,8 +173,11 @@ saved simulation unchanged. The manual wizard is independent of the provider.
 
 Automated API tests use a deterministic provider double and a mocked HTTP transport: schema inspection, probing
 questions, invalid-proposal repair, bounds/dependencies, dates, paths, timeout, unknown tools, call limits,
-credential isolation and missing-key behavior. Viewer tests cover draft application, handoff to both engine
-clients, reopening after edits, and voice detection/fallback.
+credential isolation and missing-key behavior. They also stream a reply through a mocked provider stream and check
+progress events, partial-escape handling, repair resets, in-band errors and that the final event matches the JSON
+reply. Viewer tests cover draft application, handoff to both engine clients, reopening after edits, voice
+detection/fallback, and the chat: Enter versus Shift+Enter, the immediate message and typing dots, streamed text
+and progress notes, retry, reading split event streams, and markdown that escapes HTML.
 
 Browser verification uses deterministic provider replies with the real validation and simulation APIs. A proposed
 staff reduction and recovery opened Year at May 12 with two episodes, a 5% AMI missed-read setting and three field

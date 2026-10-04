@@ -25,6 +25,13 @@ availability means a server key is configured, not that provider authentication 
 returns `{schemaVersion, message, proposal: null | validatedProposal}`. Only text history and configuration fields
 are forwarded. `proposal: null` is a follow-up question, not a failed configuration.
 
+With `Accept: text/event-stream` the same request streams server-sent events instead: `{type: "progress", stage:
+"inspect" | "drafting" | "validate" | "repair", labels?}` while Claude reads settings (with the inspected groups'
+titles) or a proposal is drafted and checked, `{type: "delta", text}` as the reply is written, `{type: "reset"}` when
+a rejected reply is about to be rewritten, then `{type: "done", ...ChatResponse}` or `{type: "error", status, detail}`.
+Errors found before streaming starts (missing key, rate limit, invalid request) keep their HTTP status. A host that
+buffers responses delivers the same events at once; without the header the reply is the JSON body above.
+
 In `inflict` mode, `currentRun` holds the current portable `townRef`, base settings, existing episodes (IDs/scenario
 included), `asOf`, selected `startDate`, and optional simulation name/region/purpose. Replies contain only new
 `InflictProposal` periods and a validated `runTo`, never replacement town/base inputs.
@@ -36,8 +43,10 @@ context freshness before appending episodes and restores episodes/date on analys
 
 `GET /api/setup/configuration?preset=small_town` supplies the manual wizard's live `schemas` and `defaults` for
 `town`, `run` and grouped `operations`, the engine `homeLimit`, four illustrative `regions` with explicit generation
-overrides, and `regionalNote`. It accepts only published pack presets and does not generate a town or use a provider
-key. Environment and utility stages use the same proposal validation boundary and editable review as voice.
+overrides, `regionalNote` and `gasDistrictMinHomes`: the smallest town drawn with more than one district (2,251 homes).
+A smaller town is one district that always keeps its gas mains, so the wizard shows Natural gas locked on there; from
+that size `gas.all_electric_district_share` = 1 leaves no gas mains. Electricity and water are always served. It
+accepts only published pack presets and does not generate a town or use a provider key. Environment and utility stages use the same proposal validation boundary and editable review as voice.
 `POST /api/setup/operation-defaults` accepts a `Proposal`, validates it and returns grouped map-day `defaults`
 derived from the edited town. The wizard loads these when opening map-day Advanced so regional storm rates and
 town crew defaults remain consistent with the environment; explicit map overrides are preserved.

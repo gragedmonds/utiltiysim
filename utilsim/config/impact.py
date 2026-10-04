@@ -206,10 +206,11 @@ IMPACT: dict[str, tuple[str, str]] = {
     "electric.voltage_max_pu": ("operations", "High-voltage limit for the voltage readings on the map."),
     # ---- gas ----------------------------------------------------------------------------------------------------------
     "gas.all_electric_district_share": ("town", "Share of districts without gas mains, counted in whole "
-                                                "districts and never the core: those homes heat with "
-                                                "electricity, mostly heat pumps. Gas accounts and usage "
-                                                "fall, winter electric usage rises. One-district towns "
-                                                "(village, small_town) have none whatever the share."),
+                                                "districts, the core last (1: no gas mains at all): those "
+                                                "homes heat with electricity, mostly heat pumps. Gas accounts "
+                                                "and usage fall, winter electric usage rises. One-district "
+                                                "towns (under 2,251 homes: village, small_town) have none "
+                                                "whatever the share."),
     "gas.scheme": ("operations", "Medium pressure everywhere or a legacy low-pressure core: regulators and pressures "
                                  "on the map."),
     "gas.transmission_kpa": ("operations", "Pressure into the city gate: gas pressures on the operations day."),

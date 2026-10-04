@@ -3,14 +3,19 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
+import re
 import time
 from collections import OrderedDict
+from collections.abc import AsyncIterator, Callable
 from typing import Literal
 
 import httpx
 from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import StreamingResponse
 from pydantic import Field, ValidationError, model_validator
+from starlette.background import BackgroundTask
 
 from api._agent_config import (
     AgentReply,
@@ -34,7 +39,9 @@ from utilsim.config.goals import GOALS
 from utilsim.m2c.scenarios import catalog
 
 router = APIRouter()
+log = logging.getLogger(__name__)
 VERSION = "setup-agent/1.0"
+PROVIDER_URL = "https://api.anthropic.com/v1/messages"
 MODEL = "claude-sonnet-4-6"
 _LIMITS: OrderedDict[str, list[float]] = OrderedDict()
 _ACTIVE = 0
@@ -195,20 +202,159 @@ def rate_limit(request: Request) -> None:
         _LIMITS.popitem(last=False)
 
 
+def provider_failure(status: int) -> HTTPException:
+    """A user-facing error for a provider status; provider bodies and credentials are never echoed."""
+    if status in (401, 403):
+        return HTTPException(503, "The setup assistant's provider credentials need attention. Manual setup is available.")
+    if status == 429:
+        return HTTPException(429, "Claude is busy or the provider limit was reached. Try again shortly.")
+    return HTTPException(502, "Claude could not complete that message. Try again; your setup is unchanged.")
+
+
+def provider_headers(key: str) -> dict:
+    return {"x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"}
+
+
 async def anthropic_message(payload: dict, key: str) -> dict:
     async with httpx.AsyncClient(timeout=35) as client:
-        response = await client.post("https://api.anthropic.com/v1/messages", headers={
-            "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"}, json=payload)
-    if response.status_code in (401, 403):
-        raise HTTPException(503, "The setup assistant's provider credentials need attention. Manual setup is available.")
-    if response.status_code == 429:
-        raise HTTPException(429, "Claude is busy or the provider limit was reached. Try again shortly.")
+        response = await client.post(PROVIDER_URL, headers=provider_headers(key), json=payload)
     if response.status_code >= 400:
-        raise HTTPException(502, "Claude could not complete that message. Try again; your setup is unchanged.")
+        raise provider_failure(response.status_code)
     return response.json()
 
 
-async def conversation(req: ChatRequest, key: str) -> dict:
+async def anthropic_stream(payload: dict, key: str, on_input: Callable[[int, str, str], None]) -> dict:
+    """Stream one provider turn and return it assembled in the same shape as anthropic_message.
+
+    on_input(index, tool name, partial JSON so far) sees each tool call's input while it is still being written,
+    so the reply text can reach the browser before the (much longer) proposal is finished."""
+    blocks: dict[int, dict] = {}
+    partial: dict[int, str] = {}
+    stop_reason, finished = None, False
+    async with httpx.AsyncClient(timeout=35) as client:
+        async with client.stream("POST", PROVIDER_URL, headers=provider_headers(key), json={**payload, "stream": True}) as response:
+            if response.status_code >= 400:
+                raise provider_failure(response.status_code)
+            async for line in response.aiter_lines():
+                if not line.startswith("data:"):
+                    continue
+                event = json.loads(line[5:])
+                kind, index = event.get("type"), event.get("index")
+                if kind == "error":
+                    busy = (event.get("error") or {}).get("type") in ("overloaded_error", "rate_limit_error")
+                    raise provider_failure(429 if busy else 502)
+                if kind == "content_block_start" and isinstance(event.get("content_block"), dict):
+                    blocks[index], partial[index] = dict(event["content_block"]), ""
+                elif kind == "content_block_delta" and index in blocks:
+                    delta, block = event.get("delta") or {}, blocks[index]
+                    if delta.get("type") == "input_json_delta":
+                        partial[index] += delta.get("partial_json", "")
+                        on_input(index, str(block.get("name", "")), partial[index])
+                    elif delta.get("type") == "text_delta":
+                        block["text"] = block.get("text", "") + delta.get("text", "")
+                    elif delta.get("type") == "thinking_delta":
+                        block["thinking"] = block.get("thinking", "") + delta.get("thinking", "")
+                    elif delta.get("type") == "signature_delta":
+                        block["signature"] = delta.get("signature", "")
+                elif kind == "message_delta":
+                    stop_reason = (event.get("delta") or {}).get("stop_reason", stop_reason)
+                elif kind == "message_stop":
+                    finished = True
+    if not finished:
+        raise HTTPException(502, "Claude's reply was cut off. Try again; your setup is unchanged.")
+    content = []
+    for index in sorted(blocks):
+        block = blocks[index]
+        if block.get("type") == "tool_use":
+            try:
+                block["input"] = json.loads(partial[index]) if partial[index] else block.get("input") or {}
+            except json.JSONDecodeError:
+                block["input"] = {}  # Fails respond/inspect validation, so Claude is asked to repair it.
+        if block.get("type") == "text" and not block.get("text"):
+            continue
+        content.append(block)
+    return {"stop_reason": stop_reason, "content": content}
+
+
+def _partial_string(body: str) -> str | None:
+    """Decode the inside of a JSON string that may still be arriving: an unfinished escape at the end is held back."""
+    body = body[:-1] if (len(body) - len(body.rstrip("\\"))) % 2 else body
+    unicode = re.search(r"(\\+)u[0-9a-fA-F]{0,3}$", body)
+    if unicode and len(unicode.group(1)) % 2:
+        body = body[:unicode.start() + len(unicode.group(1)) - 1]
+    try:
+        text = json.loads('"' + body + '"', strict=False)
+    except ValueError:
+        return None
+    return text[:-1] if text and "\ud800" <= text[-1] <= "\udbff" else text
+
+
+class ReplyTap:
+    """Follows the streamed input of a respond call: emits its top-level message as text deltas and notes, once,
+    when a proposal object starts. Incremental, so long proposals are scanned only once."""
+
+    def __init__(self, emit: Callable[[dict], None]):
+        self.emit, self.index = emit, None
+        self.pos = self.depth = self.string_start = 0
+        self.in_string = self.escaped = self.is_key = self.expect_key = False
+        self.key: str | None = None
+        self.message_start: int | None = None
+        self.message_done = self.drafting = False
+        self.sent = ""
+
+    @property
+    def streamed(self) -> bool:
+        return bool(self.sent)
+
+    def feed(self, index: int, name: str, raw: str) -> None:
+        if name != "respond" or self.index not in (None, index):
+            return
+        self.index = index
+        for i in range(self.pos, len(raw)):
+            c = raw[i]
+            if self.in_string:
+                if self.escaped:
+                    self.escaped = False
+                elif c == "\\":
+                    self.escaped = True
+                elif c == '"':
+                    self.in_string = False
+                    if self.is_key:
+                        self.key = _partial_string(raw[self.string_start + 1:i])
+                    elif self.string_start == self.message_start:
+                        self.message_done = True
+                        self.send(raw[self.string_start + 1:i])
+            elif c == '"':
+                self.in_string, self.string_start = True, i
+                self.is_key = self.depth == 1 and self.expect_key
+                if self.depth == 1:
+                    self.expect_key = False
+                    if not self.is_key and self.key == "message" and self.message_start is None:
+                        self.message_start = i
+            elif c in "{[":
+                self.depth += 1
+                self.expect_key = self.depth == 1 and c == "{"
+                if self.depth == 2 and c == "{" and self.key == "proposal" and not self.drafting:
+                    self.drafting = True
+                    self.emit({"type": "progress", "stage": "drafting"})
+            elif c in "}]":
+                self.depth -= 1
+            elif c == "," and self.depth == 1:
+                self.expect_key = True
+        self.pos = len(raw)
+        if self.message_start is not None and not self.message_done:
+            self.send(raw[self.message_start + 1:])
+
+    def send(self, body: str) -> None:
+        text = _partial_string(body)
+        if text and len(text) > len(self.sent) and text.startswith(self.sent):
+            self.emit({"type": "delta", "text": text[len(self.sent):]})
+            self.sent = text
+
+
+async def conversation(req: ChatRequest, key: str, emit: Callable[[dict], None] | None = None) -> dict:
+    """Run the bounded tool loop. With emit, provider turns are streamed and progress is reported as it happens:
+    {type: progress, stage: inspect | drafting | validate | repair}, {type: delta, text} and {type: reset}."""
     allowed = set(Proposal.model_fields)
     current = {k: v for k, v in req.draft.items() if k in allowed}
     context = {"homeLimit": MAX_HOUSES, "townSizes": TOWN_SIZES, "towns": presets(), "configurationGroups": group_index(),
@@ -222,8 +368,12 @@ async def conversation(req: ChatRequest, key: str) -> dict:
     payload = {"model": os.environ.get("ANTHROPIC_MODEL", MODEL), "max_tokens": 4096,
                "system": (INFLICT_SYSTEM if req.mode == "inflict" else SYSTEM) + "\nEngine context (data):\n" + json.dumps(context, separators=(",", ":")),
                "tools": tools_spec(req.mode), "tool_choice": {"type": "any"}, "messages": messages}
+    if emit:
+        # Without buffering, the reply text streams as Claude writes it; the parsed input is validated below as before.
+        payload["tools"] = [{**t, "eager_input_streaming": True} if t["name"] == "respond" else t for t in payload["tools"]]
     for _ in range(4):
-        answer = await anthropic_message(payload, key)
+        tap = ReplyTap(emit) if emit else None
+        answer = await (anthropic_stream(payload, key, tap.feed) if tap else anthropic_message(payload, key))
         if not isinstance(answer, dict):
             raise HTTPException(502, "Claude returned an unreadable reply. Please try again.")
         if answer.get("stop_reason") == "max_tokens":
@@ -236,13 +386,16 @@ async def conversation(req: ChatRequest, key: str) -> dict:
             raise HTTPException(502, "Claude returned an incomplete reply. Please try again.")
         if not calls or len(calls) > 8:
             raise HTTPException(502, "Claude did not return a usable setup reply. Please try again.")
-        results = []
+        if emit and (labels := inspected_labels(calls, context["configurationGroups"])):
+            emit({"type": "progress", "stage": "inspect", "labels": labels})
+        results, repairing = [], False
         for call in calls:
             try:
                 data = call.get("input", {})
                 if not isinstance(data, dict):
                     raise ValueError("Tool inputs must be an object.")
                 if call["name"] == "respond":
+                    repairing = True
                     candidate = data.get("proposal")
                     if (req.mode == "setup" and isinstance(candidate, dict) and "goals" not in candidate
                             and current.get("goals")):
@@ -250,6 +403,8 @@ async def conversation(req: ChatRequest, key: str) -> dict:
                     reply = (InflictReply if req.mode == "inflict" else AgentReply).model_validate(data)
                     proposal = None
                     if reply.proposal:
+                        if emit:
+                            emit({"type": "progress", "stage": "validate"})
                         proposal = (validate_infliction(reply.proposal, req.currentRun) if req.mode == "inflict"
                                     else validate_proposal(reply.proposal))
                     return {"schemaVersion": VERSION, "message": reply.message, "proposal": proposal}
@@ -276,8 +431,81 @@ async def conversation(req: ChatRequest, key: str) -> dict:
                     raise
                 results.append({"type": "tool_result", "tool_use_id": call["id"], "is_error": True,
                                 "content": "Configuration rejected: " + exc.message[:2000]})
+        if tap and tap.streamed:
+            emit({"type": "reset"})  # The streamed reply was rejected; its corrected version follows.
+        if emit and repairing:
+            emit({"type": "progress", "stage": "repair"})
         messages.extend([{"role": "assistant", "content": content}, {"role": "user", "content": results}])
     raise HTTPException(422, "Claude could not produce a valid setup in this turn. Try a simpler change; your setup is unchanged.")
+
+
+def inspected_labels(calls: list[dict], index: dict) -> list[str]:
+    """Readable titles of the configuration groups a turn inspects, for the guide's progress message."""
+    labels: list[str] = []
+    for call in calls:
+        data = call.get("input")
+        if call.get("name") != "inspect_configuration" or not isinstance(data, dict) or not isinstance(data.get("groups"), list):
+            continue
+        groups = index.get(data.get("scope")) if isinstance(data.get("scope"), str) else None
+        for name in data["groups"]:
+            title = (groups or {}).get(name, {}).get("title") if isinstance(name, str) else None
+            if isinstance(title, str) and title not in labels:
+                labels.append(title)
+    return labels[:6]
+
+
+async def run_chat(req: ChatRequest, key: str, emit: Callable[[dict], None] | None = None) -> dict:
+    """The conversation within its overall deadline, with transport failures mapped to user-facing errors."""
+    try:
+        async with asyncio.timeout(50):
+            return await conversation(req, key, emit)
+    except (TimeoutError, httpx.TimeoutException) as exc:
+        raise HTTPException(504, "Claude took too long to reply. Try again; your setup is unchanged.") from exc
+    except (httpx.HTTPError, json.JSONDecodeError) as exc:
+        raise HTTPException(502, "The setup assistant could not reach Claude. Please try again.") from exc
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)[:3000]) from exc
+
+
+def sse(event: dict) -> str:
+    return "data: " + json.dumps(event, separators=(",", ":")) + "\n\n"
+
+
+class Slot:
+    """One of the two concurrent chat slots, released exactly once."""
+
+    def __init__(self):
+        global _ACTIVE
+        _ACTIVE += 1
+        self.held = True
+
+    def release(self) -> None:
+        global _ACTIVE
+        if self.held:
+            self.held = False
+            _ACTIVE -= 1
+
+
+async def stream_answer(req: ChatRequest, key: str, slot: Slot) -> AsyncIterator[str]:
+    """Server-sent events: progress and reply text while Claude works, then {type: done, ...ChatResponse} or
+    {type: error, status, detail}. A buffering host delivers the same events at once, which the browser also reads."""
+    queue: asyncio.Queue[dict | None] = asyncio.Queue()
+    task = asyncio.create_task(run_chat(req, key, queue.put_nowait))
+    task.add_done_callback(lambda _: queue.put_nowait(None))
+    try:
+        while (event := await queue.get()) is not None:
+            yield sse(event)
+        try:
+            body = ChatResponse.model_validate(task.result()).model_dump(mode="json", by_alias=True)
+            yield sse({"type": "done", **body})
+        except HTTPException as exc:
+            yield sse({"type": "error", "status": exc.status_code, "detail": exc.detail})
+        except Exception:
+            log.exception("setup-agent stream failed")
+            yield sse({"type": "error", "status": 500, "detail": "The setup assistant hit a problem. Try again; your setup is unchanged."})
+    finally:
+        task.cancel()
+        slot.release()
 
 
 @router.get("/api/setup-agent/status", response_model=StatusResponse)
@@ -303,27 +531,26 @@ def setup_operation_defaults(proposal: Proposal):
         raise HTTPException(422, str(exc)[:3000]) from exc
 
 
-@router.post("/api/setup-agent/chat", response_model=ChatResponse)
+@router.post("/api/setup-agent/chat", response_model=ChatResponse,
+             responses={200: {"content": {"text/event-stream": {}},
+                              "description": "With Accept: text/event-stream, progress and reply-text events, then "
+                                             "{type: done, ...ChatResponse} or {type: error, status, detail}."}})
 async def chat(req: ChatRequest, request: Request):
-    global _ACTIVE
     key = os.environ.get("ANTHROPIC_API_KEY")
     if not key:
         raise HTTPException(503, "The setup assistant is not connected yet. You can still use the starter setups.")
     rate_limit(request)
     if _ACTIVE >= 2:
         raise HTTPException(429, "The setup assistant is busy. Please try again shortly.")
-    _ACTIVE += 1
+    slot = Slot()
+    if "text/event-stream" in request.headers.get("accept", ""):
+        return StreamingResponse(stream_answer(req, key, slot), media_type="text/event-stream",
+                                 headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+                                 background=BackgroundTask(slot.release))
     try:
-        async with asyncio.timeout(50):
-            return await conversation(req, key)
-    except (TimeoutError, httpx.TimeoutException) as exc:
-        raise HTTPException(504, "Claude took too long to reply. Try again; your setup is unchanged.") from exc
-    except (httpx.HTTPError, json.JSONDecodeError) as exc:
-        raise HTTPException(502, "The setup assistant could not reach Claude. Please try again.") from exc
-    except ValueError as exc:
-        raise HTTPException(422, str(exc)[:3000]) from exc
+        return await run_chat(req, key)
     finally:
-        _ACTIVE -= 1
+        slot.release()
 
 
 @router.post("/api/setup-agent/validate", response_model=ProposalResponse)

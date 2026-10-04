@@ -112,3 +112,12 @@ test('generate posts the full config, polls until ready and reports engine refus
  let n=0;const lost=async(url,o={})=>o.method==='POST'?{ok:true,status:202,json:async()=>({townId:'town-2',status:'building'})}:{ok:false,status:404,json:async()=>({status:n++?'unknown':'building'})};
  await assert.rejects(requestTown('/api',{},{fetchImpl:lost,sleep:async()=>{}}),/no longer knows town-2/);
 });
+
+test('numbers show at most six significant digits; whole numbers and blanks unchanged', async () => {
+ const {shownNumber}=await import('../dist/schema-form.js');
+ assert.equal(shownNumber(1/24),'0.0416667');
+ assert.equal(shownNumber(1/6),'0.166667');
+ assert.equal(shownNumber(0.15),'0.15');
+ assert.equal(shownNumber(240),'240');
+ assert.equal(shownNumber(null),'');
+});
