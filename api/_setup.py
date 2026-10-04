@@ -6,7 +6,7 @@ from api._towns import MAX_HOUSES
 from utilsim.config.goals import GOALS
 from utilsim.config.model import RUN_GROUPS, SimConfig
 
-TOWN_SIZES = [500, 5000, 25000, 50000]
+TOWN_SIZES = [500, 5000, 25000, 50000, 500000]
 
 REGIONAL_NOTE = ("Regional starters are illustrative modelling assumptions, not measured local statistics. "
                  "Edit them for your service area. Regional choices do not calibrate tariffs or regulations.")

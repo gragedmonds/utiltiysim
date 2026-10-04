@@ -40,4 +40,4 @@ export function simulationYears(s,storage=globalThis.localStorage){const first=2
 // Where a simulation opens: its Config page until its settings are locked in (simulation-lock.js), then the map for an
 // operations-only experiment and the Command Center (#/year) otherwise.
 export function landingHash(s){return s.locked===false?'#/config':s.goals?.length===1&&s.goals[0]==='operations'?'#/map':'#/year';}
-export function studioURL(s,search=''){const q=new URLSearchParams(search);q.delete('town');q.delete('setup');q.delete('new');q.set('simulation',s.id);q.set('town',s.townRef);return './studio.html?'+q+landingHash(s);}
+export function studioURL(s,search=''){const q=new URLSearchParams(search);q.delete('town');q.delete('setup');q.delete('new');q.set('simulation',s.id);q.set('town',s.townRef);if(s.execution==='local'){q.delete('town');q.delete('simulation');q.set('model',s.id);return './local-runs.html?'+q;}return './studio.html?'+q+landingHash(s);}

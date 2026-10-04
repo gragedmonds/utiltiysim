@@ -1,0 +1,108 @@
+{
+  "$defs": {
+    "Recipe": {
+      "additionalProperties": false,
+      "properties": {
+        "schemaVersion": {
+          "const": "local-job/1.0",
+          "default": "local-job/1.0",
+          "title": "Schemaversion",
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "modelId": {
+          "maxLength": 100,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9_-]+$",
+          "title": "Modelid",
+          "type": "string"
+        },
+        "homes": {
+          "maximum": 500000,
+          "minimum": 20,
+          "title": "Homes",
+          "type": "integer"
+        },
+        "chunkSize": {
+          "default": 2000,
+          "maximum": 5000,
+          "minimum": 20,
+          "title": "Chunksize",
+          "type": "integer"
+        },
+        "staffing": {
+          "const": "independent-districts",
+          "title": "Staffing",
+          "type": "string"
+        },
+        "config": {
+          "additionalProperties": true,
+          "title": "Config",
+          "type": "object"
+        },
+        "request": {
+          "additionalProperties": true,
+          "title": "Request",
+          "type": "object"
+        },
+        "proposal": {
+          "additionalProperties": true,
+          "title": "Proposal",
+          "type": "object"
+        }
+      },
+      "required": [
+        "name",
+        "modelId",
+        "homes",
+        "staffing",
+        "config",
+        "request"
+      ],
+      "title": "Recipe",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "const": "local-job-file/1.0",
+      "default": "local-job-file/1.0",
+      "title": "Schemaversion",
+      "type": "string"
+    },
+    "jobId": {
+      "pattern": "^[a-f0-9]{32}$",
+      "title": "Jobid",
+      "type": "string"
+    },
+    "revision": {
+      "minimum": 1,
+      "title": "Revision",
+      "type": "integer"
+    },
+    "recipeKey": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Recipekey",
+      "type": "string"
+    },
+    "recipe": {
+      "$ref": "#/$defs/Recipe"
+    }
+  },
+  "required": [
+    "jobId",
+    "revision",
+    "recipeKey",
+    "recipe"
+  ],
+  "title": "JobFile",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:utilsim:local-job-1.0"
+}

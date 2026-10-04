@@ -1,0 +1,69 @@
+name: Local runner packages
+on:
+  pull_request:
+    paths: ['launcher/**', 'utilsim/worker/**', 'scripts/build_runner.py', '.github/workflows/runner.yml']
+  workflow_run:
+    workflows: [ci]
+    branches: [main]
+    types: [completed]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  package:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, windows-latest, macos-15, macos-15-intel]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - uses: astral-sh/setup-uv@v3
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: uv python install 3.11
+      - run: uv sync --all-extras
+      - run: uv pip install pyinstaller cryptography
+      - run: npm ci --prefix packages/town-viewer
+      - run: go test ./...
+        working-directory: launcher
+      - name: Build and smoke test runtime
+        shell: bash
+        run: |
+          TAG="runner-$(git rev-parse --short=12 HEAD)"
+          uv run python scripts/build_runner.py --tag "$TAG"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: runner-${{ matrix.os }}
+          path: dist/release/*
+          retention-days: 14
+  publish:
+    needs: package
+    if: github.event_name == 'workflow_run' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: runner-*
+          path: release
+          merge-multiple: true
+      - name: Publish tested launchers and signed runtimes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="runner-$(git rev-parse --short=12 HEAD)"
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" release/* --target "$(git rev-parse HEAD)" --title "Utility Studio local runner" --notes-file launcher/RELEASE_NOTES.md
+          fi

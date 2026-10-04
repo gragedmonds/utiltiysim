@@ -5,7 +5,7 @@ from utilsim.batch import district_sizes, job_lock, progress, run_batch
 from utilsim.config.model import SimConfig
 
 
-@pytest.mark.parametrize("homes", [500, 5000, 25000, 50000, 49999, 2001])
+@pytest.mark.parametrize("homes", [500, 5000, 25000, 50000, 500000, 49999, 2001])
 def test_bounded_districts_cover_every_home_once(homes):
     sizes = district_sizes(homes)
     assert sum(sizes) == homes
@@ -82,8 +82,8 @@ def test_limit_and_disjoint_stage_timing(tmp_path):
 
     from utilsim.batch import StageRecorder, timing_totals
 
-    with pytest.raises(ValueError, match="50,000"):
-        district_sizes(50001)
+    with pytest.raises(ValueError, match="500,000"):
+        district_sizes(500001)
     ticks = iter([0, 1, 4, 9])
     recorder = StageRecorder(tmp_path / "progress.json", clock=lambda: next(ticks))
     recorder.start("generation")

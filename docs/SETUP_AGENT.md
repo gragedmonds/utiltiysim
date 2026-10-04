@@ -35,7 +35,7 @@ The manual wizard has four steps:
    returns it to the suggestion.
 4. **Review & open**: the editable per-input summary, validation and links back to either setup stage.
 
-Town-size starters are **500, 5,000, 25,000 and 50,000 residential homes**. New drafts start at 500.
+Town-size starters are **500, 5,000, 25,000, 50,000 and 500,000 residential homes**. New drafts start at 500. Sizes above the live-engine limit open the paired local workflow (see LOCAL_RUNNER.md).
 The last two choices are visibly unavailable: the current hosted engine caps detailed towns at 6,000 homes
 (local default: 10,000), so large-city simulation requires further engine work. Advanced retains custom
 counts within the connected engine’s limit; existing saved sizes are preserved. Claude receives the same size catalogue.

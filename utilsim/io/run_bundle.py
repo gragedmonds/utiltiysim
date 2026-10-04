@@ -38,6 +38,9 @@ def _sha(data: bytes) -> str:
 
 def engine_build() -> str:
     """Distinguish builds even if a version bump was missed; do not depend on Git being installed."""
+    import sys
+    if getattr(sys, "frozen", False):
+        return (Path(sys._MEIPASS) / "engine-build.txt").read_text().strip()
     root = Path(__file__).resolve().parents[1]
     digest = hashlib.sha256()
     for path in sorted(root.rglob("*.py")):

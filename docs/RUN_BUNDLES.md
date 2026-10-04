@@ -113,15 +113,10 @@ The product uses downloadable archive copies and local libraries, with no NAS in
 archive reads its saved results; switching scenarios uses the existing device connection and creates a new run.
 Pairing screens will use eight individual boxes with a central dash, such as `K7M2-Q9RX`; the dash is display-only.
 
-This implements architecture step 1. The next milestone is **log in to Sim → download and open the small launcher →
-configure online → pair with an eight-character alphanumeric code → see the local engine Ready**. See
-[the connection flow](PORTAL_ARCHITECTURE.md#the-user-flow-login-launch-pair). The launcher downloads and caches the
-larger runtime on first use; pairing and online sync need internet access, while cached computation stays local.
-
-Login, pairing and launcher distribution are planned, not implemented by `export-run`. The control-plane queue,
-worker polling/leases/uploads, run comparisons, utility/region roll-ups, data-first synthesis and multi-year campaigns
-follow that connection milestone.
-The existing hosted and local live engine routes continue to work alongside the saved reader.
+The paired local runner now adds revisioned jobs, persistent pairing, offline receipt sync and a manual-file fallback.
+See [LOCAL_RUNNER.md](LOCAL_RUNNER.md) for installation, storage, credentials and deployment requirements.
+Automatic hosted sync requires Upstash Redis; it does not fall back to ephemeral Vercel storage.
+The live small-town routes and saved reader remain available.
 
 Validation includes Python engine-to-archive comparisons for every table and saved worklist date, archive reuse
 without replay, corruption and interrupted-write checks, a Node reader comparison against Python filtering/sorting
@@ -130,7 +125,7 @@ and CSV, browser folder import with networking disabled, and desktop/phone navig
 
 ## Sequential district batches
 
-The local CLI can run up to 50,000 residential homes as districts of one utility, one process at a time.
+The local CLI can run up to 500,000 residential homes as districts, one process at a time.
 Each completed district becomes a full verified run bundle. Memory is released before the next district.
 With `--staffing independent-districts` every district has its own teams: analysts/agents are **per district**,
 and per-1,000 crew settings scale within each district. `--staffing shared` and `--network connected` put a
@@ -184,12 +179,12 @@ Outputs under the chosen store:
 - `runs/<runKey>/`: each district's existing full archive, openable in Studio's saved-run folder reader.
 
 Record IDs are local to a district. Cross-district references must use `(districtId, recordId)`.
-The first release is a local CLI path; the hosted wizard still enforces its single-town generation limit.
+The wizard sends larger sizes to the local workspace; each district retains the single-town generation limit.
 Verification included a 5,000-home, five-district pause/resume run and a full 50,000-home run in 25 districts
 of 2,000 homes. The latter took 505 seconds and wrote 313 MB of archives (61,104 accounts, 164,985 registers);
 monthly totals were checked against all district files. Reported peak child-process RSS was 744 MiB. These
 are measurements from one development environment, not guaranteed estimates for other hardware or settings.
-Batch runs are capped at 50,000 homes.
+The local-only cap is now 500,000 homes. A full 500k run has not been benchmarked.
 
 ### A utility above its districts
 

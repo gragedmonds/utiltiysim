@@ -169,7 +169,7 @@ LIMITS = (
              "linear in registers: the reads and VEE side is vectorised, the bills, invoices and collections side is "
              "per-invoice Python. The generator is built for towns up to 10,000 homes."},
     {"title": "Beyond one town",
-     "text": "The local batch-run command plans up to 50,000 homes as districts of one utility, processed "
+     "text": "The local batch-run command plans up to 500,000 homes as districts of one utility, processed "
              "sequentially with saved archives, resume, measured ETA and additive billing/case totals. Districts "
              "can share one workforce (a coordinator sends a float team each working day where the work waits) and "
              "connected upstream networks (transmission, the treatment plant and mains, gas gates) with one weather. "
