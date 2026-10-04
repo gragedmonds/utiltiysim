@@ -44,6 +44,8 @@ jobs:
         run: uv run pytest tests/test_runner_startup.py -q
       - name: Build and smoke test runtime
         shell: bash
+        env:
+          RUNTIME_SIGNING_KEY: ${{ secrets.RUNTIME_SIGNING_KEY }}  # the release key: installed launchers update to releases it signs
         run: |
           TAG="runner-$(git rev-parse --short=12 HEAD)"
           uv run python scripts/build_runner.py --tag "$TAG"

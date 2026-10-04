@@ -1,5 +1,5 @@
-// A small bootstrapper: it keeps the signed runtime up to date in the storage folder, starts the app's server there
-// and opens Utility Studio in the browser. The storage folder is chosen before any download.
+// A small bootstrapper: it installs the signed engine runtime in the storage folder, keeps it current, starts the
+// app's server there and opens Utility Studio in the browser. The storage folder is chosen before any download.
 package main
 
 import (
@@ -19,7 +19,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -30,9 +29,9 @@ var runtimeURL, runtimeSHA, runtimeSignature, runtimePublicKey, runtimeBytes, re
 var mu sync.Mutex
 var message = "Ready to open Utility Studio."
 var busy, picking bool
-var engineURL, logPath string
+var engineURL, logPath, engineVersion string
 var engineCmd *exec.Cmd
-var quitting bool
+var quitting, restartRequested bool
 
 func validPath(root, name string) (string, error) {
 	if strings.ContainsAny(name, "\\:") || strings.HasPrefix(name, "/") || filepath.IsAbs(name) {
@@ -98,7 +97,9 @@ func extract(archive, destination string) error {
 	return nil
 }
 func setMessage(s string) { mu.Lock(); message = s; mu.Unlock() }
-func verify(path string) error {
+
+// verify checks a downloaded runtime against its manifest: size, SHA-256 and the signature of that digest.
+func verify(path string, m manifest) error {
 	f, err := os.Open(path)
 	if err != nil {
 		return err
@@ -109,31 +110,34 @@ func verify(path string) error {
 	if err != nil {
 		return err
 	}
-	if fmt.Sprint(n) != runtimeBytes || hex.EncodeToString(h.Sum(nil)) != runtimeSHA {
+	if fmt.Sprint(n) != m.RuntimeBytes || hex.EncodeToString(h.Sum(nil)) != m.RuntimeSHA {
 		return errors.New("runtime size or checksum failed")
 	}
-	pub, err := base64.StdEncoding.DecodeString(runtimePublicKey)
+	pub, err := base64.StdEncoding.DecodeString(m.RuntimePublicKey)
 	if err != nil || len(pub) != ed25519.PublicKeySize {
 		return errors.New("invalid verification key")
 	}
-	sig, err := base64.StdEncoding.DecodeString(runtimeSignature)
-	if err != nil || !ed25519.Verify(pub, []byte(runtimeSHA), sig) {
+	sig, err := base64.StdEncoding.DecodeString(m.RuntimeSignature)
+	if err != nil || !ed25519.Verify(pub, []byte(m.RuntimeSHA), sig) {
 		return errors.New("runtime signature failed")
 	}
 	return nil
 }
-func install(root string) (string, error) {
-	if runtimeURL == "" || releaseVersion == "" {
+
+// installRuntime downloads, verifies and unpacks the runtime a manifest names into runtime/<version> under the
+// storage folder (resuming an interrupted download), and returns its executable. An installed copy is reused.
+func installRuntime(root string, m manifest, progress func(string)) (string, error) {
+	if m.RuntimeURL == "" || m.ReleaseVersion == "" {
 		return "", errors.New("this development launcher has no published runtime")
 	}
-	folder := filepath.Join(root, "runtime", releaseVersion)
-	exe := filepath.Join(folder, "utility-runner")
-	if runtime.GOOS == "windows" {
-		exe += ".exe"
+	if strings.ContainsAny(m.ReleaseVersion, `/\:`) || strings.HasPrefix(m.ReleaseVersion, ".") {
+		return "", errors.New("the release has an unsafe version name")
 	}
-	if data, err := os.ReadFile(filepath.Join(folder, ".ready")); err == nil && string(data) == runtimeSHA {
+	folder := filepath.Join(root, "runtime", m.ReleaseVersion)
+	exe := runtimeExe(root, m.ReleaseVersion)
+	if data, err := os.ReadFile(filepath.Join(folder, ".ready")); err == nil && string(data) == m.RuntimeSHA {
 		if _, err = os.Stat(exe); err == nil {
-			setMessage("Using the engine already saved on this drive…")
+			progress("Using the engine already saved on this drive…")
 			return exe, nil
 		}
 	}
@@ -145,8 +149,8 @@ func install(root string) (string, error) {
 	if stat, err := os.Stat(temp); err == nil {
 		offset = stat.Size()
 	}
-	setMessage("Connecting to the engine download…")
-	req, err := http.NewRequest("GET", runtimeURL, nil)
+	progress("Connecting to the engine download…")
+	req, err := http.NewRequest("GET", m.RuntimeURL, nil)
 	if err != nil {
 		return "", err
 	}
@@ -190,7 +194,7 @@ func install(root string) (string, error) {
 				out.Close()
 				return "", errors.New("download exceeds size limit")
 			}
-			setMessage(fmt.Sprintf("Downloading the engine: %.1f MB received. Storage: %s", float64(received)/1e6, root))
+			progress(fmt.Sprintf("Downloading the engine: %.1f MB received.", float64(received)/1e6))
 		}
 		if e == io.EOF {
 			break
@@ -203,12 +207,12 @@ func install(root string) (string, error) {
 	if err = out.Close(); err != nil {
 		return "", err
 	}
-	setMessage("Verifying the engine’s checksum and signature…")
-	if err = verify(temp); err != nil {
+	progress("Verifying the engine’s checksum and signature…")
+	if err = verify(temp, m); err != nil {
 		os.Remove(temp)
 		return "", err
 	}
-	setMessage("Installing the verified engine…")
+	progress("Installing the verified engine…")
 	staging := folder + ".installing"
 	os.RemoveAll(staging)
 	if err = os.MkdirAll(staging, 0700); err != nil {
@@ -217,7 +221,7 @@ func install(root string) (string, error) {
 	if err = extract(temp, staging); err != nil {
 		return "", err
 	}
-	if err = os.WriteFile(filepath.Join(staging, ".ready"), []byte(runtimeSHA), 0600); err != nil {
+	if err = os.WriteFile(filepath.Join(staging, ".ready"), []byte(m.RuntimeSHA), 0600); err != nil {
 		return "", err
 	}
 	if _, err = os.Stat(folder); err == nil {
@@ -231,7 +235,7 @@ func install(root string) (string, error) {
 }
 func openBrowser(url string) {
 	var cmd *exec.Cmd
-	switch runtime.GOOS {
+	switch goos {
 	case "windows":
 		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
 	case "darwin":
@@ -273,6 +277,62 @@ func runningLauncher(path string) string {
 		return ""
 	}
 	return saved.URL
+}
+
+// startStudio runs the whole start in the background: storage checks, the runtime (a staged update, the installed
+// one, or the launcher's own pinned runtime on a first start), the update check, then the engine until it stops.
+// A restart (an update ready, asked for from the page) runs the engine again with the new runtime.
+func startStudio(root, pref string) {
+	defer func() { mu.Lock(); busy = false; mu.Unlock() }()
+	if err := os.MkdirAll(root, 0700); err != nil {
+		setMessage("Storage drive unavailable: " + err.Error())
+		return
+	}
+	probe, err := os.CreateTemp(root, ".write-check-")
+	if err != nil {
+		setMessage(err.Error())
+		return
+	}
+	probe.Close()
+	os.Remove(probe.Name())
+	exe, version := chooseRuntime(root)
+	if exe == "" {
+		m := pinned()
+		exe, err = installRuntime(root, m, setMessage)
+		if err != nil {
+			setMessage("Setup paused: " + err.Error())
+			return
+		}
+		version = m.ReleaseVersion
+		_ = writeRef(filepath.Join(root, "runtime", "current.json"), runtimeRef{m.ReleaseVersion, m.RuntimeSHA})
+	}
+	os.MkdirAll(filepath.Dir(pref), 0700)
+	data, _ := json.Marshal(root)
+	if err = os.WriteFile(pref, data, 0600); err != nil {
+		setMessage(err.Error())
+		return
+	}
+	for {
+		mu.Lock()
+		engineVersion = version
+		mu.Unlock()
+		go checkForUpdate(root, version)
+		runEngine(exe, root)
+		mu.Lock()
+		again := restartRequested && !quitting
+		restartRequested = false
+		mu.Unlock()
+		if !again {
+			return
+		}
+		next, nextVersion := chooseRuntime(root)
+		if next == "" {
+			setMessage("The updated engine could not be found. Start Utility Studio again.")
+			return
+		}
+		exe, version = next, nextVersion
+		setUpdate(func(u *updateState) { *u = updateState{State: "off"} })
+	}
 }
 
 func main() {
@@ -340,13 +400,31 @@ func main() {
 		}
 		if r.URL.Path == "/status" {
 			mu.Lock()
-			json.NewEncoder(w).Encode(map[string]any{"message": message, "busy": busy, "picking": picking, "folder": chosen, "engineURL": engineURL, "logPath": logPath, "quitting": quitting})
+			json.NewEncoder(w).Encode(map[string]any{"message": message, "busy": busy, "picking": picking, "folder": chosen,
+				"engineURL": engineURL, "engineVersion": engineVersion, "logPath": logPath, "quitting": quitting,
+				"launcherVersion": releaseVersion, "update": update})
 			mu.Unlock()
 			return
 		}
 		if r.URL.Path == "/quit" && r.Method == "POST" {
 			fmt.Fprint(w, `{"ok":true}`)
 			go quit()
+			return
+		}
+		if r.URL.Path == "/restart" && r.Method == "POST" {
+			mu.Lock()
+			ready := update.State == "ready" && engineCmd != nil && engineCmd.Process != nil
+			if ready {
+				restartRequested = true
+				_ = engineCmd.Process.Kill()
+			}
+			mu.Unlock()
+			if !ready {
+				w.WriteHeader(409)
+				fmt.Fprint(w, `{"error":"No update is ready to restart with."}`)
+				return
+			}
+			fmt.Fprint(w, `{"ok":true}`)
 			return
 		}
 		if r.URL.Path == "/browse" && r.Method == "POST" {
@@ -363,7 +441,9 @@ func main() {
 			folder, err := chooseFolder(initial)
 			mu.Lock()
 			picking = false
-			if err == nil && folder != "" {
+			// A folder chosen after Utility Studio was started with another one (the dialog was left open) is not
+			// swapped in under a running engine.
+			if err == nil && folder != "" && !busy {
 				chosen = folder
 			}
 			selected := chosen
@@ -389,46 +469,23 @@ func main() {
 			return
 		}
 		mu.Lock()
-		if busy || picking {
+		if busy {
 			mu.Unlock()
 			w.WriteHeader(409)
-			fmt.Fprint(w, `{"error":"The engine is already starting or running."}`)
+			fmt.Fprint(w, `{"error":"Utility Studio is already starting or running."}`)
 			return
 		}
+		// Starting while a folder window is still open is allowed: a typed path must never wait on a dialog that may
+		// be hiding behind another window.
 		busy = true
 		engineURL = ""
-		message = "Starting the engine: checking your storage folder…"
+		message = "Starting Utility Studio: checking your storage folder…"
 		chosen = filepath.Clean(value.Folder)
 		root := chosen
 		logPath = filepath.Join(root, "runner.log")
 		mu.Unlock()
 		fmt.Fprint(w, `{"ok":true}`)
-		go func() {
-			defer func() { mu.Lock(); busy = false; mu.Unlock() }()
-			if err := os.MkdirAll(root, 0700); err != nil {
-				setMessage("Storage drive unavailable: " + err.Error())
-				return
-			}
-			probe, err := os.CreateTemp(root, ".write-check-")
-			if err != nil {
-				setMessage(err.Error())
-				return
-			}
-			probe.Close()
-			os.Remove(probe.Name())
-			exe, err := install(root)
-			if err != nil {
-				setMessage("Setup paused: " + err.Error())
-				return
-			}
-			os.MkdirAll(filepath.Dir(pref), 0700)
-			data, _ := json.Marshal(root)
-			if err = os.WriteFile(pref, data, 0600); err != nil {
-				setMessage(err.Error())
-				return
-			}
-			runEngine(exe, root)
-		}()
+		go startStudio(root, pref)
 	})
 	openBrowser(pageURL)
 	banner(pageURL)
