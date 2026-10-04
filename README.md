@@ -21,7 +21,7 @@ uv run utilsim presets                                 # village, small_town, to
 # Utility batches (independent or shared workforce, connected networks): see docs/RUN_BUNDLES.md for batch-run, pause/resume and ETA.
 uv run utilsim serve                                   # API on :8010, OpenAPI at /openapi.json
 uv run utilsim schema --all                            # regenerate schemas/config.schema.json and openapi.json
-uv run pytest -m "not slow"                            # acceptance gates, goldens, schemas, receiver conformance
+uv run pytest -m "not slow" -n auto                    # acceptance gates, goldens, schemas, receiver conformance (parallel)
 
 (cd packages/town-viewer && npm ci)                    # Astra's viewer (vendors three.js)
 node web/serve.mjs                                     # http://localhost:5175 — guided setup / saved simulations

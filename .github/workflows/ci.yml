@@ -1,31 +1,56 @@
 name: ci
+# Cost rules (see CLAUDE.md): CI runs on pull requests and by hand, never on every branch push; a new push cancels
+# the PR's run still going; a draft PR runs nothing until it is marked ready; Markdown and docs alone run nothing;
+# viewer-only changes skip the engine suite. One job, so each run is billed once (GitHub rounds each job up to a
+# minute).
 on:
-  push:
-    branches: ["**"]
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths-ignore: ["docs/**", "**/*.md", ".claude/**", "prototypes/**"]
+  workflow_dispatch:
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
 jobs:
-  engine:
+  test:
+    if: ${{ !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v3
+        with:
+          fetch-depth: 2 # the PR's merge commit and the base it merges into
+      - name: What changed
+        id: scope
+        run: |
+          files=$(git diff --name-only HEAD^1 HEAD 2>/dev/null || echo ALL)
+          printf '%s\n' "$files"
+          # The engine suite reads the viewer's receiver (adapter.js) and bundle reader (run-bundle.js); other viewer
+          # files, Markdown and docs cannot change it.
+          if [ "$GITHUB_EVENT_NAME" != pull_request ] \
+            || printf '%s\n' "$files" | grep -qE '^packages/town-viewer/dist/(adapter|run-bundle)\.js$' \
+            || printf '%s\n' "$files" | grep -qvE '^(docs/|prototypes/|\.claude/|packages/town-viewer/)|\.md$'; then
+            echo "engine=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "engine=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Only viewer files or docs changed: the engine suite is skipped."
+          fi
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - run: uv python install 3.11
-      - run: uv sync --all-extras
-      - run: uv run ruff check .
-      - run: uv run pytest -m "not slow"
-  viewer:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-      - run: npm ci
-        working-directory: packages/town-viewer
-      - run: npm test
+      - name: Viewer tests
+        run: npm ci && npm test
         working-directory: packages/town-viewer
       - name: Engine export conforms to the viewer receiver
         run: node scripts/viewer_conformance.mjs examples/village-480-seed42
+      - if: steps.scope.outputs.engine == 'true'
+        uses: astral-sh/setup-uv@v3
+      - if: steps.scope.outputs.engine == 'true'
+        run: uv python install 3.11 && uv sync --all-extras
+      - if: steps.scope.outputs.engine == 'true'
+        run: uv run ruff check .
+      - name: Engine tests (parallel)
+        if: steps.scope.outputs.engine == 'true'
+        run: uv run pytest -m "not slow" -n auto
