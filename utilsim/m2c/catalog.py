@@ -90,6 +90,14 @@ EVENTS: dict[str, tuple[str, str, str, float, float, float]] = {
     "INVOICE_DEFERRED": ("Invoice held back", "⏸️", "invoice", 0, 0.1, 0),
     "INVOICE_UNHOLD": ("Invoice hold removed", "▶️", "invoice", 2, 0, 0),
     "CASE_NOTE": ("Case note", "🗒️", "wm", 1, 0, 0),
+    # Contact centre work (utilsim/m2c/contact.py): a disputed bill or a complaint becomes a case for the analysts.
+    "BILL_DISPUTE": ("Bill dispute", "🗣️", "billing", 0, 0.25, 10),
+    "DISPUTE_EXPLAINED": ("Bill explained to the customer", "💬", "billing", 6, 0, 0),
+    "CHECK_READ": ("Check read", "🔍", "billing", 0, 0.25, 0),
+    "COMPLAINT": ("Customer complaint", "😠", "cx", 0, 0.25, 20),
+    "COMPLAINT_ANSWERED": ("Complaint answered", "✉️", "cx", 10, 0, 0),
+    "PAYMENT_RISK_RAISED": ("Pays later after bad service", "⏳", "collections", 0, 0, 10),
+    "AUTOPAY_CANCELLED": ("Cancelled automatic payments", "🚪", "collections", 0, 0, 15),
     "CASE_ASSIGNED": ("Case assigned", "👤", "wm", 0, 0, 0),
 }
 EDGE_TYPES = ("caused_by", "triggered", "resulted_in", "blocked_by", "resolved_by", "escalated_to", "required_for",
@@ -99,7 +107,8 @@ EDGE_TYPES = ("caused_by", "triggered", "resulted_in", "blocked_by", "resolved_b
 EXCEPTIONS = ("COMM_FAIL", "NO_ACCESS", "NO_READ", "ZERO_USAGE", "BILL_CREDIT", "LOW_USAGE", "PERIOD_LENGTH",
               "ERRATIC", "HIGH_USAGE", "VACANT_CONSUMING", "REGISTER_REGRESSION", "PERSISTENT_LOW",
               "CONSECUTIVE_ESTIMATES", "RATE_CLASS", "HIGH_BILL")
-HUMAN_ONLY = ("TRUE_UP",)  # exception types no RPA rule covers, whatever process.rpa_coverage says
+CONTACT_TYPES = ("BILL_DISPUTE", "COMPLAINT")  # cases the contact centre opens (a disputed bill, a complaint)
+HUMAN_ONLY = ("TRUE_UP", *CONTACT_TYPES)  # exception types no RPA rule covers, whatever process.rpa_coverage says
 EXCEPTION_TYPES = (*EXCEPTIONS, *HUMAN_ONLY)
 BILL_TYPES = ("HIGH_BILL", "BILL_CREDIT", "RATE_CLASS", "TRUE_UP")
 OUTSORTS = ("HIGH_BILL", "BILL_CREDIT")  # billing outsorts RPA may release, up to billing.outsort_auto_release_max
@@ -108,10 +117,11 @@ WORK_TYPES = ("FIELD_SERVICE", "INVOICE_HOLD")  # cases you open in the Studio (
 COLLECTION_TYPES = ("LOW_INCOME", "BUDGET_BILL")  # collections cases on an account (you or the call centre open them)
 # Case work kinds that belong to a contract account rather than a read: an invoice hold, a low-income referral and a
 # budget billing enrolment (``Case.work``; ``Case.ref`` is the account).
-ACCOUNT_WORK = ("hold", "low_income", "budget_bill")
+ACCOUNT_WORK = ("hold", "low_income", "budget_bill", "complaint")
 # Who raised a case (``createdBy`` on rows and case views).
 CREATED_BY = {"ami_head_end": "AMI head-end", "meter_reading_route": "Meter-reading route", "vee_batch": "VEE batch",
-              "billing_run": "Billing run", "studio": "You (Utility Studio)", "collections": "Collections (call centre)"}
+              "billing_run": "Billing run", "studio": "You (Utility Studio)", "collections": "Collections (call centre)",
+              "contact_centre": "Contact centre"}
 
 QUEUES = {
     "VEE_REVIEW": "VEE review",
@@ -138,8 +148,11 @@ CATEGORIES = {
     "Budget Bill Cases": "Budget billing enrolments (BUDGET_BILL) by you or the call centre, open until billing sets "
                          "up the plan",
     "Escalations": "Cases in the SUPERVISOR queue (escalated by VEE, an analyst or you), whatever their type",
+    "Bill Correction": "Bills a customer disputed with the contact centre (BILL_DISPUTE): an analyst checks the read "
+                       "and rebills or explains",
+    "Customer Complaints": "Complaints the contact centre took (COMPLAINT): an analyst answers them",
 }
-NO_ENGINE_CATEGORIES = ("AMP", "Bill Correction", "Bill Print Errors", "Billing- see IT Supp", "Invoice Errors")
+NO_ENGINE_CATEGORIES = ("AMP", "Bill Print Errors", "Billing- see IT Supp", "Invoice Errors")
 MY_CASES = "My Assigned Cases"  # not a category: the cases assigned to you
 
 
@@ -155,6 +168,10 @@ def category(kind: str, queue: str | None, work: str | None = None) -> str:
         return "Low Income Process"
     if kind == "BUDGET_BILL":
         return "Budget Bill Cases"
+    if kind == "BILL_DISPUTE":
+        return "Bill Correction"
+    if kind == "COMPLAINT":
+        return "Customer Complaints"
     if kind == "RATE_CLASS":
         return "Billing Errors"
     if kind in BILL_TYPES:

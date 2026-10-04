@@ -711,6 +711,22 @@ class ContactConfig(BaseModel):
                                            "reconnected after a disconnection you approved.")
     complaint: ContactReason = _reason(0.5, 0.2, 0.0, 14.0, 0.6, "Complaint: after a second unresolved contact "
                                        "about the same thing, or after giving up on hold twice.")
+    # What the contacts change (the contact centre inside the replay).
+    dispute_cases: float = F(1.0, "Share of answered bill-wrong contacts (and unresolved high-bill and back-bill ones) "
+                             "that open a Bill Correction case: an analyst checks the read and rebills, or explains "
+                             "the bill. 0: disputes are only counted.", ge=0, le=1,
+                             effects=["bill disputes", "rebills", "dunning holds"])
+    dispute_hold_days: float = F(30.0, "Collections pauses dunning on a disputed account until the dispute is "
+                                 "decided, at most this long.", unit="d", ge=0, le=120, advanced=True)
+    complaint_cases: bool = F(True, "A complaint the lines take opens a Customer Complaints case for the analysts to "
+                              "answer (one open complaint per account).")
+    frustration_threshold: int = F(3, "Bad experiences (a hang-up after a long wait, an unresolved contact, a wait "
+                                   "past long_wait_s, a complaint) before a customer pays later from then on. 0: "
+                                   "never.", ge=0, le=20, effects=["late payment", "autopay cancellations"])
+    long_wait_s: float = F(600.0, "A wait this long counts as a bad experience even when the call is answered.",
+                           unit="s", ge=30, le=7200, advanced=True)
+    autopay_cancel_share: float = F(0.3, "Share of frustrated customers on pre-authorized debit who cancel it and pay "
+                                    "by hand from then on (later, and sometimes not at all).", ge=0, le=1)
 
     @model_validator(mode="after")
     def _hours(self) -> ContactConfig:

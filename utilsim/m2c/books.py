@@ -47,6 +47,11 @@ def _swap(rate: str) -> str:
     return ("COM-" + rate[4:]) if rate.startswith("RES-") else ("RES-" + rate[4:]) if rate.startswith("COM-") else rate
 
 
+def wrong_bill(doc: dict) -> bool:
+    """The bill is off against the truth by more than $5 and 10% (what a check read would show)."""
+    return abs(doc["total"] - doc["truthTotal"]) > max(5.0, 0.1 * abs(doc["truthTotal"]))
+
+
 class Books:
     def __init__(self, run) -> None:
         from utilsim.m2c.run import parse_day
@@ -246,13 +251,20 @@ class Books:
             inv = day if (t - day) < 20.0 / 24 and day in self.run.bday_set else self.run.next_bday(day)
             self.to_invoice.setdefault(inv, []).extend(docs)
 
-    def redo(self, doc: dict, t: float, *, rate: str | None = None, estimate: bool = False) -> dict:
-        """Reverse ``doc`` and issue version 2 (estimated quantities or a corrected rate), released at ``t``."""
+    def redo(self, doc: dict, t: float, *, rate: str | None = None, estimate: bool = False,
+             checked: bool = False) -> dict:
+        """Reverse ``doc`` and issue version 2 (estimated quantities, a corrected rate, or ``checked``: the quantities
+        a check read finds), released at ``t``. A reversed document already invoiced is credited on the next
+        invoice."""
         run = self.run
         i, m = doc["inst"], doc["month"]
         doc["reversed"] = t
         qi, qe = doc["qImp"], doc["qExp"]
-        if estimate:
+        if checked:
+            sm = np.array([doc.get("from", m - 1)])
+            ti, te = self.quantities(np.array([i]), np.array([m]), run.truth, sm=sm)
+            qi, qe = float(ti[0]), float(te[0])
+        elif estimate:
             rows = [r for r in (self.main[i], self.export_row[i]) if r >= 0]
             est = [float(run.expected[r, m]) for r in rows]
             qi, qe = est[0], (est[1] if len(est) > 1 else 0.0)
@@ -260,8 +272,8 @@ class Books:
         ((sub, tax, total),) = self.compute([(i, m, rate, qi, qe, doc.get("from", m - 1))])
         new = {**doc, "k": len(self.docs), "rate": rate, "qImp": qi, "qExp": qe, "subtotal": sub, "tax": tax,
                "total": total, "created": t, "released": None, "reversed": None, "version": doc["version"] + 1,
-               "invoice": -1, "replaces": doc["k"], "estimated": bool(estimate or doc.get("estimated")),
-               "rebilledOnEstimate": estimate}
+               "invoice": -1, "replaces": doc["k"], "estimated": bool(estimate or (doc.get("estimated") and not checked)),
+               "rebilledOnEstimate": estimate, **({"checkRead": True} if checked else {})}
         self.docs.append(new)
         self.doc_of[i, m] = new["k"]
         self.release(new, t + 0.001)
@@ -276,6 +288,14 @@ class Books:
             case.ev(t + 0.0005, "BILL_REVERSED", {"billingDocumentId": self.doc_id(doc)})
             new = self.redo(doc, t + 0.001, estimate=True)
             case.ev(t + 0.001, "REBILL", {"billingDocumentId": self.doc_id(new), "total": new["total"]})
+        elif action == "check_rebill":  # a disputed bill was wrong: a check read, then the bill again on it
+            case.ev(t, "CHECK_READ", {"billingDocumentId": self.doc_id(doc)}, cause)
+            case.ev(t + 0.0005, "BILL_REVERSED", {"billingDocumentId": self.doc_id(doc)})
+            new = self.redo(doc, t + 0.001, checked=True)
+            case.ev(t + 0.001, "REBILL", {"billingDocumentId": self.doc_id(new), "total": new["total"],
+                                          "change": round(new["total"] - doc["total"], 2)})
+        elif action == "explain":  # a disputed bill was right: the analyst explains it
+            case.ev(t, "DISPUTE_EXPLAINED", {"billingDocumentId": self.doc_id(doc), "total": doc["total"]}, cause)
         elif action == "fix_rate":
             self.rate_fix_t[i] = t
             case.ev(t, "RATE_FIXED", {"from": doc["rate"], "to": self.run.town.inst_rate[i]}, cause)
@@ -289,10 +309,17 @@ class Books:
             case.ev(t + 0.0005, "BILL_RELEASED", {"billingDocumentId": self.doc_id(doc), "total": doc["total"]})
             if action == "release_callback":
                 case.ev(t + 0.02, "CX_CALLBACK", {"reason": "high bill"}, cause)
+        if case.type == "BILL_DISPUTE" and self.collections is not None:  # decided: dunning on the account goes on
+            self.collections.dispute_done(case.ref or self.account(doc), case.id, t)
 
     def proposal(self, case) -> str:
         if case.type == "RATE_CLASS":
             return "fix_rate"
+        if case.type == "BILL_DISPUTE":  # the customer is right when the bill is off against the truth
+            doc = self.docs[case.doc]
+            right = "check_rebill" if wrong_bill(doc) else "explain"
+            u = float(hash_u01(self.run.seed, P_BILL, self.inst_keys[doc["inst"]], case.month, 5))
+            return right if u < self.run.cfg.process.analyst_accuracy else "explain"
         right = "rebill" if case.truth in ("read_error", "meter_fault") else \
             ("release_callback" if case.truth == "physics" else "release")
         u = float(hash_u01(self.run.seed, P_BILL, self.inst_keys[self.docs[case.doc]["inst"]], case.month, 3))
@@ -321,9 +348,14 @@ class Books:
                            {"billingDocumentIds": [self.doc_id(self.docs[k]) for k in docs]})
                 continue
             n = len(self.invoices)
+            # A rebill of a document already invoiced credits the reversed version on this invoice.
+            credit = round(sum(self.docs[self.docs[k]["replaces"]]["total"] for k in docs
+                               if self.docs[k].get("replaces", -1) >= 0
+                               and self.docs[self.docs[k]["replaces"]]["invoice"] >= 0), 2)
             inv = {"n": n, "id": f"INV-{acct}-{run.date_of(day).strftime('%Y%m%d')}", "account": acct, "docs": docs,
                    "created": day + 20.0 / 24, "issued": issued, "due": issued + due_days,
-                   "total": round(sum(self.docs[k]["total"] for k in docs), 2), "payments": [], "dunning": []}
+                   "total": round(sum(self.docs[k]["total"] for k in docs) - credit, 2), "payments": [], "dunning": [],
+                   **({"credited": credit} if credit else {})}
             self.invoices.append(inv)
             new.append(inv)
             for k in docs:

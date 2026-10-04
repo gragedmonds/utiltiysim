@@ -1087,7 +1087,7 @@ CONTACTS = (Col("contactId", "Contact", "id", search=True), Col("date", "Date", 
             Col("attempt", "Attempt", "int"), Col("repeat", "Repeat", "bool"),
             Col("accountId", "Account", "id", link="account", search=True),
             Col("premiseId", "Premise", "id", link="premise", search=True), Col("address", "Address", search=True),
-            Col("trigger", "Because of", search=True))
+            Col("trigger", "Because of", search=True), Col("caseId", "Case opened", "id", link="case", search=True))
 
 
 def b_contacts(c) -> list[list]:
@@ -1108,7 +1108,7 @@ def b_contacts(c) -> list[list]:
                      CHANNEL_LABEL[contact.CHANNELS[cx.channel[i]]], OUTCOME_LABEL[contact.OUTCOMES[cx.outcome[i]]],
                      None if w != w else round(w, 1), round(float(cx.handle[i]) / 60.0, 2) or None,
                      int(cx.attempt[i]), bool(cx.repeat[i]), cx.accounts[a] if a >= 0 else None, pid,
-                     _address(c, pid) if pid else None, cx.trigger[i]])
+                     _address(c, pid) if pid else None, cx.trigger[i], cx.case[i] if cx.case else None])
     rows.reverse()  # newest first
     return _rows_to_cols(CONTACTS, rows)
 
@@ -1312,8 +1312,8 @@ SPECS: tuple[Spec, ...] = (
     Spec("collectionsWork", "Arrangements, plans & holds", "collections", "run", "Payment arrangements, budget "
          "billing plans, dunning holds and low-income referrals, by account.", COLLECTIONS_WORK, b_collections_work),
     Spec("contacts", "Contacts", "contact", "run", "Every contact by the view date: why the customer got in touch, "
-         "how (self-service, agent, call back, emergency line), the wait, the handling time, what it resolved and "
-         "what caused it.", CONTACTS, b_contacts),
+         "how (self-service, agent, call back, emergency line), the wait, the handling time, what it resolved, "
+         "what caused it and the case it opened (a bill dispute, a complaint).", CONTACTS, b_contacts),
     Spec("contactDaily", "Contact centre by day", "contact", "run", "Each day's contacts, self-service, answered, "
          "call backs and hang-ups, average wait, service level, agent occupancy and cost.", CONTACT_DAILY,
          b_contact_daily),

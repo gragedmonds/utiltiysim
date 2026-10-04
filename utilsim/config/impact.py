@@ -535,13 +535,14 @@ IMPACT: dict[str, tuple[str, str]] = {
 
     # ---- contact centre (run) ----------------------------------------------------------------------------------------
     "contact.agents": ("year", "Agents answering during opening hours. Fewer: longer waits, more hang-ups, call backs "
-                               "and repeat calls; more: shorter waits but more idle time and staffing cost."),
+                               "and repeat calls, and customers who give up pay later (more overdue bills); fewer "
+                               "disputes get through to become cases. More: shorter waits but more idle time and cost."),
     "contact.open_hour": ("year", "When the lines open on business days. Later opening squeezes the same contacts "
                                   "into fewer hours: longer waits at peaks."),
     "contact.close_hour": ("year", "When the lines close. Earlier closing squeezes contacts into fewer hours; callers "
                                    "who find the lines closed try again the next day."),
     "contact.patience_s": ("year", "How long callers hold before hanging up. Less patience: more hang-ups and retries "
-                                   "at the same waits."),
+                                   "at the same waits, and more customers who pay later after bad service."),
     "contact.retry_share": ("year", "Callers who hung up or found the lines closed and try again: retries add load "
                                     "at busy times; the rest give up unanswered."),
     "contact.repeat_share": ("year", "Customers whose problem was not resolved who contact again: repeat contacts, "
@@ -555,7 +556,7 @@ IMPACT: dict[str, tuple[str, str]] = {
                                          "service level, not who waits."),
     "contact.volume_factor": ("year", "Multiplies every reason's rates: a quick way to test a busier or quieter year."),
     "contact.handle_factor": ("year", "Multiplies every handling time: slower handling fills the agents' day, so waits "
-                                      "and hang-ups rise."),
+                                      "and hang-ups rise, and frustrated customers pay later."),
     "contact.self_serve_factor": ("year", "Multiplies the share the IVR and website handle; zero sends every contact to "
                                           "an agent."),
     "contact.agent_cost_per_hour": ("year", "Prices the agents' open hours in the contact cost. No contact changes."),
@@ -567,7 +568,8 @@ IMPACT: dict[str, tuple[str, str]] = {
     "contact.bill_question": ("year", "Questions about bills: more with estimated bills, first bills after a move-in "
                                       "and bills just after a rate change."),
     "contact.bill_wrong": ("year", "Disputes over bills that overcharge against the truth: VEE misses, rate-class "
-                                   "errors and misreads drive them."),
+                                   "errors and misreads drive them. Answered, they open Bill Correction cases (rebills "
+                                   "on a check read, dunning paused)."),
     "contact.back_bill": ("year", "Contacts about catch-up bills: rebills, and the first actual bill after a run of "
                                   "estimates (no-access and missed reads drive them)."),
     "contact.balance": ("year", "Balance enquiries around due dates; the IVR answers most."),
@@ -587,6 +589,18 @@ IMPACT: dict[str, tuple[str, str]] = {
     "contact.disconnection": ("year", "Reconnection requests after disconnections you approve."),
     "contact.complaint": ("year", "Complaints after a second unresolved contact or giving up on hold twice: long waits "
                                   "and low first-contact resolution drive them."),
+    "contact.dispute_cases": ("year", "Bill disputes become Bill Correction cases: wrong bills are rebilled on a "
+                                      "check read (a credit on the next invoice), dunning pauses while they wait."),
+    "contact.dispute_hold_days": ("year", "How long a dispute can pause dunning: longer holds, fewer notices while the "
+                                          "billing queue is behind."),
+    "contact.complaint_cases": ("year", "Complaints become cases on the billing analysts' queue: less time for other "
+                                        "billing work."),
+    "contact.frustration_threshold": ("year", "Lower: more customers pay later after bad service (more overdue bills, "
+                                              "notices and disconnections); 0 switches it off."),
+    "contact.long_wait_s": ("year", "Shorter: more answered calls count as bad experiences, so more customers pay "
+                                    "later."),
+    "contact.autopay_cancel_share": ("year", "More frustrated customers leave pre-authorized debit and pay by hand: "
+                                             "later payments, more reminders."),
     # ---- outages & leaks over the year (run) ------------------------------------------------------------------------
     "outages.enabled": ("year", "Draw the operations day's incidents for every day of the year: customers out lose "
                                 "their use and AMI meters go dark. Off: no outages, and outage and gas odour contacts "
