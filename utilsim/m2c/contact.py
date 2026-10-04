@@ -290,7 +290,7 @@ class _Builder:
     def incident(self, inc: dict, j: int) -> None:
         run = self.run
         t0 = float(inc["t"])
-        if inc["utility"] in ("electric", "water") and len(inc["premises"]):
+        if (inc["utility"] in ("electric", "water") or inc.get("upstream")) and len(inc["premises"]):
             for p, back in zip(inc["premises"].tolist(), inc["restoredAt"].tolist()):
                 a = self.account_at(p, t0)
                 if a < 0:

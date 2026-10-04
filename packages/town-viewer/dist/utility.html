@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Utility · Utility Studio</title>
+  <link rel="icon" type="image/svg+xml" href="brand/utility-studio-icon-color.svg">
+  <link rel="stylesheet" href="./style.css">
+  <link rel="stylesheet" href="./studio.css">
+  <link rel="stylesheet" href="./runs.css">
+  <link rel="stylesheet" href="./utility.css">
+</head>
+<body class="runs-shell utility-shell">
+  <header class="runs-header">
+    <a href="./" aria-label="Live Utility Studio"><img src="brand/utility-studio-horizontal-color.svg" alt="Utility Studio" width="190" height="52"></a>
+    <nav class="studio-tabs" aria-label="Saved results">
+      <a href="./utility.html" aria-current="page">Utility</a>
+      <a href="./runs.html">Saved runs</a>
+    </nav>
+    <span class="studio-pill">Saved batch · read-only</span>
+  </header>
+  <div class="run-context" id="ut-context" hidden></div>
+  <main class="ut-main">
+    <section id="ut-open" class="ut-open" hidden>
+      <span class="section-kicker">LOCAL ARCHIVE</span>
+      <h1>Utility</h1>
+      <p>A batch of districts run as one utility: its year day by day, how the shared workforce moved between districts, every district's saved run and the events on the shared upstream networks. Everything shown was computed when the batch ran.</p>
+      <form id="ut-url-form" class="ut-form"><label for="ut-url">Batch folder URL</label><input id="ut-url" type="url" placeholder="http://localhost:5175/batches/&lt;jobKey&gt;/" required><button class="outline-btn" type="submit">Open batch</button></form>
+      <details class="run-help"><summary>Run a utility batch and open it here</summary><p>Run the districts of a utility, sharing one workforce and connected upstream networks:</p><pre>utilsim batch-run --homes 50000 --chunk-size 2000 --staffing shared --float-share 0.3 --network connected --store out/store</pre><p>Then serve the store beside the Studio and open the batch folder:</p><pre>UTILSIM_RUN_STORE=out/store node web/serve.mjs</pre><pre>http://localhost:5175/utility.html?batch=/batches/&lt;jobKey&gt;/</pre><p>A paused batch shows the districts that are finished. Independent batches (<code>--staffing independent-districts</code>) have no staff allocation; unconnected ones have no upstream events.</p></details>
+    </section>
+    <p id="ut-status" class="ut-status" role="status" aria-live="polite"></p>
+    <div id="ut-root"></div>
+  </main>
+  <script type="module" src="./utility.js"></script>
+</body>
+</html>

@@ -155,7 +155,12 @@ def serve(host: str = "127.0.0.1", port: int = 8010, reload: bool = False):
 @app.command("batch-run")
 def batch_run_command(
     homes: int = typer.Option(..., help="Total residential homes, up to 50,000."),
-    staffing: str = typer.Option(..., help="Must be independent-districts; settings apply to EACH district's team."),
+    staffing: str = typer.Option(..., help="independent-districts (settings apply to EACH district's team) or shared "
+                                           "(one workforce: each district's team is pooled and coordinated daily)."),
+    network: str = typer.Option("independent", help="independent, or connected: shared upstream networks (transmission, "
+                                                    "treatment plant and mains, gas gates) and one weather."),
+    float_share: float = typer.Option(0.3, help="With shared staffing: the share of the pool the utility sends where the "
+                                                "work waits each day (the rest is each district's home team)."),
     chunk_size: int = typer.Option(2000, help="Maximum homes per sequential district, 20–5,000."),
     preset: str = typer.Option("small_town"),
     config: Path = typer.Option(None, help="Generation configuration overrides JSON."),
@@ -164,7 +169,7 @@ def batch_run_command(
     map_data: bool = typer.Option(False, "--map-data/--no-map-data", help="Include visual map data and initial state; batch analysis omits these by default."),
     max_batches: int = typer.Option(None, help="Pause after this many newly completed districts; rerun to resume."),
 ):
-    """Run independent districts sequentially, archive full results, and resume with a measured ETA."""
+    """Run a utility's districts sequentially, archive full results, and resume with a measured ETA."""
     from utilsim.batch import run_batch
 
     last = [None]
@@ -180,7 +185,8 @@ def batch_run_command(
         cfg = _cfg(preset, None, None, config, None)
         request = orjson.loads(input_.read_bytes()) if input_ else {}
         directory, job = run_batch(cfg, homes, store, request, chunk_size=chunk_size,
-                                   staffing=staffing, map_data=map_data, max_batches=max_batches, on_progress=report)
+                                   staffing=staffing, map_data=map_data, max_batches=max_batches, network=network,
+                                   float_share=float_share, on_progress=report)
     except (ValueError, OSError, RuntimeError) as exc:
         raise typer.BadParameter(str(exc)) from exc
     typer.echo(json.dumps({"directory": str(directory), "status": job["status"],

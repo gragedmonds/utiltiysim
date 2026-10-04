@@ -563,6 +563,19 @@
             "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field); see GET /api/m2c/settings.",
             "title": "Settings"
           },
+          "staffing": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A day-by-day staffing schedule (staff-schedule/1.0): {pools: {pool: [[date, n], ...]}}, pools analysts, supervisors, agents (people) and crew_meter, crew_electric, crew_water, crew_gas, crew_construction, crew_emergency (crews); from each date the pool has n until the next entry, and the settings hold before the first. A utility pooling its people across districts gives each its people per day.",
+            "title": "Staffing"
+          },
           "town": {
             "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
@@ -572,6 +585,19 @@
             "default": false,
             "title": "Truth",
             "type": "boolean"
+          },
+          "upstream": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Events upstream of the town (upstream/1.0): {stormSeed?, events: [{id, utility, day, start, end, label?, storm?}]}: its supply lost in the utility's wider networks (an outage here without a repair order; tanks and line pack carry water and gas for a while, gas premises are relit after); stormSeed shares storm days with the utility's other towns.",
+            "title": "Upstream"
           },
           "year": {
             "anyOf": [
@@ -768,10 +794,36 @@
             "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field); see GET /api/m2c/settings.",
             "title": "Settings"
           },
+          "staffing": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A day-by-day staffing schedule (staff-schedule/1.0): {pools: {pool: [[date, n], ...]}}, pools analysts, supervisors, agents (people) and crew_meter, crew_electric, crew_water, crew_gas, crew_construction, crew_emergency (crews); from each date the pool has n until the next entry, and the settings hold before the first. A utility pooling its people across districts gives each its people per day.",
+            "title": "Staffing"
+          },
           "town": {
             "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
             "type": "string"
+          },
+          "upstream": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Events upstream of the town (upstream/1.0): {stormSeed?, events: [{id, utility, day, start, end, label?, storm?}]}: its supply lost in the utility's wider networks (an outage here without a repair order; tanks and line pack carry water and gas for a while, gas premises are relit after); stormSeed shares storm days with the utility's other towns.",
+            "title": "Upstream"
           },
           "year": {
             "anyOf": [
@@ -944,6 +996,19 @@
             "title": "Sort",
             "type": "string"
           },
+          "staffing": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A day-by-day staffing schedule (staff-schedule/1.0): {pools: {pool: [[date, n], ...]}}, pools analysts, supervisors, agents (people) and crew_meter, crew_electric, crew_water, crew_gas, crew_construction, crew_emergency (crews); from each date the pool has n until the next entry, and the settings hold before the first. A utility pooling its people across districts gives each its people per day.",
+            "title": "Staffing"
+          },
           "status": {
             "default": "open",
             "enum": [
@@ -958,6 +1023,19 @@
             "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
             "type": "string"
+          },
+          "upstream": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Events upstream of the town (upstream/1.0): {stormSeed?, events: [{id, utility, day, start, end, label?, storm?}]}: its supply lost in the utility's wider networks (an outage here without a repair order; tanks and line pack carry water and gas for a while, gas premises are relit after); stormSeed shares storm days with the utility's other towns.",
+            "title": "Upstream"
           },
           "year": {
             "anyOf": [
@@ -1099,6 +1177,19 @@
             "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field); see GET /api/m2c/settings.",
             "title": "Settings"
           },
+          "staffing": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A day-by-day staffing schedule (staff-schedule/1.0): {pools: {pool: [[date, n], ...]}}, pools analysts, supervisors, agents (people) and crew_meter, crew_electric, crew_water, crew_gas, crew_construction, crew_emergency (crews); from each date the pool has n until the next entry, and the settings hold before the first. A utility pooling its people across districts gives each its people per day.",
+            "title": "Staffing"
+          },
           "status": {
             "default": "open",
             "enum": [
@@ -1112,6 +1203,19 @@
             "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
             "type": "string"
+          },
+          "upstream": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Events upstream of the town (upstream/1.0): {stormSeed?, events: [{id, utility, day, start, end, label?, storm?}]}: its supply lost in the utility's wider networks (an outage here without a repair order; tanks and line pack carry water and gas for a while, gas premises are relit after); stormSeed shares storm days with the utility's other towns.",
+            "title": "Upstream"
           },
           "year": {
             "anyOf": [
@@ -1439,10 +1543,36 @@
             "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field); see GET /api/m2c/settings.",
             "title": "Settings"
           },
+          "staffing": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A day-by-day staffing schedule (staff-schedule/1.0): {pools: {pool: [[date, n], ...]}}, pools analysts, supervisors, agents (people) and crew_meter, crew_electric, crew_water, crew_gas, crew_construction, crew_emergency (crews); from each date the pool has n until the next entry, and the settings hold before the first. A utility pooling its people across districts gives each its people per day.",
+            "title": "Staffing"
+          },
           "town": {
             "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
             "type": "string"
+          },
+          "upstream": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Events upstream of the town (upstream/1.0): {stormSeed?, events: [{id, utility, day, start, end, label?, storm?}]}: its supply lost in the utility's wider networks (an outage here without a repair order; tanks and line pack carry water and gas for a while, gas premises are relit after); stormSeed shares storm days with the utility's other towns.",
+            "title": "Upstream"
           },
           "year": {
             "anyOf": [
@@ -1621,10 +1751,36 @@
             "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field); see GET /api/m2c/settings.",
             "title": "Settings"
           },
+          "staffing": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A day-by-day staffing schedule (staff-schedule/1.0): {pools: {pool: [[date, n], ...]}}, pools analysts, supervisors, agents (people) and crew_meter, crew_electric, crew_water, crew_gas, crew_construction, crew_emergency (crews); from each date the pool has n until the next entry, and the settings hold before the first. A utility pooling its people across districts gives each its people per day.",
+            "title": "Staffing"
+          },
           "town": {
             "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
             "type": "string"
+          },
+          "upstream": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Events upstream of the town (upstream/1.0): {stormSeed?, events: [{id, utility, day, start, end, label?, storm?}]}: its supply lost in the utility's wider networks (an outage here without a repair order; tanks and line pack carry water and gas for a while, gas premises are relit after); stormSeed shares storm days with the utility's other towns.",
+            "title": "Upstream"
           },
           "year": {
             "anyOf": [
@@ -1762,10 +1918,36 @@
             "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field); see GET /api/m2c/settings.",
             "title": "Settings"
           },
+          "staffing": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A day-by-day staffing schedule (staff-schedule/1.0): {pools: {pool: [[date, n], ...]}}, pools analysts, supervisors, agents (people) and crew_meter, crew_electric, crew_water, crew_gas, crew_construction, crew_emergency (crews); from each date the pool has n until the next entry, and the settings hold before the first. A utility pooling its people across districts gives each its people per day.",
+            "title": "Staffing"
+          },
           "town": {
             "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
             "type": "string"
+          },
+          "upstream": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Events upstream of the town (upstream/1.0): {stormSeed?, events: [{id, utility, day, start, end, label?, storm?}]}: its supply lost in the utility's wider networks (an outage here without a repair order; tanks and line pack carry water and gas for a while, gas premises are relit after); stormSeed shares storm days with the utility's other towns.",
+            "title": "Upstream"
           },
           "year": {
             "anyOf": [
@@ -2209,6 +2391,19 @@
             "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field); see GET /api/m2c/settings.",
             "title": "Settings"
           },
+          "staffing": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A day-by-day staffing schedule (staff-schedule/1.0): {pools: {pool: [[date, n], ...]}}, pools analysts, supervisors, agents (people) and crew_meter, crew_electric, crew_water, crew_gas, crew_construction, crew_emergency (crews); from each date the pool has n until the next entry, and the settings hold before the first. A utility pooling its people across districts gives each its people per day.",
+            "title": "Staffing"
+          },
           "town": {
             "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
@@ -2218,6 +2413,19 @@
             "default": false,
             "title": "Truth",
             "type": "boolean"
+          },
+          "upstream": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Events upstream of the town (upstream/1.0): {stormSeed?, events: [{id, utility, day, start, end, label?, storm?}]}: its supply lost in the utility's wider networks (an outage here without a repair order; tanks and line pack carry water and gas for a while, gas premises are relit after); stormSeed shares storm days with the utility's other towns.",
+            "title": "Upstream"
           },
           "year": {
             "anyOf": [
@@ -2371,10 +2579,36 @@
             "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field); see GET /api/m2c/settings.",
             "title": "Settings"
           },
+          "staffing": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A day-by-day staffing schedule (staff-schedule/1.0): {pools: {pool: [[date, n], ...]}}, pools analysts, supervisors, agents (people) and crew_meter, crew_electric, crew_water, crew_gas, crew_construction, crew_emergency (crews); from each date the pool has n until the next entry, and the settings hold before the first. A utility pooling its people across districts gives each its people per day.",
+            "title": "Staffing"
+          },
           "town": {
             "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
             "type": "string"
+          },
+          "upstream": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Events upstream of the town (upstream/1.0): {stormSeed?, events: [{id, utility, day, start, end, label?, storm?}]}: its supply lost in the utility's wider networks (an outage here without a repair order; tanks and line pack carry water and gas for a while, gas premises are relit after); stormSeed shares storm days with the utility's other towns.",
+            "title": "Upstream"
           },
           "year": {
             "anyOf": [
@@ -2518,10 +2752,36 @@
             "description": "The order raised from this case (or a Field Work case's own order).",
             "title": "Sourcecaseid"
           },
+          "staffing": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A day-by-day staffing schedule (staff-schedule/1.0): {pools: {pool: [[date, n], ...]}}, pools analysts, supervisors, agents (people) and crew_meter, crew_electric, crew_water, crew_gas, crew_construction, crew_emergency (crews); from each date the pool has n until the next entry, and the settings hold before the first. A utility pooling its people across districts gives each its people per day.",
+            "title": "Staffing"
+          },
           "town": {
             "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
             "type": "string"
+          },
+          "upstream": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Events upstream of the town (upstream/1.0): {stormSeed?, events: [{id, utility, day, start, end, label?, storm?}]}: its supply lost in the utility's wider networks (an outage here without a repair order; tanks and line pack carry water and gas for a while, gas premises are relit after); stormSeed shares storm days with the utility's other towns.",
+            "title": "Upstream"
           },
           "year": {
             "anyOf": [
@@ -2744,6 +3004,19 @@
             "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field); see GET /api/m2c/settings.",
             "title": "Settings"
           },
+          "staffing": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A day-by-day staffing schedule (staff-schedule/1.0): {pools: {pool: [[date, n], ...]}}, pools analysts, supervisors, agents (people) and crew_meter, crew_electric, crew_water, crew_gas, crew_construction, crew_emergency (crews); from each date the pool has n until the next entry, and the settings hold before the first. A utility pooling its people across districts gives each its people per day.",
+            "title": "Staffing"
+          },
           "status": {
             "default": "all",
             "description": "open: rows whose missed-read case is still open.",
@@ -2758,6 +3031,19 @@
             "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
             "type": "string"
+          },
+          "upstream": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Events upstream of the town (upstream/1.0): {stormSeed?, events: [{id, utility, day, start, end, label?, storm?}]}: its supply lost in the utility's wider networks (an outage here without a repair order; tanks and line pack carry water and gas for a while, gas premises are relit after); stormSeed shares storm days with the utility's other towns.",
+            "title": "Upstream"
           },
           "utility": {
             "anyOf": [
@@ -2886,6 +3172,19 @@
             "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field); see GET /api/m2c/settings.",
             "title": "Settings"
           },
+          "staffing": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A day-by-day staffing schedule (staff-schedule/1.0): {pools: {pool: [[date, n], ...]}}, pools analysts, supervisors, agents (people) and crew_meter, crew_electric, crew_water, crew_gas, crew_construction, crew_emergency (crews); from each date the pool has n until the next entry, and the settings hold before the first. A utility pooling its people across districts gives each its people per day.",
+            "title": "Staffing"
+          },
           "town": {
             "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
@@ -2896,6 +3195,19 @@
             "description": "Include simulation ground truth (never send it to a VEE engine).",
             "title": "Truth",
             "type": "boolean"
+          },
+          "upstream": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Events upstream of the town (upstream/1.0): {stormSeed?, events: [{id, utility, day, start, end, label?, storm?}]}: its supply lost in the utility's wider networks (an outage here without a repair order; tanks and line pack carry water and gas for a while, gas premises are relit after); stormSeed shares storm days with the utility's other towns.",
+            "title": "Upstream"
           },
           "year": {
             "anyOf": [
@@ -3254,6 +3566,19 @@
             "title": "Sort",
             "type": "string"
           },
+          "staffing": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A day-by-day staffing schedule (staff-schedule/1.0): {pools: {pool: [[date, n], ...]}}, pools analysts, supervisors, agents (people) and crew_meter, crew_electric, crew_water, crew_gas, crew_construction, crew_emergency (crews); from each date the pool has n until the next entry, and the settings hold before the first. A utility pooling its people across districts gives each its people per day.",
+            "title": "Staffing"
+          },
           "status": {
             "default": "open",
             "enum": [
@@ -3279,6 +3604,19 @@
               }
             ],
             "title": "Type"
+          },
+          "upstream": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Events upstream of the town (upstream/1.0): {stormSeed?, events: [{id, utility, day, start, end, label?, storm?}]}: its supply lost in the utility's wider networks (an outage here without a repair order; tanks and line pack carry water and gas for a while, gas premises are relit after); stormSeed shares storm days with the utility's other towns.",
+            "title": "Upstream"
           },
           "year": {
             "anyOf": [
@@ -3391,6 +3729,19 @@
             "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field); see GET /api/m2c/settings.",
             "title": "Settings"
           },
+          "staffing": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A day-by-day staffing schedule (staff-schedule/1.0): {pools: {pool: [[date, n], ...]}}, pools analysts, supervisors, agents (people) and crew_meter, crew_electric, crew_water, crew_gas, crew_construction, crew_emergency (crews); from each date the pool has n until the next entry, and the settings hold before the first. A utility pooling its people across districts gives each its people per day.",
+            "title": "Staffing"
+          },
           "town": {
             "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
@@ -3400,6 +3751,19 @@
             "default": false,
             "title": "Truth",
             "type": "boolean"
+          },
+          "upstream": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Events upstream of the town (upstream/1.0): {stormSeed?, events: [{id, utility, day, start, end, label?, storm?}]}: its supply lost in the utility's wider networks (an outage here without a repair order; tanks and line pack carry water and gas for a while, gas premises are relit after); stormSeed shares storm days with the utility's other towns.",
+            "title": "Upstream"
           },
           "year": {
             "anyOf": [
@@ -3568,10 +3932,36 @@
             "description": "Overrides for the run-scoped groups (process, anomalies, reading, vee, billing, contact, outages, field); see GET /api/m2c/settings.",
             "title": "Settings"
           },
+          "staffing": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A day-by-day staffing schedule (staff-schedule/1.0): {pools: {pool: [[date, n], ...]}}, pools analysts, supervisors, agents (people) and crew_meter, crew_electric, crew_water, crew_gas, crew_construction, crew_emergency (crews); from each date the pool has n until the next entry, and the settings hold before the first. A utility pooling its people across districts gives each its people per day.",
+            "title": "Staffing"
+          },
           "town": {
             "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
             "type": "string"
+          },
+          "upstream": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Events upstream of the town (upstream/1.0): {stormSeed?, events: [{id, utility, day, start, end, label?, storm?}]}: its supply lost in the utility's wider networks (an outage here without a repair order; tanks and line pack carry water and gas for a while, gas premises are relit after); stormSeed shares storm days with the utility's other towns.",
+            "title": "Upstream"
           },
           "year": {
             "anyOf": [
@@ -3717,10 +4107,36 @@
             "description": "Start of a period (YYYY-MM-DD): adds ``window``, the figures between that day and asOf (this month, the last 30 days, since your first action, ...).",
             "title": "Since"
           },
+          "staffing": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A day-by-day staffing schedule (staff-schedule/1.0): {pools: {pool: [[date, n], ...]}}, pools analysts, supervisors, agents (people) and crew_meter, crew_electric, crew_water, crew_gas, crew_construction, crew_emergency (crews); from each date the pool has n until the next entry, and the settings hold before the first. A utility pooling its people across districts gives each its people per day.",
+            "title": "Staffing"
+          },
           "town": {
             "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
             "type": "string"
+          },
+          "upstream": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Events upstream of the town (upstream/1.0): {stormSeed?, events: [{id, utility, day, start, end, label?, storm?}]}: its supply lost in the utility's wider networks (an outage here without a repair order; tanks and line pack carry water and gas for a while, gas premises are relit after); stormSeed shares storm days with the utility's other towns.",
+            "title": "Upstream"
           },
           "year": {
             "anyOf": [
@@ -3903,6 +4319,19 @@
             "description": "A column key; rows with no value sort last.",
             "title": "Sort"
           },
+          "staffing": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A day-by-day staffing schedule (staff-schedule/1.0): {pools: {pool: [[date, n], ...]}}, pools analysts, supervisors, agents (people) and crew_meter, crew_electric, crew_water, crew_gas, crew_construction, crew_emergency (crews); from each date the pool has n until the next entry, and the settings hold before the first. A utility pooling its people across districts gives each its people per day.",
+            "title": "Staffing"
+          },
           "table": {
             "description": "A table name from GET /api/m2c/tables.",
             "maxLength": 40,
@@ -3913,6 +4342,19 @@
             "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
             "type": "string"
+          },
+          "upstream": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Events upstream of the town (upstream/1.0): {stormSeed?, events: [{id, utility, day, start, end, label?, storm?}]}: its supply lost in the utility's wider networks (an outage here without a repair order; tanks and line pack carry water and gas for a while, gas premises are relit after); stormSeed shares storm days with the utility's other towns.",
+            "title": "Upstream"
           },
           "year": {
             "anyOf": [
@@ -4096,6 +4538,19 @@
             "description": "A column key; rows with no value sort last.",
             "title": "Sort"
           },
+          "staffing": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A day-by-day staffing schedule (staff-schedule/1.0): {pools: {pool: [[date, n], ...]}}, pools analysts, supervisors, agents (people) and crew_meter, crew_electric, crew_water, crew_gas, crew_construction, crew_emergency (crews); from each date the pool has n until the next entry, and the settings hold before the first. A utility pooling its people across districts gives each its people per day.",
+            "title": "Staffing"
+          },
           "table": {
             "description": "A table name from GET /api/m2c/tables.",
             "maxLength": 40,
@@ -4106,6 +4561,19 @@
             "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
             "type": "string"
+          },
+          "upstream": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Events upstream of the town (upstream/1.0): {stormSeed?, events: [{id, utility, day, start, end, label?, storm?}]}: its supply lost in the utility's wider networks (an outage here without a repair order; tanks and line pack carry water and gas for a while, gas premises are relit after); stormSeed shares storm days with the utility's other towns.",
+            "title": "Upstream"
           },
           "year": {
             "anyOf": [
@@ -4563,6 +5031,32 @@
             ],
             "description": "That year's run settings (as ``settings``).",
             "title": "Settings"
+          },
+          "staffing": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "That year's staffing schedule (as ``staffing``).",
+            "title": "Staffing"
+          },
+          "upstream": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "That year's upstream events (as ``upstream``).",
+            "title": "Upstream"
           }
         },
         "title": "YearInputs",
@@ -4847,6 +5341,43 @@
           }
         },
         "summary": "Post Contact"
+      }
+    },
+    "/api/m2c/daily": {
+      "post": {
+        "description": "``run-daily/1.0``: the run day by day in figures that add up across towns: cases opened, closed and in the\nbacklog per queue; the analysts' and supervisors' day (people, work waiting and done, the oldest waiting); each\nfield crew type (crews, minutes available and busy, overtime, work waiting); the contact centre (agents, time,\ncontacts by how they ended); customers and customer-hours without service.",
+        "operationId": "post_daily_api_m2c_daily_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Daily"
       }
     },
     "/api/m2c/fieldwork": {

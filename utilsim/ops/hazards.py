@@ -106,17 +106,22 @@ def _point(points: np.ndarray, f: float) -> tuple[float, float]:
     return float(np.interp(s, cum, points[:, 0])), float(np.interp(s, cum, points[:, 1]))
 
 
-def draw(ops, day: date, s: dict, seed: str) -> tuple[list[dict], dict]:
+def draw(ops, day: date, s: dict, seed: str, storm_seed: str | None = None) -> tuple[list[dict], dict]:
     """The day's background incidents in time order (``{at, kind, utility, edge | collector, x, z}``; ``at`` in
-    seconds since local midnight) and what was expected (``expected`` incidents per hazard, storm day)."""
+    seconds since local midnight) and what was expected (``expected`` incidents per hazard, storm day). With
+    ``storm_seed`` the storm days and hours are drawn from it (towns of one utility share their weather), the faults
+    from ``seed``."""
     ex: Exposure = ops.exposure
     key = day.toordinal()
 
     def u(*k) -> float:
         return float(hash_u01(seed, P, key, *k))
 
-    stormy = u(0, 0) < storm_probability(day, float(s["stormDaysPerYear"]))
-    storm_at = STORM_HOURS[0] + (STORM_HOURS[1] - STORM_HOURS[0]) * u(0, 1)
+    def us(*k) -> float:
+        return float(hash_u01(storm_seed, P, key, *k)) if storm_seed else u(*k)
+
+    stormy = us(0, 0) < storm_probability(day, float(s["stormDaysPerYear"]))
+    storm_at = STORM_HOURS[0] + (STORM_HOURS[1] - STORM_HOURS[0]) * us(0, 1)
     out, expected = [], {}
     for code, kind, util, setting in HAZARDS:
         rate = max(0.0, float(s[setting]))
