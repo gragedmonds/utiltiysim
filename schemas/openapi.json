@@ -5091,6 +5091,82 @@
         "summary": "Validate"
       }
     },
+    "/api/setup/configuration": {
+      "get": {
+        "description": "Live schemas, defaults and regional starters for the manual wizard; no API key required.",
+        "operationId": "setup_configuration_api_setup_configuration_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "preset",
+            "required": false,
+            "schema": {
+              "default": "small_town",
+              "title": "Preset",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Setup Configuration"
+      }
+    },
+    "/api/setup/operation-defaults": {
+      "post": {
+        "description": "Map-day defaults derived from the edited town, including regional weather and crew defaults.",
+        "operationId": "setup_operation_defaults_api_setup_operation_defaults_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Proposal"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Setup Operation Defaults"
+      }
+    },
     "/api/sim/days": {
       "post": {
         "description": "``utility-days/1.0``: the run days from ``from`` to ``to`` (inclusive, at most 62), each replayed with no\ncommands: per day its ``date``, ``interruptions`` (as the timeline reports them: the meter-to-cash run's\n``outages`` for the days the viewer skips over) and counts of ``incidents`` and ``jobs``. The days' background\nincidents are the same draws as a single-day timeline's, so the two always agree.",

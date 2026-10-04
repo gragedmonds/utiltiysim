@@ -6,6 +6,37 @@ starting pressures before shaping the experiment. It inspects the engine's curre
 shows its summary, dated episodes, assumptions, model limits and exact setting changes. **Use this setup** validates
 it again and fills in the draft; **Open simulation** opens Year with those settings. Manual starters remain available.
 
+## Environment and utility wizard
+
+The manual wizard has three steps:
+
+1. **Environment**: simulation name, residential home count, regional starting point and location label. The
+   preview shows seasonal mean temperatures, eligible-lot pool share, construction era and two-storey shares.
+   Advanced contains seeds, geography, housing and weather, with search, bounds and effect descriptions.
+2. **Utility & operations**: services, billing analysts, contact-centre agents and Year field crews, followed by
+   scenario intensity and view date. Advanced contains utility networks and metering, Year workflows and costs,
+   and a separately labelled map-day operations section. Year field crews are expressed per 1,000 total premises.
+3. **Review & open**: the editable per-input summary, validation and links back to either setup stage.
+
+Town-size starters are **500, 5,000, 50,000 and 500,000 residential homes**. New drafts start at 500.
+The last two choices are visibly unavailable: the current hosted engine caps detailed towns at 6,000 homes
+(local default: 10,000), so large-city simulation requires further engine work. Advanced retains custom
+counts within the connected engine’s limit; existing saved sizes are preserved. Claude receives the same size catalogue.
+
+Basic and advanced controls edit the same values. Region changes preserve home count and utility settings;
+scenario changes replace dated periods while preserving the environment and operating baseline. Existing drafts
+migrate to the appropriate new step. Manual setup and revalidation do not need an Anthropic key.
+
+`api/_setup.py` defines four illustrative regional starters: Great Lakes/southern Ontario, Upstate/Northeast
+suburbs, Midwest/plains suburbs and warm southern suburbs. They set explicit weather, terrain, lot, housing-era,
+AC, irrigation and pool inputs. They are not observed local statistics or calibrated forecasts. A free-text
+service-area label does not geocode or fetch weather; the selected regional starter supplies those assumptions.
+Tariffs and regulations retain the engine defaults unless edited. Claude receives the same regional catalogue.
+
+Every town currently includes electricity and water. The service selector adds gas districts or chooses
+all-electric heating through `gas.all_electric_district_share`; Advanced exposes the exact coverage share.
+Pool activity still follows the engine's May–September model even in the warm-region starter.
+
 ## Editable input summary
 
 Both the proposal and final wizard review show **What your inputs change**. Each explicit town, baseline,
