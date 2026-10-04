@@ -6,6 +6,7 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/sha256"
+	_ "embed"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -27,7 +28,8 @@ import (
 var runtimeURL, runtimeSHA, runtimeSignature, runtimePublicKey, runtimeBytes, releaseVersion string
 var mu sync.Mutex
 var message = "Choose a folder for the engine and your simulations."
-var busy bool
+var busy, picking bool
+var engineURL, logPath string
 
 func validPath(root, name string) (string, error) {
 	if strings.ContainsAny(name, "\\:") || strings.HasPrefix(name, "/") || filepath.IsAbs(name) {
@@ -128,6 +130,7 @@ func install(root string) (string, error) {
 	}
 	if data, err := os.ReadFile(filepath.Join(folder, ".ready")); err == nil && string(data) == runtimeSHA {
 		if _, err = os.Stat(exe); err == nil {
+			setMessage("Using the engine already saved on this drive…")
 			return exe, nil
 		}
 	}
@@ -139,6 +142,7 @@ func install(root string) (string, error) {
 	if stat, err := os.Stat(temp); err == nil {
 		offset = stat.Size()
 	}
+	setMessage("Connecting to the engine download…")
 	req, err := http.NewRequest("GET", runtimeURL, nil)
 	if err != nil {
 		return "", err
@@ -146,7 +150,9 @@ func install(root string) (string, error) {
 	if offset > 0 {
 		req.Header.Set("Range", fmt.Sprintf("bytes=%d-", offset))
 	}
-	response, err := (&http.Client{Timeout: 30 * time.Minute}).Do(req)
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.ResponseHeaderTimeout = 30 * time.Second
+	response, err := (&http.Client{Timeout: 30 * time.Minute, Transport: transport}).Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -199,6 +205,7 @@ func install(root string) (string, error) {
 		os.Remove(temp)
 		return "", err
 	}
+	setMessage("Installing the verified engine…")
 	staging := folder + ".installing"
 	os.RemoveAll(staging)
 	if err = os.MkdirAll(staging, 0700); err != nil {
@@ -232,7 +239,8 @@ func openBrowser(url string) {
 	_ = cmd.Start()
 }
 
-const page = `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Utility Studio · Install</title><style>body{font:16px system-ui;background:#f4f7f5;color:#153c3c;max-width:680px;margin:60px auto;padding:24px}h1{font-size:42px;letter-spacing:-2px}label,input,button{display:block;margin:16px 0}input{box-sizing:border-box;width:100%;padding:14px;font:inherit}button{padding:14px 22px;border:0;border-radius:10px;background:#196b61;color:white;font:inherit}p{line-height:1.6}#status{background:white;padding:20px;border-radius:12px}</style></head><body><small>UTILITY STUDIO · LOCAL RUNNER</small><h1>A home for your simulations.</h1><p>Choose a folder for the engine, cached towns and full results, such as <strong>P:\UtilitySim</strong>. The engine downloads once. Later launches use the cached copy.</p><label for="folder">Storage folder</label><input id="folder"><button id="start">Start local engine</button><p id="status" role="status"></p><p>To open another library, change the folder before starting. Existing libraries stay where they are. To move a library, stop the runner, copy the complete folder and select the copy; saved archives are verified when reopened.</p><script>const token=new URLSearchParams(location.hash.slice(1)).get('token');history.replaceState(null,'','/');async function call(path,data){const r=await fetch(path,{method:data?'POST':'GET',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:data?JSON.stringify(data):undefined});const v=await r.json();if(!r.ok)throw Error(v.error);return v;}call('/status').then(v=>document.getElementById('folder').value=v.folder);document.getElementById('start').onclick=async()=>{try{await call('/start',{folder:document.getElementById('folder').value});}catch(e){document.getElementById('status').textContent=e.message;}};setInterval(async()=>{try{const v=await call('/status');document.getElementById('status').textContent=v.message;document.getElementById('start').disabled=v.busy;}catch{}},800);</script></body></html>`
+//go:embed page.html
+var page string
 
 func main() {
 	config, err := os.UserConfigDir()
@@ -278,8 +286,35 @@ func main() {
 		}
 		if r.URL.Path == "/status" {
 			mu.Lock()
-			json.NewEncoder(w).Encode(map[string]any{"message": message, "busy": busy, "folder": chosen})
+			json.NewEncoder(w).Encode(map[string]any{"message": message, "busy": busy, "picking": picking, "folder": chosen, "engineURL": engineURL, "logPath": logPath})
 			mu.Unlock()
+			return
+		}
+		if r.URL.Path == "/browse" && r.Method == "POST" {
+			mu.Lock()
+			if busy || picking {
+				mu.Unlock()
+				w.WriteHeader(409)
+				fmt.Fprint(w, `{"error":"Finish the current action before choosing another folder."}`)
+				return
+			}
+			picking = true
+			initial := chosen
+			mu.Unlock()
+			folder, err := chooseFolder(initial)
+			mu.Lock()
+			picking = false
+			if err == nil && folder != "" {
+				chosen = folder
+			}
+			selected := chosen
+			mu.Unlock()
+			if err != nil {
+				w.WriteHeader(422)
+				json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+				return
+			}
+			json.NewEncoder(w).Encode(map[string]any{"folder": selected, "cancelled": folder == ""})
 			return
 		}
 		if r.URL.Path != "/start" || r.Method != "POST" {
@@ -295,15 +330,18 @@ func main() {
 			return
 		}
 		mu.Lock()
-		if busy {
+		if busy || picking {
 			mu.Unlock()
 			w.WriteHeader(409)
 			fmt.Fprint(w, `{"error":"The engine is already starting or running."}`)
 			return
 		}
 		busy = true
+		engineURL = ""
+		message = "Starting the engine: checking your storage folder…"
 		chosen = filepath.Clean(value.Folder)
 		root := chosen
+		logPath = filepath.Join(root, "runner.log")
 		mu.Unlock()
 		fmt.Fprint(w, `{"ok":true}`)
 		go func() {
@@ -330,22 +368,7 @@ func main() {
 				setMessage(err.Error())
 				return
 			}
-			setMessage("Engine ready. Opening pairing and status…")
-			cmd := exec.Command(exe, "--store", root)
-			cmd.Dir = root
-			log, err := os.OpenFile(filepath.Join(root, "runner.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
-			if err != nil {
-				setMessage(err.Error())
-				return
-			}
-			defer log.Close()
-			cmd.Stdout = log
-			cmd.Stderr = log
-			if err = cmd.Run(); err != nil {
-				setMessage("Engine stopped. See runner.log in your storage folder. " + err.Error())
-			} else {
-				setMessage("Engine stopped. Your library is ready for next time.")
-			}
+			runEngine(exe, root)
 		}()
 	})
 	openBrowser(origin + "/#token=" + token)

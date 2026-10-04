@@ -11,6 +11,7 @@ def main():
     parser.add_argument('--store')
     parser.add_argument('--self-test')
     parser.add_argument('--port', type=int, default=8010)
+    parser.add_argument('--ready-file')
     args = parser.parse_args()
     if args.self_test:
         import uuid
@@ -28,7 +29,7 @@ def main():
         district_worker(Path(args.batch_worker[0]), int(args.batch_worker[1]), args.batch_worker[2])
     else:
         from utilsim.worker.server import serve
-        serve(args.store, args.port)
+        serve(args.store, args.port, ready_file=args.ready_file)
 
 
 if __name__ == '__main__':

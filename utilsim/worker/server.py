@@ -1,7 +1,10 @@
 """Loopback-only runner UI, authenticated independently from the hosted workspace."""
 from __future__ import annotations
 
+import json
+import os
 import secrets
+import socket
 import sys
 import threading
 import webbrowser
@@ -21,14 +24,18 @@ def assets():
     return root / 'packages/town-viewer/dist'
 
 
-def create_app(agent, local_token):
+def create_app(agent, local_token, on_ready=None):
     @asynccontextmanager
     async def lifespan(app):
         thread = threading.Thread(target=agent.loop, daemon=True)
         thread.start()
-        yield
-        agent.shutdown.set()
-        thread.join(timeout=20)
+        try:
+            if on_ready:
+                on_ready()
+            yield
+        finally:
+            agent.shutdown.set()
+            thread.join(timeout=20)
 
     app = FastAPI(lifespan=lifespan)
 
@@ -108,7 +115,7 @@ def create_app(agent, local_token):
     return app
 
 
-def serve(store, port=8010, open_browser=True):
+def serve(store, port=8010, open_browser=True, ready_file=None):
     import uvicorn
 
     from utilsim.batch import job_lock
@@ -117,8 +124,19 @@ def serve(store, port=8010, open_browser=True):
     if not root.is_dir():
         raise ValueError('The selected storage folder must exist. Reconnect the drive or choose an existing folder.')
     token = secrets.token_urlsafe(32)
-    with job_lock(root / 'runner.lock'):
+    with job_lock(root / 'runner.lock'), socket.socket() as listener:
+        listener.bind(('127.0.0.1', port))
+        port = listener.getsockname()[1]
         agent = Agent(root)
-        if open_browser:
-            threading.Timer(1.2, lambda: webbrowser.open(f'http://127.0.0.1:{port}/#token={token}')).start()
-        uvicorn.run(create_app(agent, token), host='127.0.0.1', port=port, access_log=False)
+        url = f'http://127.0.0.1:{port}/#token={token}'
+
+        def ready():
+            if ready_file:
+                fd = os.open(ready_file, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+                with os.fdopen(fd, 'w') as stream:
+                    json.dump({'url': url}, stream)
+            elif open_browser:
+                threading.Timer(1.2, lambda: webbrowser.open(url)).start()
+
+        config = uvicorn.Config(create_app(agent, token, ready), access_log=False)
+        uvicorn.Server(config).run(sockets=[listener])

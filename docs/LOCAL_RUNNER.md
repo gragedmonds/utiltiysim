@@ -10,9 +10,9 @@ the monitor estimates from completed districts and shows actual phase times.
 
 1. Open a simulation from the guided setup. Large sizes say **Local computer required**.
 2. Download the UtilityStudio launcher from the repository's latest release. Select the matching operating system.
-3. Choose a writable storage folder, such as `P:\UtilitySim`. The engine, baselines, archives, temporary downloads,
+3. Click **Choose folder** to open the native folder selector (Windows supports mapped drives), or use **Type a path**. Choose a writable storage folder, such as `P:\UtilitySim`. The engine, baselines, archives, temporary downloads,
    jobs and receipts stay under it. The bootstrap preference stores only the selected path in the OS config folder.
-4. Start the engine, choose **Connect a computer** in Studio, and enter the eight boxes (`ABCD–2345`) in the runner.
+4. Click **Start local engine**. The launcher shows storage checks, download and installation progress, then verifies that the local server answers before showing **Engine running** and an **Open local engine** link. Errors remain visible with the log location. Refreshing the launcher keeps its session. In Studio, choose **Connect a computer** in Studio, and enter the eight boxes (`ABCD–2345`) in the runner.
    Codes expire after ten minutes and can be redeemed once. The computer keeps a separate credential for reconnection.
 5. Review the independent-district staffing explanation and queue a run. Pairing itself never starts a simulation.
 

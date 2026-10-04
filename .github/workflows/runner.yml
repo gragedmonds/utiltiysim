@@ -18,6 +18,7 @@ permissions:
   contents: read
 jobs:
   package:
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     timeout-minutes: 45
     strategy:
       fail-fast: false
@@ -39,6 +40,8 @@ jobs:
       - run: npm ci --prefix packages/town-viewer
       - run: go test ./...
         working-directory: launcher
+      - name: Local server startup checks (no simulation replay)
+        run: uv run pytest tests/test_runner_startup.py -q
       - name: Build and smoke test runtime
         shell: bash
         run: |

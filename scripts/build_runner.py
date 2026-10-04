@@ -9,13 +9,55 @@ import os
 import platform
 import subprocess
 import sys
+import time
 import zipfile
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 
+import httpx
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def smoke_startup(executable, library):
+    """The GUI entry point must work too, not just the simulation self-test."""
+    ready = library / 'startup-ready.json'
+    ready.unlink(missing_ok=True)
+    with (library / 'startup.log').open('w') as log:
+        process = subprocess.Popen([str(executable), '--store', str(library), '--port', '0',
+                                    '--ready-file', str(ready)], cwd=library, stdout=log, stderr=log)
+        try:
+            deadline = time.monotonic() + 45
+            with httpx.Client(timeout=1, trust_env=False) as client:
+                while time.monotonic() < deadline:
+                    if process.poll() is not None:
+                        raise RuntimeError((library / 'startup.log').read_text())
+                    try:
+                        address = urlparse(json.loads(ready.read_text())['url'])
+                        origin = 'http://' + address.netloc
+                        headers = {'Authorization': 'Bearer ' + parse_qs(address.fragment)['token'][0]}
+                        response = client.get(origin + '/local/status', headers=headers)
+                        if response.status_code == 200:
+                            assert response.json()['schemaVersion'] == 'local-status/1.0'
+                            assert client.get(origin + '/').status_code == 200
+                            assert client.get(origin + '/assets/runner.js').status_code == 200
+                            assert client.get(origin + '/local/status').status_code == 401
+                            print('Packaged server startup, UI and authenticated readiness passed.')
+                            return
+                    except (OSError, ValueError, httpx.HTTPError):
+                        pass
+                    time.sleep(.2)
+                raise RuntimeError('Packaged server did not become ready: ' + (library / 'startup.log').read_text())
+        finally:
+            process.terminate()
+            try:
+                process.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait()
+            ready.unlink(missing_ok=True)
 
 
 def main():
@@ -77,6 +119,7 @@ def main():
     library = ROOT / 'build' / 'smoke-library'
     library.mkdir(exist_ok=True)
     subprocess.run([str(executable), '--self-test', str(library)], check=True)
+    smoke_startup(executable, library)
 
 
 if __name__ == '__main__':
