@@ -8,7 +8,10 @@ from __future__ import annotations
 
 from utilsim.config.goals import GOALS
 from utilsim.m2c import scenarios, tables
-from utilsim.m2c.run import EPISODE_MAX, YEAR_DAYS
+from utilsim.m2c.calendar import calendar
+from utilsim.m2c.run import EPISODE_MAX
+
+YEAR_DAYS = calendar().days  # the snapshot's year
 
 GUIDE_VERSION = "engine-guide/1.0"
 MEASURED_ON = "October 2026, one 4-core development container"

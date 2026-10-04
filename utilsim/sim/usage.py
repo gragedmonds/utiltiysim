@@ -8,6 +8,7 @@ Heating and cooling follow the town's seeded weather year (``sim.weather``): eac
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date
 
 import numpy as np
 
@@ -72,12 +73,13 @@ class UsageInputs:
                    np.array([bool((p.get("services") or {}).get("gas")) for p in ps]), col("solarKW"))
 
 
-def monthly_typical_day(u: UsageInputs, cfg) -> dict[str, np.ndarray]:
-    """Arrays shaped (12, n): daily electric load kWh, PV kWh, water m³, gas m³ for a typical day of each month."""
+def monthly_typical_day(u: UsageInputs, cfg, year: int = 2026) -> dict[str, np.ndarray]:
+    """Arrays shaped (12, n): daily electric load kWh, PV kWh, water m³, gas m³ for a typical day of each month of
+    ``year`` (its weather)."""
     n = len(u)
     floor = u.floor_m2
     occ = u.occupants.astype(float)
-    h, c = monthly_degree_days(cfg)
+    h, c = monthly_degree_days(cfg, year=year)
     hdd, cdd = h[:, None], c[:, None]  # mean degrees per day below the heating / above the cooling base
     ua = 0.045 * floor * UA_ERA[u.era]
     fuel = u.heating_fuel
@@ -107,14 +109,22 @@ def monthly_typical_day(u: UsageInputs, cfg) -> dict[str, np.ndarray]:
             "gas": np.round(gas, 5)}
 
 
-def monthly_energy(u: UsageInputs, cfg) -> dict[str, np.ndarray]:
-    """Monthly totals (12, n) per register: electric import/export split hourly against the PV arc, water, gas.
+def month_days(year: int = 2026) -> np.ndarray:
+    """Days in each month of ``year`` (12,)."""
+    return np.array([(date(year + (m == 12), m % 12 + 1, 1) - date(year, m, 1)).days for m in range(1, 13)])
 
-    A per-premise, per-month variation of ±7 % (counter-based) keeps neighbours from looking identical."""
-    m = monthly_typical_day(u, cfg)
+
+def monthly_energy(u: UsageInputs, cfg, year: int = 2026) -> dict[str, np.ndarray]:
+    """Monthly totals (12, n) per register for ``year``: electric import/export split hourly against the PV arc,
+    water, gas.
+
+    A per-premise, per-month variation of ±7 % (counter-based, keyed by the month since January 2026) keeps neighbours
+    from looking identical and one year from repeating the last."""
+    m = monthly_typical_day(u, cfg, year)
     keys = np.array([str_key(x) for x in u.uid], dtype=np.int64)
     noise = 1.0 + 0.07 * hash_normal(cfg.seeds.for_("households"), Purpose.DAILY_NOISE, keys[None, :],
-                                     np.arange(12)[:, None])
+                                     (12 * (year - 2026) + np.arange(12))[:, None])
+    days = month_days(year)
     hours = np.arange(24) + 0.5
     shp = np.array([_shapes(h) for h in hours])
     load_shape = 0.42 + 1.15 * shp[:, 0] + 1.65 * shp[:, 1]
@@ -125,11 +135,11 @@ def monthly_energy(u: UsageInputs, cfg) -> dict[str, np.ndarray]:
     for mo in range(12):
         lh = m["electric"][mo][None, :] * load_shape[:, None]
         ph = m["pv"][mo][None, :] * sun[:, None]
-        imp[mo] = np.maximum(0, lh - ph).sum(0) * DAYS_2026[mo] * noise[mo]
-        exp_[mo] = np.maximum(0, ph - lh).sum(0) * DAYS_2026[mo]
+        imp[mo] = np.maximum(0, lh - ph).sum(0) * days[mo] * noise[mo]
+        exp_[mo] = np.maximum(0, ph - lh).sum(0) * days[mo]
     return {"electric_import": np.round(imp, 3), "electric_export": np.round(exp_, 3),
-            "water": np.round(m["water"] * DAYS_2026[:, None] * noise, 4),
-            "gas": np.round(m["gas"] * DAYS_2026[:, None] * noise, 4)}
+            "water": np.round(m["water"] * days[:, None] * noise, 4),
+            "gas": np.round(m["gas"] * days[:, None] * noise, 4)}
 
 
 def monthly_daily(u: UsageInputs, cfg) -> dict[str, np.ndarray]:

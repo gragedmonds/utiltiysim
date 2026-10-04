@@ -17,7 +17,6 @@ from collections import Counter
 import numpy as np
 
 from utilsim.m2c import network
-from utilsim.m2c.base import date_of
 from utilsim.m2c.run import COLLECTOR_REASON, OUTAGE_REASON, M2CRun
 from utilsim.m2c.views import CAUSES, as_of_t
 
@@ -89,7 +88,7 @@ def outage_followup(run: M2CRun, *, as_of: str | None = None, utility: str | Non
             gasp = {int(p) for p in tw.prem[regs[tw.tech[regs] == "AMI"]].tolist()}
         missed = _missed(run, o, T)
         head = {"outageId": o["id"], "utility": o["utility"], "collectorOutage": o["utility"] == "ami",
-                "day": date_of(int(o["t0"])).isoformat(), "startSeconds": round((o["t0"] - int(o["t0"])) * 86400.0),
+                "day": run.cal.date_of(int(o["t0"])).isoformat(), "startSeconds": round((o["t0"] - int(o["t0"])) * 86400.0),
                 "start": run.iso(o["t0"]), "end": run.iso(o["t1"]), "ongoing": o["t1"] > T,
                 "minutes": round((end - o["t0"]) * 1440.0, 1), "unit": unit}
         mine = []
@@ -123,7 +122,7 @@ def outage_followup(run: M2CRun, *, as_of: str | None = None, utility: str | Non
             rows.append(row)
     start = (max(1, page) - 1) * page_size
     return {"schemaVersion": "m2c-outage-followup/1.0", "simulationId": run.simulation_id,
-            "asOf": date_of(day).isoformat(), "utility": utility, "kind": kind, "status": status, "outages": groups,
+            "asOf": run.cal.date_of(day).isoformat(), "utility": utility, "kind": kind, "status": status, "outages": groups,
             "total": len(rows), "page": max(1, page), "pageSize": page_size, "rows": rows[start:start + page_size]}
 
 
@@ -152,7 +151,7 @@ def collector_groups(run: M2CRun, *, as_of: str | None = None, status: str = "op
         code, label = CAUSES.get(top, ("comm_fail", "Comm fail"))
         prem = sorted({int(tw.prem[c.r]) for c in cases})
         meta = tw.collectors.get(col, {})
-        groups.append({"collectorId": col, "day": date_of(d).isoformat(), "cases": len(cases), "open": len(still),
+        groups.append({"collectorId": col, "day": run.cal.date_of(d).isoformat(), "cases": len(cases), "open": len(still),
                        "caseIds": [c.id for c in cases], "openCaseIds": [c.id for c in still],
                        "premises": len(prem), "streets": sorted({_street(tw.address[p]) for p in prem})[:6],
                        "cause": {"code": code, "label": label, "reasonCode": top}, "reasons": dict(reasons),
@@ -162,6 +161,6 @@ def collector_groups(run: M2CRun, *, as_of: str | None = None, status: str = "op
     meters = Counter(c for c in tw.meter_collector if c)
     start = (max(1, page) - 1) * page_size
     return {"schemaVersion": "m2c-collector-groups/1.0", "simulationId": run.simulation_id,
-            "asOf": date_of(day).isoformat(), "status": status,
+            "asOf": run.cal.date_of(day).isoformat(), "status": status,
             "collectors": [{"collectorId": k, "meters": meters.get(k, 0), **v} for k, v in sorted(tw.collectors.items())],
             "total": len(groups), "page": max(1, page), "pageSize": page_size, "groups": groups[start:start + page_size]}

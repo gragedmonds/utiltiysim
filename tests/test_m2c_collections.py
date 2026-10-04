@@ -12,8 +12,12 @@ from api.index import app
 from utilsim.m2c import catalog as cat
 from utilsim.m2c import collections as colls
 from utilsim.m2c import followup, views
-from utilsim.m2c.base import date_of
-from utilsim.m2c.run import ActionError, M2CRun, parse_day
+from utilsim.m2c.calendar import calendar
+from utilsim.m2c.run import ActionError, M2CRun
+
+CAL = calendar(2026)
+date_of = CAL.date_of
+parse_day = CAL.parse_day
 
 DAY = "2026-08-05"  # the day the analyst works the Collections lists
 D = parse_day(DAY, 0)

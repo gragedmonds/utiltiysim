@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import numpy as np
 
-from utilsim.m2c.base import date_of
 from utilsim.m2c.run import M2CRun
 from utilsim.m2c.views import (
     _row,
@@ -30,7 +29,7 @@ PAGE_MAX = 50
 
 
 def _head(run: M2CRun, day: int, version: str) -> dict:
-    return {"schemaVersion": version, "simulationId": run.simulation_id, "asOf": date_of(day).isoformat()}
+    return {"schemaVersion": version, "simulationId": run.simulation_id, "asOf": run.cal.date_of(day).isoformat()}
 
 
 def _account(run: M2CRun, acct: str, T: float) -> dict:
@@ -55,7 +54,7 @@ def installation(run: M2CRun, installation_id: str, *, as_of: str | None = None,
     if k is None:
         raise KeyError(installation_id)
     day, T = as_of_t(run, as_of)
-    asof = date_of(day).isoformat()
+    asof = run.cal.date_of(day).isoformat()
     rows = [int(r) for r in tw.inst_rows[k]]
     r0 = int(bk.main[k]) if bk.main[k] >= 0 else rows[0]
     p = int(tw.prem[r0])
@@ -93,7 +92,7 @@ def installation(run: M2CRun, installation_id: str, *, as_of: str | None = None,
 
 
 def device_history(run: M2CRun, mi: int, T: float) -> list[dict]:
-    """The devices on meter slot ``mi`` as of ``T``, oldest first: the snapshot's own (in place before 2026), then
+    """The devices on meter slot ``mi`` as of ``T``, oldest first: the snapshot's own (in place before the year), then
     each replacement registered by ``T`` with its install date, initial and removal reads, and who made it (you, or a
     field crew FIELD-n, from a case or an order)."""
     tw = run.town
@@ -136,7 +135,7 @@ def read_document(run: M2CRun, read_id: str, *, as_of: str | None = None, truth:
             "address": tw.address[p], "meterId": rec["meterId"], "registerId": rec["registerId"],
             "case": _row(run, case, T) if case is not None else None,
             "order": order_brief(run, order, T) if order is not None else None,
-            "history": [{"readId": run.read_id(r, j), "readDate": date_of(int(tw.read_day[r, j])).isoformat(),
+            "history": [{"readId": run.read_id(r, j), "readDate": run.cal.date_of(int(tw.read_day[r, j])).isoformat(),
                          "readType": read_type(run, r, j, T), "registerValue": _value(run, r, j, T),
                          "veeStatus": vee_status(run, r, j, T), "cause": missing_cause(run, r, j)}
                         for j in range(12, 0, -1) if run.read_t[r, j] <= T]}
@@ -208,7 +207,7 @@ def _read_entries(run: M2CRun, q: str, T: float, page: int, page_size: int) -> t
         for r in rows[skip: skip + page_size - len(out)].tolist():
             m = j + 1
             out.append({"id": run.read_id(r, m),
-                        "text": f"{date_of(int(tw.read_day[r, m])).isoformat()} · {tw.meter_ids[tw.meter_of[r]]} · "
+                        "text": f"{run.cal.date_of(int(tw.read_day[r, m])).isoformat()} · {tw.meter_ids[tw.meter_of[r]]} · "
                                 f"{tw.address[tw.prem[r]]} · {tw.commodity[r]}"})
         skip = 0
         if len(out) >= page_size:

@@ -23,6 +23,7 @@ from utilsim.m2c import collections as colls
 from utilsim.m2c import contact, fieldwork, followup, guide, lookups, scenarios, tables, trend, views
 from utilsim.m2c import orders as ords
 from utilsim.m2c.base import M2CTown, cached_m2c_town, m2c_town
+from utilsim.m2c.calendar import calendar
 from utilsim.m2c.run import (
     ACTION_TYPES,
     CASE_WORK,
@@ -33,9 +34,7 @@ from utilsim.m2c.run import (
     M2C_GROUPS,
     MAX_SEED,
     ORDER_ACTIONS,
-    YEAR_DAYS,
     M2CRun,
-    parse_day,
     run_seed,
     settings_schema,
     town_seed,
@@ -125,7 +124,7 @@ class Episode(BaseModel):
     scenario: str | None = Field(None, max_length=60, description="The library scenario it came from, if any.")
     from_: str = Field(..., alias="from", description="First day (YYYY-MM-DD, in 2026).")
     to: str | None = Field(None, description="Last day (inclusive); null runs to the end of the year.")
-    ramp: int = Field(0, ge=0, le=365, description="Days over which numeric values slide to the target (0: a step).")
+    ramp: int = Field(0, ge=0, le=366, description="Days over which numeric values slide to the target (0: a step).")
     settings: dict[str, dict[str, Any]] = Field(..., description=f"Run-scoped groups ({', '.join(M2C_GROUPS)}) → "
                                                                  "setting → value or operator.")
 
@@ -601,11 +600,12 @@ def m2c_day(town: str, day: str, m2c: dict) -> tuple[list[dict], dict[str, dict]
     meter-to-cash records that day, so they come from the run with every outage (the one the Workspace shows): a pole
     broken at 01:40 shows as missed AMI reads, comm-fail cases and the bills they hold back."""
     try:
-        d = parse_day(day, -1)
+        cal = calendar()  # the operations day is in the snapshot's year
+        d = cal.parse_day(day, -1)
         outages = m2c.get("outages") or []
         base = {"town": town, "settings": m2c.get("settings"), "actions": m2c.get("actions") or [],
                 "seed": m2c.get("seed"), "episodes": m2c.get("episodes") or []}
-        req = RunRequest(**base, outages=[o for o in outages if parse_day(o.get("day"), YEAR_DAYS) < d])
+        req = RunRequest(**base, outages=[o for o in outages if cal.parse_day(o.get("day"), cal.days) < d])
         full = RunRequest(**base, outages=outages) if len(req.outages) < len(outages) else req
     except ValidationError as exc:
         raise HTTPException(422, orjson.loads(exc.json(include_url=False))) from exc
@@ -729,7 +729,7 @@ def post_dispositions(req: DispositionRequest):
             else DISPOSITION_ACTION.get(d.disposition)
         if not reason:  # what the engine would refuse at 09:00 that day (not raised yet, resolved, backwards, …)
             try:
-                t = parse_day(day, -1) + 9.0 / 24
+                t = run.cal.parse_day(day, -1) + 9.0 / 24
             except ValueError:
                 t = None
             reason = "decidedAt is not a date" if t is None else run.not_open(case, case.id, t) or \

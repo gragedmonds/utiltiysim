@@ -6,14 +6,47 @@ from datetime import date, datetime, timedelta
 from functools import lru_cache
 from zoneinfo import ZoneInfo
 
-HOLIDAYS = {
-    date(2025, 1, 1), date(2025, 2, 17), date(2025, 4, 18), date(2025, 5, 19), date(2025, 7, 1), date(2025, 8, 4),
-    date(2025, 9, 1), date(2025, 10, 13), date(2025, 12, 25), date(2025, 12, 26),
-    date(2026, 1, 1), date(2026, 2, 16), date(2026, 4, 3), date(2026, 5, 18), date(2026, 7, 1), date(2026, 8, 3),
-    date(2026, 9, 7), date(2026, 10, 12), date(2026, 12, 25), date(2026, 12, 28),
-    date(2027, 1, 1), date(2027, 2, 15), date(2027, 3, 26), date(2027, 5, 24), date(2027, 7, 1), date(2027, 8, 2),
-    date(2027, 9, 6), date(2027, 10, 11), date(2027, 12, 27), date(2027, 12, 28),
-}
+
+def _easter(year: int) -> date:
+    """Easter Sunday (Gregorian; anonymous algorithm)."""
+    a, b, c = year % 19, year // 100, year % 100
+    d, e = b // 4, b % 4
+    f = (b + 8) // 25
+    g = (b - f + 1) // 3
+    h = (19 * a + b - d - g + 15) % 30
+    i, k = c // 4, c % 4
+    m = (32 + 2 * e + 2 * i - h - k) % 7
+    n = (a + 11 * h + 22 * m) // 451
+    month, day = divmod(h + m - 7 * n + 114, 31)
+    return date(year, month, day + 1)
+
+
+def _nth_monday(year: int, month: int, n: int) -> date:
+    d = date(year, month, 1)
+    d += timedelta(days=(7 - d.weekday()) % 7)
+    return d + timedelta(weeks=n - 1)
+
+
+@lru_cache(maxsize=64)
+def holidays(year: int) -> frozenset[date]:
+    """Ontario statutory and commonly observed holidays of ``year``: New Year's Day, Family Day, Good Friday,
+    Victoria Day, Canada Day, the Civic Holiday, Labour Day, Thanksgiving, Christmas and Boxing Day; a weekend holiday
+    moves to the next free weekday."""
+    fixed = [date(year, 1, 1), date(year, 7, 1), date(year, 12, 25), date(year, 12, 26)]
+    may25 = date(year, 5, 25)
+    out = {_nth_monday(year, 2, 3),  # Family Day
+           _easter(year) - timedelta(days=2),  # Good Friday
+           may25 - timedelta(days=(may25.weekday() or 7)),  # Victoria Day: the Monday before 25 May
+           _nth_monday(year, 8, 1), _nth_monday(year, 9, 1), _nth_monday(year, 10, 2)}
+    for d in fixed:
+        while d in out or d.weekday() >= 5:
+            d += timedelta(days=1)
+        out.add(d)
+    return frozenset(out)
+
+
+def is_holiday(d: date) -> bool:
+    return d in holidays(d.year)
 
 
 @lru_cache(maxsize=512)
@@ -21,7 +54,7 @@ def business_days(year: int, month: int) -> tuple[date, ...]:
     d = date(year, month, 1)
     out = []
     while d.month == month:
-        if d.weekday() < 5 and d not in HOLIDAYS:
+        if d.weekday() < 5 and not is_holiday(d):
             out.append(d)
         d += timedelta(days=1)
     return tuple(out)

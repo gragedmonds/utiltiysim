@@ -12,8 +12,6 @@ import numpy as np
 from utilsim.m2c import catalog as cat
 from utilsim.m2c import collections as colls
 from utilsim.m2c import views
-from utilsim.m2c.base import date_of
-from utilsim.m2c.registers import MONTH_START
 from utilsim.m2c.run import INF, OFF, M2CRun
 from utilsim.m2c.tables import PHASES, _phase
 
@@ -25,8 +23,8 @@ DUNNING = {"DUNNING_REMINDER": "reminders", "DUNNING_NOTICE": "notices", "DISCON
 
 def episode_json(run: M2CRun) -> list[dict]:
     """The run's episodes with their dates as the viewer sent them."""
-    return [{"id": e["id"], "title": e["title"], "scenario": e.get("scenario"), "from": date_of(e["start"]).isoformat(),
-             "to": date_of(e["end"]).isoformat(), "ramp": e["ramp"], "settings": e["settings"]}
+    return [{"id": e["id"], "title": e["title"], "scenario": e.get("scenario"), "from": run.cal.date_of(e["start"]).isoformat(),
+             "to": run.cal.date_of(e["end"]).isoformat(), "ramp": e["ramp"], "settings": e["settings"]}
             for e in run.episodes]
 
 
@@ -95,10 +93,10 @@ def trend(run: M2CRun, as_of: str | None = None) -> dict:
     release_t = run.release_t[:, 1:]
     months = []
     for m in range(1, 13):
-        start, end_excl = int(MONTH_START[m]), int(MONTH_START[m + 1])
+        start, end_excl = int(run.cal.month_start[m]), int(run.cal.month_start[m + 1])
         if start > day:
-            months.append({"month": m, "label": MONTH_LABELS[m - 1], "start": date_of(start).isoformat(),
-                           "end": date_of(end_excl - 1).isoformat(), "complete": False, "reads": None, "cases": None,
+            months.append({"month": m, "label": MONTH_LABELS[m - 1], "start": run.cal.date_of(start).isoformat(),
+                           "end": run.cal.date_of(end_excl - 1).isoformat(), "complete": False, "reads": None, "cases": None,
                            "cost": None, "billing": None, "collections": None})
             continue
         end_day = min(end_excl - 1, day)
@@ -157,17 +155,17 @@ def trend(run: M2CRun, as_of: str | None = None) -> dict:
             for k, hit in zip(dun_k, win(dun_t).tolist()):
                 if hit and k:
                     counts[k] += 1
-        months.append({"month": m, "label": MONTH_LABELS[m - 1], "start": date_of(start).isoformat(),
-                       "end": date_of(end_day).isoformat(), "complete": end_excl - 1 <= day, "reads": reads,
+        months.append({"month": m, "label": MONTH_LABELS[m - 1], "start": run.cal.date_of(start).isoformat(),
+                       "end": run.cal.date_of(end_day).isoformat(), "complete": end_excl - 1 <= day, "reads": reads,
                        "cases": cases, "cost": cost, "billing": billing,
                        "collections": {**counts, "phases": phases}})
     from utilsim.m2c import contact, fieldwork
 
-    for m, figures in zip(months, contact.monthly(run, day, T, MONTH_START)):
+    for m, figures in zip(months, contact.monthly(run, day, T, run.cal.month_start)):
         m["contact"] = figures
-    for m, figures in zip(months, fieldwork.monthly(run, day, T, MONTH_START)):
+    for m, figures in zip(months, fieldwork.monthly(run, day, T, run.cal.month_start)):
         m["field"] = figures
-    out = {"schemaVersion": TREND_VERSION, "simulationId": run.simulation_id, "asOf": date_of(day).isoformat(),
-           "scenarioDate": c.scenario.date, "episodes": episode_json(run), "months": months}
+    out = {"schemaVersion": TREND_VERSION, "simulationId": run.simulation_id, "asOf": run.cal.date_of(day).isoformat(),
+           "scenarioDate": run.cal.date_of(views.scenario_day(run)).isoformat(), "episodes": episode_json(run), "months": months}
     cache[day] = out
     return out

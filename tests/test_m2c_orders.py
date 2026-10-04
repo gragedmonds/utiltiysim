@@ -12,8 +12,12 @@ from api.index import app
 from utilsim.m2c import catalog as cat
 from utilsim.m2c import lookups, views
 from utilsim.m2c import orders as ords
-from utilsim.m2c.base import date_of
-from utilsim.m2c.run import ActionError, M2CRun, add_bdays
+from utilsim.m2c.calendar import calendar
+from utilsim.m2c.run import ActionError, M2CRun
+
+CAL = calendar(2026)
+add_bdays = CAL.add_bdays
+date_of = CAL.date_of
 
 SLOW = {"process": {"analysts": 0, "rpa_coverage": 0}}  # nothing resolves cases but you (and supervisors, crews)
 LIMIT = 4_500_000
@@ -92,7 +96,7 @@ def field_errors(town, actions: list[dict]) -> dict:
 def test_release_needs_every_required_field(town):
     assert set(field_errors(town, release_of(town, {}))) == set(ords.REQUIRED)
     assert len(ords.REQUIRED) == 13 and not {"responsible", "contactName", "contactPhone"} & set(ords.REQUIRED)
-    assert not ords.validate(form("2026-05-06"), SEAL, 123, ("SM01 · Small Town",))
+    assert not ords.validate(form("2026-05-06"), SEAL, 123, ("SM01 · Small Town",), CAL)
 
 
 @pytest.mark.parametrize(("change", "components", "field"), [
