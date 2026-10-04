@@ -596,6 +596,20 @@ details.schema-group>.schema-field:last-child{margin-bottom:10px}
 .data-tools input[type=date]{font:inherit;font-size:13px;padding:5px 7px;border:1px solid #d7d4e3;border-radius:6px;background:#fff}
 .data-tools .outline-btn{width:auto;margin:0;min-height:34px;padding:6px 12px;font-size:13px}
 .data-controls{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center;margin:0 0 8px}
+.data-connect{border:1px solid #d7d4e3;border-radius:10px;background:#faf9fd;padding:12px 14px;margin:0 0 12px;font-size:13px;color:#3b3650;max-width:100%;box-sizing:border-box}
+.data-connect .connect-head{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.data-connect h3{font-size:15px;margin:0 0 6px}
+.data-connect p{margin:6px 0}
+.data-connect .connect-row{display:grid;grid-template-columns:48px minmax(0,1fr) auto;gap:8px;align-items:center;margin:6px 0}
+.data-connect .connect-row label{font-weight:600;font-size:12px;color:#5d5870}
+.data-connect .connect-row input,.data-connect .connect-row textarea{font:12px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;padding:6px 8px;border:1px solid #d7d4e3;border-radius:6px;background:#fff;min-width:0;width:100%;box-sizing:border-box}
+.data-connect .connect-row .outline-btn{width:auto;margin:0;min-height:30px;padding:4px 10px;font-size:12px}
+.data-connect details{margin:6px 0;border-top:1px solid #ebe8f3;padding-top:6px}
+.data-connect summary{cursor:pointer;font-weight:600}
+.data-connect pre{background:#fff;border:1px solid #ebe8f3;border-radius:6px;padding:8px;overflow:auto;font-size:12px;max-width:100%}
+.data-connect ol{margin:6px 0;padding-left:20px}
+.data-connect code{font-size:12px;word-break:break-all}
+@media (max-width:640px){.data-connect .connect-row{grid-template-columns:minmax(0,1fr) auto}.data-connect .connect-row label{grid-column:1/-1}}
 .data-controls input[type=search]{flex:1 1 220px;min-width:160px;font:inherit;font-size:13px;padding:7px 10px;border:1px solid #d7d4e3;border-radius:7px;background:#fff}
 .data-facet{display:flex;align-items:center;gap:5px;font-size:12px;color:#5d5870;background:#fff;border:1px solid #d7d4e3;border-radius:7px;padding:2px 4px 2px 8px}
 .data-facet select{font:inherit;font-size:12px;border:0;background:none;max-width:200px;color:#2d2840;padding:3px 2px}
@@ -706,11 +720,15 @@ details.schema-group>.schema-field:last-child{margin-bottom:10px}
 .year-bar:not(.starts){border-top-left-radius:0;border-bottom-left-radius:0}
 .year-bar:not(.ends){border-top-right-radius:0;border-bottom-right-radius:0}
 .year-bar:hover,.year-bar:focus-visible{outline:2px solid #2d2840;outline-offset:1px}
+/* A sporadic episode: its window faint and dashed, the days it strikes solid (the bar's label says how many). */
+.year-bar.is-sporadic{background-image:repeating-linear-gradient(90deg,transparent 0 3px,#fff 3px 4px)}
+.year-bar i{position:absolute;top:0;bottom:0;min-width:2px;background:var(--c);border-radius:1px}
 .year-legend{list-style:none;margin:12px 0 0;padding:10px 0 0;border-top:1px solid #efeef4;display:flex;flex-wrap:wrap;gap:6px 18px}
 .year-legend-empty{font-size:12px;color:#737f94;margin:12px 0 0;padding:10px 0 0;border-top:1px solid #efeef4}
 .year-leg{display:flex;align-items:center;gap:7px;border:0;background:none;padding:3px 4px;border-radius:6px;font:inherit;font-size:12px;color:#3d3750;cursor:pointer;min-height:0;text-align:left}
 .year-leg:hover{background:#f0ecfc}
 .year-leg i{width:12px;height:12px;border-radius:3px;flex:none}
+.year-leg i.is-sporadic{background:repeating-linear-gradient(90deg,var(--c) 0 2px,transparent 2px 4px);box-shadow:inset 0 0 0 1px var(--c)}
 .year-leg strong{font-weight:650}
 .year-leg span{color:#8a8497}
 /* Trend charts: white cards, hairline grid, 2px lines, ≤24px columns, a readout on hover or focus and a table twin. */
@@ -728,6 +746,8 @@ details.schema-group>.schema-field:last-child{margin-bottom:10px}
 .yr-tick{font-size:9.5px;fill:#8a8497;font-family:inherit;font-variant-numeric:tabular-nums}
 .yr-line{fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .yr-band{opacity:.13}
+.yr-band.is-sporadic{opacity:.06}
+.yr-strike{fill:none;stroke-width:1.25}
 .yr-run{stroke:#7357d8;stroke-width:1}
 .yr-hit{outline:none;cursor:crosshair}
 .yr-hit:hover,.yr-hit:focus-visible{fill:#7357d814}
@@ -768,6 +788,7 @@ details.schema-group>.schema-field:last-child{margin-bottom:10px}
 .year-sc-pick strong{display:block;font-weight:650}
 .year-sc-pick span,.year-sc.is-coming>span{display:block;color:#737f94;font-size:12px;margin-top:1px}
 .year-sc:hover:not(.is-coming){border-color:#7357d8;background:#faf8ff}
+.year-sc-pick .year-sc-pattern{color:#5d43b8;font-size:11.5px;margin-top:3px}
 .year-sc details{font-size:12px;color:#5d5870;margin-top:4px}
 .year-sc summary{cursor:pointer;color:#5d43b8;width:max-content}
 .year-sc details p{margin:4px 0 0}
@@ -782,6 +803,18 @@ details.schema-group>.schema-field:last-child{margin-bottom:10px}
 .year-f input{font:inherit;font-size:12.5px;padding:5px 7px;border:1px solid #d7d4e3;border-radius:6px;background:#fff;min-width:0;width:100%}
 .year-f-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px}
 .year-f-row .year-f:last-child input{width:64px}
+/* When it strikes: every day, spikes or scattered days. */
+.year-strike{border:0;border-top:1px solid #efeef4;margin:10px 0 0;padding:8px 0 0;min-width:0}
+.year-ep .year-strike legend{font-size:11.5px;letter-spacing:0;text-transform:none;color:#5d5870;font-weight:600;padding:0;margin-bottom:5px}
+.year-seg{display:flex;flex-wrap:wrap;gap:4px}
+.year-seg label{display:inline-flex;align-items:center;gap:5px;border:1px solid #d7d4e3;border-radius:6px;padding:4px 9px;font-size:12px;color:#3d3750;background:#fff;cursor:pointer}
+.year-seg label:has(input:checked){border-color:#7357d8;background:#f0ecfc;color:#4a3aa7;font-weight:600}
+.year-strike input[type=radio],.year-strike input[type=checkbox]{min-height:0;width:14px;height:14px;margin:0;accent-color:#7357d8;flex:none}
+.year-strike-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+.year-range{display:flex;align-items:center;gap:4px;color:#8a8497}
+.year-f .year-range input{flex:1 1 0;width:auto}
+.year-check{display:flex;align-items:center;gap:6px;font-size:12px;color:#3d3750;margin-top:7px;cursor:pointer}
+.year-strike .small-note{margin:6px 0 0}
 .year-settings{width:100%;border-collapse:collapse;margin-top:8px;font-size:12px}
 .year-settings th{text-align:left;font-size:11px;color:#8a8497;font-weight:600;padding:2px 4px;border-bottom:1px solid #efeef4}
 .year-settings td{padding:4px;border-bottom:1px solid #f4f2f8;vertical-align:middle}

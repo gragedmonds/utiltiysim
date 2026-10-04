@@ -48,13 +48,70 @@ export const episodeColor=i=>EPISODE_COLORS[((i%EPISODE_COLORS.length)+EPISODE_C
 export function parseSettingValue(raw){if(typeof raw!=='string')return raw;const s=raw.trim();if(s==='')return undefined;
  if(s==='true')return true;if(s==='false')return false;const op=s.match(/^([*+-])\s*(\d+(?:\.\d+)?)$/);if(op)return op[1]+op[2];
  const n=Number(s);return s!==''&&Number.isFinite(n)?n:s;}
-// A panel draft (dates, ramp and settings rows as typed) as one episode of `year`, or the first thing wrong with it.
+// ---- sporadic episodes -----------------------------------------------------------------------------------------
+// An episode's `pattern` makes it strike only some days of its window: `spikes` (count bursts of length days, one in
+// each equal stretch) or `days` (a share of the days, scattered), each day at a strength (0–1) towards the episode's
+// values. The engine draws the days (the trend's episodes[].hits); this page only edits the pattern and draws them.
+export const STRIKE_KINDS={steady:'Every day',spikes:'Spikes',days:'Scattered days'};
+const pairOf=(v,d)=>v==null?[d,d]:Array.isArray(v)?[v[0],v[1]]:[v,v];
+const pctText=v=>String(Math.round(Number(v)*1000)/10);
+const pct=v=>Math.round(Number(v)*100)+'%';
+const plural=(n,one,many=one+'s')=>`${n} ${Number(n)===1?one:many}`;
+// The "When it strikes" controls as typed (share and strength in %) for an episode's pattern; steady (no pattern)
+// starts the other kinds from a few spikes of 1–2 days or 20% of the days, at full strength, on working days.
+export function strikeDraft(p){const kind=p?.kind==='spikes'||p?.kind==='days'?p.kind:'steady',l=kind==='spikes'?pairOf(p.length,1):[1,2],st=kind==='steady'?[1,1]:pairOf(p.strength,1);
+ return {kind,count:String(kind==='spikes'?p.count??'':4),lenMin:String(l[0]),lenMax:String(l[1]),share:pctText(kind==='days'?p.share:.2),strMin:pctText(st[0]),strMax:pctText(st[1]),workdays:kind==='steady'||p.workdays!==false,independent:kind!=='steady'&&!!p.independent,...(kind!=='steady'&&p.seed?{seed:String(p.seed)}:{})};}
+// The days from `from` to `to` (inclusive) a pattern can strike: Monday to Friday when `workdays` (the engine also
+// skips its holidays).
+export function windowDays(from,to,workdays=true){let n=0;for(let t=Date.parse(from+'T12:00:00Z'),z=Date.parse(to+'T12:00:00Z');t<=z;t+=86400000){const wd=new Date(t).getUTCDay();if(!workdays||(wd!==0&&wd!==6))n++;}return n;}
+// The controls as an episode's `pattern` ({pattern: null} for every day), or the first thing wrong with them, checked as
+// the engine checks them: 1–60 whole spikes of 1–30 whole days (min ≤ max), a share above 0 up to 100%, a strength
+// 0–100% (min ≤ max, max above 0). Share and strength become fractions; the window is `from`–`to`.
+export function draftPattern(s,{from=null,to=null}={}){if(!s||!s.kind||s.kind==='steady')return {pattern:null};if(!(s.kind in STRIKE_KINDS))return {error:'When it strikes is every day, spikes or scattered days.'};
+ const num=v=>String(v??'').trim()===''?NaN:Number(v),whole=(v,lo,hi)=>{const n=num(v);return Number.isInteger(n)&&n>=lo&&n<=hi?n:null;},frac=v=>Number((v/100).toFixed(6)),workdays=s.workdays!==false,out={kind:s.kind};
+ const room=isDay(from)&&isDay(to)?windowDays(from,to,workdays):null,what=workdays?'working days':'days';if(room===0)return {error:`There are no ${what} between the start and the end.`};
+ if(s.kind==='spikes'){const n=whole(s.count,1,60);if(n==null)return {error:'Spikes: how many is a whole number, 1–60.'};if(room!=null&&n>room)return {error:`${plural(n,'spike')} do not fit in ${plural(room,what.slice(0,-1),what)}.`};
+  const l0=whole(s.lenMin,1,30),l1=whole(s.lenMax,1,30);if(l0==null||l1==null)return {error:'Days each is a whole number of days, 1–30.'};if(l0>l1)return {error:'Days each: the first number is more than the second.'};out.count=n;out.length=[l0,l1];}
+ else{const sh=num(s.share);if(!Number.isFinite(sh)||sh<=0||sh>100||frac(sh)<=0)return {error:'Scattered days: the share of days is above 0% and up to 100%.'};out.share=frac(sh);}
+ const a=num(s.strMin),b=num(s.strMax);if(![a,b].every(v=>Number.isFinite(v)&&v>=0&&v<=100))return {error:'Strength is 0–100%.'};if(a>b)return {error:'Strength: the first number is more than the second.'};if(b<=0)return {error:'Strength must reach above 0%.'};
+ out.strength=[frac(a),frac(b)];out.workdays=workdays;out.independent=!!s.independent;if(s.seed)out.seed=String(s.seed);return {pattern:out};}
+// A pattern in a few words, for the legend and the bar's label: "6 spikes · 1–2 d", "30% of working days", " · mixed"
+// when each setting draws its own strength, and the days struck once the trend has them.
+export function patternLabel(p,struck=null){if(!p)return '';const [l0,l1]=pairOf(p.length,1);
+ return (p.kind==='spikes'?`${plural(p.count,'spike')} · ${l0===l1?l0:`${l0}–${l1}`} d`:`${pctText(p.share)}% of ${p.workdays===false?'days':'working days'}`)+(p.independent?' · mixed':'')+(struck==null?'':` · ${plural(struck,'day')} struck`);}
+// A library scenario's sporadic templates in one line ('' for a steady scenario): "Sporadic: 6 spikes of 1–2 days over 6 months".
+const overLabel=days=>days==null?'to the year end':days<14?`over ${plural(days,'day')}`:days<60?`over ${Math.round(days/7)} weeks`:`over ${Math.round(days/30.44)} months`;
+export function scenarioPatternLine(sc){const lines=(sc?.episodes||[]).filter(t=>t?.pattern).map(t=>{const p=t.pattern,[l0,l1]=pairOf(p.length,1);
+  return `${p.kind==='spikes'?`${plural(p.count,'spike')} of ${l0===l1?plural(l0,'day'):`${l0}–${l1} days`}`:`${pctText(p.share)}% of ${p.workdays===false?'days':'working days'}`} ${overLabel(t.durationDays??null)}${p.independent?', a different mix each day':''}`;});
+ return lines.length?'Sporadic: '+lines.join('; '):'';}
+// The days each sporadic episode strikes, from the trend's episodes (matched by id): id → [[day, strength 0–1]]. Only
+// for an episode whose title, window and pattern are the trend's own, so a trend of an older shape is not drawn.
+const shapeOf=p=>JSON.stringify([p.kind,p.kind==='spikes'?[Number(p.count),pairOf(p.length,1).map(Number)]:Number(p.share),pairOf(p.strength,1).map(Number),p.workdays!==false,!!p.independent,p.seed||null]);
+export function episodeStrikes(trend,episodes){const out=new Map(),mine=new Map((episodes||[]).filter(ep=>ep?.pattern&&ep.id).map(ep=>[ep.id,ep]));
+ for(const t of trend?.episodes||[]){const ep=mine.get(t?.id);if(!ep||!t.pattern||!Array.isArray(t.hits))continue;
+  if(t.from!==ep.from||t.to!==(ep.to||yearEnd(dayYear(ep.from)||FIRST_YEAR))||(t.title!=null&&t.title!==String(ep.title||ep.id).slice(0,120))||shapeOf(t.pattern)!==shapeOf(ep.pattern))continue;
+  out.set(ep.id,t.hits.filter(h=>Array.isArray(h)&&isDay(h[0])).map(([d,v])=>[d,Number(v)]));}
+ return out;}
+// A struck day as text: "Head end down · Fri 13 Feb 2026 · strength 89%".
+export const strikeTitle=(ep,day,v)=>`${ep.title} · ${longDay(day)} · strength ${pct(v)}`;
+// The "When it strikes" controls of the panel's draft `k` (strikeDraft as typed): every day, spikes or scattered days.
+function strikeFields(s,k){const id=`yr-strike-${k}`,num=(p,label,min,max,step=1)=>`<input type="number" data-k="${k}" data-p="${p}" min="${min}" max="${max}" step="${step}" value="${e(s[p])}"${label?` aria-label="${e(label)}"`:''}>`;
+ const kinds=Object.entries(STRIKE_KINDS).map(([v,l])=>`<label><input type="radio" name="${id}" data-k="${k}" data-p="kind" value="${v}"${s.kind===v?' checked':''}>${e(l)}</label>`).join('');
+ const range=(a,b,label,unit,min,max,step)=>`<div class="year-f"><span aria-hidden="true">${e(label)}</span><span class="year-range">${num(a,`${label}, from`,min,max,step)}<span aria-hidden="true">–</span>${num(b,`${label}, to`,min,max,step)}${unit?`<span aria-hidden="true">${unit}</span>`:''}</span></div>`;
+ const own=s.kind==='spikes'?`<div class="year-strike-row"><label class="year-f">How many spikes ${num('count','',1,60)}</label>${range('lenMin','lenMax','Days each','',1,30)}</div>`
+  :s.kind==='days'?`<div class="year-strike-row"><label class="year-f">Share of the days, % ${num('share','',0,100,'any')}</label></div>`:'';
+ const more=s.kind==='steady'?'<p class="small-note">The settings hold every day from the start to the end.</p>'
+  :`${own}<div class="year-strike-row">${range('strMin','strMax','Strength','%',0,100,'any')}</div><label class="year-check"><input type="checkbox" data-k="${k}" data-p="workdays"${s.workdays!==false?' checked':''}> Working days only</label><label class="year-check"><input type="checkbox" data-k="${k}" data-p="independent"${s.independent?' checked':''}> A different mix each day</label><p class="small-note">${s.kind==='spikes'?'One spike in each equal stretch of the window.':'Scattered over the window.'} Strength: how far a struck day goes towards the episode's values (100%: all the way). A different mix: each setting its own strength each day. The engine draws the days from the run's seed.</p>`;
+ return `<fieldset class="year-strike"><legend>When it strikes</legend><div class="year-seg">${kinds}</div>${more}</fieldset>`;}
+// A panel draft (dates, ramp and settings rows as typed, and `strike`: the "When it strikes" controls, else the draft's
+// own `pattern`) as one episode of `year`, or the first thing wrong with it.
 export function draftEpisode(d,year=FIRST_YEAR){if(!isDay(d.from)||!d.from.startsWith(year+'-'))return {error:`Start must be a ${year} date.`};
  const to=d.to?String(d.to).trim():'';if(to&&(!isDay(to)||!to.startsWith(year+'-')))return {error:`End must be a ${year} date, or blank for the year end.`};if(to&&to<d.from)return {error:'End is before the start.'};
  const ramp=d.ramp===''||d.ramp==null?0:Number(d.ramp);if(!Number.isInteger(ramp)||ramp<0)return {error:'Ramp is a whole number of days.'};
  const settings={};for(const [g,keys] of Object.entries(d.settings||{}))for(const [k,raw] of Object.entries(keys||{})){const v=parseSettingValue(raw);if(v===undefined)return {error:`${g}.${k} needs a value.`};(settings[g]||={})[k]=v;}
  if(!Object.keys(settings).length)return {error:'An episode changes at least one setting.'};
- return {episode:{title:String(d.title||'').trim()||d.scenario||'Episode',scenario:d.scenario||null,from:d.from,to:to&&to<yearEnd(year)?to:null,ramp,settings}};}
+ const pr=draftPattern(d.strike||strikeDraft(d.pattern),{from:d.from,to:to||yearEnd(year)});if(pr.error)return {error:pr.error};
+ return {episode:{title:String(d.title||'').trim()||d.scenario||'Episode',scenario:d.scenario||null,from:d.from,to:to&&to<yearEnd(year)?to:null,ramp,settings,...(pr.pattern?{pattern:pr.pattern}:{})}};}
 // Settings as rows for the panel: [group, key, value as text].
 export const settingRows=settings=>Object.entries(settings||{}).flatMap(([g,keys])=>Object.entries(keys||{}).map(([k,v])=>[g,k,v==null?'':String(v)]));
 // ---- the trend charts ------------------------------------------------------------------------------------------
@@ -122,11 +179,16 @@ export function describeChart(model){const n=model.tops.filter(v=>v!=null).lengt
  return `${model.title}, ${model.unit}. ${n} month${n===1?'':'s'}, ${MONTHS[model.tops.findIndex(v=>v!=null)]} to ${MONTHS[li]} ${modelYear(model)}${model.partial[li]?`, ${MONTHS[li]} to the run date only`:''}. Latest, ${readout(model,li)}.`;}
 export const GEOM={w:320,h:150,left:44,right:10,top:10,bottom:22};
 // Inline SVG for one chart: hairline grid and ticks, episode bands, the run date, the marks, and one hit target per month.
-export function chartSvg(model,{asOf=null,episodes=[],id='yr',year=modelYear(model)}={}){const g=GEOM,pw=g.w-g.left-g.right,ph=g.h-g.top-g.bottom,slot=pw/12,cal=calendarModel(year),end=yearEnd(year),f=n=>Number(n.toFixed(2));
+// A sporadic episode's band is fainter, with a thin tick at the top for each day it strikes (`strikes`: episodeStrikes).
+export function chartSvg(model,{asOf=null,episodes=[],strikes=null,id='yr',year=modelYear(model)}={}){const g=GEOM,pw=g.w-g.left-g.right,ph=g.h-g.top-g.bottom,slot=pw/12,cal=calendarModel(year),end=yearEnd(year),f=n=>Number(n.toFixed(2));
  const x=i=>f(g.left+(i+.5)*slot),y=v=>f(g.top+ph-(v/model.max)*ph),dayX=day=>{if(!day||day>end)return g.left+pw;const mi=Number(day.slice(5,7))-1,d=Number(day.slice(8,10));return f(g.left+(mi+(d-1)/cal[mi].days)*slot);};
  const grid=model.ticks.map(t=>`<line class="yr-grid" x1="${g.left}" x2="${g.w-g.right}" y1="${y(t)}" y2="${y(t)}"/><text class="yr-tick" x="${g.left-6}" y="${f(y(t)+3)}" text-anchor="end">${e(fmtTick(t,model.fmt))}</text>`).join('');
  const xl=MONTHS.map((m,i)=>`<text class="yr-tick" x="${x(i)}" y="${g.h-7}" text-anchor="middle">${m[0]}</text>`).join('');
- const bands=episodes.map((ep,k)=>{const a=dayX(ep.from),b=ep.to&&ep.to<end?dayX(addDays(ep.to,1)):g.left+pw;return b<=a?'':`<rect class="yr-band" x="${a}" y="${g.top}" width="${f(b-a)}" height="${ph}" fill="${episodeColor(k)}"><title>${e(ep.title)} · ${e(rangeLabel(ep))}</title></rect>`;}).join('');
+ const dayMid=day=>{const mi=Number(day.slice(5,7))-1,d=Number(day.slice(8,10));return f(g.left+(mi+(d-.5)/cal[mi].days)*slot);};let lane=0;
+ const bands=episodes.map((ep,k)=>{const a=dayX(ep.from),b=ep.to&&ep.to<end?dayX(addDays(ep.to,1)):g.left+pw;if(b<=a)return '';const c=episodeColor(k),hits=ep.pattern?strikes?.get?.(ep.id)||null:null,what=`${e(ep.title)} · ${e(rangeLabel(ep))}${ep.pattern?' · '+e(patternLabel(ep.pattern,hits?hits.length:null)):''}`;
+  const band=`<rect class="yr-band${ep.pattern?' is-sporadic':''}" x="${a}" y="${g.top}" width="${f(b-a)}" height="${ph}" fill="${c}"><title>${what}</title></rect>`;if(!ep.pattern)return band;
+  const y0=g.top+Math.min(lane++,3)*7,d=(hits||[]).filter(([day])=>day.startsWith(year+'-')).map(([day])=>`M${dayMid(day)} ${y0}V${y0+6}`).join('');
+  return band+(d?`<path class="yr-strike" d="${d}" stroke="${c}"><title>${what}</title></path>`:'');}).join('');
  const run=asOf&&asOf.startsWith(year+'-')?`<line class="yr-run" x1="${dayX(asOf)}" x2="${dayX(asOf)}" y1="${g.top}" y2="${g.top+ph}"><title>Run date ${e(asOf)}</title></line>`:'';
  let marks='';
  if(model.kind==='line'){for(const s of model.series){const d=linePath(s.values,x,y);if(!d)continue;marks+=`<path class="yr-line" d="${d}" stroke="${s.color}"/>`;const li=model.latest;if(li>=0&&s.values[li]!=null)marks+=`<circle cx="${x(li)}" cy="${y(s.values[li])}" r="6" fill="#fff"/>`+(model.partial[li]?`<circle cx="${x(li)}" cy="${y(s.values[li])}" r="3" fill="#fff" stroke="${s.color}" stroke-width="2"/>`:`<circle cx="${x(li)}" cy="${y(s.values[li])}" r="4" fill="${s.color}"/>`);}}
@@ -169,7 +231,7 @@ export function yearsBar(m,{confirm=false,opening=null,loaded=false}={}){if(!m)r
 // `onYear(year)` hears a year switched to or opened (the Studio's other pages and the map follow the active year).
 export function installYearPage({getClient,getSimulation=()=>null,getEngineState=()=>({state:'idle',towns:[]}),toast=()=>{},onDate=null,onYear=null,root=document.getElementById('year-root')}){
  const ui={library:null,trend:null,busy:false,recalc:false,opened:false,error:'',panel:null,confirmClear:false,confirmContinue:false,opening:null,models:[],agent:null,applying:false};
- let closePops=null,closeAgent=null,agentClient=null;
+ let closePops=null,closeAgent=null,agentClient=null,strikes=new Map();
  const header=root?.ownerDocument?.querySelector('.studio-header');
  const positionGuide=()=>{if(header)root.style.setProperty('--year-guide-top',header.getBoundingClientRect().bottom+'px');};
  if(header&&globalThis.ResizeObserver)new ResizeObserver(positionGuide).observe(header);
@@ -207,9 +269,9 @@ export function installYearPage({getClient,getSimulation=()=>null,getEngineState
   if(err?.status===422){for(const a of added)m.removeEpisode(a.id);m.setAsOf(previous);ui.panel={...p,error:engineRefusal(err)};toast('The engine refused the episode.');await load();}
   else if(!err&&onDate){try{await onDate(end);}catch(e){toast('Year updated; the operations day could not refresh: '+e.message);}}}
  async function saveEdit(){const m=client(),p=ui.panel;if(!m||p?.kind!=='edit')return;const r=draftEpisode(p.draft,yearOf());if(r.error){p.error=r.error;render();return;}
-  const was=m.episodes.find(x=>x.id===p.id);if(!was)return;const before=JSON.parse(JSON.stringify(was));m.updateEpisode(p.id,r.episode);
+  const was=m.episodes.find(x=>x.id===p.id);if(!was)return;const before=JSON.parse(JSON.stringify(was));m.updateEpisode(p.id,{pattern:null,...r.episode});
   ui.panel=null;toast(`Recalculating the year with ${r.episode.title}…`);const err=await load({recalc:true});
-  if(err?.status===422){m.updateEpisode(p.id,before);ui.panel={...p,error:engineRefusal(err)};await load();}}
+  if(err?.status===422){m.updateEpisode(p.id,{pattern:null,...before});ui.panel={...p,error:engineRefusal(err)};await load();}}
  async function remove(id){const m=client();if(!m)return;const ep=m.episodes.find(x=>x.id===id);if(!m.removeEpisode(id))return;ui.panel=null;toast(`Recalculating the year without ${ep.title}…`);await load({recalc:true});}
  async function clearAll(){const m=client();if(!m)return;const n=m.episodes.length;m.clearEpisodes();ui.confirmClear=false;ui.panel=null;toast(`Recalculating the year without ${n} episode${n===1?'':'s'}…`);await load({recalc:true});}
  function viewDay(day){const m=client();if(!day)return;Promise.resolve(onDate?onDate(day):null).then(()=>{if(m&&m.asOf!==day)m.setAsOf(day);load();});}
@@ -225,32 +287,38 @@ export function installYearPage({getClient,getSimulation=()=>null,getEngineState
   }});}
  // ---- rendering ------------------------------------------------------------------------------------------------
  function head(){const m=client(),yr=yearOf(),asOf=ui.trend?.asOf||m?.asOf||'',n=frozen(m)?0:m?.episodes.length||0;
-  return `<header class="year-head"><div><span class="section-kicker">RUN · ${yr}</span><h1 class="has-pop">Command Center<button type="button" class="schema-info" aria-label="About the Command Center" aria-expanded="false" title="About the Command Center">i</button><div class="schema-pop" role="note"><p>The simulated year, day by day. Click a day to inflict a scenario from the engine's library starting that day; the engine replays the whole year with that episode and the charts below show its mark, month by month.</p><p>Episodes are run input like your actions and settings: kept in this browser, sent with every request, applied by the engine. Settings in an episode are absolute (a number, true/false) or relative to the base (*0.5, +2, -1); a ramp slides a number there over that many days.</p></div></h1></div><div class="year-tools">${m&&!frozen(m)&&yr===FIRST_YEAR?`<button type="button" class="outline-btn" data-act="voice-tweak">● Talk through a tweak</button>`:""}<label>Run date <input type="date" id="year-asof" min="${yr}-01-01" max="${yr}-12-31" value="${e(asOf)}"></label>${n?ui.confirmClear?`<span class="year-confirm">Clear ${n} episode${n===1?'':'s'}? <button type="button" class="small-link" data-act="clear-yes">Yes, clear</button><button type="button" class="small-link" data-act="clear-no">Keep</button></span>`:`<button type="button" class="small-link" data-act="clear">Clear all episodes</button>`:''}</div></header>`;}
+  return `<header class="year-head"><div><span class="section-kicker">RUN · ${yr}</span><h1 class="has-pop">Command Center<button type="button" class="schema-info" aria-label="About the Command Center" aria-expanded="false" title="About the Command Center">i</button><div class="schema-pop" role="note"><p>The simulated year, day by day. Click a day to inflict a scenario from the engine's library starting that day; the engine replays the whole year with that episode and the charts below show its mark, month by month.</p><p>Episodes are run input like your actions and settings: kept in this browser, sent with every request, applied by the engine. Settings in an episode are absolute (a number, true/false) or relative to the base (*0.5, +2, -1); a ramp slides a number there over that many days.</p><p>An episode can strike only some days of its period: a few spikes, or scattered days. The engine draws those days from the run's seed; the calendar shows the period faint and the days struck solid.</p></div></h1></div><div class="year-tools">${m&&!frozen(m)&&yr===FIRST_YEAR?`<button type="button" class="outline-btn" data-act="voice-tweak">● Talk through a tweak</button>`:""}<label>Run date <input type="date" id="year-asof" min="${yr}-01-01" max="${yr}-12-31" value="${e(asOf)}"></label>${n?ui.confirmClear?`<span class="year-confirm">Clear ${n} episode${n===1?'':'s'}? <button type="button" class="small-link" data-act="clear-yes">Yes, clear</button><button type="button" class="small-link" data-act="clear-no">Keep</button></span>`:`<button type="button" class="small-link" data-act="clear">Clear all episodes</button>`:''}</div></header>`;}
  function years(){return yearsBar(client(),{confirm:ui.confirmContinue,opening:ui.opening,loaded:!!ui.trend});}
  function status(){const m=client(),t=ui.trend,n=m?.episodes.length||0,eps=`${n} episode${n===1?'':'s'}`;
   if(ui.error)return `<p class="year-status" role="status"><span class="year-error">${e(ui.error)}</span></p>`;
   if(!t)return `<p class="year-status" role="status">${ui.busy?(m?.readOnly?'Loading saved trends…':ui.opened?`Opening ${yearOf()} on ${yearOf()-1}'s close… (the engine replays each year, 10–30 s)`:ui.recalc?'Recalculating the year… (5–15 s)':'Asking the engine… (a cold engine replays the year first, 5–15 s)'):''}</p>`;
   return `<p class="year-status" role="status">${m?.readOnly?'Saved results':'Engine data'} as of ${e(t.asOf)} · ${eps}${ui.busy?(ui.recalc?' · Recalculating the year…':' · Updating…'):''}</p>`;}
- function month(mo,asOf,eps){const spans=episodeSpans(eps,mo),selected=ui.panel?.kind==='inflict'?ui.panel.day:null,cells=[];
+ // A sporadic episode's bar is its window, faint and dashed, with the days it strikes solid (once the trend has them);
+ // a struck day's cell says which episode strikes it and how hard.
+ function month(mo,asOf,eps){const spans=episodeSpans(eps,mo),selected=ui.panel?.kind==='inflict'?ui.panel.day:null,cells=[],struck=new Map();
+  for(const ep of eps)for(const [day,v] of strikes.get(ep.id)||[])if(day>=mo.start&&day<=mo.end)(struck.get(day)||struck.set(day,[]).get(day)).push([ep,v]);
   for(let i=0;i<mo.offset;i++)cells.push('<span class="year-pad"></span>');
-  for(let d=1;d<=mo.days;d++){const day=mo.start.slice(0,8)+String(d).padStart(2,'0'),wd=(mo.offset+d-1)%7,cls=['year-day',asOf&&day<=asOf?'is-past':'',day===asOf?'is-today':'',wd>=5?'is-weekend':'',day===selected?'is-selected':''].filter(Boolean).join(' ');
-   cells.push(`<button type="button" class="${cls}" data-day="${day}" aria-label="${e(longDay(day))}${day===asOf?', the run date':''}"${day===selected?' aria-pressed="true"':''}>${d}</button>`);}
-  const bars=spans.map(s=>{const ep=eps[s.index];return `<button type="button" class="year-bar${s.startsHere?' starts':''}${s.endsHere?' ends':''}" data-ep="${e(ep.id)}" style="left:${((s.from-1)/mo.days*100).toFixed(2)}%;width:${((s.to-s.from+1)/mo.days*100).toFixed(2)}%;top:${s.lane*6}px;background:${episodeColor(s.index)}" title="${e(ep.title)} · ${e(rangeLabel(ep))}" aria-label="Edit ${e(ep.title)}, ${e(rangeLabel(ep))}"></button>`;}).join('');
+  for(let d=1;d<=mo.days;d++){const day=mo.start.slice(0,8)+String(d).padStart(2,'0'),wd=(mo.offset+d-1)%7,hit=struck.get(day),cls=['year-day',asOf&&day<=asOf?'is-past':'',day===asOf?'is-today':'',wd>=5?'is-weekend':'',day===selected?'is-selected':'',hit?'has-strike':''].filter(Boolean).join(' ');
+   cells.push(`<button type="button" class="${cls}" data-day="${day}" aria-label="${e(longDay(day))}${day===asOf?', the run date':''}${hit?e(hit.map(([ep,v])=>`, ${ep.title} strikes at ${pct(v)}`).join('')):''}"${hit?` title="${e(hit.map(([ep,v])=>strikeTitle(ep,day,v)).join('\n'))}"`:''}${day===selected?' aria-pressed="true"':''}>${d}</button>`);}
+  const bars=spans.map(s=>{const ep=eps[s.index],c=episodeColor(s.index),n=s.to-s.from+1,hits=ep.pattern?strikes.get(ep.id)||null:null;
+   const marks=hits?hits.filter(([d])=>d>=mo.start&&d<=mo.end).map(([d,v])=>{const i=Number(d.slice(8,10))-s.from;return i<0||i>=n?'':`<i style="left:${(i/n*100).toFixed(2)}%;width:${(100/n).toFixed(2)}%" title="${e(strikeTitle(ep,d,v))}"></i>`;}).join(''):'';
+   const what=ep.pattern?patternLabel(ep.pattern,hits?hits.length:null):'',said=ep.pattern?`, sporadic: ${hits?`strikes ${hits.length} day${hits.length===1?'':'s'}`:'strikes some days'}`:'';
+   return `<button type="button" class="year-bar${s.startsHere?' starts':''}${s.endsHere?' ends':''}${ep.pattern?' is-sporadic':''}" data-ep="${e(ep.id)}" style="left:${((s.from-1)/mo.days*100).toFixed(2)}%;width:${(n/mo.days*100).toFixed(2)}%;top:${s.lane*6}px;${ep.pattern?`--c:${c};background-color:${c}59`:`background:${c}`}" title="${e(ep.title)} · ${e(rangeLabel(ep))}${what?' · '+e(what):''}" aria-label="Edit ${e(ep.title)}, ${e(rangeLabel(ep))}${e(said)}">${marks}</button>`;}).join('');
   return `<div class="year-month"><h2>${mo.label}</h2><div class="year-grid">${WEEKDAYS.map(w=>`<span class="year-wd" aria-hidden="true">${w}</span>`).join('')}${cells.join('')}</div><div class="year-strip" style="height:${Math.max(1,spans.length)*6+2}px">${bars}</div></div>`;}
  function legend(eps){if(!eps.length)return '<p class="year-legend-empty">No episodes yet. Click a day to inflict a scenario from that date.</p>';
-  return `<ul class="year-legend" aria-label="Episodes">${eps.map((ep,i)=>`<li><button type="button" class="year-leg" data-ep="${e(ep.id)}" aria-label="Edit ${e(ep.title)}"><i style="background:${episodeColor(i)}"></i><strong>${e(ep.title)}</strong><span>${e(rangeLabel(ep))}${ep.ramp?` · ramp ${ep.ramp} d`:''}</span></button></li>`).join('')}</ul>`;}
+  return `<ul class="year-legend" aria-label="Episodes">${eps.map((ep,i)=>{const hits=ep.pattern?strikes.get(ep.id):null;return `<li><button type="button" class="year-leg" data-ep="${e(ep.id)}" aria-label="Edit ${e(ep.title)}"><i${ep.pattern?` class="is-sporadic" style="--c:${episodeColor(i)}"`:` style="background:${episodeColor(i)}"`}></i><strong>${e(ep.title)}</strong><span>${e(rangeLabel(ep))}${ep.ramp?` · ramp ${ep.ramp} d`:''}${ep.pattern?' · '+e(patternLabel(ep.pattern,hits?hits.length:null)):''}</span></button></li>`;}).join('')}</ul>`;}
  function calendar(){const m=client(),yr=yearOf(),asOf=ui.trend?.asOf||m?.asOf||'',eps=m?.episodes||[];
   return `<section class="year-calendar" aria-label="Calendar ${yr}"><div class="year-months">${calendarModel(yr).map(mo=>month(mo,asOf,eps)).join('')}</div>${legend(eps)}</section>`;}
  function card(model,k){const m=client(),asOf=ui.trend?.asOf||m?.asOf||null,eps=m?.episodes||[],li=model.latest,one=model.series.length===1;
   const when=li<0?'':model.partial[li]?`${MONTHS[li]} to ${shortDay(model.months[li].end)}`:MONTHS[li],latest=li<0?'<strong>—</strong><span>no figures yet</span>':one?`<strong>${e(fmtValue(model.series[0].values[li],model.fmt))}</strong><span>${e(when)}</span>`:`<span>latest · ${e(when)}</span>`;
   const leg=one?'':`<ul class="yr-legend">${model.series.map(s=>`<li><i class="${model.kind==='line'?'is-line':''}" style="background:${s.color}"></i><span>${e(s.label)}</span>${li>=0&&s.values[li]!=null?`<strong>${e(fmtValue(s.values[li],model.fmt))}</strong>`:''}</li>`).join('')}</ul>`;
-  return `<article class="yr-card" data-chart="${k}"><header><div><h3>${e(model.title)}</h3><p>${e(model.unit)}</p></div><div class="yr-latest">${latest}</div></header>${chartSvg(model,{asOf,episodes:eps,id:'yr-'+model.id,year:yearOf()})}<div class="yr-tip" hidden></div>${leg}<details class="yr-table"><summary>Table</summary>${chartTable(model)}</details></article>`;}
+  return `<article class="yr-card" data-chart="${k}"><header><div><h3>${e(model.title)}</h3><p>${e(model.unit)}</p></div><div class="yr-latest">${latest}</div></header>${chartSvg(model,{asOf,episodes:eps,strikes,id:'yr-'+model.id,year:yearOf()})}<div class="yr-tip" hidden></div>${leg}<details class="yr-table"><summary>Table</summary>${chartTable(model)}</details></article>`;}
  function trends(){const t=ui.trend;if(!t)return `<section class="year-trends" aria-label="Trends"><div class="yr-empty">${ui.busy?'':'No trend yet.'}</div></section>`;
   ui.models=CHARTS.map(c=>chartModel(c,t.months));return `<section class="year-trends${ui.busy?' is-stale':''}" aria-label="Trends">${ui.models.map(card).join('')}</section>`;}
  function library(p){const lib=ui.library;if(!lib)return `<p class="small-note">${ui.error?e(ui.error):'Loading the scenario library…'}</p>`;
   return (lib.groups||[]).map(g=>{const own=(lib.scenarios||[]).filter(s=>s.group===g.id),soon=(lib.coming||[]).filter(s=>s.group===g.id);if(!own.length&&!soon.length)return '';
-   return `<h3>${e(g.title)}</h3>${own.map(s=>`<div class="year-sc"><button type="button" class="year-sc-pick" data-sc="${e(s.id)}"><strong>${e(s.title)}</strong><span>${e(s.description||'')}</span></button>${s.watch?`<details><summary>What to watch</summary><p>${e(s.watch)}</p></details>`:''}${s.tags?.length?`<span class="year-tags">${s.tags.map(t=>`<em>${e(t)}</em>`).join('')}</span>`:''}</div>`).join('')}${soon.map(s=>`<div class="year-sc is-coming" aria-disabled="true"><strong>${e(s.title)}<em class="year-soon">coming soon</em></strong><span>${e(s.description||'')}</span></div>`).join('')}`;}).join('')||'<p class="small-note">The library is empty.</p>';}
- function draftForm(drafts,{single=false}={}){const yr=yearOf();return drafts.map((d,k)=>`<fieldset class="year-ep"><legend>${single?'Episode':`Episode ${k+1}`}</legend><label class="year-f">Title <input type="text" data-k="${k}" data-f="title" value="${e(d.title||'')}" maxlength="80"></label><div class="year-f-row"><label class="year-f">Start <input type="date" data-k="${k}" data-f="from" min="${yr}-01-01" max="${yr}-12-31" value="${e(d.from||'')}"></label><label class="year-f">End <input type="date" data-k="${k}" data-f="to" min="${yr}-01-01" max="${yr}-12-31" value="${e(d.to||'')}" placeholder="year end"></label><label class="year-f">Ramp <input type="number" data-k="${k}" data-f="ramp" min="0" max="365" step="1" value="${e(d.ramp??0)}"> days</label></div><table class="year-settings"><thead><tr><th>Setting</th><th>Value</th></tr></thead><tbody>${settingRows(d.settings).map(([g,key,v])=>`<tr><td><span>${e(prettyKey(g))}</span><code>${e(g)}.${e(key)}</code></td><td><input type="text" data-k="${k}" data-g="${e(g)}" data-key="${e(key)}" value="${e(v)}" aria-label="${e(g)}.${e(key)}"></td></tr>`).join('')||'<tr><td colspan="2">No settings.</td></tr>'}</tbody></table></fieldset>`).join('')+'<p class="small-note">A number or true/false sets the value for the episode; *0.5, +2 or -1 change the base value. Blank end: to the year end.</p>';}
+   return `<h3>${e(g.title)}</h3>${own.map(s=>`<div class="year-sc"><button type="button" class="year-sc-pick" data-sc="${e(s.id)}"><strong>${e(s.title)}</strong><span>${e(s.description||'')}</span>${scenarioPatternLine(s)?`<span class="year-sc-pattern">${e(scenarioPatternLine(s))}</span>`:''}</button>${s.watch?`<details><summary>What to watch</summary><p>${e(s.watch)}</p></details>`:''}${s.tags?.length?`<span class="year-tags">${s.tags.map(t=>`<em>${e(t)}</em>`).join('')}</span>`:''}</div>`).join('')}${soon.map(s=>`<div class="year-sc is-coming" aria-disabled="true"><strong>${e(s.title)}<em class="year-soon">coming soon</em></strong><span>${e(s.description||'')}</span></div>`).join('')}`;}).join('')||'<p class="small-note">The library is empty.</p>';}
+ function draftForm(drafts,{single=false}={}){const yr=yearOf();return drafts.map((d,k)=>`<fieldset class="year-ep"><legend>${single?'Episode':`Episode ${k+1}`}</legend><label class="year-f">Title <input type="text" data-k="${k}" data-f="title" value="${e(d.title||'')}" maxlength="80"></label><div class="year-f-row"><label class="year-f">Start <input type="date" data-k="${k}" data-f="from" min="${yr}-01-01" max="${yr}-12-31" value="${e(d.from||'')}"></label><label class="year-f">End <input type="date" data-k="${k}" data-f="to" min="${yr}-01-01" max="${yr}-12-31" value="${e(d.to||'')}" placeholder="year end"></label><label class="year-f">Ramp <input type="number" data-k="${k}" data-f="ramp" min="0" max="365" step="1" value="${e(d.ramp??0)}"> days</label></div>${strikeFields(d.strike||=strikeDraft(d.pattern),k)}<table class="year-settings"><thead><tr><th>Setting</th><th>Value</th></tr></thead><tbody>${settingRows(d.settings).map(([g,key,v])=>`<tr><td><span>${e(prettyKey(g))}</span><code>${e(g)}.${e(key)}</code></td><td><input type="text" data-k="${k}" data-g="${e(g)}" data-key="${e(key)}" value="${e(v)}" aria-label="${e(g)}.${e(key)}"></td></tr>`).join('')||'<tr><td colspan="2">No settings.</td></tr>'}</tbody></table></fieldset>`).join('')+'<p class="small-note">A number or true/false sets the value for the episode; *0.5, +2 or -1 change the base value. Blank end: to the year end.</p>';}
  function panel(){const p=ui.panel;if(!p)return '';const m=client();
   if(p.kind==='agent')return '<aside class="year-panel year-agent-panel" aria-label="Talk through a tweak"><div id="year-agent-root"></div></aside>';
   if(p.kind==='inflict'){const sc=p.scenario?scenarioOf(p.scenario):null;
@@ -261,6 +329,7 @@ export function installYearPage({getClient,getSimulation=()=>null,getEngineState
   const keepAgent=ui.panel?.kind==='agent'&&m===agentClient?root.querySelector('#year-agent-root'):null;
   if(!keepAgent){closeAgent?.();closeAgent=null;agentClient=null;}
   if(!m){root.innerHTML=`<section class="fiori-shell"><div class="fiori-empty ws-empty">${engineNotice(getEngineState(),undefined,'#/year','The Year')}</div></section>`;root.querySelector('[data-ws="retry"]')?.addEventListener('click',()=>location.reload());return;}
+  strikes=episodeStrikes(ui.trend,m.episodes||[]);
   root.innerHTML=`<div class="year-layout${ui.panel?' has-panel':''}"><main class="year-main">${head()}${years()}${status()}${calendar()}${trends()}</main>${panel()}</div>`;
   if(keepAgent)root.querySelector('#year-agent-root')?.replaceWith(keepAgent);else if(ui.panel?.kind==='agent')mountAgent();
   if(m.readOnly){root.querySelector('#year-asof').disabled=true;for(const b of root.querySelectorAll('[data-day],[data-ep]')){b.disabled=true;b.removeAttribute('data-day');b.removeAttribute('data-ep');}const pop=root.querySelector('.schema-pop');if(pop)pop.innerHTML='<p>Saved engine results through '+e(m.asOf)+'. Episodes and trends are archived with this run. Open a live engine to change inputs or replay another date.</p>';const empty=root.querySelector('.year-legend-empty');if(empty)empty.textContent='No episodes in this saved run.';}
@@ -280,8 +349,8 @@ export function installYearPage({getClient,getSimulation=()=>null,getEngineState
   if(b.dataset.act==='continue-no'){ui.confirmContinue=false;render();root.querySelector('[data-act="continue"]')?.focus();return;}
   if(b.dataset.act==='continue-yes'){continueYear();return;}
   if(b.dataset.day){ui.panel={kind:'inflict',day:b.dataset.day,scenario:null,draft:null,error:''};ui.confirmClear=false;render();return;}
-  if(b.dataset.ep){const ep=m?.episodes.find(x=>x.id===b.dataset.ep);if(!ep)return;ui.panel={kind:'edit',id:ep.id,draft:{...JSON.parse(JSON.stringify(ep)),to:ep.to||''},error:''};render();return;}
-  if(b.dataset.sc){const p=ui.panel,sc=scenarioOf(b.dataset.sc);if(p?.kind!=='inflict'||!sc)return;p.scenario=sc.id;p.draft=episodeDates(sc,p.day).map(d=>({...d,to:d.to||''}));p.error='';render();return;}
+  if(b.dataset.ep){const ep=m?.episodes.find(x=>x.id===b.dataset.ep);if(!ep)return;ui.panel={kind:'edit',id:ep.id,draft:{...JSON.parse(JSON.stringify(ep)),to:ep.to||'',strike:strikeDraft(ep.pattern)},error:''};render();return;}
+  if(b.dataset.sc){const p=ui.panel,sc=scenarioOf(b.dataset.sc);if(p?.kind!=='inflict'||!sc)return;p.scenario=sc.id;p.draft=episodeDates(sc,p.day).map(d=>({...d,to:d.to||'',strike:strikeDraft(d.pattern)}));p.error='';render();return;}
   switch(b.dataset.act){
    case 'voice-tweak':if(frozen(m)||yearOf()!==FIRST_YEAR)return;ui.agent=null;ui.panel={kind:'agent',day:ui.panel?.day||m?.asOf||`${yearOf()}-03-31`};ui.confirmClear=false;render();return;
    case 'close':ui.panel=null;render();return;
@@ -294,7 +363,9 @@ export function installYearPage({getClient,getSimulation=()=>null,getEngineState
    case 'clear-no':ui.confirmClear=false;render();return;
    case 'clear-yes':clearAll();return;}});
  root?.addEventListener('input',ev=>{const el=ev.target,p=ui.panel;if(!p||el.dataset.k==null)return;const d=p.kind==='edit'?p.draft:p.draft?.[Number(el.dataset.k)];if(!d)return;
-  if(el.dataset.f)d[el.dataset.f]=el.value;else if(el.dataset.g!=null){((d.settings||={})[el.dataset.g]||={})[el.dataset.key]=el.value;}});
+  if(el.dataset.f)d[el.dataset.f]=el.value;else if(el.dataset.g!=null){((d.settings||={})[el.dataset.g]||={})[el.dataset.key]=el.value;}
+  else if(el.dataset.p){const s=d.strike||=strikeDraft(d.pattern);s[el.dataset.p]=el.type==='checkbox'?el.checked:el.value;
+   if(el.dataset.p==='kind'){render();root.querySelector(`[data-k="${el.dataset.k}"][data-p="kind"][value="${el.value}"]`)?.focus();}}});
  root?.addEventListener('change',ev=>{const el=ev.target;if(el.id==='year-asof'){const day=el.value;if(!day)return;viewDay(day);}});
  root?.addEventListener('pointermove',ev=>{const hit=ev.target.closest?.('.yr-hit');if(hit)showTip(hit);else hideTip(ev.target.closest?.('.yr-card'));});
  root?.addEventListener('pointerleave',()=>{for(const c of root.querySelectorAll('.yr-card'))hideTip(c);});

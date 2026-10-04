@@ -167,3 +167,20 @@ test('years run to 2030, and each year has its own date bounds (2028 has 29 Febr
  const {episodeDates}=await import('../dist/m2c.js');assert.equal(episodeDates({id:'x',episodes:[{startOffset:0,durationDays:90,settings:{}}]},'2028-12-01')[0].to,'2028-12-31','clamped at its own year end');
  assert.equal(episodeDates({id:'x',episodes:[{startOffset:0,durationDays:2,settings:{}}]},'2028-02-28')[0].to,'2028-02-29');
 });
+
+test('a sporadic episode keeps its own copy of its pattern; a steady one has no pattern key, and an edit can set or drop it',async()=>{
+ const {episodeDates}=await import('../dist/m2c.js'),log=[],store=memory();
+ const pattern={kind:'spikes',count:6,length:[1,2],strength:[0.7,1.0]};
+ const sc={id:'headend_hiccups',title:'Head-end hiccups',episodes:[{title:'Head end down',startOffset:0,durationDays:182,ramp:0,settings:{reading:{ami_missed_read:0.9}},pattern},{title:'Steady',startOffset:0,durationDays:9,settings:{reading:{ami_missed_read:0.9}}}]};
+ const [spiky,steady]=episodeDates(sc,'2026-01-12');
+ assert.deepEqual(spiky,{title:'Head end down',scenario:'headend_hiccups',from:'2026-01-12',to:'2026-07-12',ramp:0,settings:{reading:{ami_missed_read:0.9}},pattern:{kind:'spikes',count:6,length:[1,2],strength:[0.7,1.0]}},'the template\'s pattern comes along as it is');
+ spiky.pattern.length[1]=9;assert.equal(pattern.length[1],2,'a copy, not the library\'s own');assert.equal('pattern' in steady,false,'a steady template gives no pattern key');
+ const m=new EngineM2C({api:'/api',townRef:'small_town',townId:'town-1',storage:store,fetchImpl:fakeEngine(log)});m.setAsOf('2026-07-15');
+ const src={...steady,pattern:{kind:'days',share:0.3,strength:[0.2,1],independent:true}},a=m.addEpisode(src),b=m.addEpisode(steady);
+ src.pattern.share=0.9;assert.equal(a.pattern.share,0.3,'addEpisode copies the pattern');assert.equal('pattern' in b,false);assert.equal('pattern' in m.addEpisode({...steady,pattern:null}),false,'never a null pattern');
+ await m.summary();assert.deepEqual(log.at(-1).body.episodes.map(x=>x.pattern?.kind??null),['days',null,null],'sent with the run');
+ assert.equal(m.updateEpisode(a.id,{ramp:2}).pattern.kind,'days','a patch without pattern keeps it');
+ assert.equal('pattern' in m.updateEpisode(a.id,{pattern:null,title:'Steady now'}),false,'pattern: null makes it steady again');
+ const p={kind:'spikes',count:2,length:[1,1],strength:[1,1],workdays:false,independent:false};m.updateEpisode(b.id,{pattern:p});p.count=5;assert.equal(m.episodes.find(x=>x.id===b.id).pattern.count,2,'an edit stores a copy');
+ assert.deepEqual(new EngineM2C({townRef:'small_town',townId:'town-1',storage:store}).episodes.map(x=>x.pattern?.kind??null),[null,'spikes',null],'persisted');
+});

@@ -380,6 +380,19 @@
             "title": "From",
             "type": "string"
           },
+          "pattern": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Sporadic: strike only some days of the window. {kind: 'spikes', count, length: [min, max]} for a few bursts, or {kind: 'days', share} for a share of the days; strength: [min, max] (0–1) how hard each day; independent: true draws it per setting.",
+            "title": "Pattern"
+          },
           "ramp": {
             "default": 0,
             "maximum": 366.0,
@@ -431,6 +444,19 @@
           "id": {
             "title": "Id",
             "type": "string"
+          },
+          "pattern": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Sporadic: strike only some days of the window. {kind: 'spikes', count, length: [min, max]} for a few bursts, or {kind: 'days', share} for a share of the days; strength: [min, max] (0–1) how hard each day; independent: true draws it per setting.",
+            "title": "Pattern"
           },
           "ramp": {
             "default": 0,
@@ -1972,7 +1998,7 @@
         "type": "object"
       },
       "Episode": {
-        "description": "A scenario inflicted from a day: setting overrides in force from ``from`` to ``to`` (inclusive; null = the\nyear's end), sliding from the base to the target over ``ramp`` days. A value is a number or boolean, or an\noperator on the value in force before the episode: ``\"*0.5\"``, ``\"+2\"``, ``\"-1\"`` (numeric settings).",
+        "description": "A scenario inflicted from a day: setting overrides in force from ``from`` to ``to`` (inclusive; null = the\nyear's end), sliding from the base to the target over ``ramp`` days. A value is a number or boolean, or an\noperator on the value in force before the episode: ``\"*0.5\"``, ``\"+2\"``, ``\"-1\"`` (numeric settings). With a\n``pattern`` it strikes only some of those days (sporadic spikes, or scattered days).",
         "properties": {
           "from": {
             "description": "First day (YYYY-MM-DD, in the run's year).",
@@ -1990,6 +2016,17 @@
               }
             ],
             "title": "Id"
+          },
+          "pattern": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EpisodePattern"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Sporadic: the days it strikes within its window."
           },
           "ramp": {
             "default": 0,
@@ -2053,6 +2090,128 @@
         "title": "Episode",
         "type": "object"
       },
+      "EpisodePattern": {
+        "additionalProperties": false,
+        "description": "Sporadic instead of steady: the episode strikes only some days between ``from`` and ``to``, drawn from the\nrun's seed (utilsim/m2c/run.py ``_pattern``). ``spikes``: ``count`` bursts of ``length`` days, one in each equal\nstretch of the window; ``days``: a ``share`` of the window's days, scattered. Each day struck has a ``strength``:\nhow far the settings go from the value in force towards the episode's (1: all the way; a whole number rounds up\nwith chance its fraction).",
+        "properties": {
+          "count": {
+            "anyOf": [
+              {
+                "maximum": 60.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "spikes: how many bursts in the window.",
+            "title": "Count"
+          },
+          "independent": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Draw the strength per setting each day (default false): a bit of everything, some days one team, some days another.",
+            "title": "Independent"
+          },
+          "kind": {
+            "description": "spikes: a few bursts; days: a share of the days.",
+            "enum": [
+              "spikes",
+              "days"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "length": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "spikes: days per burst, or [min, max] (1–30; default 1).",
+            "title": "Length"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Draw the days from this instead of the run's seed (the same on every run).",
+            "title": "Seed"
+          },
+          "share": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 1.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "days: the share of the window's days struck.",
+            "title": "Share"
+          },
+          "strength": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How hard each day strikes, or [min, max] (0–1; default 1).",
+            "title": "Strength"
+          },
+          "workdays": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Strike working days only (default true); a spike then runs over consecutive working days.",
+            "title": "Workdays"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "EpisodePattern",
+        "type": "object"
+      },
       "ExistingEpisode": {
         "additionalProperties": false,
         "properties": {
@@ -2065,6 +2224,19 @@
             "minLength": 1,
             "title": "Id",
             "type": "string"
+          },
+          "pattern": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Sporadic: strike only some days of the window. {kind: 'spikes', count, length: [min, max]} for a few bursts, or {kind: 'days', share} for a share of the days; strength: [min, max] (0–1) how hard each day; independent: true draws it per setting.",
+            "title": "Pattern"
           },
           "ramp": {
             "default": 0,
@@ -5424,6 +5596,150 @@
         "summary": "Post Daily"
       }
     },
+    "/api/m2c/export/{table}.csv": {
+      "get": {
+        "description": "One CSV page of a linked table (``run`` from POST /api/m2c/table/link): header on every page; the total, page\ncount and next page in the ``X-Total-Rows``/``X-Pages`` and ``Link`` headers.",
+        "operationId": "get_export_csv_api_m2c_export__table__csv_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "table",
+            "required": true,
+            "schema": {
+              "title": "Table",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The link's run token.",
+            "in": "query",
+            "name": "run",
+            "required": true,
+            "schema": {
+              "description": "The link's run token.",
+              "title": "Run",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pageSize",
+            "required": false,
+            "schema": {
+              "default": 5000,
+              "maximum": 5000,
+              "minimum": 1,
+              "title": "Pagesize",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Export Csv"
+      }
+    },
+    "/api/m2c/export/{table}.json": {
+      "get": {
+        "description": "``m2c-export/1.0``: one page of a linked table as JSON, each row an object keyed by column; ``total``,\n``pages`` and ``next`` (the next page's URL, null on the last).",
+        "operationId": "get_export_json_api_m2c_export__table__json_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "table",
+            "required": true,
+            "schema": {
+              "title": "Table",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The link's run token.",
+            "in": "query",
+            "name": "run",
+            "required": true,
+            "schema": {
+              "description": "The link's run token.",
+              "title": "Run",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pageSize",
+            "required": false,
+            "schema": {
+              "default": 1000,
+              "maximum": 5000,
+              "minimum": 1,
+              "title": "Pagesize",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Export Json"
+      }
+    },
     "/api/m2c/fieldwork": {
       "post": {
         "description": "``m2c-fieldwork/1.0``: the field crews' year to ``asOf``: work orders created, completed, open and overdue by\nprogramme (customer emergencies, service orders, meter maintenance, preventative maintenance, capital\nconstruction) and work type, on-time and emergency response, crew utilisation and overtime, labour and materials\ncost, and the maintenance plan's compliance. Orders follow the year (collections, moves, VEE field visits, the\ncontact centre's calls, the year's outages, meter ages and the town's assets); ``settings.field`` (and episodes)\nshape the crews and the work.",
@@ -5871,6 +6187,43 @@
           }
         },
         "summary": "Post Table Csv"
+      }
+    },
+    "/api/m2c/table/link": {
+      "post": {
+        "description": "``m2c-table-link/1.0``: links another system (Celonis, Power BI, Excel, a script) can GET for this table of\nthis run, with the same selection (search, filters, sort, columns) and run date: ``paths.csv`` and\n``paths.json`` (relative to the API root; add ``page``), the rows that match and the pages at each page size.\n``token`` is null (``tooLarge``) when the run's inputs do not fit a link: POST the request body to\n/api/m2c/table.csv or /api/m2c/table instead.",
+        "operationId": "post_table_link_api_m2c_table_link_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TableRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Table Link"
       }
     },
     "/api/m2c/tables": {

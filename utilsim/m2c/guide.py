@@ -69,7 +69,8 @@ CAPABILITIES = (
      "where": ["Workspace › Field Work", "Data › Device changes"]},
     {"id": "scenarios", "title": "Scenarios and episodes",
      "text": f"A library of {len(scenarios.SCENARIOS)} situations you inflict from any day of the calendar; each is "
-             "dated setting changes, optionally ramped, absolute or relative to the base; the engine replays the year "
+             "dated setting changes, optionally ramped, absolute or relative to the base, steady or sporadic (a few "
+             "spikes, or a share of the days, each as hard as its drawn strength); the engine replays the year "
              "with each day's settings and every page shows the result.",
      "where": ["Year"]},
     {"id": "data", "title": "Data tables",

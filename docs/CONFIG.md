@@ -352,9 +352,9 @@ How periodic billing reads succeed or fail, by meter technology.
 
 | Field | Reaches | Default | Range | Unit | Description | How it changes the results |
 |---|---|---|---|---|---|---|
-| `ami_missed_read` | year | `0.012` | 0–0.5 |  | AMI billing reads still missing after the head-end retry window. *Affects: comm-fail exceptions, estimates.* | AMI reads still missing after retries: estimates, missing-read cases and estimate streaks. |
-| `amr_missed_read` | year | `0.03` | 0–0.5 |  | Drive-by reads missed (no signal, street skipped). | Drive-by reads missed: estimates and missing-read cases on AMR routes. |
-| `manual_no_access` | year | `0.06` | 0–0.8 |  | Manual reads with no access (locked gate, dog, meter inside). *Affects: no-access exceptions, consecutive estimates.* | Walked reads with no access: estimates, streaks and field reads. |
+| `ami_missed_read` | year | `0.012` | 0–1 |  | AMI billing reads still missing after the head-end retry window (1: a day the head end is down). *Affects: comm-fail exceptions, estimates.* | AMI reads still missing after retries: estimates, missing-read cases and estimate streaks. |
+| `amr_missed_read` | year | `0.03` | 0–1 |  | Drive-by reads missed (no signal, street skipped; 1: the van does not go out). | Drive-by reads missed: estimates and missing-read cases on AMR routes. |
+| `manual_no_access` | year | `0.06` | 0–1 |  | Manual reads with no access (locked gate, dog, meter inside; 1: nobody walks the route). *Affects: no-access exceptions, consecutive estimates.* | Walked reads with no access: estimates, streaks and field reads. |
 | `no_access_repeat` | year | `0.4` | 0–1 |  | (advanced) Chance a missed manual read is missed again the next month. | Chance a no-access meter is missed again next month: longer estimate streaks and more field reads. |
 | `read_cost_ami` | year | `0.1` | 0–20 | $ | (advanced) Cost of one AMI read. | Cost of one AMI read. Prices reading; no read changes. |
 | `read_cost_amr` | year | `0.35` | 0–20 | $ | (advanced) Cost of one drive-by read. | Cost of one drive-by read. Prices reading in the cost totals; no read changes. |

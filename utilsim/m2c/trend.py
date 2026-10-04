@@ -22,10 +22,19 @@ DUNNING = {"DUNNING_REMINDER": "reminders", "DUNNING_NOTICE": "notices", "DISCON
 
 
 def episode_json(run: M2CRun) -> list[dict]:
-    """The run's episodes with their dates as the viewer sent them."""
-    return [{"id": e["id"], "title": e["title"], "scenario": e.get("scenario"), "from": run.cal.date_of(e["start"]).isoformat(),
-             "to": run.cal.date_of(e["end"]).isoformat(), "ramp": e["ramp"], "settings": e["settings"]}
-            for e in run.episodes]
+    """The run's episodes with their dates as the viewer sent them; a sporadic one with its ``pattern`` and the days
+    it strikes, ``hits``: ``[date, strength]`` (the mean over its settings when drawn per setting)."""
+    out = []
+    for e in run.episodes:
+        j = {"id": e["id"], "title": e["title"], "scenario": e.get("scenario"),
+             "from": run.cal.date_of(e["start"]).isoformat(), "to": run.cal.date_of(e["end"]).isoformat(),
+             "ramp": e["ramp"], "settings": e["settings"]}
+        if e.get("pattern"):
+            j["pattern"] = e["pattern"]
+            j["hits"] = [[run.cal.date_of(d).isoformat(), round(sum(s) / len(s), 3) if isinstance(s, list) else s]
+                         for d, s in e["hits"]]
+        out.append(j)
+    return out
 
 
 def _r2(x) -> float:

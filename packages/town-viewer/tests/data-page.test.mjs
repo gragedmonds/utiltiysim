@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {parseDataRoute,dataHash,fmtCell,linkTarget,invoiceAccount,stitchCsv,pageCount,csvName,loadHidden,saveHidden,facetMarkup,sourceLabel,INLINE_FACETS,CSV_PAGE} from '../dist/data-page.js';
+import {parseDataRoute,dataHash,fmtCell,linkTarget,invoiceAccount,stitchCsv,pageCount,csvName,loadHidden,saveHidden,facetMarkup,sourceLabel,INLINE_FACETS,CSV_PAGE,connectLinks,connectMarkup,withoutPage} from '../dist/data-page.js';
 import {EngineM2C} from '../dist/m2c.js';
 
 test('data routes name a table and round-trip',()=>{
@@ -69,4 +69,27 @@ test('the client asks the engine for a table page with the run context, and for 
  assert.deepEqual(log.at(-1).body,{town:'small_town',actions:[],table:'reads',page:2,pageSize:100,sort:'consumption',desc:true,filters:{commodity:'water'},search:'piper',settings:{process:{analysts:2}},asOf:'2026-08-05'});
  assert.equal(page.table,'reads');
  const csv=await m.tableCsv({table:'reads',page:1,pageSize:5000});assert.equal(csv,'a,b\n1,2\n');assert.equal(log.at(-1).body.pageSize,5000);assert.equal(log.at(-1).body.asOf,'2026-08-05');
+});
+
+test('connect: the engine links as absolute URLs and the panel that explains them', () => {
+  const link = {paths: {csv: 'm2c/export/cases.csv?run=r1.abc&page=1&pageSize=5000', json: 'm2c/export/cases.json?run=r1.abc&page=1&pageSize=1000'},
+    total: 7200, pages: {csv: 2, json: 8}, pageSize: {csv: 5000, json: 1000}, tooLarge: false};
+  const hosted = connectLinks(link, '/api', 'https://studio.example/#/data/cases');
+  assert.equal(hosted.csv, 'https://studio.example/api/m2c/export/cases.csv?run=r1.abc&page=1&pageSize=5000');
+  assert.equal(connectLinks(link, 'http://127.0.0.1:8010/api/', 'https://studio.example/').json,
+    'http://127.0.0.1:8010/api/m2c/export/cases.json?run=r1.abc&page=1&pageSize=1000');
+  assert.equal(withoutPage(hosted.csv), 'https://studio.example/api/m2c/export/cases.csv?run=r1.abc&pageSize=5000');
+  const html = connectMarkup(link, {apiBase: '/api', origin: 'https://studio.example/', title: 'Cases', asOf: '2026-10-31',
+    columns: [{key: 'caseId', kind: 'id'}, {key: 'queue', kind: 'text'}], body: {town: 'small_town', table: 'cases'}});
+  assert.match(html, /Connect another system to Cases/);
+  assert.match(html, /id="connect-csv" readonly value="https:\/\/studio\.example\/api\/m2c\/export\/cases\.csv\?run=r1\.abc&amp;page=1&amp;pageSize=5000"/);
+  assert.match(html, /7,200 rows: 2 CSV pages of up to 5,000 rows, or 8 JSON pages of up to 1,000/);
+  assert.match(html, /<code>caseId<\/code> as the primary key/);
+  assert.match(html, /&quot;pageSize&quot;: 5000/);  // the POST body (escaped), with its page
+  assert.doesNotMatch(html, /<details open><summary>POST/);
+  // Too large for a link: no links, the POST instructions open.
+  const big = connectMarkup({...link, paths: null, token: null, tooLarge: true}, {apiBase: '/api', origin: 'https://studio.example/', title: 'Cases', body: {town: 'x'}});
+  assert.doesNotMatch(big, /connect-csv/);
+  assert.match(big, /too large to put in a link/);
+  assert.match(big, /<details open><summary>POST the request/);
 });
