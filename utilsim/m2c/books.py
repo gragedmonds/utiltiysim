@@ -142,22 +142,35 @@ class Books:
             sm = np.array([items[k][5] if len(items[k]) > 5 else items[k][1] - 1 for k in ks])
             rows = self.main[i]
             comm = str(tw.commodity[rows[0]])
+            t0, t1 = run.read_t[rows, sm], run.read_t[rows, m]
+            if any(len(items[k]) > 6 for k in ks):  # a carried document: its own period
+                t0 = np.array([items[k][6] if len(items[k]) > 6 else t0[j] for j, k in enumerate(ks)])
+                t1 = np.array([items[k][7] if len(items[k]) > 6 else t1[j] for j, k in enumerate(ks)])
             _, sub, tax = bl.charges(tariff, comm, np.array([items[k][3] for k in ks]),
-                                     np.array([items[k][4] for k in ks]), run.read_t[rows, sm], run.read_t[rows, m],
-                                     self.change, pct, self.export_row[i] >= 0)
+                                     np.array([items[k][4] for k in ks]), t0, t1, self.change, pct,
+                                     self.export_row[i] >= 0)
             for j, k in enumerate(ks):
                 out[k] = (float(sub[j]), float(tax[j]), round(float(sub[j] + tax[j]), 2))
         return out
 
     def lines(self, doc: dict) -> list[dict]:
         run, tw = self.run, self.run.town
-        i, m = doc["inst"], doc["month"]
+        i = doc["inst"]
         rows = self.main[[i]]
+        t0, t1 = self.period(doc)
         comps, _, _ = bl.charges(tw.tariffs.get(doc["rate"], {}), str(tw.commodity[rows[0]]), np.array([doc["qImp"]]),
-                                 np.array([doc["qExp"]]), run.read_t[rows, doc.get("from", m - 1)], run.read_t[rows, m],
-                                 self.change,
+                                 np.array([doc["qExp"]]), np.array([t0]), np.array([t1]), self.change,
                                  run.cfg.billing.rate_change_pct, np.array([self.export_row[i] >= 0]))
         return bl.lines(comps, 0)
+
+    def period(self, doc: dict) -> tuple[float, float]:
+        """When the document's period starts and ends (read times; a document carried from last year keeps its
+        own)."""
+        c = doc.get("carried")
+        if c is not None:
+            return c["t0"], c["t1"]
+        r, m = int(self.main[doc["inst"]]), doc["month"]
+        return float(self.run.read_t[r, doc.get("from", m - 1)]), float(self.run.read_t[r, m])
 
     def mark(self, rows, m: int) -> None:
         for i in self.run.town.inst_of[np.atleast_1d(rows)].tolist():
@@ -257,6 +270,15 @@ class Books:
         i, m = doc["inst"], doc["month"]
         doc["reversed"] = t
         qi, qe = doc["qImp"], doc["qExp"]
+        carried = doc.get("carried")
+        if carried is not None:  # last year's bill: its truth and expected quantities came with it
+            if checked:
+                qi, qe = carried["qTruth"]
+            elif estimate:
+                qi, qe = carried["qExpected"]
+            rate = rate or doc["rate"]
+            ((sub, tax, total),) = self.compute([(i, m, rate, qi, qe, 0, carried["t0"], carried["t1"])])
+            return self._reissue(doc, t, rate, qi, qe, sub, tax, total, estimate, checked)
         if checked:
             sm = np.array([doc.get("from", m - 1)])
             ti, te = self.quantities(np.array([i]), np.array([m]), run.truth, sm=sm)
@@ -267,12 +289,18 @@ class Books:
             qi, qe = est[0], (est[1] if len(est) > 1 else 0.0)
         rate = rate or doc["rate"]
         ((sub, tax, total),) = self.compute([(i, m, rate, qi, qe, doc.get("from", m - 1))])
+        return self._reissue(doc, t, rate, qi, qe, sub, tax, total, estimate, checked)
+
+    def _reissue(self, doc: dict, t: float, rate: str, qi: float, qe: float, sub: float, tax: float, total: float,
+                 estimate: bool, checked: bool) -> dict:
+        i, m = doc["inst"], doc["month"]
         new = {**doc, "k": len(self.docs), "rate": rate, "qImp": qi, "qExp": qe, "subtotal": sub, "tax": tax,
                "total": total, "created": t, "released": None, "reversed": None, "version": doc["version"] + 1,
                "invoice": -1, "replaces": doc["k"], "estimated": bool(estimate or (doc.get("estimated") and not checked)),
                "rebilledOnEstimate": estimate, **({"checkRead": True} if checked else {})}
         self.docs.append(new)
-        self.doc_of[i, m] = new["k"]
+        if doc.get("carried") is None or self.doc_of[i, m] == doc["k"]:
+            self.doc_of[i, m] = new["k"]
         self.release(new, t + 0.001)
         return new
 
@@ -361,20 +389,28 @@ class Books:
             self.collections.issue(new)
 
     def account(self, doc: dict) -> str:
+        if doc.get("carried") is not None:
+            return doc["carried"]["account"]
         return self.run.town.contract_at(int(self.main[doc["inst"]]), int(np.floor(self.run.read_t[
             self.main[doc["inst"]], doc.get("from", doc["month"] - 1)])))[1]
 
     def doc_id(self, doc: dict) -> str:
+        c = doc.get("carried")
+        if c is not None:
+            return c["id"] + (f"-v{doc['version']}" if doc["version"] > 1 else "")
         tw = self.run.town
         stamp = self.run.date_of(int(tw.read_day[self.main[doc["inst"]], doc["month"]])).strftime("%Y%m")
         return f"BD-{tw.inst_ids[doc['inst']]}-{stamp}" + (f"-v{doc['version']}" if doc["version"] > 1 else "")
 
     # ---- payments and collections (day by day with the run) ------------------------------------------------------
-    def start_collections(self) -> None:
-        """Payments, dunning and collections work per account (utilsim/m2c/collections.py), from the first day."""
+    def start_collections(self, opening=None) -> None:
+        """Payments, dunning and collections work per account (utilsim/m2c/collections.py), from the first day;
+        ``opening(collections)`` first puts in a closed year's accounts and scheduled events."""
         from utilsim.m2c.collections import Collections
 
         self.collections = Collections(self.run)
+        if opening is not None:
+            opening(self.collections)
         self.collections.start()
 
     def collect(self) -> None:

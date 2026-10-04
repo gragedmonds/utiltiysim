@@ -72,6 +72,7 @@ import numpy as np
 
 from utilsim.core.ids import str_key
 from utilsim.core.rng import Purpose, normalize_seed
+from utilsim.m2c.calendar import FIRST_YEAR
 from utilsim.m2c.run import M2CRun
 
 FIELD_VERSION = "m2c-fieldwork/1.0"
@@ -1159,8 +1160,10 @@ def fieldwork(run: M2CRun) -> FieldWork:
     eng.respond()
     b = eng.b
     orders = sorted(b.orders, key=lambda o: (o.created, o.release, o.k))
-    for n, o in enumerate(orders, start=1):
-        o.id = f"WO-{n:06d}"
+    # A later year's orders carry its year (an order carried from last year keeps its id).
+    prefix = "WO-" if run.cal.year == FIRST_YEAR else f"WO-{run.cal.year % 100:02d}-"
+    for n, o in enumerate((o for o in orders if not o.id), start=1):
+        o.id = f"{prefix}{n:06d}"
     by_k = {o.k: o for o in orders}
     for o in orders:  # a finding's repair names the inspection (or new service) that raised it
         if o.parent >= 0:

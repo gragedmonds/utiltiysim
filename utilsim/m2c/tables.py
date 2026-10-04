@@ -1167,7 +1167,8 @@ def b_year_incidents(c) -> list[list]:
     return _rows_to_cols(YEAR_INCIDENTS, rows)
 
 
-STATUS_LABEL = {"planned": "Planned", "open": "Open", "in_progress": "In progress", "completed": "Completed"}
+STATUS_LABEL = {"planned": "Planned", "open": "Open", "in_progress": "In progress", "completed": "Completed",
+                "cancelled": "Called off"}
 WORK_ORDERS = (Col("orderId", "Work order", "id", search=True), Col("type", "Work", facet=True, search=True),
                Col("program", "Programme", facet=True), Col("crew", "Crew", facet=True),
                Col("crewId", "Crew id", search=True), Col("priority", "Priority", "int", facet=True),

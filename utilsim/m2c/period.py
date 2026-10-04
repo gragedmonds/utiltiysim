@@ -134,6 +134,7 @@ def window(run: M2CRun, since: str, as_of: str | None = None) -> dict:
                         "released": len(released), "billed": round(sum(d["total"] for d in released), 2),
                         "invoices": len(invs), "invoiced": round(sum(inv["total"] for inv in invs), 2),
                         "paid": int(paid), "collected": round(collected, 2), "dunning": dunning,
-                        "overdueAtStart": overdue(S) if d0 > 0 else 0.0, "overdue": overdue(T),
-                        "receivableAtStart": receivable(S) if d0 > 0 else 0.0, "receivable": receivable(T)},
+                        "overdueAtStart": overdue(S) if d0 > 0 or run.opening else 0.0, "overdue": overdue(T),
+                        "receivableAtStart": receivable(S) if d0 > 0 or run.opening else 0.0,
+                        "receivable": receivable(T)},
             "collections": work, "reliability": rel_out}

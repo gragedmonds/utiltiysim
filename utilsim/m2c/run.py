@@ -40,7 +40,7 @@ from utilsim.m2c import registers as regs
 from utilsim.m2c import vee as vee_mod
 from utilsim.m2c.base import M2CTown
 from utilsim.m2c.books import Books
-from utilsim.m2c.calendar import RunCalendar, calendar
+from utilsim.m2c.calendar import FIRST_YEAR, RunCalendar, calendar
 
 M2C_GROUPS = ("process", "anomalies", "reading", "vee", "billing", "contact", "outages", "field")
 SUMMARY_VERSION = "m2c-summary/1.0"
@@ -343,9 +343,11 @@ def resolve_episode_days(cfg: SimConfig, episodes: list[dict], cal: RunCalendar 
 class M2CRun:
     def __init__(self, town: M2CTown, settings: dict | None = None, actions: list[dict] | None = None,
                  outages: list[dict] | None = None, *, strict: bool = True, seed: str | None = None,
-                 episodes: list[dict] | None = None, ops_factory=None):
+                 episodes: list[dict] | None = None, ops_factory=None, opening=None):
         self.town = town
         self.cal = town.cal  # the calendar year the run replays
+        # A chained year opens on the previous year's close (utilsim/m2c/yearclose.py; its town from open_town).
+        self.opening = opening
         # The town's operations model (networks, incidents), built on demand: the field crews and the year's
         # outages need it during the replay. None: a run without networks (no incidents, no network assets).
         self.ops_factory = ops_factory
@@ -365,8 +367,11 @@ class M2CRun:
         self.actions = self._check_actions(actions or [])
         self.outages = self._check_outages(outages or [])
         inputs = _hash([self.actions, self.outages]) if self.outages else (_hash(self.actions) if self.actions else "0")
-        self.simulation_id = f"m2c-{town.id}-{self.settings_hash}-{inputs}"
-        self.seed = f"{self.run_seed or town_seed(town.cfg)}:m2c"
+        year = "" if self.cal.year == FIRST_YEAR else f"{self.cal.year}-"
+        chain = f"-{_hash(opening.simulation_id)}" if opening is not None else ""
+        self.simulation_id = f"m2c-{town.id}-{year}{self.settings_hash}-{inputs}{chain}"
+        # Each year draws anew: a later year's draws are salted with it (the snapshot's year keeps the town's own).
+        self.seed = f"{self.run_seed or town_seed(town.cfg)}:m2c" + (f":{self.cal.year}" if year else "")
         self._setup()
         self._setup_outages()
         self._simulate()
@@ -681,6 +686,10 @@ class M2CRun:
         self._drift_base: dict[int, float] = {}
         self.field = None  # the field engine, from the first day (_simulate)
         self.contact = None  # the contact centre, from the first day (_simulate)
+        if self.opening is not None:
+            from utilsim.m2c import yearclose
+
+            yearclose.open_registers(self, self.opening)
 
     def _setup_outages(self) -> None:
         """Per register, the merged spans (start, end as day + fraction) during which it had no service, and those
@@ -823,22 +832,34 @@ class M2CRun:
         return None
 
     def _off_loss(self, rows: np.ndarray, t: np.ndarray) -> np.ndarray:
-        """Normal use that did not flow while each register's service was off, from 1 January to ``t``."""
+        """Normal use that did not flow while each register's service was off, from 1 January to ``t`` (a service
+        already off when the year began counts from 1 January: the year's dial starts where it stood). Hours of an
+        outage while off are the outage's loss already (``_outage_loss``), not counted twice."""
         out = np.zeros(len(rows))
         if not self.off_any.any():
             return out
         tt = np.broadcast_to(t, len(rows))
+        ptr = getattr(self, "o_ptr", None)
         for k in np.flatnonzero(self.off_any[rows]).tolist():
             r = int(rows[k])
             for a, b, _ in self.off_spans[r]:
+                a = max(a, 0.0)
                 if tt[k] <= a:
                     continue
                 c = min(float(tt[k]), b)
-                da, dc = int(np.floor(a)), int(np.floor(c))
-                adv = self.town.true_advance(np.array([r, r]), np.array([da, dc]),
-                                             np.array([(a - da) * 24.0, (c - dc) * 24.0]))
-                out[k] += float(adv[1] - adv[0])
+                out[k] += self._advance(r, a, c)
+                if ptr is not None:
+                    for s in range(int(ptr[r]), int(ptr[r + 1])):
+                        x0, x1 = max(a, float(self.o_t0[s])), min(c, float(self.o_t1[s]))
+                        if x1 > x0:
+                            out[k] -= self._advance(r, x0, x1)
         return out
+
+    def _advance(self, r: int, a: float, c: float) -> float:
+        """Register ``r``'s normal use from ``a`` to ``c`` (day + fraction)."""
+        da, dc = int(np.floor(a)), int(np.floor(c))
+        adv = self.town.true_advance(np.array([r, r]), np.array([da, dc]), np.array([(a - da) * 24.0, (c - dc) * 24.0]))
+        return float(adv[1] - adv[0])
 
     def period_start(self, r: int, m: int) -> int:
         """The read month a bill for register ``r``'s period ending at month ``m`` starts from: the previous month,
@@ -948,10 +969,19 @@ class M2CRun:
         from utilsim.m2c.contact import ContactEngine
         from utilsim.m2c.fieldwork import FieldEngine
 
-        self.books.start_collections()
+        opening = self.opening
+        if opening is not None:
+            from utilsim.m2c import yearclose
+
+            yearclose.open_work(self, opening)
+        self.books.start_collections(
+            None if opening is None else lambda col: yearclose.open_collections(self, opening, col))
         col = self.books.collections
         self.field = FieldEngine(self)
         self.contact = ContactEngine(self)
+        if opening is not None:
+            yearclose.open_field(self, opening)
+            yearclose.open_contact(self, opening)
         self.contact.start()
         for day in range(self.cal.days):
             acts = by_day.get(day, [])
@@ -1009,7 +1039,7 @@ class M2CRun:
                     continue
                 a = int(np.floor(t0))
                 b = int(np.floor(nxt[0])) if nxt else self.cal.days
-                diff[q][min(a, self.cal.days)] += 1
+                diff[q][min(max(a, 0), self.cal.days)] += 1
                 diff[q][min(b, self.cal.days)] -= 1
         for q in cat.QUEUES:
             self.series[q][:, 2] = np.cumsum(diff[q])[:self.cal.days]
@@ -1413,18 +1443,20 @@ class M2CRun:
                 self._visit_case(c, max(t0 + 1.0 / 24, c.events[-1][0]), actor=crew)
 
     def new_device_id(self, meter: int) -> str:
-        return f"{self.town.meter_ids[meter]}-X{sum(1 for x in self.installs if x.meter == meter) + 1}"
+        before = int(self.town.device_count[meter]) if len(self.town.device_count) else 0  # earlier years' changes
+        return f"{self.town.meter_ids[meter]}-X{before + sum(1 for x in self.installs if x.meter == meter) + 1}"
 
     def device_at(self, meter: int, t: float, T: float = INF) -> str:
         """The device on meter slot ``meter`` at ``t``, as registered by ``T``."""
         return next((x.device for x in reversed(self.installs) if x.meter == meter and x.t <= t and x.t_reg <= T),
-                    self.town.meter_ids[meter])
+                    self.town.meter_device[meter] if self.town.meter_device else self.town.meter_ids[meter])
 
     def install_check(self, meter: int, t_inst: float, t_reg: float, device: str) -> str | None:
         """Why a device replacement on ``meter`` from ``t_inst`` (registered at ``t_reg``) does not apply, or None:
         the device id is taken, or a read on or after the install date was already released on the old register."""
         tw = self.town
-        if device in self.meter_index or any(x.device == device for x in self.installs):
+        if device in self.meter_index or any(x.device == device for x in self.installs) or \
+                device in self.town.meter_device:
             return f"device {device} is already in use; give the new device's own serial"
         for r in np.flatnonzero(tw.meter_of == meter).tolist():
             late = [m for m in range(13) if self.read_t[r, m] >= t_inst and self.release_t[r, m] <= t_reg]
