@@ -11,6 +11,8 @@ from referencing import Registry, Resource
 
 SCHEMA_DIR = Path(__file__).resolve().parents[2] / "schemas"
 NAMES = {
+    "local-job-1.0": "local-job-1.0.schema.json",
+    "local-result-1.0": "local-result-1.0.schema.json",
     "utility-town-2.0": "utility-town-2.0.schema.json",
     "utility-state-1.0": "utility-state-1.0.schema.json",
     "utility-replay-1.0": "utility-replay-1.0.schema.json",

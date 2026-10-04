@@ -21,8 +21,8 @@ STAFFING = "independent-districts"
 
 
 def district_sizes(homes: int, chunk_size: int = 2000) -> list[int]:
-    if not 20 <= homes <= 50_000 or not 20 <= chunk_size <= 5000:
-        raise ValueError("Choose 20–50,000 total homes and 20–5,000 homes per district.")
+    if not 20 <= homes <= 500_000 or not 20 <= chunk_size <= 5000:
+        raise ValueError("Choose 20–500,000 total homes and 20–5,000 homes per district.")
     count = math.ceil(homes / chunk_size)
     size, extra = divmod(homes, count)
     if size < 20:
@@ -128,6 +128,8 @@ def rollup(job: dict, store: Path) -> dict:
         registers += sum(t["registers"] for t in manifest["towns"])
         done += 1
         for month in orjson.loads((directory / "trend.json").read_bytes())["months"]:
+            if month["billing"] is None or month["cases"] is None:
+                continue  # Future months have no results at the requested view date.
             row = months.setdefault(month["month"], {"month": month["month"], "billing": {}, "cases": {}})
             for group, fields in (("billing", ("documents", "blocked", "billed", "invoices", "invoiced", "collected", "overdue", "receivable")),
                                   ("cases", ("opened", "resolved", "backlog", "escalated", "fieldOrders"))):
@@ -143,7 +145,7 @@ def rollup(job: dict, store: Path) -> dict:
 
 
 def run_batch(cfg, homes: int, store: Path, request: dict | None = None, *,
-              chunk_size: int = 2000, staffing: str, map_data: bool = False, max_batches: int | None = None, on_progress=lambda _: None):
+              chunk_size: int = 2000, staffing: str, map_data: bool = False, max_batches: int | None = None, on_progress=lambda _: None, should_pause=lambda: False):
     from api._m2c import RunRequest
     from utilsim.io.run_bundle import engine_build, read_manifest
     from utilsim.m2c.run import parse_day, parse_episodes, resolve_episode_days, resolve_settings
@@ -187,7 +189,7 @@ def run_batch(cfg, homes: int, store: Path, request: dict | None = None, *,
                 if district.get("result"):
                     read_manifest(store / "runs" / district["result"]["runKey"])
                     continue
-                if max_batches is not None and completed_now >= max_batches:
+                if should_pause() or (max_batches is not None and completed_now >= max_batches):
                     break
                 job["status"] = "running"
                 job["activeDistrict"] = district["id"]
@@ -197,7 +199,8 @@ def run_batch(cfg, homes: int, store: Path, request: dict | None = None, *,
                 started = time.monotonic()
                 on_progress(progress(job))
                 # Process isolation releases all generation/replay memory before the next district.
-                child = subprocess.Popen([sys.executable, "-m", "utilsim.batch", str(path), str(index)])
+                command = [sys.executable, "--batch-worker"] if getattr(sys, "frozen", False) else [sys.executable, "-m", "utilsim.batch"]
+                child = subprocess.Popen([*command, str(path), str(index)])
                 try:
                     while child.poll() is None:
                         time.sleep(1)
@@ -259,10 +262,35 @@ def district_worker(path: Path, index: int):
         config["seeds"][group] = hashlib.sha256(f"{source}:{district['id']}".encode()).hexdigest()[:32]
     config["seeds"]["weather"] = config["seeds"].get("weather") or master
     cfg = SimConfig.model_validate(config)
-    town = generate(cfg, on_stage=recorder.start)
+    import gzip
+
+    from utilsim.io.run_bundle import engine_build
+    from utilsim.worker.contracts import digest
+
     detail = "full" if job["inputs"].get("mapData", False) else "analysis"
-    recorder.start(f"snapshot.{detail}")
-    snapshot = build_snapshot(town, detail=detail)
+    baseline_key = digest({"config": config, "engineBuild": engine_build(), "detail": detail})
+    cache = path.parents[2] / "baselines" / baseline_key
+    cache.mkdir(parents=True, exist_ok=True)
+    snapshot_path = cache / "snapshot.json.gz"
+    marker = cache / "manifest.json"
+    with job_lock(cache / "cache.lock"):
+        if marker.exists():
+            recorder.start("baseline.verify_reuse")
+            data = snapshot_path.read_bytes()
+            if hashlib.sha256(data).hexdigest() != orjson.loads(marker.read_bytes())["sha256"]:
+                raise ValueError("Saved baseline failed its checksum. Choose another library or restore the baseline.")
+            snapshot = orjson.loads(gzip.decompress(data))
+        else:
+            town = generate(cfg, on_stage=recorder.start)
+            recorder.start(f"snapshot.{detail}")
+            snapshot = build_snapshot(town, detail=detail)
+            snapshot.get("stats", {}).pop("timingsS", None)
+            recorder.start("baseline.save")
+            data = gzip.compress(orjson.dumps(snapshot, option=orjson.OPT_SERIALIZE_NUMPY), compresslevel=3, mtime=0)
+            temporary = cache / "snapshot.tmp"
+            temporary.write_bytes(data)
+            os.replace(temporary, snapshot_path)
+            write_json(marker, {"sha256": hashlib.sha256(data).hexdigest(), "key": baseline_key})
     request = job["inputs"]["request"]
     if request.get("seed"):
         request["seed"] = hashlib.sha256(f"{request['seed']}:{district['id']}".encode()).hexdigest()[:32]

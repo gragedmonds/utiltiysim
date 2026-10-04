@@ -154,7 +154,7 @@ def serve(host: str = "127.0.0.1", port: int = 8010, reload: bool = False):
 
 @app.command("batch-run")
 def batch_run_command(
-    homes: int = typer.Option(..., help="Total residential homes, up to 50,000."),
+    homes: int = typer.Option(..., help="Total residential homes, up to 500,000 (local computer only)."),
     staffing: str = typer.Option(..., help="Must be independent-districts; settings apply to EACH district's team."),
     chunk_size: int = typer.Option(2000, help="Maximum homes per sequential district, 20–5,000."),
     preset: str = typer.Option("small_town"),
@@ -187,6 +187,22 @@ def batch_run_command(
                            "rollup": str(directory / "rollup.json"),
                            "timings": str(directory / "timings.json"),
                            "open": "Open each completed district's runs/<runKey> folder in Studio's saved-run reader."}))
+
+
+@app.command("runner")
+def runner_command(store: Path = typer.Option(..., help="Existing storage folder, e.g. P:/UtilitySim."),
+                   port: int = typer.Option(8010)):
+    """Open the local runner: pair once, queue jobs in Studio, keep all large files here."""
+    from utilsim.worker.server import serve
+    serve(store, port)
+
+
+@app.command("run-job")
+def run_job_command(job: Path, store: Path = typer.Option(...)):
+    """Process a downloaded job offline and write a small result file for Studio."""
+    from utilsim.worker.execute import execute
+    result = execute(orjson.loads(job.read_bytes()), store, lambda p: typer.echo(json.dumps(p)))
+    typer.echo(str(store / "results" / (result["jobId"] + ".result.json")))
 
 
 if __name__ == "__main__":

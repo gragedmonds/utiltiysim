@@ -20,3 +20,5 @@ viewer*.png
 
 # Claude Code agent worktrees
 .claude/worktrees/
+# PyInstaller generated specification
+/utility-runner.spec

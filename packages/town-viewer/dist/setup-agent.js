@@ -1,6 +1,6 @@
 import {summaryMarkup,editProposalInput,collectEditedProposal,summaryNeedsRefresh} from './proposal-summary.js';
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-export const PROPOSAL_FIELDS=['name','goals','purpose','region','preset','seed','asOf','townOverrides','settings','operations','episodes','summary','assumptions','limitations'];
+export const PROPOSAL_FIELDS=['execution','totalHomes','name','goals','purpose','region','preset','seed','asOf','townOverrides','settings','operations','episodes','summary','assumptions','limitations'];
 export function proposalInput(proposal){return Object.fromEntries(PROPOSAL_FIELDS.filter(k=>proposal[k]!==undefined).map(k=>[k,k==='episodes'?proposal[k].map(({id,scenario,...ep})=>ep):proposal[k]]));}
 export function applyAgentProposal(draft,p){if(draft.status!=='draft')throw Error('Create a new simulation to apply a new setup.');return {...draft,...proposalInput(p),townRef:p.townRef,townId:p.townId,townName:p.townName,homes:p.homes,opsSettings:p.opsSettings,episodes:p.episodes,scenarioId:'custom',scenarioTitle:p.name,agentProposal:p,step:3};}
 export function inflictInput(p){return Object.fromEntries(['name','summary','episodes','assumptions','limitations'].filter(k=>p[k]!==undefined).map(k=>[k,p[k]]));}

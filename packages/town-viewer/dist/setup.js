@@ -64,5 +64,5 @@ function render(focus=true){if(!draft)return;if(summaryNeedsRefresh(draft.agentP
  const retry=root.querySelector('#retry-config');if(retry)retry.onclick=()=>loadConfiguration();
 }
 function open(s){library.update(s.id,{openedAt:new Date().toISOString()});location.href=studioURL(s,location.search);}
-try{library=new SimulationLibrary();packs=await fetchPackIndex();library.adoptPacks(packs);if(library.list().length)showLibrary();else begin();}
+try{library=new SimulationLibrary();packs=await fetchPackIndex();library.adoptPacks(packs);if(query.get('edit')&&library.get(query.get('edit')))begin({...library.get(query.get('edit')),status:'draft',step:0});else if(library.list().length)showLibrary();else begin();}
 catch(e){root.innerHTML=`<section class="library"><h1>Your simulations couldn’t open.</h1><p role="alert">${esc(e.message)}</p><button class="primary" onclick="location.reload()">Try again</button><p>Existing browser data has not been removed.</p></section>`;}

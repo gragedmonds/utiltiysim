@@ -409,3 +409,7 @@ event graph is also reproducible. Weather never changes geography or customer id
 `roads, parcels, buildings, service_points, parks, districts, facilities, electric_transmission, electric_primary,
 electric_secondary, electric_services, electric_equipment, gas_transmission, gas_mains, gas_services,
 gas_equipment, water_transmission, water_mains, water_services, water_equipment, ami_collectors, mru_routes`.
+
+## Local job transport
+
+`local-job/1.0`, `local-job-file/1.0` and `local-result-file/1.0` are defined in utilsim/worker/contracts.py and schemas/local-job-1.0.schema.json. `/api/portal/*` supplies workspace links, pairing, leased jobs, result import and small detail pages. See LOCAL_RUNNER.md for authentication, storage and reconnect semantics.

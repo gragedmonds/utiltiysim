@@ -46,6 +46,8 @@ class AgentEpisode(StrictModel):
 
 
 class Proposal(StrictModel):
+    execution: Literal["hosted", "local"] = "hosted"
+    totalHomes: int | None = Field(default=None, ge=20, le=500_000)
     name: str = Field(min_length=1, max_length=100)
     goals: list[str] = Field(default_factory=lambda: ["everything"], min_length=1, max_length=8)
     purpose: str = Field(default="", max_length=500)
@@ -342,6 +344,8 @@ def grouped_ops_defaults(cfg: SimConfig) -> dict:
 def validate_proposal(proposal: Proposal) -> dict:
     from utilsim.config.presets import deep_merge
 
+    if proposal.totalHomes is not None and proposal.execution != "local":
+        raise ValueError("Large utility batches require the local runner.")
     base = preset_config(proposal.preset)
     town = proposal.townOverrides
     if any(not isinstance(v, dict) for v in town.values()):
@@ -384,7 +388,7 @@ def validate_proposal(proposal: Proposal) -> dict:
     return {**proposal.model_dump(by_alias=True), "episodes": episodes, "opsSettings": ops,
             "townRef": ref, "townId": pack["townId"] if ref == proposal.preset else cfg.town_id(),
             "townName": pack["name"] + (" · customised" if ref != proposal.preset else ""),
-            "homes": cfg.town.houses, "limitations": limits,
+            "homes": proposal.totalHomes or cfg.town.houses, "limitations": limits,
             "changes": input_changes(town, base.model_dump(mode="json"), cfg.model_dump(mode="json"), config_schema(), "town")
                        + input_changes(proposal.settings, cfg.model_dump(mode="json"), run_cfg.model_dump(mode="json"), settings_schema(), "run")
                        + input_changes(proposal.operations, grouped_ops_defaults(cfg),

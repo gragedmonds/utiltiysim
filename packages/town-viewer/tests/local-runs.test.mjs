@@ -1,0 +1,6 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {revisionState,mergeJobs,formatETA,codeMarkup} from '../dist/local-runs.js';
+import {studioURL} from '../dist/simulation-library.js';
+test('completed results remain visible while the next revision processes',()=>{const recipe={modelId:'a'},one={jobId:'1',recipe,revision:1,status:'complete'},two={jobId:'2',recipe,revision:2,status:'running'},other={jobId:'3',recipe:{modelId:'b'},revision:10,status:'complete'};const state=revisionState([two,one,other],'a');assert.equal(state.viewing,one);assert.equal(state.latest,two);assert.equal(state.next,3);assert.deepEqual(mergeJobs([one],[{...one,status:'running'}]),[{...one,status:'running'}]);});
+test('large local setup bypasses the live map route',()=>{assert.match(studioURL({id:'model',execution:'local',townRef:'unused'}),/local-runs.html\?model=model/);assert.doesNotMatch(studioURL({id:'model',execution:'local'}),/town=/);});
+test('pairing has eight boxes split four and four and ETA stays honest',()=>{const html=codeMarkup('ABCD2345');assert.equal((html.match(/<b>/g)||[]).length,8);assert.match(html,/<b>D<\/b><span aria-hidden="true">–<\/span><b>2/);assert.match(formatETA(null),/first district/);});

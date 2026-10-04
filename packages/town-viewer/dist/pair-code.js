@@ -1,0 +1,4 @@
+export function installPairCode(root){
+ root.innerHTML=Array.from({length:8},(_,i)=>`${i===4?'<span aria-hidden="true">–</span>':''}<input aria-label="Code character ${i+1}" autocomplete="off" autocapitalize="characters" maxlength="1" pattern="[A-Za-z0-9]" required>`).join('');const inputs=[...root.querySelectorAll('input')];
+ inputs.forEach((el,i)=>{el.oninput=()=>{el.value=el.value.replace(/[^a-z0-9]/gi,'').toUpperCase();if(el.value)inputs[i+1]?.focus();};el.onkeydown=e=>{if(e.key==='Backspace'&&!el.value)inputs[i-1]?.focus();};el.onpaste=e=>{const value=e.clipboardData.getData('text').replace(/[^a-z0-9]/gi,'').toUpperCase();if(!value)return;e.preventDefault();[...value].slice(0,8).forEach((c,j)=>{if(inputs[i+j])inputs[i+j].value=c;});inputs[Math.min(7,i+value.length-1)].focus();};});return ()=>inputs.map(el=>el.value).join('');
+}

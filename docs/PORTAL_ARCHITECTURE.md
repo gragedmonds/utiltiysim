@@ -3,12 +3,12 @@
 *Architecture, October 2026. Companion to [DATA_FIRST.md](DATA_FIRST.md) (what gets generated) and [M2C.md](M2C.md)
 (what gets replayed).*
 
-**Implemented:** step 1 now has `utilsim export-run` and the Studio's Runs reader (no-map boot, Year, Data,
-month-end Workspace snapshots and VEE scorecard). See [RUN_BUNDLES.md](RUN_BUNDLES.md) for the exact contract,
-commands, verification and current limits. The root URL now opens guided setup or the browser-local simulation
-chooser, with Year as the dashboard. No login or WorkOS is required. Shared metadata across browsers, launcher
-download, code pairing, queueing and campaigns remain planned. The build instructions, milestone by
-milestone with done-when checks, contracts and tests, are in [HANDOFF_BUILD.md](HANDOFF_BUILD.md).
+**Implemented:** saved archives, goal-first setup, local-only 25k/50k/500k mode, revisioned jobs,
+workspace links, expiring pairing, leased worker execution, baseline reuse, receipt sync, manual files,
+small on-demand table pages and cross-platform launcher/release builds. See [LOCAL_RUNNER.md](LOCAL_RUNNER.md)
+for the shipped workflow and its exact limits. Automatic hosted sync requires Upstash Redis configuration.
+The sections below retain the broader target architecture: shared utility-wide staffing, automatic library moves,
+platform publisher signing, comparisons and multi-year campaigns are not implemented.
 
 ## The user flow: open the link, choose or configure, launch, pair
 

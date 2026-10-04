@@ -1,0 +1,99 @@
+{
+  "$defs": {
+    "DistrictReceipt": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^district-\\d{4,5}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "runKey": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Runkey",
+          "type": "string"
+        },
+        "manifestSha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Manifestsha256",
+          "type": "string"
+        },
+        "homes": {
+          "maximum": 5000,
+          "minimum": 20,
+          "title": "Homes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "runKey",
+        "manifestSha256",
+        "homes"
+      ],
+      "title": "DistrictReceipt",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "const": "local-result-file/1.0",
+      "default": "local-result-file/1.0",
+      "title": "Schemaversion",
+      "type": "string"
+    },
+    "jobId": {
+      "pattern": "^[a-f0-9]{32}$",
+      "title": "Jobid",
+      "type": "string"
+    },
+    "revision": {
+      "minimum": 1,
+      "title": "Revision",
+      "type": "integer"
+    },
+    "recipeKey": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Recipekey",
+      "type": "string"
+    },
+    "engineBuild": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Enginebuild",
+      "type": "string"
+    },
+    "districts": {
+      "items": {
+        "$ref": "#/$defs/DistrictReceipt"
+      },
+      "maxItems": 25000,
+      "minItems": 1,
+      "title": "Districts",
+      "type": "array"
+    },
+    "rollup": {
+      "additionalProperties": true,
+      "title": "Rollup",
+      "type": "object"
+    },
+    "timings": {
+      "additionalProperties": true,
+      "title": "Timings",
+      "type": "object"
+    }
+  },
+  "required": [
+    "jobId",
+    "revision",
+    "recipeKey",
+    "engineBuild",
+    "districts",
+    "rollup",
+    "timings"
+  ],
+  "title": "ResultFile",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:utilsim:local-result-1.0"
+}

@@ -19,4 +19,4 @@ export class SimulationLibrary{
    this.save({...this.create(),id,name:name+' · previous work',status:'ready',step:3,preset:t.preset,townRef:t.preset,townId:t.townId,townName:name,homes:t.homes,asOf:saved.asOf||'2026-03-31',seed:saved.seed||'',scenarioTitle:'Previous work'});
   }}
 }
-export function studioURL(s,search=''){const q=new URLSearchParams(search);q.delete('town');q.delete('setup');q.delete('new');q.set('simulation',s.id);q.set('town',s.townRef);return './studio.html?'+q+(s.goals?.length===1&&s.goals[0]==='operations'?'#/map':'#/year');}
+export function studioURL(s,search=''){const q=new URLSearchParams(search);q.delete('town');q.delete('setup');q.delete('new');q.set('simulation',s.id);q.set('town',s.townRef);if(s.execution==='local'){q.delete('town');q.delete('simulation');q.set('model',s.id);return './local-runs.html?'+q;}return './studio.html?'+q+(s.goals?.length===1&&s.goals[0]==='operations'?'#/map':'#/year');}

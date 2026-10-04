@@ -83,3 +83,5 @@ The executable, pairing and storage-folder selection are still planned.
 review an engine-validated configuration. Set the server-only Vercel variable `ANTHROPIC_API_KEY` and redeploy.
 `ANTHROPIC_MODEL` optionally overrides the default `claude-sonnet-4-6`. Voice transcription depends on browser
 support; typing and manual starters remain available. See [setup agent configuration](docs/SETUP_AGENT.md).
+
+Local processing: [paired runner, large simulations and deployment](docs/LOCAL_RUNNER.md).

@@ -18,7 +18,7 @@ def test_wizard_configuration_without_provider_key(monkeypatch):
         assert "weather" in data["schemas"]["town"]["properties"]
         assert "field" in data["schemas"]["run"]["properties"]
         assert data["defaults"]["operations"]["crews"]["fieldCrews"] >= 0
-        assert data["townSizes"] == [500, 5000, 25000, 50000]
+        assert data["townSizes"] == [500, 5000, 25000, 50000, 500000]
         assert len(data["regions"]) == 4
         assert "illustrative" in data["regionalNote"]
         assert client.get("/api/setup/configuration?preset=../../etc/passwd").status_code == 422

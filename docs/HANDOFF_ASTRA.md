@@ -492,3 +492,7 @@ What the Studio shows:
 types with their settings, crews, the maintenance plan's compliance, the last 60 days and notes. There is no field
 work page yet; the Year charts and the Data tables cover it. A dispatch board (orders by crew and day) and orders on
 the map are the natural next steps.
+
+## 16. Paired local revisions
+
+Large sizes route to local-runs.html. It provides device pairing, immutable job revisions, Year rollups, manual files, scenario/voice tweaks and on-demand saved table pages. The runner.html loopback UI owns storage status, pairing and offline import. See LOCAL_RUNNER.md for deployment and current bounds.
