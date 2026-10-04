@@ -69,8 +69,8 @@ def _geometry(ops, tw) -> dict:
         if i is None:
             continue
         xz[i] = (float(p.get("x", 0.0)), float(p.get("z", 0.0)))
-        sv = p.get("services") or {}
-        water[i], gas[i] = bool(sv.get("water")), bool(sv.get("gas"))
+        sv = p.get("connections") or p.get("services") or {}  # the networks it is on, whoever serves them
+        water[i], gas[i] = "water" in sv, "gas" in sv
     hit = {"xz": xz, "water": water, "gas": gas}
     ops.__dict__[key] = hit
     return hit
@@ -167,6 +167,9 @@ def draw_day(run: M2CRun, ops, d: int, keep=None) -> tuple[list[dict], bool]:
         if keep is not None and not keep(b, n):
             continue
         kind = b["kind"]
+        util = KINDS.get(kind, ("electric",))[0]
+        if util != "ami" and not run.cfg.serves(util):
+            continue  # another utility's network: its own crews and customers (the others keep their ids)
         t0 = d + b["at"] / 86400.0
         edge = b.get("edge") if kind in ("transformer_failure", "line_fault") else None
         out.append(consequence(run, ops, kind, t0, float(b["x"]), float(b["z"]), edge=edge,

@@ -108,7 +108,10 @@ allowed; everything is exclusive. Prioritise those goals' settings and outcomes.
 current/default values and say so; do not force an interview about every subsystem. Goals tailor setup only:
 they do not turn off generation or make runs faster. Operations-only setups open the map; others open Year.
 1. Place: country, state/province, nearest city/region; urban/suburban/rural service area, terrain and seasonal conditions.
-2. Utility and scale: electric/water/gas services, homes versus accounts, residential/commercial mix and growth.
+2. Utility and scale: which services the utility provides (townOverrides customers_billing.services: any of electric,
+water, gas, at least one; leave it out for all three). Another utility serves the rest: its networks stay on the map,
+but settings tagged x-services for it do not apply. Having no gas mains is a separate, physical choice
+(gas.all_electric_district_share). Then homes versus accounts, residential/commercial mix and growth.
 3. Normal metering: AMI versus manual reads, reliability, missed reads and estimation practices.
 4. Normal team and workflow: staffing, automation, review queues, field coverage and turnaround.
 5. Normal billing and cash: cycle, billing accuracy, payment/collections difficulties and existing pressure.

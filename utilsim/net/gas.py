@@ -150,7 +150,7 @@ def build_gas(ctx: NetContext) -> Network:
         t = int(prem_tap[k])
         meter_xy = meter_g[i]
         mid = net.add_node(meter_node_id("gas", prem.ids[i]), "meter", meter_xy, premiseId=prem.ids[i],
-                           servicePointId=service_point_id(prem.ids[i], "gas"),
+                           servicePointId=service_point_id(prem.ids[i], "gas") if ctx.cfg.serves("gas") else None,
                            meterClass="250 CFH diaphragm" if loads[i] < 7 else "1000 CFH rotary")
         lp = bool(tier_lp[t])
         mm, label = 19, '3/4" PE'

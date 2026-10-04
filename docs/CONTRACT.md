@@ -44,9 +44,13 @@ context freshness before appending episodes and restores episodes/date on analys
 `GET /api/setup/configuration?preset=small_town` supplies the manual wizard's live `schemas` and `defaults` for
 `town`, `run` and grouped `operations`, the engine `homeLimit`, four illustrative `regions` with explicit generation
 overrides, `regionalNote` and `gasDistrictMinHomes`: the smallest town drawn with more than one district (2,251 homes).
-A smaller town is one district that always keeps its gas mains, so the wizard shows Natural gas locked on there; from
-that size `gas.all_electric_district_share` = 1 leaves no gas mains. Electricity and water are always served. It
-accepts only published pack presets and does not generate a town or use a provider key. Environment and utility stages use the same proposal validation boundary and editable review as voice.
+A smaller town is one district that always keeps its gas mains; from that size `gas.all_electric_district_share` = 1
+leaves no gas mains. That share is physical (an Advanced setting in the wizard, with this size note). Which services
+the utility provides is the town setting `customers_billing.services` (any of `electric`, `water`, `gas`, at least
+one): the wizard's three service cards toggle it in `townOverrides`, the last one on stays on, and serving all three
+leaves the key out so the town id stays the default. A setting tagged `x-services` (in the `town` and `run` schemas)
+for none of the services provided shows disabled as "Not applicable: your utility does not provide gas", keeping its
+value; the network groups always apply. It accepts only published pack presets and does not generate a town or use a provider key. Environment and utility stages use the same proposal validation boundary and editable review as voice.
 `POST /api/setup/operation-defaults` accepts a `Proposal`, validates it and returns grouped map-day `defaults`
 derived from the edited town. The wizard loads these when opening map-day Advanced so regional storm rates and
 town crew defaults remain consistent with the environment; explicit map overrides are preserved.
@@ -115,7 +119,7 @@ Premises also carry a content `uid`.
 | Collection | Fields the 3D view uses |
 |---|---|
 | `roads[]` | `points[{x,z}]`, `class` (`primary`/`tertiary`/`residential`), `roadClass` (`arterial`/`collector`/`local`), `pavementWidthM`, `rowWidthM`, `name`, `corridorId` (arterial/collector corridor, when on one) |
-| `premises[]` | `x`, `z`, `width` (along street), `depth`, `height`, `angle` (road direction `atan2(dz,dx)`; mesh `rotation.y = -angle`), `side` (±1), `front {x,z}`, `roofTone`, `roof` (`gable`/`hip`/`flat`), `stories`, `premiseType`, `buildingType`, `solar`, `solarKW`, `occupied`, `services {electric,water,gas}`, `uid` |
+| `premises[]` | `x`, `z`, `width` (along street), `depth`, `height`, `angle` (road direction `atan2(dz,dx)`; mesh `rotation.y = -angle`), `side` (±1), `front {x,z}`, `roofTone`, `roof` (`gable`/`hip`/`flat`), `stories`, `premiseType`, `buildingType`, `solar`, `solarKW`, `occupied`, `services {electric,water,gas}` (the utility's service point per commodity it serves there; `{}` for another utility's customer), `connections` (the networks the premise is on, present only when they differ from `services`: the viewer reads the rest as "Served by another utility"), `accountId` (null when the premise is not the utility's customer: no Billing tab), `uid` |
 | `buildings[]` | exact `footprint.polygon[{x,z}]`, `heightM`, `roof` |
 | `facilities[]` | `kind` (`substation`, `pump_station`, `elevated_tank`, `city_gate`, `depot`, `industrial`, `school`), `polygon`, `label` |
 | `networks.{u}` | `sourceIds` (every `external_supply` node), `sourceId` (the first), `unit`, `nodes`, `edges`, `equipment`; electric also `corridors[{id, name, hierarchy, roadIds (ordered), lengthM, entranceNodeId, exitNodeId, ring, feederIds, trunkLengthM}]` and `meta` with `feeders[{id, substationId, headNodeId, customers, designKVA, trunkKm, expressKm, corridorIds, tieIds, switchIds, sections}]`, `ties`, `switches` |
@@ -141,7 +145,8 @@ Overhead edges have a vertex at every pole, so a pole per vertex is correct.
 * Connectivity is "reachable from any source through enabled edges, in either direction". The receiver's
   `traceConnection` returns one deterministic route; it is not the hydraulic or electric flow allocation.
 * Every truthy `premises[].services[u]` has exactly one `kind: "meter"` node with that `premiseId` (or
-  `servicePointId`).
+  `servicePointId`). A network in `connections` that the utility does not serve keeps its meter node (by
+  `premiseId`, no `servicePointId`); `traceConnection` gives no route for it, reason `Served by another utility`.
 
 ## State frames (`utility-state/1.0`)
 

@@ -58,7 +58,10 @@
           "type": "integer",
           "x-advanced": true,
           "x-impact": "Register digits on electric meters: where registers roll over, and how far a transposed or misread digit throws a read.",
-          "x-reach": "town"
+          "x-reach": "town",
+          "x-services": [
+            "electric"
+          ]
         },
         "meter_digits_gas": {
           "default": 5,
@@ -69,7 +72,10 @@
           "type": "integer",
           "x-advanced": true,
           "x-impact": "Register digits on gas meters: rollover and digit-error size.",
-          "x-reach": "town"
+          "x-reach": "town",
+          "x-services": [
+            "gas"
+          ]
         },
         "meter_digits_water": {
           "default": 6,
@@ -80,7 +86,10 @@
           "type": "integer",
           "x-advanced": true,
           "x-impact": "Register digits on water meters: rollover and digit-error size.",
-          "x-reach": "town"
+          "x-reach": "town",
+          "x-services": [
+            "water"
+          ]
         },
         "poll_end_hour": {
           "default": 4.0,
@@ -162,7 +171,10 @@
           "title": "Leak",
           "type": "number",
           "x-impact": "Water leaks after the meter: high water reads, high-bill blocks and complaints.",
-          "x-reach": "year"
+          "x-reach": "year",
+          "x-services": [
+            "water"
+          ]
         },
         "manual_factor": {
           "default": 1.0,
@@ -223,7 +235,10 @@
           "title": "Tamper",
           "type": "number",
           "x-impact": "Bypasses that under-register 50 to 90 percent: lost revenue and investigations.",
-          "x-reach": "year"
+          "x-reach": "year",
+          "x-services": [
+            "electric"
+          ]
         },
         "transposed_digits": {
           "default": 6.0,
@@ -621,7 +636,11 @@
           "title": "Winter Moratorium",
           "type": "boolean",
           "x-impact": "No electric or water disconnection notices in winter; held notices go out after the end date. Shifts collections from winter to spring.",
-          "x-reach": "year"
+          "x-reach": "year",
+          "x-services": [
+            "electric",
+            "water"
+          ]
         }
       },
       "title": "Billing & collections",
@@ -874,7 +893,10 @@
           },
           "description": "I smell gas: neighbours of a gas leak (the household with a service leak calls 9 times in 10); emergency line.",
           "x-impact": "Gas odour calls from neighbours of the year's gas leaks, on the emergency line.",
-          "x-reach": "year"
+          "x-reach": "year",
+          "x-services": [
+            "gas"
+          ]
         },
         "handle_factor": {
           "default": 1.0,
@@ -1206,6 +1228,9 @@
           "type": "array",
           "x-impact": "Energy price blocks: bill amounts, high-bill checks and the cost of each billing error.",
           "x-reach": "town",
+          "x-services": [
+            "electric"
+          ],
           "x-unit": "$/kWh"
         },
         "electric_fixed_monthly": {
@@ -1217,6 +1242,9 @@
           "type": "number",
           "x-impact": "Fixed electric charge: every electric bill moves by this, whatever the usage.",
           "x-reach": "town",
+          "x-services": [
+            "electric"
+          ],
           "x-unit": "$"
         },
         "electric_variable_delivery": {
@@ -1228,6 +1256,9 @@
           "type": "number",
           "x-impact": "Delivery charge per kWh: electric bills scale with usage.",
           "x-reach": "town",
+          "x-services": [
+            "electric"
+          ],
           "x-unit": "$/kWh"
         },
         "gas_fixed_monthly": {
@@ -1239,6 +1270,9 @@
           "type": "number",
           "x-impact": "Fixed gas charge: every gas bill moves by this, whatever the usage.",
           "x-reach": "town",
+          "x-services": [
+            "gas"
+          ],
           "x-unit": "$"
         },
         "gas_price_m3": {
@@ -1250,6 +1284,9 @@
           "type": "number",
           "x-impact": "Gas price per m³: winter gas bills scale with it.",
           "x-reach": "town",
+          "x-services": [
+            "gas"
+          ],
           "x-unit": "$/m3"
         },
         "late_payer_share": {
@@ -1288,6 +1325,9 @@
           ],
           "x-impact": "Credit per exported kWh: solar homes' summer bills and the large-credit checks.",
           "x-reach": "town",
+          "x-services": [
+            "electric"
+          ],
           "x-unit": "$/kWh"
         },
         "on_time_payer_share": {
@@ -1316,6 +1356,32 @@
           "x-impact": "Accounts on pre-authorized debit: they pay on the due date, but a share bounce, which opens payment-rejected cases and NSF fees.",
           "x-reach": "town"
         },
+        "services": {
+          "default": [
+            "electric",
+            "water",
+            "gas"
+          ],
+          "description": "The services your utility provides in this town. The networks are there either way; for a service you do not provide, another utility runs it: no accounts, meters, reads, bills, crews, maintenance or calls of yours, and its settings do not apply.",
+          "items": {
+            "enum": [
+              "electric",
+              "water",
+              "gas"
+            ],
+            "type": "string"
+          },
+          "title": "Services",
+          "type": "array",
+          "x-effects": [
+            "accounts and meters",
+            "bills",
+            "field work",
+            "outage and odour calls"
+          ],
+          "x-impact": "The services your utility provides here. For a service it does not provide, another utility runs the network: no accounts, meters, reads, bills, crews, maintenance, incidents or calls of yours, and its settings do not apply. A new town (the networks are the same; the customers change).",
+          "x-reach": "town"
+        },
         "tax_rate": {
           "default": 0.13,
           "description": "Sales tax on utility bills (Ontario HST).",
@@ -1334,7 +1400,10 @@
           "title": "Wastewater Ratio",
           "type": "number",
           "x-impact": "Wastewater as a multiple of the water price: water bills scale with it.",
-          "x-reach": "town"
+          "x-reach": "town",
+          "x-services": [
+            "water"
+          ]
         },
         "water_fixed_monthly": {
           "default": 18.0,
@@ -1345,6 +1414,9 @@
           "type": "number",
           "x-impact": "Fixed water charge: every water bill moves by this, whatever the usage.",
           "x-reach": "town",
+          "x-services": [
+            "water"
+          ],
           "x-unit": "$"
         },
         "water_price_m3": {
@@ -1356,6 +1428,9 @@
           "type": "number",
           "x-impact": "Water price per m³: water bills scale with it, and wastewater follows it.",
           "x-reach": "town",
+          "x-services": [
+            "water"
+          ],
           "x-unit": "$/m3"
         }
       },
@@ -1982,7 +2057,10 @@
           "description": "Pole work, tree trimming, outage repairs, service upgrades.",
           "title": "Electric line crews",
           "x-impact": "Electric line crews: outage repairs take their time first, then pole and tree programmes and service upgrades.",
-          "x-reach": "year"
+          "x-reach": "year",
+          "x-services": [
+            "electric"
+          ]
         },
         "crew_emergency": {
           "$ref": "#/$defs/FieldCrew",
@@ -2006,7 +2084,10 @@
           "description": "Leak surveys, regulator stations, leak repairs.",
           "title": "Gas crews",
           "x-impact": "Gas crews: leak repairs, leak surveys and regulator inspections.",
-          "x-reach": "year"
+          "x-reach": "year",
+          "x-services": [
+            "gas"
+          ]
         },
         "crew_meter": {
           "$ref": "#/$defs/FieldCrew",
@@ -2030,7 +2111,10 @@
           "description": "Valves, hydrants, main break repairs.",
           "title": "Water crews",
           "x-impact": "Water crews: main break repairs, valve and hydrant programmes and their repairs.",
-          "x-reach": "year"
+          "x-reach": "year",
+          "x-services": [
+            "water"
+          ]
         },
         "dead_battery_miss": {
           "default": 0.9,
@@ -2104,7 +2188,10 @@
           },
           "description": "Gas leak repair (grade 2): leaks found per surveyed km.",
           "x-impact": "Leaks found per surveyed kilometre: grade 2 repairs on the gas crews.",
-          "x-reach": "year"
+          "x-reach": "year",
+          "x-services": [
+            "gas"
+          ]
         },
         "gas_odour": {
           "$ref": "#/$defs/FieldWorkType",
@@ -2117,7 +2204,10 @@
           "description": "Gas odour investigation: share of gas odour reports (a leak's first report, every background report) a responder attends.",
           "title": "Gas odour",
           "x-impact": "Gas odour reports a responder attends; follows the year's gas leaks and the contact centre's gas odour calls.",
-          "x-reach": "year"
+          "x-reach": "year",
+          "x-services": [
+            "gas"
+          ]
         },
         "hydrant_flush": {
           "$ref": "#/$defs/FieldWorkType",
@@ -2130,7 +2220,10 @@
           "description": "Hydrant flushing and inspection: share of hydrants a year (May to October).",
           "title": "Hydrant flushing",
           "x-impact": "Hydrants flushed May to October; flushing finds hydrants to repair.",
-          "x-reach": "year"
+          "x-reach": "year",
+          "x-services": [
+            "water"
+          ]
         },
         "hydrant_repair": {
           "$ref": "#/$defs/FieldWorkType",
@@ -2142,7 +2235,10 @@
           },
           "description": "Hydrant repair: share of flushed hydrants found defective.",
           "x-impact": "Flushed hydrants found defective.",
-          "x-reach": "year"
+          "x-reach": "year",
+          "x-services": [
+            "water"
+          ]
         },
         "leak_survey": {
           "$ref": "#/$defs/FieldWorkType",
@@ -2154,7 +2250,10 @@
           },
           "description": "Gas leak survey: share of gas main length walked a year (minutes per km).",
           "x-impact": "Gas main walked a year; surveys find leaks to repair.",
-          "x-reach": "year"
+          "x-reach": "year",
+          "x-services": [
+            "gas"
+          ]
         },
         "main_replacement": {
           "$ref": "#/$defs/FieldWorkType",
@@ -2167,7 +2266,11 @@
           "description": "Main renewal: share of cast-iron water and gas main length replaced a year (minutes and materials per 100 m).",
           "title": "Main renewal",
           "x-impact": "Cast-iron main renewed a year: the biggest capital cost.",
-          "x-reach": "year"
+          "x-reach": "year",
+          "x-services": [
+            "water",
+            "gas"
+          ]
         },
         "meter_investigation": {
           "$ref": "#/$defs/FieldWorkType",
@@ -2288,7 +2391,10 @@
           },
           "description": "Pole inspection: share of poles inspected a year (0.1 is a ten-year cycle).",
           "x-impact": "Poles inspected a year; inspections find poles to replace.",
-          "x-reach": "year"
+          "x-reach": "year",
+          "x-services": [
+            "electric"
+          ]
         },
         "pole_replacement": {
           "$ref": "#/$defs/FieldWorkType",
@@ -2300,7 +2406,10 @@
           },
           "description": "Pole replacement: share of inspected poles found needing replacement.",
           "x-impact": "Inspected poles found needing replacement: long, costly line crew jobs.",
-          "x-reach": "year"
+          "x-reach": "year",
+          "x-services": [
+            "electric"
+          ]
         },
         "reconnect": {
           "$ref": "#/$defs/FieldWorkType",
@@ -2324,7 +2433,10 @@
           },
           "description": "Regulator station inspection: share of stations (city gate, district regulators) a year.",
           "x-impact": "Regulator stations inspected a year.",
-          "x-reach": "year"
+          "x-reach": "year",
+          "x-services": [
+            "gas"
+          ]
         },
         "remote_switch_share": {
           "default": 0.85,
@@ -2334,7 +2446,10 @@
           "title": "Remote Switch Share",
           "type": "number",
           "x-impact": "AMI electric meters with a remote switch: their disconnects and reconnects need no truck.",
-          "x-reach": "year"
+          "x-reach": "year",
+          "x-services": [
+            "electric"
+          ]
         },
         "removal": {
           "$ref": "#/$defs/FieldWorkType",
@@ -2377,7 +2492,11 @@
           },
           "description": "Seal-expiry exchange: share of the meters due (the sample of every expiring lot, every meter of a failed lot) exchanged. A failed lot's meters are due by 31 December.",
           "x-impact": "Seal-expiry exchanges: the samples and failed lots due this year, each a new meter on the installation (reads and bills on the new register).",
-          "x-reach": "year"
+          "x-reach": "year",
+          "x-services": [
+            "electric",
+            "gas"
+          ]
         },
         "seal_lot_pass_rate": {
           "default": 0.8,
@@ -2431,7 +2550,10 @@
           },
           "description": "Electric service upgrade: share of homes with an EV or electric heat upgrading a year.",
           "x-impact": "Homes with an EV or electric heat upgrading their service a year.",
-          "x-reach": "year"
+          "x-reach": "year",
+          "x-services": [
+            "electric"
+          ]
         },
         "shift_hours": {
           "default": 8.0,
@@ -2487,7 +2609,10 @@
           },
           "description": "Tree trimming: share of overhead spans trimmed a year (minutes per span).",
           "x-impact": "Overhead spans trimmed a year.",
-          "x-reach": "year"
+          "x-reach": "year",
+          "x-services": [
+            "electric"
+          ]
         },
         "valve_exercise": {
           "$ref": "#/$defs/FieldWorkType",
@@ -2499,7 +2624,11 @@
           },
           "description": "Valve exercising: share of water and gas valves a year.",
           "x-impact": "Water and gas valves exercised a year; exercising finds valves to repair.",
-          "x-reach": "year"
+          "x-reach": "year",
+          "x-services": [
+            "water",
+            "gas"
+          ]
         },
         "valve_repair": {
           "$ref": "#/$defs/FieldWorkType",
@@ -2511,7 +2640,11 @@
           },
           "description": "Valve repair: share of exercised valves found broken or stuck.",
           "x-impact": "Exercised valves found broken: repairs on the utility's crew.",
-          "x-reach": "year"
+          "x-reach": "year",
+          "x-services": [
+            "water",
+            "gas"
+          ]
         },
         "water_meter_life_years": {
           "default": 15,
@@ -2534,7 +2667,10 @@
           },
           "description": "Water meter replacement by age: share of over-age water meters replaced this year.",
           "x-impact": "Over-age water meters replaced this year (new meters, no more drift); the rest keep under-registering.",
-          "x-reach": "year"
+          "x-reach": "year",
+          "x-services": [
+            "water"
+          ]
         }
       },
       "title": "Field work",
@@ -3145,7 +3281,10 @@
           ],
           "x-impact": "Electric crews: how long outages last on the operations day.",
           "x-reach": "operations",
-          "x-run-setting": "electricCrews"
+          "x-run-setting": "electricCrews",
+          "x-services": [
+            "electric"
+          ]
         },
         "gas_crews": {
           "default": 2,
@@ -3159,7 +3298,10 @@
           ],
           "x-impact": "Gas crews: how fast leaks are made safe on the operations day.",
           "x-reach": "operations",
-          "x-run-setting": "gasCrews"
+          "x-run-setting": "gasCrews",
+          "x-services": [
+            "gas"
+          ]
         },
         "gas_response_target_min": {
           "default": 60.0,
@@ -3171,6 +3313,9 @@
           "x-impact": "The response target gas crews are measured against on the operations day.",
           "x-reach": "operations",
           "x-run-setting": "gasResponseTargetMinutes",
+          "x-services": [
+            "gas"
+          ],
           "x-unit": "min"
         },
         "meter_techs": {
@@ -3288,7 +3433,10 @@
           "type": "integer",
           "x-impact": "Water crews: how long main breaks keep customers off.",
           "x-reach": "operations",
-          "x-run-setting": "waterCrews"
+          "x-run-setting": "waterCrews",
+          "x-services": [
+            "water"
+          ]
         }
       },
       "title": "Field operations",

@@ -726,7 +726,7 @@ def build_electric(ctx: NetContext) -> Network:
                      phase=ph, feeder=fname, feederId=fname, designRole="transformer")
         for i in m:
             mid = net.add_node(meter_node_id("electric", prem.ids[i]), "meter", meter_e[i], premiseId=prem.ids[i],
-                               servicePointId=service_point_id(prem.ids[i], "electric"), feeder=fname,
+                               servicePointId=service_point_id(prem.ids[i], "electric") if ctx.cfg.serves("electric") else None, feeder=fname,
                                transformerId=net.nodes[tx].id, phase=ph)
             if gr["overhead"]:
                 pts = np.array([txy, meter_e[i]])

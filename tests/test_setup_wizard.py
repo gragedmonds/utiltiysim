@@ -26,7 +26,9 @@ def test_wizard_configuration_without_provider_key(monkeypatch):
 
 
 def test_gas_can_be_switched_off_only_in_towns_with_more_than_one_district():
-    """The wizard's Natural gas checkbox locks on below gasDistrictMinHomes: the one district keeps its gas mains."""
+    """Physically, a town below gasDistrictMinHomes is one district and keeps its gas mains (the Advanced share of
+    districts without gas mains applies from that size). Whether the utility serves gas is a separate choice
+    (customers_billing.services, the wizard's Natural gas card), open at any size."""
     import math
 
     from utilsim.gen.roads.build import ERA_RADIUS_M2_PER_HOUSE, district_count, synthetic_extent

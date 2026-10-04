@@ -369,6 +369,10 @@ IMPACT: dict[str, tuple[str, str]] = {
     "customers_billing.pre_authorized_share": ("town", "Accounts on pre-authorized debit: they pay on the due date, but "
                                                        "a share bounce, which opens payment-rejected cases and NSF "
                                                        "fees."),
+    "customers_billing.services": ("town", "The services your utility provides here. For a service it does not provide, "
+                                   "another utility runs the network: no accounts, meters, reads, bills, crews, "
+                                   "maintenance, incidents or calls of yours, and its settings do not apply. A new town "
+                                   "(the networks are the same; the customers change)."),
     "customers_billing.due_days": ("town", "Days from invoice to due date: when accounts go overdue, so receivable "
                                            "carry and the dunning calendar."),
     # ---- meter-to-cash process (run) ----------------------------------------------------------------------------------
@@ -713,3 +717,29 @@ IMPACT: dict[str, tuple[str, str]] = {
 
 def impact_of(group: str, key: str) -> tuple[str, str] | None:
     return IMPACT.get(f"{group}.{key}")
+
+
+# Settings that matter only when the utility provides one of these services (``customers_billing.services``): a viewer
+# shows the others as not applicable (``x-services`` in the schemas). The networks' own groups (electric, water, gas)
+# shape the map whoever serves them, so they always apply.
+SERVICES_OF: dict[str, tuple[str, ...]] = {
+    **{f"customers_billing.{k}": ("electric",) for k in ("electric_fixed_monthly", "electric_blocks",
+                                                         "electric_variable_delivery", "net_metering_credit")},
+    **{f"customers_billing.{k}": ("gas",) for k in ("gas_fixed_monthly", "gas_price_m3")},
+    **{f"customers_billing.{k}": ("water",) for k in ("water_fixed_monthly", "water_price_m3", "wastewater_ratio")},
+    "ami.meter_digits_electric": ("electric",), "ami.meter_digits_water": ("water",), "ami.meter_digits_gas": ("gas",),
+    "anomalies.leak": ("water",), "anomalies.tamper": ("electric",),
+    "operations.electric_crews": ("electric",), "operations.water_crews": ("water",), "operations.gas_crews": ("gas",),
+    "operations.gas_response_target_min": ("gas",),
+    "billing.winter_moratorium": ("electric", "water"),
+    "contact.gas_odour": ("gas",),
+    "field.crew_electric": ("electric",), "field.crew_water": ("water",), "field.crew_gas": ("gas",),
+    "field.gas_odour": ("gas",), "field.remote_switch_share": ("electric",),
+    "field.seal_exchange": ("electric", "gas"), "field.water_meter_replacement": ("water",),
+    "field.pole_inspection": ("electric",), "field.pole_replacement": ("electric",), "field.tree_trimming": ("electric",),
+    "field.service_upgrade": ("electric",),
+    "field.valve_exercise": ("water", "gas"), "field.valve_repair": ("water", "gas"),
+    "field.hydrant_flush": ("water",), "field.hydrant_repair": ("water",),
+    "field.leak_survey": ("gas",), "field.gas_leak_repair": ("gas",), "field.regulator_inspection": ("gas",),
+    "field.main_replacement": ("water", "gas"),
+}

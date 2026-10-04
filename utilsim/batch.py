@@ -252,7 +252,7 @@ def run_batch(cfg, homes: int, store: Path, request: dict | None = None, *,
             if network == "connected":
                 from utilsim.utility import network as nw
 
-                lay = nw.layout([d["id"] for d in job["districts"]])
+                lay = nw.layout([d["id"] for d in job["districts"]], services=cfg.customers_billing.services)
                 seed = f"{cfg.seeds.master}:utility"
                 ups = nw.upstream_inputs(lay, seed, cal)
                 write_json(directory / "network.json", {**lay, "seed": seed, "upstream": ups})

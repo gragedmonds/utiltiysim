@@ -329,6 +329,8 @@ def background_arrivals(run: M2CRun, key: str, b: _Builder | None = None) -> lis
         if b is None:
             b = run.__dict__["_contact_master"] = _Builder(run)
     i = IDX[key]
+    if key == "gas_odour" and not run.cfg.serves("gas"):
+        return []  # another utility answers for gas
     n_acc = max(1, len(b.accounts))
     bdays = [d for d in range(run.cal.days) if run.cal.add_bdays(d, 0) == d]
     wsum = sum(WEEKDAY_WEIGHT[run.cal.date_of(d).weekday()] for d in bdays) or 1.0

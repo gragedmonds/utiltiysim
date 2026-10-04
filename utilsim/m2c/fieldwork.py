@@ -162,11 +162,14 @@ def _poisson(lam: float, u: float) -> int:
     return k
 
 
-def crews_on(fc, crew: str, premises: int) -> float:
+def crews_on(fc, crew: str, premises: int, served=None) -> float:
     """Crews of a type on a day: ``per_1000_premises`` per 1,000 premises. On-call responders are whole crews (at
-    least one when above zero); the business-day crews may be part of a crew (its share of the day on this work)."""
+    least one when above zero); the business-day crews may be part of a crew (its share of the day on this work).
+    ``served``: the utility's services; a network's crew (electric, water, gas) of a service it does not provide is
+    another utility's (none)."""
     c = getattr(fc, f"crew_{crew}")
-    if c.per_1000_premises <= 0:
+    if c.per_1000_premises <= 0 or (served is not None and crew in ("electric", "water", "gas")
+                                    and crew not in served):
         return 0.0
     n = c.per_1000_premises * premises / 1000.0
     return float(max(1, int(round(n)))) if crew == "emergency" else round(n, 3)
@@ -388,7 +391,8 @@ class _Build:
         if _u(run, IDX["outage_repair"], j, 0) >= self.w("outage_repair", t0).rate:
             return
         util = inc["utility"]
-        crew = util if util in ("electric", "water", "gas") else "electric"  # AMI collectors: line crews
+        # AMI collectors: line crews, or the meter technicians where another utility runs the lines.
+        crew = util if util in ("electric", "water", "gas") else ("electric" if run.cfg.serves("electric") else "meter")
         wt = self.w("outage_repair", t0)
         start = t0 + 30.0 / 1440.0  # detection, dispatch and driving
         back = float(np.max(inc["restoredAt"])) if len(inc["restoredAt"]) else start + wt.minutes / 1440.0
@@ -566,21 +570,24 @@ class _Build:
             return float(pts[len(pts) // 2][0]), float(pts[len(pts) // 2][1])
 
         year = self.bdays
+        serves = self.run.cfg.serves  # another utility maintains the networks of the services it provides
         poles = [(q["id"], q["x"], q["z"], 1.0, ("find", "pole_replacement", q["id"]), None)
-                 for q in el.equipment if q["kind"] == "pole"]
+                 for q in el.equipment if q["kind"] == "pole"] if serves("electric") else []
         self.programme("pole_inspection", poles, year)
         spans = [(el.edge_ids[e], *mid(el, e), 1.0, None, None) for e in range(len(el.edge_ids))
-                 if el.placement and el.placement[e] == "overhead" and el.kind[e] in ("distribution", "trunk")]
+                 if el.placement and el.placement[e] == "overhead" and el.kind[e] in ("distribution", "trunk")] \
+            if serves("electric") else []
         self.programme("tree_trimming", spans, year)
         valves = [(q["id"], q["x"], q["z"], 1.0, ("find", "valve_repair", q["id"]), u)
-                  for u, net in (("water", wa), ("gas", ga)) for q in net.equipment if q["kind"] == "valve"]
+                  for u, net in (("water", wa), ("gas", ga)) if serves(u) for q in net.equipment
+                  if q["kind"] == "valve"]
         self.programme("valve_exercise", valves, year, crew="water")
         hydrants = [(q["id"], q["x"], q["z"], 1.0, ("find", "hydrant_repair", q["id"]), None)
-                    for q in wa.equipment if q["kind"] == "hydrant"]
+                    for q in wa.equipment if q["kind"] == "hydrant"] if serves("water") else []
         self.programme("hydrant_flush", hydrants, self.days_in(5, 10))
         # Leak survey routes: consecutive gas main edges, about a kilometre each.
         routes, cur, length = [], [], 0.0
-        for e in range(len(ga.edge_ids)):
+        for e in (range(len(ga.edge_ids)) if serves("gas") else ()):
             if ga.kind[e] not in ("distribution", "trunk"):
                 continue
             cur.append(e)
@@ -594,7 +601,7 @@ class _Build:
                    ("leaks", km / 1000.0, tuple(es)), None) for k, (es, km) in enumerate(routes)]
         self.programme("leak_survey", survey, self.days_in(4, 11))
         regs = [(ga.node_ids[i], float(ga.node_xy[i][0]), float(ga.node_xy[i][1]), 1.0, None, None)
-                for i, kind in enumerate(ga.node_kind) if "regulator" in kind]
+                for i, kind in enumerate(ga.node_kind) if "regulator" in kind] if serves("gas") else []
         self.programme("regulator_inspection", regs, year)
 
     def finding(self, o: Order) -> None:
@@ -673,7 +680,7 @@ class _Build:
         if self.ops is None:
             return
         segs = []
-        for u in ("water", "gas"):
+        for u in [u for u in ("water", "gas") if self.run.cfg.serves(u)]:
             net = self.ops.nets[u]
             for e in range(len(net.edge_ids)):
                 if net.kind[e] != "distribution" or (net.material[e] or "") != "cast iron":
@@ -718,7 +725,7 @@ class FieldEngine:
                                                                        "waitingMin", "oldestDays")} for c in CREWS}
         for d, fc in enumerate(b.fc):
             for c in CREWS:
-                self.crews[c]["crews"][d] = crews_on(fc, c, b.n_prem)
+                self.crews[c]["crews"][d] = crews_on(fc, c, b.n_prem, self.run.cfg.customers_billing.services)
         self.pending: list = []
         self.queues: dict[str, list] = {c: [] for c in DAY_CREWS}
         self.fixed_on: dict[tuple[str, int], float] = {}
@@ -1337,7 +1344,7 @@ def summary(run: M2CRun, as_of: str | None = None) -> dict:
         k = c["crew"] == crew
         lab = float(c["labour"][k & (c["end"] <= T)].sum())
         cc = getattr(fc, f"crew_{crew}")
-        crews.append({"id": crew, "label": label, "crews": crews_on(fc, crew, fw.premises), **_crew_stats(fw, crew, 0, day),
+        crews.append({"id": crew, "label": label, "crews": crews_on(fc, crew, fw.premises, run.cfg.customers_billing.services), **_crew_stats(fw, crew, 0, day),
                       "orders": int((k & (c["end"] <= T)).sum()), "labour": _r(lab),
                       "settings": cc.model_dump(mode="json")})
     plan = []

@@ -2,7 +2,9 @@
 // advanced flags (x-unit, x-effects, x-advanced). A field is one compact row (short title, input, unit); its
 // description, default, effects and path sit behind an (i) button, and the fields of a group lay out in two columns. Nested objects (a value per era, a season's temperatures, a crew) render as
 // one compound row (class schema-compound): the title line, then a compact row of captioned sub-inputs with their units, lists as a checked JSON box, and settings the engine marks x-status "not-modelled" or
-// x-deprecated stay visible but disabled with the reason. The form reports only values that differ from a base (the
+// x-deprecated stay visible but disabled with the reason. So does a setting that matters only for services the
+// utility does not provide (x-services against the town's customers_billing.services: "Not applicable"); it keeps its
+// value. A list of choices (items.enum, the services themselves) is a row of checkboxes. The form reports only values that differ from a base (the
 // schema defaults, or a town's own configuration), so the engine stays authoritative. Every engine setting also says
 // where its effect reaches (x-reach: year, town, shape, operations, display) and how it changes the results
 // (x-impact): a small chip on the row and the first lines of its (i) popover. Searching "year" lists what moves it.
@@ -13,13 +15,31 @@ export const REACH={year:{chip:'Year',text:'Changes the meter-to-cash year direc
  shape:{chip:'Map',text:'Map shape. Rearranges the town; the year moves only because homes are drawn again (seed-sized noise).'},
  operations:{chip:'Ops day',text:'The operations day on the map. Reaches the year only through interruptions you carry into a run.'},
  display:{chip:'Display',text:'Display only: labels, units, clocks or default dates. No result changes.'}};
+// The services a utility can provide, and the town setting that lists the ones it does.
+export const SERVICE_KEYS=['electric','water','gas'],SERVICES_PATH='customers_billing.services';
+const SERVICE_NAME={electric:'electricity',water:'water',gas:'gas'};
+// The services a town's utility provides (customers_billing.services of its config, every one when it does not say),
+// in canonical order.
+export function servedServices(config){const v=config?.customers_billing?.services;return Array.isArray(v)?SERVICE_KEYS.filter(k=>v.includes(k)):[...SERVICE_KEYS];}
+// ['water','gas'] → "water or gas" (joiner 'and' for "water and gas").
+export function serviceNames(list,joiner='or'){const n=(list||[]).map(s=>SERVICE_NAME[s]||s);return n.length<2?n.join(''):`${n.slice(0,-1).join(', ')} ${joiner} ${n.at(-1)}`;}
+// A setting tagged x-services is not applicable when the utility provides none of them (served: null = no filter).
+export function serviceStatus(tags,served){if(!Array.isArray(tags)||!tags.length||!Array.isArray(served)||tags.some(s=>served.includes(s)))return null;
+ return {status:'not-applicable',reason:`your utility does not provide ${serviceNames(tags)}.`};}
+const STATUS_LABEL={deprecated:'Deprecated','not-modelled':'Not modelled','not-applicable':'Not applicable'};
+export const statusLabel=s=>STATUS_LABEL[s]||'Unavailable';
+// A field's status for the services served: its own (not modelled, deprecated) first, else not applicable. A compound
+// row's sub-values can be not applicable on their own. Mutates and returns the field.
+export function applyServices(f,served){const s=f.modelStatus||serviceStatus(f.services,served);f.status=s?.status;f.reason=s?.reason;f.disabled=!!s;
+ for(const c of f.children||[]){const cs=serviceStatus(c.services,served);c.notApplicable=cs?`${statusLabel(cs.status)}: ${cs.reason}`:'';c.disabled=f.disabled||!!cs;}
+ return f;}
 // The popover's lines for a field, in order: how it changes the results, where that reaches, then the description,
-// status, unit/default, effects and path.
+// status, unit/default, effects, the services it matters for and path.
 export function infoLines(f,reaches=null){const r=f.reach&&REACH[f.reach];
  return [f.impact&&`How it changes the results: ${f.impact}`,r&&`Reaches: ${(reaches&&reaches[f.reach])||r.text}`,f.description,
-  f.status&&`${f.status==='deprecated'?'Deprecated':f.status==='not-modelled'?'Not modelled':'Unavailable'}: ${f.reason}`,
+  f.status&&`${statusLabel(f.status)}: ${f.reason}`,
   [f.unit&&`Unit ${f.unit}`,f.default!==undefined&&`Default ${show(f.default)}`,f.advanced&&'Advanced'].filter(Boolean).join(' · '),
-  f.effects?.length&&`Affects ${f.effects.join(', ')}`,f.path].filter(Boolean);}
+  f.effects?.length&&`Affects ${f.effects.join(', ')}`,f.services?.length&&`Applies when your utility provides ${serviceNames(f.services)}`,f.path].filter(Boolean);}
 const SUB_LABEL={per_event:'Per event',per_1000:'Per 1,000 a month',per_1000_premises:'Per 1,000 premises',target_days:'Due in (business days)',overtime_factor:'Overtime ×',self_serve:'Self-serve',handle_min:'Handle min',resolved:'Resolved first time',pre_1945:'Pre-1945',postwar:'Post-war',modern:'Modern',mean_c:'Mean',sd_c:'Std dev',min_c:'Min',max_c:'Max',up_to:'Up to',price:'Price'};
 export const prettyKey=k=>SUB_LABEL[k]||(s=>s.charAt(0).toUpperCase()+s.slice(1))(String(k).replaceAll('_',' '));
 // Field titles read as sentences: a generated Title Case title ("Analyst Queue Days Max") becomes "Analyst queue days
@@ -40,20 +60,24 @@ function describe(defs,key,p0){
  const resolve=s=>{if(s?.$ref){const {$ref,...rest}=s;return {...(defs[$ref.split('/').pop()]||{}),...rest,title:rest.title,_ref:true};}if(s?.allOf?.length===1&&s.allOf[0].$ref){const {allOf,...rest}=s;return resolve({...rest,$ref:allOf[0].$ref});}return s||{};};
  let p=resolve(p0),nullable=false;
  if(Array.isArray(p.anyOf)){const opts=p.anyOf.filter(o=>o.type!=='null');nullable=opts.length<p.anyOf.length;if(opts.length===1){const {anyOf,...rest}=p;p={...resolve(opts[0]),...rest,title:rest.title,description:rest.description??resolve(opts[0]).description};}}
- const title=p.title||prettyKey(key),base={key,title,description:p.description||'',min:p.minimum,max:p.maximum,xmin:p.exclusiveMinimum,xmax:p.exclusiveMaximum,unit:p['x-unit']||'',advanced:!!p['x-advanced'],effects:p['x-effects']||[],reach:p['x-reach']||'',impact:p['x-impact']||'',options:p.enum||null,default:p.default,nullable,...(statusOf(p)||{})};
+ const title=p.title||prettyKey(key),base={key,title,description:p.description||'',min:p.minimum,max:p.maximum,xmin:p.exclusiveMinimum,xmax:p.exclusiveMaximum,unit:p['x-unit']||'',advanced:!!p['x-advanced'],effects:p['x-effects']||[],reach:p['x-reach']||'',impact:p['x-impact']||'',options:p.enum||null,default:p.default,nullable,services:Array.isArray(p['x-services'])?p['x-services']:null,...(statusOf(p)||{})};
  if(p.type==='object'&&p.properties&&Object.values(p.properties).every(c=>{const r=resolve(c);return !r.properties&&r.type!=='array'&&r.type!=='object';}))
   return {...base,type:'object',children:Object.entries(p.properties).map(([k,c])=>{const d=describe(defs,k,c);return {...d,title:SUB_LABEL[k]||(d.title===prettyKey(k)||/^[A-Z][a-z]*( [A-Z0-9][a-z0-9]*)*$/.test(d.title)?prettyKey(k):d.title),unit:d.unit||base.unit};})};
+ if(p.type==='array'&&Array.isArray(p.items?.enum)&&!p.anyOf)return {...base,type:'set',options:p.items.enum,minItems:p.minItems??1};
  if(p.type==='array'||p.type==='object'||p.anyOf)return {...base,type:'json',array:p.type==='array',items:p.items?resolve(p.items):null,minItems:p.minItems,maxItems:p.maxItems};
  return {...base,type:scalarType(p),maxLength:p.maxLength};
 }
 // groups: optional (key, groupSchema) => boolean, e.g. only the town-scoped groups of the full SimConfig schema.
-export function schemaFields(schema,{groups=null}={}){
+// services: the services the utility provides (servedServices); a field (or group) tagged x-services for none of them
+// is not applicable. Left out, every field applies.
+export function schemaFields(schema,{groups=null,services=null}={}){
  const defs=schema?.$defs||{},resolve=s=>s?.$ref?defs[s.$ref.split('/').pop()]||{}:s||{},out=[];
  const list=Object.entries(schema?.properties||{}).map(([group,gs],i)=>({group,g:resolve(gs),i})).filter(({group,g})=>g.properties&&(!groups||groups(group,g)));
  list.sort((a,b)=>(a.g['x-order']??1e9)-(b.g['x-order']??1e9)||a.i-b.i);
- for(const {group,g} of list){const gst=statusOf(g);
+ for(const {group,g} of list){const gst=statusOf(g),gsv=Array.isArray(g['x-services'])?g['x-services']:null;
   for(const [key,p0] of Object.entries(g.properties)){const f=describe(defs,key,p0);if(gst&&!f.status)Object.assign(f,gst);
-   out.push({group,groupTitle:g.title||group,groupDescription:g.description||'',...f,path:group+'.'+key,disabled:!!f.status});}}
+   const field={group,groupTitle:g.title||group,groupDescription:g.description||'',...f,services:f.services||gsv,modelStatus:f.status?{status:f.status,reason:f.reason}:null,path:group+'.'+key};
+   out.push(applyServices(field,services));}}
  return out;
 }
 const isNum=v=>typeof v==='number'&&Number.isFinite(v);
@@ -67,6 +91,8 @@ function checkItem(item,spec,i){if(!spec)return null;const at=`Item ${i+1}`;
  return null;}
 export function parseField(f,raw){
  if(f.type==='boolean')return {ok:true,value:!!raw};
+ if(f.type==='set'){const v=Array.isArray(raw)?raw:[];if(v.some(x=>!f.options.includes(x)))return {ok:false,error:`Choose from ${f.options.join(', ')}.`};
+  const value=f.options.filter(o=>v.includes(o));if(value.length<(f.minItems??1))return {ok:false,error:(f.minItems??1)>1?`Choose at least ${f.minItems}.`:'Choose at least one.'};return {ok:true,value};}
  if(f.type==='object'){const value={};for(const c of f.children){const r=parseField(c,raw?.[c.key]);if(!r.ok)return {ok:false,error:`${c.title}: ${r.error}`};value[c.key]=r.value;}return {ok:true,value};}
  if(f.type==='json'){let v;try{v=typeof raw==='string'?JSON.parse(raw):raw;}catch{return {ok:false,error:'Enter valid JSON.'};}
   if(v===null&&f.nullable)return {ok:true,value:null};
@@ -106,43 +132,55 @@ const jsonText=v=>v==null?'null':Array.isArray(v)&&v.some(x=>x&&typeof x==='obje
 // Options: values ({group:{key:value}}), base (what "changed" compares with; default the schema defaults), groups
 // (filter), showAdvanced, collapsible (cards fold; `open` lists the groups open at first), skip (paths rendered
 // elsewhere), decorate(field,row,input) and onChange(overrides, changes). Returns {fields, values, set, filter, changes}.
-export function renderSchemaForm(el,schema,{values={},base=null,groups=null,showAdvanced=false,collapsible=false,open=[],skip=[],decorate=null,baseLabel='',onChange=()=>{}}={}){
+export function renderSchemaForm(el,schema,{values={},base=null,groups=null,services=null,showAdvanced=false,collapsible=false,open=[],skip=[],decorate=null,baseLabel='',onChange=()=>{}}={}){
  const info=(label,lines)=>{const text=lines.filter(Boolean);if(!text.length)return null;const b=mk('button','schema-info','i');b.type='button';b.setAttribute('aria-label','About '+label);b.setAttribute('aria-expanded','false');b.title=text[0];const pop=mk('div','schema-pop');pop.setAttribute('role','note');for(const t of text){pop.append(mk('p',null,t));}return [b,pop];};
- const fields=schemaFields(schema,{groups}),state=structuredClone(values||{}),byGroup=new Map(),rows=new Map(),badges=new Map(),mk=(tag,cls,text)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(text!=null)e.textContent=text;return e;};
+ const fields=schemaFields(schema,{groups,services}),state=structuredClone(values||{}),byGroup=new Map(),rows=new Map(),badges=new Map(),mk=(tag,cls,text)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(text!=null)e.textContent=text;return e;};
  for(const f of fields){if(!byGroup.has(f.group))byGroup.set(f.group,[]);byGroup.get(f.group).push(f);}
  const changes=()=>changeList(fields,state,base),refLabel=baseLabel||(base?'This town':'Default');
  function mark(f){const r=rows.get(f.path),ref=refOf(f,base),cur=state[f.group]?.[f.key],changed=cur!==undefined&&!same(cur,ref);if(r){r.row.classList.toggle('is-changed',changed);r.was.textContent=changed?`${refLabel}: ${show(ref)}`:'';}
   const n=changeList(byGroup.get(f.group),state,base).length,b=badges.get(f.group);if(b){b.textContent=n?`${n} changed`:'';b.hidden=!n;}}
  function commit(f,value){(state[f.group]||={})[f.key]=value;mark(f);onChange(overridesFrom(fields,state,base),changes());}
+ // A row's status: disabled inputs (a sub-value on its own when only it is not applicable; a page lock stays), the
+ // status chip (not modelled, deprecated) or, for a setting that does not apply, the reason under it.
+ function paint({f,row,inputs,ctl,na}){row.classList.toggle('is-disabled',!!f.disabled);row.classList.toggle('is-not-applicable',f.status==='not-applicable');
+  for(const i of inputs){const c=f.type==='object'?f.children.find(c=>c.key===i.dataset.key):null;i.disabled=(c?c.disabled:!!f.disabled)||i.dataset.lockedInput!==undefined;if(c)i.closest('.schema-sub').title=c.notApplicable||c.description||c.title;}
+  for(const old of ctl.querySelectorAll('.schema-status'))old.remove();
+  if(f.status&&f.status!=='not-applicable'){const chip=mk('span','schema-status',statusLabel(f.status));chip.title=`${statusLabel(f.status)}: ${f.reason}`;ctl.append(chip);}
+  na.textContent=f.status==='not-applicable'?`${statusLabel(f.status)}: ${f.reason}`:'';na.hidden=!na.textContent;}
  el.replaceChildren();
  for(const [group,list] of byGroup){
   const card=mk(collapsible?'details':'section','settings-card schema-group'),h=mk('h3',null,list[0].groupTitle),badge=mk('span','schema-badge'),ginfo=info(list[0].groupTitle,[list[0].groupDescription]),body=mk('div','schema-fields');card.dataset.group=group;badge.hidden=true;badges.set(group,badge);
   const head=mk(collapsible?'summary':'div','schema-group-head'+(collapsible?' schema-summary':'')),count=mk('span','schema-count',`${list.filter(f=>!skip.includes(f.path)).length}`);head.append(h,badge,count);if(ginfo){head.classList.add('has-pop');head.append(...ginfo);}if(collapsible)card.open=open==='all'||open.includes(group);card.append(head,body);
   for(const f of list){if(skip.includes(f.path))continue;const hidden=f.advanced&&!showAdvanced;
-   const row=mk(f.type==='object'?'div':'label','schema-field'+(f.disabled?' is-disabled':'')),name=mk('span','schema-name',sentenceTitle(f.title)),err=mk('small','schema-error'),was=mk('small','schema-was');row.dataset.path=f.path;if(hidden)row.hidden=true;row.title=f.description||'';
+   const row=mk(f.type==='object'||f.type==='set'?'div':'label','schema-field'+(f.disabled?' is-disabled':'')),name=mk('span','schema-name',sentenceTitle(f.title)),err=mk('small','schema-error'),was=mk('small','schema-was'),na=mk('small','schema-na');row.dataset.path=f.path;if(hidden)row.hidden=true;row.title=f.description||'';
    const current=state[f.group]?.[f.key]??f.default;let input,inputs=[];
    if(f.type==='boolean'){input=mk('input');input.type='checkbox';input.checked=!!current;}
    else if(f.type==='enum'){input=mk('select');for(const o of f.options){const opt=mk('option',null,String(o).replaceAll('_',' '));opt.value=o;input.append(opt);}input.value=current;}
    else if(f.type==='json'){input=mk('textarea','schema-json');input.spellcheck=false;input.value=jsonText(current);input.rows=Math.min(8,input.value.split('\n').length+(input.value.length>60?1:0));row.classList.add('schema-wide');}
+   else if(f.type==='set'){input=mk('span','schema-set');row.setAttribute('role','group');row.setAttribute('aria-label',sentenceTitle(f.title));
+    for(const o of f.options){const lab=mk('label','schema-set-item'),i=mk('input');i.type='checkbox';i.value=o;i.name=f.path;i.checked=Array.isArray(current)&&current.includes(o);lab.append(i,mk('span',null,prettyKey(o)));input.append(lab);inputs.push(i);}}
    else if(f.type==='object'){input=mk('div','schema-subs');row.setAttribute('role','group');row.setAttribute('aria-label',f.description||f.title);
     for(const c of f.children){const lab=mk('label','schema-sub'),cap=mk('span','schema-sub-cap',c.title),i=mk('input');if(c.unit)cap.append(mk('span','schema-sub-unit',c.unit));lab.title=c.description||c.title;i.type='number';i.step=c.type==='integer'?'1':'any';if(c.min!=null)i.min=c.min;if(c.max!=null)i.max=c.max;setNum(i,current?.[c.key]);i.dataset.key=c.key;i.name=f.path+'.'+c.key;i.disabled=f.disabled;lab.append(cap,i);input.append(lab);inputs.push(i);}row.classList.add('schema-compound');}
    else{input=mk('input');input.type=f.type==='text'?'text':'number';if(f.min!=null)input.min=f.min;if(f.max!=null)input.max=f.max;if(f.maxLength!=null)input.maxLength=f.maxLength;if(f.type!=='text')input.step=f.type==='integer'?'1':'any';if(f.type==='text')input.value=current??'';else setNum(input,current);if(f.nullable)input.placeholder='none';}
-   if(f.type!=='object'){input.name=f.path;input.dataset.group=f.group;input.dataset.key=f.key;input.disabled=f.disabled;inputs=[input];}
+   if(f.type!=='object'&&f.type!=='set'){input.name=f.path;input.dataset.group=f.group;input.dataset.key=f.key;input.disabled=f.disabled;inputs=[input];}
    const finfo=info(sentenceTitle(f.title),infoLines(f,schema?.['x-reaches']));const rc=REACH[f.reach];if(rc){const chip=mk('span','schema-reach reach-'+f.reach,rc.chip);chip.title=(schema?.['x-reaches']?.[f.reach])||rc.text;name.append(chip);}if(finfo){row.classList.add('has-pop');name.append(finfo[0]);}
    err.setAttribute('role','alert');
-   const read=()=>f.type==='boolean'?input.checked:f.type==='object'?Object.fromEntries(inputs.map(i=>[i.dataset.key,exact(i)])):exact(input);
+   const read=()=>f.type==='boolean'?input.checked:f.type==='set'?inputs.filter(i=>i.checked).map(i=>i.value):f.type==='object'?Object.fromEntries(inputs.map(i=>[i.dataset.key,exact(i)])):exact(input);
    const check=()=>{const res=parseField(f,read());for(const i of inputs)i.setAttribute('aria-invalid',String(!res.ok));err.textContent=res.ok?'':res.error;return res;};
    for(const i of inputs){i.onchange=()=>{const res=check();if(res.ok)commit(f,res.value);};if(f.type==='json')i.oninput=check;}
-   const ctl=mk('span','schema-control');ctl.append(input);if(f.unit&&f.type!=='json'&&f.type!=='object')ctl.append(mk('span','schema-unit',f.unit));if(f.status)ctl.append(mk('span','schema-status',f.status==='deprecated'?'Deprecated':f.status==='not-modelled'?'Not modelled':'Unavailable'));
-   row.append(name,ctl,was,err);if(finfo)row.append(finfo[1]);
-   decorate?.(f,row,input);rows.set(f.path,{row,input,inputs,was,f});body.append(row);mark(f);}
+   const ctl=mk('span','schema-control');ctl.append(input);if(f.unit&&f.type!=='json'&&f.type!=='object')ctl.append(mk('span','schema-unit',f.unit));
+   row.append(name,ctl,na,was,err);if(finfo)row.append(finfo[1]);
+   decorate?.(f,row,input);rows.set(f.path,{row,input,inputs,ctl,na,was,f});paint(rows.get(f.path));body.append(row);mark(f);}
   el.append(card);}
  // Sets a value from outside the form (a seed button, a reset), updating its inputs.
  function set(path,value,{silent=false}={}){const f=fields.find(x=>x.path===path);if(!f)return false;(state[f.group]||={})[f.key]=value;const r=rows.get(path);
-  if(r){if(f.type==='boolean')r.input.checked=!!value;else if(f.type==='object')for(const i of r.inputs)setNum(i,value?.[i.dataset.key]);else if(f.type==='json')r.input.value=jsonText(value);else if(f.type==='text'||f.type==='enum')r.input.value=value??'';else setNum(r.input,value);for(const i of r.inputs)i.setAttribute('aria-invalid','false');}
+  if(r){if(f.type==='boolean')r.input.checked=!!value;else if(f.type==='set')for(const i of r.inputs)i.checked=Array.isArray(value)&&value.includes(i.value);else if(f.type==='object')for(const i of r.inputs)setNum(i,value?.[i.dataset.key]);else if(f.type==='json')r.input.value=jsonText(value);else if(f.type==='text'||f.type==='enum')r.input.value=value??'';else setNum(r.input,value);for(const i of r.inputs)i.setAttribute('aria-invalid','false');}
   mark(f);if(!silent)onChange(overridesFrom(fields,state,base),changes());return true;}
  // Shows only matching settings; cards with a match open while a search is active. Returns the number of matches.
  function filter(query){let n=0;for(const {row,f} of rows.values()){const hit=fieldMatches(f,query)&&(showAdvanced||!f.advanced||!!query);row.hidden=!hit;if(hit)n++;}
   for(const card of el.querySelectorAll('.schema-group')){const any=[...card.querySelectorAll('.schema-field')].some(r=>!r.hidden);card.hidden=!any&&!!query;if(collapsible&&query&&any)card.open=true;const c=card.querySelector('.schema-count');if(c)c.textContent=String([...card.querySelectorAll('.schema-field')].filter(r=>!r.hidden).length);}return n;}
- return {fields,values:state,set,filter,changes,invalid:()=>[...el.querySelectorAll('[aria-invalid="true"]')].length};
+ // The services the utility provides changed (the town's customers_billing.services): settings for none of them
+ // show as not applicable, the others come back. Values stay as they are.
+ function setServices(served){for(const f of fields)applyServices(f,served);for(const r of rows.values())paint(r);}
+ return {fields,values:state,set,filter,changes,setServices,invalid:()=>[...el.querySelectorAll('[aria-invalid="true"]')].length};
 }
