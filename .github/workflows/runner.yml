@@ -11,7 +11,8 @@ permissions:
   contents: read
 jobs:
   package:
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    if: (github.event_name != 'pull_request' || !github.event.pull_request.draft) && (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success')
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -34,6 +35,8 @@ jobs:
       - run: npm ci --prefix packages/town-viewer
       - run: go test ./...
         working-directory: launcher
+      - name: Local server startup checks (no simulation replay)
+        run: uv run pytest tests/test_runner_startup.py -q
       - name: Build and smoke test runtime
         shell: bash
         run: |
@@ -48,6 +51,7 @@ jobs:
     needs: package
     if: github.event_name == 'workflow_run' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
       contents: write
     steps:
