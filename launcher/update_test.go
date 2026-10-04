@@ -104,3 +104,14 @@ func TestStagedRuntimeIsPromotedOnTheNextStart(t *testing.T) {
 		t.Fatal("ran a runtime whose digest changed:", exe)
 	}
 }
+
+func TestTheCommittedReleaseKeyIsUsable(t *testing.T) {
+	// release_key.pub is empty until the release key exists; once committed it must be a parseable ssh-ed25519 line,
+	// or every launcher built from it would silently never update.
+	if len(releaseKeyFile) == 0 {
+		t.Skip("no release key committed yet")
+	}
+	if key := releaseKey(); key == nil || len(key) != ed25519.PublicKeySize {
+		t.Fatal("launcher/release_key.pub does not hold an ssh-ed25519 public key")
+	}
+}
