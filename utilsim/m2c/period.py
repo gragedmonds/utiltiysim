@@ -13,8 +13,7 @@ import numpy as np
 
 from utilsim.m2c import catalog as cat
 from utilsim.m2c import collections as colls
-from utilsim.m2c.base import date_of
-from utilsim.m2c.run import M2CRun, parse_day
+from utilsim.m2c.run import M2CRun
 
 
 def window(run: M2CRun, since: str, as_of: str | None = None) -> dict:
@@ -22,7 +21,7 @@ def window(run: M2CRun, since: str, as_of: str | None = None) -> dict:
 
     tw, c, bk = run.town, run.cfg, run.books
     day, T = as_of_t(run, as_of)
-    d0 = min(max(parse_day(since, 0), 0), day)
+    d0 = min(max(run.cal.parse_day(since, 0), 0), day)
     t0 = float(d0)
     S = t0 - 1e-6  # the end of the day before the window: the stocks at its start
     M = slice(1, 13)
@@ -121,7 +120,7 @@ def window(run: M2CRun, since: str, as_of: str | None = None) -> dict:
                           "customerMinutes": round(sum(len(o["prem"]) * (min(o["t1"], T) - o["t0"]) * 1440.0
                                                        for o in logs))}
     total = sum(costs.values()) + read_cost
-    return {"since": date_of(d0).isoformat(), "asOf": date_of(day).isoformat(), "days": day - d0 + 1,
+    return {"since": run.cal.date_of(d0).isoformat(), "asOf": run.cal.date_of(day).isoformat(), "days": day - d0 + 1,
             "kpis": {"reads": int(inwin.sum()), "actual": int(got.sum()), "missing": int((inwin & np.isnan(obs)).sum()),
                      "autoAccepted": int((got & (disp == 0)).sum()), "flagged": int((got & (disp > 0)).sum()),
                      "released": int((relwin & (st > 0) & (st < 4)).sum()), "estimated": int((relwin & (st == 2)).sum()),

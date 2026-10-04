@@ -15,10 +15,15 @@ from viewer_contract import validate_frame
 
 from utilsim.io import schemas
 from utilsim.io.snapshot import build_snapshot
+from utilsim.m2c.calendar import calendar
 from utilsim.ops.opstown import OpsTown
 from utilsim.ops.routing import Router, access_point
 from utilsim.ops.timeline import Run
 from utilsim.sim.state import FrameBuilder, local_time
+
+CAL = calendar(2026)
+date_of = CAL.date_of
+parse_day = CAL.parse_day
 
 ROOT = Path(__file__).resolve().parents[1]
 # Most tests follow one incident they cause: background incidents (on by default) are switched off for them.
@@ -269,7 +274,6 @@ def test_reading_rounds_show_the_meter_to_cash_outcome_of_each_read(small_town):
 
     from api._m2c import RunRequest, run_for
     from api.index import app
-    from utilsim.m2c.base import date_of
 
     run = run_for(RunRequest(town="small_town"))
     tw = run.town
@@ -310,7 +314,6 @@ def test_m2c_field_orders_become_crew_jobs_and_field_visits_settle_cases(small_t
 
     from api._m2c import RunRequest, run_for
     from api.index import app
-    from utilsim.m2c.base import date_of
 
     client = TestClient(app)
     run = run_for(RunRequest(town="small_town"))
@@ -375,8 +378,6 @@ def test_outages_from_operations_reach_meter_to_cash(small_town):
     from api._m2c import RunRequest, run_for
     from api.index import app
     from utilsim.m2c import views
-    from utilsim.m2c.base import date_of
-    from utilsim.m2c.run import parse_day
 
     pole = fused_pole(small_town)
     base = run_for(RunRequest(town="small_town"))

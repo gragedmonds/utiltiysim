@@ -15,7 +15,11 @@ from api._m2c import RunRequest, _master, run_for
 from api.index import app
 from utilsim.m2c import tables as T
 from utilsim.m2c import views
-from utilsim.m2c.base import date_of
+from utilsim.m2c.calendar import calendar
+
+CAL = calendar(2026)
+parse_day = CAL.parse_day
+date_of = CAL.date_of
 
 DAY = "2026-08-05"
 LIMIT = 4_500_000
@@ -185,7 +189,7 @@ def test_tariffs_carry_both_rate_versions(run, master):
     v1, v2 = by[("RES-E", 1)], by[("RES-E", 2)]
     pct = run.cfg.billing.rate_change_pct
     assert v2[keys.index("effectiveFrom")] == str(run.cfg.billing.rate_change_date)[:10]
-    assert v1[keys.index("effectiveTo")] == date_of(views.parse_day(v2[keys.index("effectiveFrom")], 0) - 1).isoformat()
+    assert v1[keys.index("effectiveTo")] == date_of(parse_day(v2[keys.index("effectiveFrom")], 0) - 1).isoformat()
     assert abs(v2[keys.index("tier1Price")] - round(v1[keys.index("tier1Price")] * (1 + pct / 100), 5)) < 1e-9
     assert v1[keys.index("fixedMonthly")] == v2[keys.index("fixedMonthly")]
     assert by[("COM-E", 1)][keys.index("demandChargePerKW")] == 9.5

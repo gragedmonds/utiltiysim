@@ -14,8 +14,12 @@ from api.index import app
 from utilsim.m2c import catalog as cat
 from utilsim.m2c import lookups, views
 from utilsim.m2c import orders as ords
-from utilsim.m2c.base import date_of
-from utilsim.m2c.run import ActionError, M2CRun, add_bdays
+from utilsim.m2c.calendar import calendar
+from utilsim.m2c.run import ActionError, M2CRun
+
+CAL = calendar(2026)
+add_bdays = CAL.add_bdays
+date_of = CAL.date_of
 
 SLOW = {"process": {"analysts": 0, "rpa_coverage": 0}}  # nothing resolves cases but you (and supervisors, crews)
 

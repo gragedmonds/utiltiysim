@@ -17,17 +17,19 @@ from utilsim.core.ids import str_key
 from utilsim.core.rng import Purpose, hash_u01
 from utilsim.customers.calendar import scheduled_read_date
 from utilsim.m2c import registers as regs
+from utilsim.m2c.calendar import FIRST_YEAR, RunCalendar, calendar
 from utilsim.sim.usage import KEYS, UsageInputs, monthly_energy
+from utilsim.sim.weather import START as WEATHER_START
 from utilsim.sim.weather import daily_temps
 
-YEAR = 2026
+YEAR = FIRST_YEAR  # the snapshot's year: a town built without a year is in it
 READ_HOUR = {"AMI": (2.0, 0.0), "AMR": (9.5, 5.0), "MANUAL": (9.0, 6.0)}  # base hour, spread × u
 
 
-def _day(iso: str | None) -> int | None:
+def _day(iso: str | None, cal: RunCalendar) -> int | None:
     if not iso:
         return None
-    return regs.day_of(datetime.fromisoformat(iso.replace("Z", "+00:00")).date())
+    return cal.day_of(datetime.fromisoformat(iso.replace("Z", "+00:00")).date())
 
 
 @dataclass
@@ -42,7 +44,7 @@ class M2CTown:
     move_in: np.ndarray  # day index (or very negative)
     move_out: np.ndarray  # day index (or very large)
     normal: dict[str, np.ndarray]  # key -> (13, n) cumulative normal consumption from Jan 1
-    december: dict[str, np.ndarray]  # key -> (n,) December consumption (used before 2026)
+    december: dict[str, np.ndarray]  # key -> (n,) December consumption (used before the year)
     # Registers (R rows).
     reg_ids: list[str]
     reg_index: dict[str, int]
@@ -62,7 +64,7 @@ class M2CTown:
     portion: np.ndarray
     base: np.ndarray
     hour: np.ndarray
-    read_day: np.ndarray  # (R, 13): scheduled read day for Dec 2025 (col 0) and each month of 2026
+    read_day: np.ndarray  # (R, 13): scheduled read day for the December before (col 0) and each month
     contracts: dict[tuple[int, str], list[tuple[int, int, str, str]]]  # (premise, commodity) -> tenancies
     # Meters (M rows).
     meter_prem: np.ndarray
@@ -77,7 +79,7 @@ class M2CTown:
     tariffs: dict[str, dict]
     account_method: dict[str, str]
     account_profile: dict[str, str]
-    temps: np.ndarray  # daily mean temperature, index 0 = 2025-12-01 (sim.weather)
+    temps: np.ndarray  # daily mean temperature, index 0 = 1 December of the year before (sim.weather)
     # Master data for the lookup screens (installation, contract, account, business partner).
     name: str = ""  # town name (e.g. "Small Town"), for the planning plant of field service orders
     inst_index: dict[str, int] = field(default_factory=dict)
@@ -97,6 +99,7 @@ class M2CTown:
     premise_xz: np.ndarray = field(default_factory=lambda: np.zeros((0, 2)))
     premise_street: list[str] = field(default_factory=list)
     premise_attrs: dict[str, np.ndarray] = field(default_factory=dict)  # yearBuilt, hasEV, electricHeat, residential
+    cal: RunCalendar = field(default_factory=calendar)  # the calendar year the town's days count in
 
     def collector_of(self, r: int) -> str | None:
         """The AMI collector register row ``r``'s meter reports through, if any."""
@@ -107,19 +110,21 @@ class M2CTown:
         return len(self.reg_ids)
 
     def true_advance(self, rows: np.ndarray, day: np.ndarray, hour: np.ndarray) -> np.ndarray:
-        """Normal (anomaly-free) consumption since 2026-01-01 for register rows at (day, hour)."""
+        """Normal (anomaly-free) consumption since 1 January of the town's year for register rows at (day, hour)."""
         out = np.empty(len(rows))
         for k, name in enumerate(KEYS):
             m = self.key[rows] == k
             if m.any():
-                out[m] = regs.advance(self.normal[name], self.december[name], self.prem[rows[m]], day[m], hour[m])
+                out[m] = regs.advance(self.normal[name], self.december[name], self.prem[rows[m]], day[m], hour[m],
+                                      self.cal.month_start)
         return out
 
     def read_id(self, r: int, m: int) -> str:
-        return f"READ-{self.id}-{self.reg_ids[r]}-{date_of(int(self.read_day[r, m])).isoformat()}"
+        return f"READ-{self.id}-{self.reg_ids[r]}-{self.cal.date_of(int(self.read_day[r, m])).isoformat()}"
 
     def find_read(self, read_id: str) -> tuple[int, int]:
-        """(register row, month) of a 2026 read id ``READ-{townId}-{registerId}-{YYYY-MM-DD}``; KeyError if unknown."""
+        """(register row, month) of a read id of the year ``READ-{townId}-{registerId}-{YYYY-MM-DD}``; KeyError if
+        unknown."""
         prefix = f"READ-{self.id}-"
         r = self.reg_index.get(read_id[len(prefix):-11]) if read_id.startswith(prefix) and len(read_id) > \
             len(prefix) + 11 else None
@@ -140,12 +145,15 @@ class M2CTown:
         return (ten[0][2], ten[0][3]) if ten else ("", "")
 
     @classmethod
-    def from_snapshot(cls, snap: dict) -> M2CTown:
+    def from_snapshot(cls, snap: dict, year: int = YEAR) -> M2CTown:
+        """The town in calendar ``year``: its read schedule, usage and weather for that year (2026: the snapshot's
+        own year)."""
+        cal = calendar(year)
         cfg = SimConfig.model_validate(snap["config"])
         premises = snap["premises"]
         pidx = {p["id"]: i for i, p in enumerate(premises)}
         far = 10 ** 6
-        usage = monthly_energy(UsageInputs.from_snapshot(snap), cfg)
+        usage = monthly_energy(UsageInputs.from_snapshot(snap), cfg, cal.year)
         normal = {k: regs.cumulative(v) for k, v in usage.items()}
         december = {k: v[11] for k, v in usage.items()}
         u15 = hash_u01(cfg.seeds.for_("households"), Purpose.CUSTOMER,
@@ -175,8 +183,9 @@ class M2CTown:
                              regs.register_base(rid, cfg.seeds.master), base_h + spread * float(u15[i])))
         cols = list(zip(*rows, strict=True)) if rows else [[]] * 16
         portion = np.array(cols[13], dtype=np.int64)
-        table = {p: [regs.day_of(scheduled_read_date(YEAR - 1, 12, p))] +
-                 [regs.day_of(scheduled_read_date(YEAR, mo, p)) for mo in range(1, 13)] for p in set(portion.tolist())}
+        table = {p: [cal.day_of(scheduled_read_date(cal.year - 1, 12, p))] +
+                 [cal.day_of(scheduled_read_date(cal.year, mo, p)) for mo in range(1, 13)]
+                 for p in set(portion.tolist())}
         read_day = np.array([table[p] for p in portion], dtype=np.int64).reshape(len(portion), 13)
         inst_prem = {x["id"]: (pidx[x["premiseId"]], x["division"]) for x in snap["installations"]}
         rate_of = {x["id"]: x.get("rateCategory") or "" for x in snap["installations"]}
@@ -201,16 +210,16 @@ class M2CTown:
             k = inst_prem.get(ctr["installationId"])
             if k is None:
                 continue
-            start = _day(ctr.get("validFrom"))
-            end = _day(ctr.get("validTo"))
+            start = _day(ctr.get("validFrom"), cal)
+            end = _day(ctr.get("validTo"), cal)
             contracts.setdefault(k, []).append((-far if start is None else start, far if end is None else end,
                                                 ctr["id"], ctr["accountId"]))
         return cls(
             id=snap["id"], cfg=cfg, timezone=cfg.town.timezone, premise_ids=[p["id"] for p in premises],
             premise_index=pidx, address=[p.get("address") or p["id"] for p in premises],
             occupied=np.array([bool(p.get("occupied")) for p in premises]),
-            move_in=np.array([_day(p.get("moveInAt")) if p.get("moveInAt") else -far for p in premises]),
-            move_out=np.array([_day(p.get("moveOutAt")) if p.get("moveOutAt") else far for p in premises]),
+            move_in=np.array([_day(p.get("moveInAt"), cal) if p.get("moveInAt") else -far for p in premises]),
+            move_out=np.array([_day(p.get("moveOutAt"), cal) if p.get("moveOutAt") else far for p in premises]),
             normal=normal, december=december,
             reg_ids=list(cols[0]), reg_index={r: k for k, r in enumerate(cols[0])}, meter_ids=[m["id"] for m in meters],
             meter_of=np.array(cols[1], dtype=np.int64), prem=np.array(cols[2], dtype=np.int64),
@@ -225,7 +234,8 @@ class M2CTown:
             inst_rate=[rate_of.get(x, "") for x in inst_ids], tariffs=tariffs,
             account_method={a["id"]: a.get("paymentMethod") or "online" for a in snap.get("accounts", [])},
             account_profile={a["id"]: profile.get(a.get("businessPartnerId"), "on_time") for a in snap.get("accounts", [])},
-            temps=daily_temps(cfg), name=town_name(snap), inst_index=inst_index,
+            temps=daily_temps(cfg, through=cal.year)[(date(cal.year - 1, 12, 1) - WEATHER_START).days:],
+            name=town_name(snap), inst_index=inst_index, cal=cal,
             inst_meta=[{x: meta.get(x) for x in INST_FIELDS} for meta in (inst_raw.get(i, {}) for i in inst_ids)],
             inst_contracts=inst_contracts,
             accounts={a["id"]: {x: a.get(x) for x in ACCOUNT_FIELDS} for a in snap.get("accounts", [])},
@@ -269,9 +279,6 @@ def _year(iso: str | None) -> float:
     return d.year + (d.timetuple().tm_yday - 1) / 365.0
 
 
-def date_of(day: int) -> date:
-    return date.fromordinal(regs.EPOCH.toordinal() + int(day))
-
 
 _CACHE: dict[str, M2CTown] = {}
 
@@ -280,11 +287,12 @@ def cached_m2c_town(town_id: str) -> M2CTown | None:
     return _CACHE.get(town_id)
 
 
-def m2c_town(snap: dict) -> M2CTown:
-    """Cached per town id (a warm function instance reuses it across requests)."""
-    hit = _CACHE.get(snap["id"])
+def m2c_town(snap: dict, year: int = YEAR) -> M2CTown:
+    """Cached per town id and year (a warm function instance reuses it across requests)."""
+    key = snap["id"] if year == YEAR else f"{snap['id']}@{year}"
+    hit = _CACHE.get(key)
     if hit is None:
         if len(_CACHE) >= 4:
             _CACHE.pop(next(iter(_CACHE)))
-        hit = _CACHE[snap["id"]] = M2CTown.from_snapshot(snap)
+        hit = _CACHE[key] = M2CTown.from_snapshot(snap, year)
     return hit

@@ -47,8 +47,8 @@ import numpy as np
 
 from utilsim.core.ids import str_key
 from utilsim.core.rng import Purpose, normalize_seed
-from utilsim.m2c.base import _day, date_of
-from utilsim.m2c.run import YEAR_DAYS, M2CRun, add_bdays, parse_day
+from utilsim.m2c.base import _day
+from utilsim.m2c.run import M2CRun
 
 CONTACT_VERSION = "m2c-contact/1.0"
 P = Purpose.CONTACT
@@ -129,14 +129,14 @@ class _Builder:
         self.run = run
         tw = run.town
         self.tw = tw
-        self.cc = [run.cfg_at(d).contact for d in range(YEAR_DAYS)]
+        self.cc = [run.cfg_at(d).contact for d in range(self.run.cal.days)]
         self.accounts = list(tw.accounts)
         self.acct_index = {a: i for i, a in enumerate(self.accounts)}
         self.acct_prem = np.array([tw.premise_index.get(tw.accounts[a].get("premiseId"), -1) for a in self.accounts],
                                   dtype=np.int64)
         far = 10 ** 6
-        self.acct_from = np.array([_day(tw.accounts[a].get("validFrom")) or -far for a in self.accounts])
-        self.acct_to = np.array([_day(tw.accounts[a].get("validTo")) if tw.accounts[a].get("validTo") else far
+        self.acct_from = np.array([_day(tw.accounts[a].get("validFrom"), tw.cal) or -far for a in self.accounts])
+        self.acct_to = np.array([_day(tw.accounts[a].get("validTo"), tw.cal) if tw.accounts[a].get("validTo") else far
                                  for a in self.accounts])
         by_prem: dict[int, list[int]] = {}
         for i, p in enumerate(self.acct_prem.tolist()):
@@ -147,14 +147,14 @@ class _Builder:
 
     # ---- helpers ------------------------------------------------------------------------------------------------
     def share(self, reason: str, day: int, mult: float = 1.0) -> float:
-        d = min(max(int(day), 0), YEAR_DAYS - 1)
+        d = min(max(int(day), 0), self.run.cal.days - 1)
         c = self.cc[d]
         return min(1.0, getattr(c, reason).per_event * mult * c.volume_factor)
 
     def open_time(self, day: float, u: float) -> float:
         """A moment within opening hours on the first business day at or after ``day``, morning-heavy."""
-        d = add_bdays(int(math.floor(day)), 0)
-        c = self.cc[min(max(d, 0), YEAR_DAYS - 1)]
+        d = self.run.cal.add_bdays(int(math.floor(day)), 0)
+        c = self.cc[min(max(d, 0), self.run.cal.days - 1)]
         f = u ** 1.25  # more contacts early in the day
         return d + (c.open_hour + f * (c.close_hour - c.open_hour)) / 24.0
 
@@ -165,7 +165,7 @@ class _Builder:
         return -1
 
     def add(self, t: float, reason: str, acct: int, prem: int, trigger: str, *uid, doc: int = -1) -> None:
-        if not 0 <= t < YEAR_DAYS:
+        if not 0 <= t < self.run.cal.days:
             return
         if prem < 0 and acct >= 0:
             prem = int(self.acct_prem[acct])
@@ -256,14 +256,14 @@ class _Builder:
         run = self.run
         for a, acct in enumerate(self.accounts):
             start, end = int(self.acct_from[a]), int(self.acct_to[a])
-            if 0 <= start < YEAR_DAYS and _u(run, IDX["move_in"], a, 0) < self.share("move_in", start):
+            if 0 <= start < self.run.cal.days and _u(run, IDX["move_in"], a, 0) < self.share("move_in", start):
                 lead = 3 + int(_u(run, IDX["move_in"], a, 1) * 12)
                 self.add(self.open_time(max(0, start - lead), _u(run, IDX["move_in"], a, 2)), "move_in", a, -1,
-                         f"{acct} opens {date_of(start).isoformat()}", a)
-            if 0 <= end < YEAR_DAYS and _u(run, IDX["move_out"], a, 0) < self.share("move_out", end):
+                         f"{acct} opens {self.run.cal.date_of(start).isoformat()}", a)
+            if 0 <= end < self.run.cal.days and _u(run, IDX["move_out"], a, 0) < self.share("move_out", end):
                 lead = 3 + int(_u(run, IDX["move_out"], a, 1) * 12)
                 self.add(self.open_time(max(0, end - lead), _u(run, IDX["move_out"], a, 2)), "move_out", a, -1,
-                         f"{acct} closes {date_of(end).isoformat()}", a)
+                         f"{acct} closes {self.run.cal.date_of(end).isoformat()}", a)
 
     def no_access(self, rows: np.ndarray, m: int) -> None:
         """A read batch's no-access reads: one contact draw per premise and month."""
@@ -277,7 +277,7 @@ class _Builder:
             a = self.account_at(p, day)
             if a >= 0 and _u(run, IDX["meter_access"], p, m, 0) < self.share("meter_access", day):
                 self.add(self.lagged("meter_access", day, 2, 10, p, m), "meter_access", a, p,
-                         f"no-access read {date_of(int(day)).isoformat()}", p, m)
+                         f"no-access read {self.run.cal.date_of(int(day)).isoformat()}", p, m)
 
     def field_visit(self, case, t: float) -> None:
         """A case sent to the field: the household may call about the visit."""
@@ -330,16 +330,16 @@ def background_arrivals(run: M2CRun, key: str, b: _Builder | None = None) -> lis
             b = run.__dict__["_contact_master"] = _Builder(run)
     i = IDX[key]
     n_acc = max(1, len(b.accounts))
-    bdays = [d for d in range(YEAR_DAYS) if add_bdays(d, 0) == d]
-    wsum = sum(WEEKDAY_WEIGHT[date_of(d).weekday()] for d in bdays) or 1.0
+    bdays = [d for d in range(run.cal.days) if run.cal.add_bdays(d, 0) == d]
+    wsum = sum(WEEKDAY_WEIGHT[run.cal.date_of(d).weekday()] for d in bdays) or 1.0
     emergency = key in ("outage", "gas_odour")
     out = []
-    for d in (range(YEAR_DAYS) if emergency else bdays):
+    for d in (range(run.cal.days) if emergency else bdays):
         c = b.cc[d]
         rate = getattr(c, key).per_1000 * c.volume_factor * n_acc / 1000.0 * 12.0
         if rate <= 0:
             continue
-        lam = rate / YEAR_DAYS if emergency else rate * WEEKDAY_WEIGHT[date_of(d).weekday()] / wsum
+        lam = rate / run.cal.days if emergency else rate * WEEKDAY_WEIGHT[run.cal.date_of(d).weekday()] / wsum
         for j in range(poisson(lam, _u(run, i, d, 0, 0))):
             a = int(_u(run, i, d, j, 1) * n_acc)
             for _ in range(5):  # an account open that day
@@ -372,7 +372,7 @@ class ContactEngine:
         self.seq = 0
         self.free = np.zeros(max(1, max(c.agents for c in cc)))
         self.rows: list[tuple] = []
-        self.busy = np.zeros(YEAR_DAYS)
+        self.busy = np.zeros(self.run.cal.days)
         self.unresolved_before: set[tuple[int, int]] = set()
         self.abandoned_twice: set[tuple[int, int]] = set()
         self.inv_ptr, self.case_ptr, self.inc_ptr = 0, 0, 0
@@ -382,7 +382,8 @@ class ContactEngine:
         self.watch: set[int] = set()  # cases not yet seen going to the field
         self.disputed: set[int] = set()  # bills disputed (one case per bill)
         self.complaint_open: dict[str, int] = {}  # account -> its open complaint case
-        self.rc_day = parse_day(run.cfg.billing.rate_change_date, YEAR_DAYS)
+        rc = self.run.cal.parse_day(run.cfg.billing.rate_change_date, self.run.cal.days)
+        self.rc_day = rc if rc >= 0 else self.run.cal.days  # a rate change before the year raises no new questions
         self.result: Contacts | None = None
 
     # ---- feeding it --------------------------------------------------------------------------------------------
@@ -398,7 +399,7 @@ class ContactEngine:
 
     def push(self, t: float, r: int, a: int, p: int, trig: str, uid: int, attempt: int, repeat: bool,
              doc: int = -1) -> None:
-        if 0 <= t < YEAR_DAYS:
+        if 0 <= t < self.run.cal.days:
             heapq.heappush(self.heap, (t, self.seq, r, a, p, trig, uid, attempt, repeat, doc))
             self.seq += 1
 
@@ -444,11 +445,11 @@ class ContactEngine:
         self.advance(day + 1)
 
     def finish(self) -> Contacts:
-        self.advance(float(YEAR_DAYS))
+        self.advance(float(self.run.cal.days))
         cc, b = self.b.cc, self.b
         rows = sorted(self.rows, key=lambda x: x[0])
         cols = list(zip(*rows)) if rows else [[] for _ in range(12)]
-        hours = np.array([max(0.0, c.close_hour - c.open_hour) if add_bdays(d, 0) == d else 0.0
+        hours = np.array([max(0.0, c.close_hour - c.open_hour) if self.run.cal.add_bdays(d, 0) == d else 0.0
                           for d, c in enumerate(cc)])
         agents = np.array([c.agents for c in cc], dtype=float)
         daily = {"agents": agents, "availableS": agents * hours * 3600.0, "busyS": self.busy,
@@ -466,7 +467,7 @@ class ContactEngine:
     # ---- the lines -----------------------------------------------------------------------------------------------
     def is_open(self, t: float) -> bool:
         d = int(math.floor(t))
-        if not 0 <= d < YEAR_DAYS or add_bdays(d, 0) != d:
+        if not 0 <= d < self.run.cal.days or self.run.cal.add_bdays(d, 0) != d:
             return False
         c = self.b.cc[d]
         h = (t - d) * 24.0
@@ -484,7 +485,7 @@ class ContactEngine:
 
     def _handle(self, t, _seq, r, a, p, trig, uid, attempt, repeat, doc) -> None:
         run, b, cc = self.run, self.b, self.b.cc
-        d = min(int(math.floor(t)), YEAR_DAYS - 1)
+        d = min(int(math.floor(t)), self.run.cal.days - 1)
         c = cc[d]
         key = KEYS[r]
         rc = getattr(c, key)
@@ -531,7 +532,7 @@ class ContactEngine:
                 i = int(np.argmin(free[:n]))
                 cb = max(cb, float(free[i]))
             free[i] = cb + handle / 86400.0
-            busy[min(int(cb), YEAR_DAYS - 1)] += handle
+            busy[min(int(cb), self.run.cal.days - 1)] += handle
             resolved = u(8) < rc.resolved
             self._row(*row, 2, 0 if resolved else 1, (cb - t) * 86400.0, handle, attempt, *tail)
         elif wait > patience:
@@ -558,7 +559,7 @@ class ContactEngine:
                     self.push(b.open_time(t + 1 + int(u(13) * 2), u(14)), IDX["complaint"], a, p,
                               f"unresolved {KEYS[r].replace('_', ' ')}", str_key(f"complaint|{uid}"), 1, False, doc)
             elif u(15) < c.repeat_share:
-                self.push(b.open_time(add_bdays(int(t), 1 + int(u(16) * 4)), u(17)), r, a, p, trig,
+                self.push(b.open_time(self.run.cal.add_bdays(int(t), 1 + int(u(16) * 4)), u(17)), r, a, p, trig,
                           str_key(f"repeat|{uid}|{attempt}"), 1, True, doc)
             if a >= 0:
                 self.unresolved_before.add((a, r))
@@ -617,7 +618,6 @@ class ContactEngine:
         return case
 
     def _complaint(self, t: float, p: int, acct: str, trig: str):
-        from utilsim.m2c import registers as regs
 
         run = self.run
         open_idx = self.complaint_open.get(acct)
@@ -626,7 +626,7 @@ class ContactEngine:
         rows = np.flatnonzero(self.b.tw.prem == p) if p >= 0 else np.zeros(0, dtype=np.int64)
         if not len(rows):
             return None
-        m = int(np.clip(np.searchsorted(regs.MONTH_START, t, side="right") - 1, 1, 12))
+        m = int(np.clip(np.searchsorted(self.run.cal.month_start, t, side="right") - 1, 1, 12))
         case = run.new_case(day=int(t), r=int(rows[0]), m=m, kind="COMPLAINT", disposition=-1, impact=0.0,
                             confidence=float("nan"), truth="clean", queue="BILLING", t=t,
                             cause_payload={"accountId": acct, "about": trig}, created_by="contact_centre", rpa=False)
@@ -653,17 +653,17 @@ def _stats(cx: Contacts, k: np.ndarray, cfgs: list, day0: int, day1: int) -> dic
     abandoned = oc == 2
     to_agents = int(agent.sum())
     waits = cx.wait[k][answered]
-    target = np.array([cfgs[min(max(int(x), 0), YEAR_DAYS - 1)].service_target_s for x in cx.t[k][answered]])
+    target = np.array([cfgs[min(max(int(x), 0), len(cfgs) - 1)].service_target_s for x in cx.t[k][answered]])
     sl = float((waits <= target).mean()) if len(waits) else None
     d = slice(day0, day1 + 1)
     avail = float(cx.daily["availableS"][d].sum())
     busy = float(cx.daily["busyS"][d].sum())
     n_self = int((ch == 0).sum())
     staff = float(cx.daily["staffCost"][d].sum())
-    self_cost = sum(cfgs[min(max(int(x), 0), YEAR_DAYS - 1)].self_serve_cost for x in cx.t[k][ch == 0])
-    ab_cost = sum(cfgs[min(max(int(x), 0), YEAR_DAYS - 1)].abandon_cx_cost for x in cx.t[k][abandoned])
+    self_cost = sum(cfgs[min(max(int(x), 0), len(cfgs) - 1)].self_serve_cost for x in cx.t[k][ch == 0])
+    ab_cost = sum(cfgs[min(max(int(x), 0), len(cfgs) - 1)].abandon_cx_cost for x in cx.t[k][abandoned])
     emerg = ch == 3
-    disp_cost = float(sum(h / 3600.0 * cfgs[min(max(int(x), 0), YEAR_DAYS - 1)].agent_cost_per_hour
+    disp_cost = float(sum(h / 3600.0 * cfgs[min(max(int(x), 0), len(cfgs) - 1)].agent_cost_per_hour
                           for h, x in zip(cx.handle[k][emerg], cx.t[k][emerg])))
     total = staff + self_cost + ab_cost + disp_cost
     n = int(k.sum())
@@ -709,7 +709,7 @@ def feedback(run: M2CRun, t0: float, T: float) -> dict:
 def monthly(run: M2CRun, day: int, T: float, starts) -> list[dict | None]:
     """Contact figures per month to ``T`` (``None`` for months that have not started), for the trend."""
     cx = contacts(run)
-    cfgs = [run.cfg_at(d).contact for d in range(YEAR_DAYS)]
+    cfgs = [run.cfg_at(d).contact for d in range(run.cal.days)]
     out = []
     for m in range(1, 13):
         start, end_excl = int(starts[m]), int(starts[m + 1])
@@ -729,7 +729,7 @@ def summary(run: M2CRun, as_of: str | None = None) -> dict:
 
     day, T = views.as_of_t(run, as_of)
     cx = contacts(run)
-    cfgs = [run.cfg_at(d).contact for d in range(YEAR_DAYS)]
+    cfgs = [run.cfg_at(d).contact for d in range(run.cal.days)]
     k = cx.t <= T
     kpis = _stats(cx, k, cfgs, 0, day)
     reasons = []
@@ -747,7 +747,7 @@ def summary(run: M2CRun, as_of: str | None = None) -> dict:
     for d in range(first, day + 1):
         kd = (cx.t >= d) & (cx.t < d + 1) & k
         s = _stats(cx, kd, cfgs, d, d)
-        series.append({"date": date_of(d).isoformat(), "contacts": s["contacts"], "toAgents": s["toAgents"],
+        series.append({"date": run.cal.date_of(d).isoformat(), "contacts": s["contacts"], "toAgents": s["toAgents"],
                        "answered": s["answered"], "abandoned": s["abandoned"], "asaS": s["asaS"],
                        "serviceLevelPct": s["serviceLevelPct"]})
     inc = [x for x in cx.incidents if x["t"] <= T]
@@ -755,7 +755,7 @@ def summary(run: M2CRun, as_of: str | None = None) -> dict:
     for x in inc:
         by_kind[x["kind"]] = by_kind.get(x["kind"], 0) + 1
     c = cfgs[day]
-    return {"schemaVersion": CONTACT_VERSION, "simulationId": run.simulation_id, "asOf": date_of(day).isoformat(),
+    return {"schemaVersion": CONTACT_VERSION, "simulationId": run.simulation_id, "asOf": run.cal.date_of(day).isoformat(),
             "settings": {"agents": c.agents, "openHour": c.open_hour, "closeHour": c.close_hour,
                          "serviceTargetS": c.service_target_s, "callback": c.callback},
             "kpis": kpis, "feedback": feedback(run, 0.0, T), "reasons": reasons, "groups": GROUPS, "daily": series,

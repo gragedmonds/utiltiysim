@@ -18,7 +18,7 @@ from pathlib import Path
 import orjson
 
 from utilsim.m2c import tables, trend, views
-from utilsim.m2c.base import M2CTown, date_of
+from utilsim.m2c.base import M2CTown
 from utilsim.m2c.run import M2C_GROUPS, M2CRun, run_seed, town_seed
 from utilsim.version import GENERATOR_VERSION
 
@@ -128,12 +128,11 @@ def export_run(snapshot: dict, request: dict, store: str | Path, *, on_stage=lam
 
     cfg = resolve_settings(town.cfg, req.settings)
     as_of = req.asOf or cfg.scenario.date
-    from utilsim.m2c.run import parse_day
-
-    day = parse_day(as_of, -1)
-    if day < 0 or day > 364 or as_of != date_of(day).isoformat():
-        raise ValueError("an export needs a date in 2026")
-    as_of = date_of(day).isoformat()
+    cal = town.cal
+    day = cal.parse_day(as_of, -1)
+    if not cal.in_year(day) or as_of != cal.date_of(day).isoformat():
+        raise ValueError(f"an export needs a date in {cal.year}")
+    as_of = cal.date_of(day).isoformat()
     seed = run_seed(town.cfg, req.seed) or town_seed(town.cfg)
     inputs = {"town": town.id, "snapshotSha256": _sha(_json(snapshot)),
               "settings": {g: getattr(cfg, g).model_dump(mode="json") for g in M2C_GROUPS},

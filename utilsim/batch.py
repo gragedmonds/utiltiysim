@@ -146,7 +146,8 @@ def run_batch(cfg, homes: int, store: Path, request: dict | None = None, *,
               chunk_size: int = 2000, staffing: str, map_data: bool = False, max_batches: int | None = None, on_progress=lambda _: None):
     from api._m2c import RunRequest
     from utilsim.io.run_bundle import engine_build, read_manifest
-    from utilsim.m2c.run import parse_day, parse_episodes, resolve_episode_days, resolve_settings
+    from utilsim.m2c.calendar import calendar
+    from utilsim.m2c.run import parse_episodes, resolve_episode_days, resolve_settings
 
     if staffing != STAFFING:
         raise ValueError("Only explicit independent-districts staffing is implemented. Shared teams need a coordinator.")
@@ -159,8 +160,9 @@ def run_batch(cfg, homes: int, store: Path, request: dict | None = None, *,
     if set(request) - {"settings", "episodes", "seed", "asOf"}:
         raise ValueError("Batch input accepts settings, episodes, seed and asOf only; town-specific actions cannot be copied across districts.")
     req = RunRequest.model_validate({**request, "town": "district", "asOf": request.get("asOf") or "2026-12-31"})
-    if parse_day(req.asOf, -1) not in range(365):
-        raise ValueError("Choose a view date in 2026.")
+    cal = calendar()  # district batches replay the snapshot's year
+    if not cal.in_year(cal.parse_day(req.asOf, -1)):
+        raise ValueError(f"Choose a view date in {cal.year}.")
     resolved = resolve_settings(cfg, req.settings)
     episodes = [e.model_dump(by_alias=True, exclude_none=True) for e in req.episodes]
     resolve_episode_days(resolved, parse_episodes(resolved, episodes))

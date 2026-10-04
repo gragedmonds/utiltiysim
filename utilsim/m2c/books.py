@@ -33,7 +33,6 @@ from utilsim.core.ids import str_key
 from utilsim.core.rng import Purpose, hash_u01
 from utilsim.m2c import billing as bl
 from utilsim.m2c import catalog as cat
-from utilsim.m2c import registers as regs
 from utilsim.m2c.vee import MIN_EXPECTED
 
 OFF = 6  # run.OFF: the service was off at the read
@@ -54,12 +53,10 @@ def wrong_bill(doc: dict) -> bool:
 
 class Books:
     def __init__(self, run) -> None:
-        from utilsim.m2c.run import parse_day
-
         self.run = run
         tw, b = run.town, run.cfg.billing
         n = len(tw.inst_ids)
-        self.change = float(parse_day(b.rate_change_date, 10 ** 6))
+        self.change = float(run.cal.parse_day(b.rate_change_date, 10 ** 6))
         self.inst_keys = np.array([str_key(x) for x in tw.inst_ids], dtype=np.int64)
         self.main = np.array([rows[np.argmax(tw.direction[rows] == "import")] if len(rows) else -1
                               for rows in tw.inst_rows], dtype=np.int64)
@@ -69,7 +66,7 @@ class Books:
         p = run.month_rate("billing", "data_error_rate") / 1000.0 / 12.0 * bool(run.cfg.anomalies.enabled)
         hit = hash_u01(run.seed, P_BILL, self.inst_keys[:, None], 1, months[None, :]) < p[None, :]
         first = np.where(hit.any(1), hit.argmax(1) + 1, 0)
-        self.rate_err_t = np.where(first > 0, regs.MONTH_START[first] + 0.0, INF)
+        self.rate_err_t = np.where(first > 0, run.cal.month_start[first] + 0.0, INF)
         self.rate_fix_t = np.full(n, INF)
         self.doc_of = np.full((n, 13), -1, dtype=np.int64)
         self.docs: list[dict] = []

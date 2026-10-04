@@ -15,7 +15,11 @@ from api._m2c import RunRequest, _master, run_for
 from api.index import app
 from utilsim.m2c import scenarios as sc
 from utilsim.m2c import tables, trend
-from utilsim.m2c.run import OFF, M2CRun, parse_day, parse_episodes
+from utilsim.m2c.calendar import calendar
+from utilsim.m2c.run import OFF, M2CRun, parse_episodes
+
+CAL = calendar(2026)
+parse_day = CAL.parse_day
 
 DAY = "2026-03-01"
 D0 = parse_day(DAY, 0)

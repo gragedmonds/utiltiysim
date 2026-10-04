@@ -36,7 +36,7 @@ class AgentEpisode(StrictModel):
     title: str = Field(min_length=1, max_length=120)
     from_: str = Field(alias="from")
     to: str | None = None
-    ramp: int = Field(0, ge=0, le=365)
+    ramp: int = Field(0, ge=0, le=366)
     settings: dict[str, dict[str, Any]]
 
     @field_validator("from_", "to")

@@ -12,9 +12,13 @@ import orjson
 import pytest
 from fastapi.testclient import TestClient
 
+from utilsim.m2c.calendar import calendar
 from utilsim.ops.hazards import draw, storm_probability
 from utilsim.ops.opstown import OpsTown
 from utilsim.ops.timeline import DEFAULTS, TOWN_SETTINGS, Run, run_defaults
+
+CAL = calendar(2026)
+date_of = CAL.date_of
 
 ROOT = Path(__file__).resolve().parents[1]
 ONLY = {"waterMainBreaksPer100km": 0, "gasMainLeaksPer100km": 0, "gasServiceLeaksPer1000": 0,
@@ -144,7 +148,6 @@ def test_transformer_failures_and_service_leaks_stay_local(small_town):
 def test_a_collector_outage_silences_its_meters_until_the_day_shift(small_town):
     from api._m2c import RunRequest, run_for
     from utilsim.m2c import views
-    from utilsim.m2c.base import date_of
 
     s, seed = {**small_town.run_defaults, **ONLY, "collectorOutagesPerYear": 50}, small_town.sim_config.seeds.for_("incidents")
     night = next(d for d, items in year(small_town, s, seed)

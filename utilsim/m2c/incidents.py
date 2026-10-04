@@ -1,5 +1,5 @@
 """Outages and leaks across the year: the operations day's background incidents (``utilsim/ops/hazards.py``) drawn
-for every day of 2026, with who loses service, for how long, and who smells gas.
+for every day of the run's year, with who loses service, for how long, and who smells gas.
 
 Each day uses the same draw as the map's operations day (the town's incident seed, plus the run seed when the run
 names one), so a date's storm, leak or failure is the same incident in both places. The run's ``outages`` settings
@@ -31,8 +31,7 @@ from __future__ import annotations
 import numpy as np
 
 from utilsim.core.rng import Purpose
-from utilsim.m2c.base import date_of
-from utilsim.m2c.run import YEAR_DAYS, M2CRun
+from utilsim.m2c.run import M2CRun
 
 INCIDENTS_VERSION = "m2c-incidents/1.0"
 P = Purpose.CONTACT
@@ -161,7 +160,7 @@ def draw_day(run: M2CRun, ops, d: int, keep=None) -> tuple[list[dict], bool]:
     s["stormDaysPerYear"] = float(base["stormDaysPerYear"]) * c.storm_factor
     for k in RATE_SETTINGS:
         s[k] = float(base[k]) * c.incident_factor
-    items, info = hazards.draw(ops, date_of(d), s, ctx["seed"])
+    items, info = hazards.draw(ops, run.cal.date_of(d), s, ctx["seed"])
     storm = bool(info.get("stormDay"))
     out = []
     for n, b in enumerate(items, start=1):
@@ -171,7 +170,7 @@ def draw_day(run: M2CRun, ops, d: int, keep=None) -> tuple[list[dict], bool]:
         t0 = d + b["at"] / 86400.0
         edge = b.get("edge") if kind in ("transformer_failure", "line_fault") else None
         out.append(consequence(run, ops, kind, t0, float(b["x"]), float(b["z"]), edge=edge,
-                               collector=b.get("collector"), ident=f"INC-{date_of(d).strftime('%Y%m%d')}-{n}",
+                               collector=b.get("collector"), ident=f"INC-{run.cal.date_of(d).strftime('%Y%m%d')}-{n}",
                                storm=storm))
     return out, storm
 
@@ -185,7 +184,7 @@ def year_incidents(run: M2CRun, ops) -> list[dict]:
         return hit
     out: list[dict] = []
     if ops is not None:
-        for d in range(YEAR_DAYS):
+        for d in range(run.cal.days):
             out.extend(draw_day(run, ops, d)[0])
     out.sort(key=lambda r: r["t"])
     run.__dict__["_year_incidents"] = out

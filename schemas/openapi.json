@@ -382,7 +382,7 @@
           },
           "ramp": {
             "default": 0,
-            "maximum": 365.0,
+            "maximum": 366.0,
             "minimum": 0.0,
             "title": "Ramp",
             "type": "integer"
@@ -434,7 +434,7 @@
           },
           "ramp": {
             "default": 0,
-            "maximum": 365.0,
+            "maximum": 366.0,
             "minimum": 0.0,
             "title": "Ramp",
             "type": "integer"
@@ -1602,7 +1602,7 @@
           "ramp": {
             "default": 0,
             "description": "Days over which numeric values slide to the target (0: a step).",
-            "maximum": 365.0,
+            "maximum": 366.0,
             "minimum": 0.0,
             "title": "Ramp",
             "type": "integer"
@@ -1676,7 +1676,7 @@
           },
           "ramp": {
             "default": 0,
-            "maximum": 365.0,
+            "maximum": 366.0,
             "minimum": 0.0,
             "title": "Ramp",
             "type": "integer"

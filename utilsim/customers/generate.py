@@ -20,6 +20,7 @@ from utilsim.core.rng import Purpose, hash_choice, hash_u01
 from utilsim.customers.calendar import scheduled_read_date, to_utc_iso
 from utilsim.customers.names import BUSINESS, GIVEN, SURNAME
 from utilsim.m2c import registers
+from utilsim.m2c.calendar import calendar
 from utilsim.sim.demand import monthly_energy
 from utilsim.version import READ_SCHEMA_VERSION
 
@@ -33,6 +34,7 @@ TECH_MODEL = {
     ("water", "AMI"): "W-PD-58-AMI", ("water", "AMR"): "W-PD-58-ERT", ("water", "MANUAL"): "W-PD-58",
 }
 READ_YEAR, READ_MONTH = 2026, 6  # baseline fixture: the June read (May read → June read)
+READ_CAL = calendar(READ_YEAR)
 SIM_START = date(2026, 1, 1)
 
 
@@ -310,8 +312,8 @@ def build_customers(town) -> Customers:
                 base = registers.register_base(reg, cfg.seeds.master)
                 mod = 10.0 ** digits[c]
                 true = base + registers.advance(cum[key], december[key], np.array([i, i]),
-                                                np.array([registers.day_of(prev_d), registers.day_of(this_d)]),
-                                                np.array([read_hour, read_hour]))
+                                                np.array([READ_CAL.day_of(prev_d), READ_CAL.day_of(this_d)]),
+                                                np.array([read_hour, read_hour]), READ_CAL.month_start)
                 prev_val, val = (float(x) for x in registers.observe(true, digits[c]))
                 consumption = round((val - prev_val) % mod, 3)
                 active_ctr = next((ids.contract_id(pid, c) + sfx for t_in, t_out, sfx in tenancies

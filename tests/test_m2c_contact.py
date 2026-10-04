@@ -12,8 +12,12 @@ from fastapi.testclient import TestClient
 from api._m2c import RunRequest, _master, _town, run_for
 from api.index import app
 from utilsim.m2c import contact, fieldwork, tables, trend, views
-from utilsim.m2c.base import date_of
-from utilsim.m2c.run import M2CRun, parse_day
+from utilsim.m2c.calendar import calendar
+from utilsim.m2c.run import M2CRun
+
+CAL = calendar(2026)
+date_of = CAL.date_of
+parse_day = CAL.parse_day
 
 TOWN = "small_town"
 DAY = "2026-12-31"

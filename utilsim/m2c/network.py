@@ -9,7 +9,6 @@ outage) raises a missing-read case on that meter; cases on one collector raised 
 from __future__ import annotations
 
 from utilsim.m2c import catalog as cat
-from utilsim.m2c.base import date_of
 
 AMI_REASONS = ("SIM_TELEMETRY_FAILURE", "SIM_POWER_OUTAGE", "SIM_COLLECTOR_OUTAGE")
 RELATED_MAX = 50
@@ -65,4 +64,4 @@ def case_links(run, case, T: float) -> dict:
                         "status": "resolved" if done else "open", "outcome": c.outcome if done else None,
                         "reasonCode": str(run.reason[c.r, c.month]) or None})
     return {"network": {"collectorId": col, "mountedOn": meta.get("mountedOn"), "mountId": meta.get("mountId"),
-                        "day": date_of(day).isoformat(), "cases": len(same), "relatedCases": related[:RELATED_MAX]}}
+                        "day": run.cal.date_of(day).isoformat(), "cases": len(same), "relatedCases": related[:RELATED_MAX]}}

@@ -15,10 +15,15 @@ from utilsim.io import schemas
 from utilsim.io.snapshot import build_snapshot
 from utilsim.m2c import catalog as cat
 from utilsim.m2c import views
-from utilsim.m2c.base import M2CTown, date_of
-from utilsim.m2c.run import FAULTS, INF, METHODS, ActionError, M2CRun, add_bdays, resolve_settings
+from utilsim.m2c.base import M2CTown
+from utilsim.m2c.calendar import calendar
+from utilsim.m2c.run import FAULTS, INF, METHODS, ActionError, M2CRun, resolve_settings
 from utilsim.sim.demand import monthly_energy as town_energy
 from utilsim.sim.usage import UsageInputs, monthly_energy
+
+CAL = calendar(2026)
+add_bdays = CAL.add_bdays
+date_of = CAL.date_of
 
 ROOT = Path(__file__).resolve().parents[1]
 QUIET = {"anomalies": {"enabled": False},

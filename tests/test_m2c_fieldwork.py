@@ -14,7 +14,12 @@ from api._m2c import RunRequest, _master, _town, run_for
 from api.index import app
 from utilsim.m2c import contact, tables, trend, views
 from utilsim.m2c import fieldwork as fwk
-from utilsim.m2c.run import BATTERY_REASON, OFF, YEAR_DAYS, M2CRun, parse_day
+from utilsim.m2c.calendar import calendar
+from utilsim.m2c.run import BATTERY_REASON, OFF, M2CRun
+
+CAL = calendar(2026)
+YEAR_DAYS = CAL.days
+parse_day = CAL.parse_day
 
 TOWN = "small_town"
 DAY = "2026-12-31"
