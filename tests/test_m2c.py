@@ -207,7 +207,7 @@ def test_hosted_m2c_api():
     client = TestClient(app)
     st = client.get("/api/m2c/settings").json()
     assert set(st["schema"]["properties"]) == {"process", "anomalies", "reading", "vee", "billing", "contact", "outages",
-                                                  "field"}
+                                                  "field", "kpi"}
     assert st["defaults"]["vee"]["accept_confidence"] == 0.75
     seed = client.get("/api/m2c/settings", params={"town": "small_town"}).json()["seed"]
     assert seed["default"] and seed["maxLength"] == 64 and "string" in seed["type"]
