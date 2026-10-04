@@ -30,7 +30,7 @@ var message = "Choose a folder for the engine and your simulations."
 var busy bool
 
 func validPath(root, name string) (string, error) {
-	if strings.ContainsAny(name, "\\:") || filepath.IsAbs(name) {
+	if strings.ContainsAny(name, "\\:") || strings.HasPrefix(name, "/") || filepath.IsAbs(name) {
 		return "", errors.New("unsafe runtime filename")
 	}
 	clean := filepath.Clean(filepath.FromSlash(name))
