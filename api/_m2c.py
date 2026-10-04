@@ -20,10 +20,21 @@ from api._ops import J, load_snapshot, town_key
 from utilsim.config.model import SimConfig
 from utilsim.m2c import catalog as cat
 from utilsim.m2c import collections as colls
-from utilsim.m2c import contact, fieldwork, followup, guide, lookups, scenarios, tables, trend, views
+from utilsim.m2c import (
+    contact,
+    fieldwork,
+    followup,
+    guide,
+    lookups,
+    scenarios,
+    tables,
+    trend,
+    views,
+    yearclose,
+)
 from utilsim.m2c import orders as ords
 from utilsim.m2c.base import M2CTown, cached_m2c_town, m2c_town
-from utilsim.m2c.calendar import calendar
+from utilsim.m2c.calendar import FIRST_YEAR, LAST_YEAR, calendar
 from utilsim.m2c.run import (
     ACTION_TYPES,
     CASE_WORK,
@@ -43,13 +54,18 @@ from utilsim.m2c.run import (
 router = APIRouter()
 _RUNS: OrderedDict[bytes, M2CRun] = OrderedDict()
 RUN_CACHE = 4
+# The closes of earlier years of a chain (what the next year opens on), per town, seed and the inputs of every year so
+# far: a later year replays only the years not closed yet.
+_CLOSES: OrderedDict[bytes, yearclose.YearClose] = OrderedDict()
+CLOSE_CACHE = 8
 _MASTER: OrderedDict[str, dict] = OrderedDict()  # the snapshot's customer and meter tables, per town (Data pages)
 MASTER_CACHE = 2
 
 
 class Action(BaseModel):
     id: str | None = None
-    day: str = Field(..., description="Local date of the decision (YYYY-MM-DD), in 2026, never before the previous action.")
+    day: str = Field(..., description="Local date of the decision (YYYY-MM-DD), in the run's year, never before the "
+                                        "previous action.")
     type: Literal["accept", "override", "estimate", "field_order", "escalate", "check_read", "field_read",
                   "order_save", "order_release", "order_dispatch", "order_complete", "note", "assign", "invoice_hold",
                   "invoice_unhold", "device_replace", "payment_arrangement", "extend_due", "dunning_hold",
@@ -105,7 +121,7 @@ class Action(BaseModel):
 
 class Outage(BaseModel):
     id: str | None = None
-    day: str = Field(..., description="Local date the interruption began (YYYY-MM-DD), in 2026.")
+    day: str = Field(..., description="Local date the interruption began (YYYY-MM-DD), in the run's year.")
     utility: Literal["electric", "water", "gas", "ami"] = Field(
         ..., description="The service lost, or \"ami\" for an AMI collector outage (service goes on; the premises' AMI "
                          "meters cannot report)")
@@ -122,11 +138,20 @@ class Episode(BaseModel):
     id: str | None = Field(None, max_length=40)
     title: str | None = Field(None, max_length=120)
     scenario: str | None = Field(None, max_length=60, description="The library scenario it came from, if any.")
-    from_: str = Field(..., alias="from", description="First day (YYYY-MM-DD, in 2026).")
+    from_: str = Field(..., alias="from", description="First day (YYYY-MM-DD, in the run's year).")
     to: str | None = Field(None, description="Last day (inclusive); null runs to the end of the year.")
     ramp: int = Field(0, ge=0, le=366, description="Days over which numeric values slide to the target (0: a step).")
     settings: dict[str, dict[str, Any]] = Field(..., description=f"Run-scoped groups ({', '.join(M2C_GROUPS)}) → "
                                                                  "setting → value or operator.")
+
+
+class YearInputs(BaseModel):
+    """An earlier year of a chain: what that year ran with (its own settings, scenarios, Studio work and outages)."""
+    model_config = ConfigDict(extra="forbid")
+    settings: dict[str, dict[str, Any]] | None = Field(None, description="That year's run settings (as ``settings``).")
+    episodes: list[Episode] = Field(default_factory=list, max_length=EPISODE_MAX)
+    actions: list[Action] = Field(default_factory=list, max_length=2000)
+    outages: list[Outage] = Field(default_factory=list, max_length=500)
 
 
 class RunRequest(BaseModel):
@@ -146,6 +171,16 @@ class RunRequest(BaseModel):
                              description="Run seed: re-rolls the run's random draws (missed reads, anomalies, analyst "
                                          "work, bill checks) on the same town. Blank or null: the town's seed (GET "
                                          "/api/m2c/settings?town= shows it).")
+    year: int | None = Field(None, ge=FIRST_YEAR, le=LAST_YEAR,
+                             description=f"The calendar year to replay ({FIRST_YEAR}-{LAST_YEAR}; default: the year "
+                                         f"after ``previous``, else {FIRST_YEAR}). A later year opens on the years "
+                                         "before it, each where the one before closed (dials, money owed, open work, "
+                                         "services off, devices). ``actions``, ``outages``, ``episodes`` and ``asOf`` "
+                                         "are the year's own.")
+    previous: list[YearInputs] | None = Field(
+        None, max_length=LAST_YEAR - FIRST_YEAR,
+        description=f"The inputs of the years before ``year``, from {FIRST_YEAR} on, one each. Omitted: the earlier "
+                    "years run with this request's settings and nothing else.")
 
 
 class PremiseRequest(RunRequest):
@@ -302,26 +337,67 @@ def _master(ref: str) -> dict:
     return master
 
 
+def _inputs(settings, episodes, actions, outages) -> dict:
+    return {"settings": settings, "actions": [a.model_dump(exclude_none=True) for a in actions],
+            "outages": [o.model_dump(exclude_none=True) for o in outages],
+            "episodes": [e.model_dump(by_alias=True, exclude_none=True) for e in episodes]}
+
+
+def chain_of(req: RunRequest) -> list[dict]:
+    """The request's chain: the inputs of each year from the first to the request's own (the last). ValueError when
+    ``previous`` does not give exactly the years before ``year``."""
+    prev = req.previous
+    year = req.year or FIRST_YEAR + len(prev or [])
+    if year > LAST_YEAR:
+        raise ValueError(f"a chain runs {FIRST_YEAR}-{LAST_YEAR}: previous gives {len(prev or [])} years")
+    n = year - FIRST_YEAR
+    if prev is None:
+        earlier = [_inputs(req.settings, [], [], []) for _ in range(n)]
+    elif len(prev) != n:
+        raise ValueError(f"year {year} opens on {n} earlier year{'' if n == 1 else 's'}"
+                         f"{f' ({FIRST_YEAR}-{year - 1})' if n else ''}: previous gives {len(prev)}")
+    else:
+        earlier = [_inputs(p.settings, p.episodes, p.actions, p.outages) for p in prev]
+    return [*earlier, _inputs(req.settings, req.episodes, req.actions, req.outages)]
+
+
+def _run_key(town_id: str, chain: list[dict], strict: bool, seed: str | None) -> bytes:
+    x = chain[-1]
+    key = [town_id, x["settings"], x["actions"], x["outages"], strict, seed, x["episodes"]]  # the first year's as ever
+    return orjson.dumps(key + [chain[:-1]] if len(chain) > 1 else key, option=orjson.OPT_SORT_KEYS)
+
+
 def run_for(req: RunRequest, *, strict: bool = True) -> M2CRun:
     """The run for a request (cached). A refused action is HTTP 422: its ``detail`` is a message, or for an order
-    form ``{message, actionIndex, actionId, orderId, fieldErrors: {field: message}}``."""
+    form ``{message, actionIndex, actionId, orderId, fieldErrors: {field: message}}``. A later year opens on the
+    close of the years before it (cached; an earlier year's error names its year)."""
     town = _town(req.town)
-    actions = [a.model_dump(exclude_none=True) for a in req.actions]
-    outages = [o.model_dump(exclude_none=True) for o in req.outages]
-    episodes = [e.model_dump(by_alias=True, exclude_none=True) for e in req.episodes]
     try:
+        chain = chain_of(req)
         seed = run_seed(town.cfg, req.seed)
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
-    key = orjson.dumps([town.id, req.settings, actions, outages, strict, seed, episodes],
-                       option=orjson.OPT_SORT_KEYS)
-    hit = _RUNS.get(key)
-    if hit is not None:
-        _RUNS.move_to_end(key)
-        return hit
+    return _year_run(req.town, town, chain, seed, strict)
+
+
+def _year_run(ref: str, town: M2CTown, chain: list[dict], seed: str | None, strict: bool) -> M2CRun:
+    """The run of the chain's last year (cached). Earlier years replay leniently: a strict run that skipped nothing
+    is the same run."""
+    key = _run_key(town.id, chain, strict, seed)
+    for k in (key, _run_key(town.id, chain, not strict, seed)):
+        hit = _RUNS.get(k)
+        if hit is not None and (k == key or not strict or not hit.warnings):
+            _RUNS.move_to_end(k)
+            return hit
+    inputs = chain[-1]
+    opening = _close(ref, town, chain[:-1], seed) if len(chain) > 1 else None
     try:
-        run = M2CRun(town, req.settings, actions, outages, strict=strict, seed=seed, episodes=episodes,
-                     ops_factory=lambda ref=req.town: _ops_town(ref))  # networks: incidents, assets, failures
+        if opening is None:
+            run = M2CRun(town, inputs["settings"], inputs["actions"], inputs["outages"], strict=strict, seed=seed,
+                         episodes=inputs["episodes"], ops_factory=lambda: _ops_town(ref))
+        else:
+            run = yearclose.run_year(load_snapshot(ref), FIRST_YEAR + len(chain) - 1, inputs, opening=opening,
+                                     strict=strict, seed=seed, ops_factory=lambda: _ops_town(ref))
     except ValidationError as exc:
         raise HTTPException(422, orjson.loads(exc.json(include_url=False))) from exc
     except ValueError as exc:
@@ -330,6 +406,29 @@ def run_for(req: RunRequest, *, strict: bool = True) -> M2CRun:
     while len(_RUNS) > RUN_CACHE:
         _RUNS.popitem(last=False)
     return run
+
+
+def _close(ref: str, town: M2CTown, chain: list[dict], seed: str | None) -> yearclose.YearClose:
+    """The close of the chain's last year (cached), replaying it (and the years before it not closed yet)."""
+    key = orjson.dumps([town.id, seed, chain], option=orjson.OPT_SORT_KEYS)
+    hit = _CLOSES.get(key)
+    if hit is not None:
+        _CLOSES.move_to_end(key)
+        return hit
+    year = FIRST_YEAR + len(chain) - 1
+    try:
+        run = _year_run(ref, town, chain, seed, strict=False)
+    except HTTPException as exc:
+        detail = exc.detail
+        if isinstance(detail, str) and not detail.startswith(f"{year}: ") and not detail[:4].isdigit():
+            detail = f"{year}: {detail}"
+        elif not isinstance(detail, str):
+            detail = {"year": year, "detail": detail}
+        raise HTTPException(exc.status_code, detail) from exc
+    out = _CLOSES[key] = yearclose.close(run)
+    while len(_CLOSES) > CLOSE_CACHE:
+        _CLOSES.popitem(last=False)
+    return out
 
 
 def _view(fn, *args, **kw):
@@ -348,6 +447,7 @@ def get_settings(town: str | None = None):
     cfg = _town(town).cfg if town else SimConfig()
     defaults = cfg.model_dump(mode="json")
     return J({"schema": settings_schema(), "defaults": {g: defaults[g] for g in M2C_GROUPS},
+              "years": {"first": FIRST_YEAR, "last": LAST_YEAR},
               "seed": {"type": ["string", "null"], "maxLength": MAX_SEED, "default": town_seed(cfg),
                        "title": "Run seed", "description": "Re-rolls the run's random draws (missed reads, anomalies, "
                        "analyst work, bill checks) on the same town; send it as the request's top-level seed. Blank "

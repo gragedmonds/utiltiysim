@@ -75,7 +75,8 @@ than Python's `0.0`; its value, selection and order are the same.
 `towns`, `files: [{name, bytes, sha256, uploaded}]`, `tableDates`, `worklistDates`, `aggregates` and `readOnly`.
 `engineBuild` hashes the packaged engine and run-validation sources plus the numpy, pydantic and orjson versions.
 The run key is BLAKE2b-256 of the build identifier, a NUL separator and sorted-key JSON of the inputs. Inputs include
-the snapshot's SHA-256, effective settings and seed, ordered episodes/actions/interruptions and export date. Aliases
+the snapshot's SHA-256, effective settings and seed, ordered episodes/actions/interruptions and export date (and for
+a later year, `year` and `previous`: the inputs of the years it opens on, replayed from 2026). Aliases
 and omitted settings defaults therefore do not create different keys for the same inputs. A different build or
 snapshot cannot silently reuse an old result. There are no timestamps or output-directory paths in the identity.
 Generation timing measurements are omitted from the saved snapshot so rebuilding the same town on another machine
@@ -140,7 +141,7 @@ uv run utilsim batch-run --homes 50000 --chunk-size 2000 --staffing independent-
 
 Use `--homes 50000` for 25 districts at 2,000 homes each. Optional `--config` supplies generation overrides;
 `--input` accepts a JSON object containing `settings`, `episodes`, `seed` and `asOf`. Town-specific actions
-and interruptions cannot be copied between districts. The engine still models calendar year 2026 only.
+and interruptions cannot be copied between districts. District batches replay calendar year 2026.
 Use smaller chunks to reduce peak memory. Their size affects network boundaries and per-district staffing,
 so comparisons must keep the same chunk size; chunking is part of the model, not only a performance setting.
 

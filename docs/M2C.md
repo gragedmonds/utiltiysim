@@ -47,7 +47,10 @@ A run is stateless and deterministic: `(town, settings, actions, outages, seed)`
   (`utility` `electric`, `water`, `gas`, or `ami` for an AMI collector outage), with
   start and end in seconds since local midnight of `day` (end may pass midnight, up to a week). An operations
   timeline reports them as `interruptions`. See "Outages from the map" below.
-- Views read the finished year *as of* a date (`asOf`, default: the town's scenario date).
+- `year` (2026 to 2030, default 2026) is the calendar year the run replays, and `previous` gives the inputs of the
+  years before it (`[{settings, episodes, actions, outages}]`, one per year from 2026; omitted: the earlier years
+  run with the request's settings and nothing else). See "Years" below.
+- Views read the finished year *as of* a date (`asOf`, default: the town's scenario date in the run's year).
 
 The engine (`utilsim/m2c/`, numpy only) runs locally (`utilsim serve`) and on the hosted Vercel function. A
 5,500-home town (16k registers) replays its year, every bill and collection included, in about 15 s on one core,
@@ -78,6 +81,16 @@ hands over, with its times shifted so that the next year counts from its own 1 J
   changed, and collections events already scheduled for the next year (a notice the winter moratorium holds until
   1 May), carry too.
 - **The networks.** Main renewed so far still breaks less.
+
+Over the API a request names its year (`year`) and what the years before it ran with (`previous`); `actions`,
+`outages`, `episodes` and `asOf` are the year's own, dated in that year. The engine replays the earlier years once
+and keeps their closes (eight per warm instance), so moving on to the next year replays only that year; a cold
+instance replays the chain from 2026 (about 4 s a year for a 300-home village, 15 s for 5,500 homes). An earlier
+year's error names its year (`2026: …`). The summary carries `year` and `opening` (the year before's close: its
+simulation id, open cases, unbilled documents, unpaid invoices, receivable, open orders, services off, dead
+batteries, faulty meters; null for 2026), and `GET /api/m2c/settings` gives `years: {first, last}`. A run bundle
+(`utilsim export-run`) of a later year keeps `year` and `previous` in its inputs and run key. The map's operations
+days are still the snapshot's year.
 
 The next year draws its own anomalies, misses, payments and calls: its seed is salted with the year
 (`"{seed}:m2c:2027"`), and its simulation id carries the year and the chain

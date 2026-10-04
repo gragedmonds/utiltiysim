@@ -174,16 +174,18 @@ LIMITS = (
              "teams and networks. One development run of 50,000 homes in 25 districts completed in 505 seconds "
              "with 313 MB of archives; this is not a hardware-independent estimate. Shared utility-wide resources are still outstanding."},
     {"title": "Calendar",
-     "text": f"One calendar year (2026, {YEAR_DAYS} days), twelve billing cycles, twenty-one portions. Multi-year "
-             "needs chaining (see Gaps)."},
+     "text": "A run replays one calendar year (2026 to 2030; Ontario holidays by rule, 366 days in a leap year), "
+             "twelve billing cycles, twenty-one portions. A later year opens where the one before closed: dials, "
+             "money owed, open cases, bills, field orders, services off, devices and meter faults carry."},
 )
 
 GAPS = (
     {"title": "Undetected water loss", "text": "No mains leakage fraction and no supplied-versus-billed water "
      "balance.", "plan": "Per-zone unbilled loss that shows in flows but never in bills, and a monthly water-balance "
      "report."},
-    {"title": "Multiple years", "text": "One calendar year; nothing carries into a second.", "plan": "Chain years: "
-     "year two starts from year one's balances, arrears, open cases, device ages and backlog."},
+    {"title": "Multiple years in the Studio", "text": "The engine chains years 2026 to 2030 (a request's year and "
+     "previous); the Studio still works on 2026 alone, and the map's operations days are 2026's.", "plan": "A year "
+     "switcher and Continue into the next year in the Command Center; operations days in any year."},
     {"title": "A utility above the town", "text": "Independent district batches and additive archive totals are available locally. "
      "There is no shared utility-wide workforce, connected cross-district network or live utility dashboard.",
      "plan": "Coordinate work and staffing daily across districts; add boundary conditions for connected networks "

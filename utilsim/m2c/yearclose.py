@@ -30,6 +30,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from utilsim.m2c import registers as regs
+from utilsim.m2c.calendar import FIRST_YEAR
 
 CLOSE_VERSION = "year-close/1.0"
 INF = float("inf")
@@ -344,17 +345,44 @@ def _mapped(v, memo: dict, case_idx: dict):
 
 
 # ---- the next year opening on a close ------------------------------------------------------------------------------
+def run_year(snapshot: dict, year: int, inputs: dict | None = None, *, opening: YearClose | None = None, **kwargs):
+    """One year of a chain from ``snapshot``: its own ``inputs`` (``settings``, ``actions``, ``outages``,
+    ``episodes``), opening on ``opening`` (the year before's close; None for the snapshot's own year). ``kwargs`` go
+    to the run (``seed``, ``strict``, ``ops_factory``)."""
+    from utilsim.m2c.base import m2c_town
+    from utilsim.m2c.run import M2CRun
+
+    inputs = inputs or {}
+    town = m2c_town(snapshot, year)
+    if opening is not None:
+        town = open_town(town, opening)
+    return M2CRun(town, inputs.get("settings"), inputs.get("actions") or [], inputs.get("outages") or [],
+                  episodes=inputs.get("episodes") or [], opening=opening, **kwargs)
+
+
+def replay(snapshot: dict, years: list[dict], *, strict: bool = True, **kwargs):
+    """The last year of a chain: ``years`` are the inputs of 2026, 2027, … (see ``run_year``), each year opening on
+    the one before. Earlier years replay leniently (an action that no longer applies is skipped with a warning)."""
+    if not years:
+        raise ValueError("a chain needs at least its first year")
+    run = None
+    for k, inputs in enumerate(years):
+        run = run_year(snapshot, FIRST_YEAR + k, inputs, opening=None if run is None else close(run),
+                       strict=strict and k == len(years) - 1, **kwargs)
+    return run
+
+
 def next_year(run, snapshot: dict, **kwargs):
     """The year after ``run`` (its town from ``snapshot``), opening on ``run``'s close. The run's settings, seed and
     operations model go on unless ``kwargs`` give others (actions, outages and episodes belong to their year)."""
-    from utilsim.m2c.base import M2CTown
-    from utilsim.m2c.run import M2C_GROUPS, M2CRun
+    from utilsim.m2c.run import M2C_GROUPS
 
-    c = close(run)
-    kwargs.setdefault("settings", {g: run.cfg.model_dump(mode="json")[g] for g in M2C_GROUPS})
+    inputs = {k: kwargs.pop(k, None) for k in ("settings", "actions", "outages", "episodes")}
+    if inputs["settings"] is None:
+        inputs["settings"] = {g: run.cfg.model_dump(mode="json")[g] for g in M2C_GROUPS}
     kwargs.setdefault("seed", run.run_seed)
     kwargs.setdefault("ops_factory", run.ops_factory)
-    return M2CRun(open_town(M2CTown.from_snapshot(snapshot, run.cal.year + 1), c), opening=c, **kwargs)
+    return run_year(snapshot, run.cal.year + 1, inputs, opening=close(run), **kwargs)
 
 
 def open_town(town, close: YearClose):
