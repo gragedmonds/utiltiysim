@@ -88,7 +88,7 @@
             "title": "Covercaseids"
           },
           "day": {
-            "description": "Local date of the decision (YYYY-MM-DD), in 2026, never before the previous action.",
+            "description": "Local date of the decision (YYYY-MM-DD), in the run's year, never before the previous action.",
             "title": "Day",
             "type": "string"
           },
@@ -518,6 +518,22 @@
             "title": "Outages",
             "type": "array"
           },
+          "previous": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/YearInputs"
+                },
+                "maxItems": 4,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The inputs of the years before ``year``, from 2026 on, one each. Omitted: the earlier years run with this request's settings and nothing else.",
+            "title": "Previous"
+          },
           "seed": {
             "anyOf": [
               {
@@ -556,6 +572,20 @@
             "default": false,
             "title": "Truth",
             "type": "boolean"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "maximum": 2030.0,
+                "minimum": 2026.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The calendar year to replay (2026-2030; default: the year after ``previous``, else 2026). A later year opens on the years before it, each where the one before closed (dials, money owed, open work, services off, devices). ``actions``, ``outages``, ``episodes`` and ``asOf`` are the year's own.",
+            "title": "Year"
           }
         },
         "required": [
@@ -693,6 +723,22 @@
             "title": "Outages",
             "type": "array"
           },
+          "previous": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/YearInputs"
+                },
+                "maxItems": 4,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The inputs of the years before ``year``, from 2026 on, one each. Omitted: the earlier years run with this request's settings and nothing else.",
+            "title": "Previous"
+          },
           "seed": {
             "anyOf": [
               {
@@ -726,6 +772,20 @@
             "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
             "type": "string"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "maximum": 2030.0,
+                "minimum": 2026.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The calendar year to replay (2026-2030; default: the year after ``previous``, else 2026). A later year opens on the years before it, each where the one before closed (dials, money owed, open work, services off, devices). ``actions``, ``outages``, ``episodes`` and ``asOf`` are the year's own.",
+            "title": "Year"
           }
         },
         "required": [
@@ -815,6 +875,22 @@
             "title": "Pagesize",
             "type": "integer"
           },
+          "previous": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/YearInputs"
+                },
+                "maxItems": 4,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The inputs of the years before ``year``, from 2026 on, one each. Omitted: the earlier years run with this request's settings and nothing else.",
+            "title": "Previous"
+          },
           "search": {
             "anyOf": [
               {
@@ -882,6 +958,20 @@
             "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
             "type": "string"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "maximum": 2030.0,
+                "minimum": 2026.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The calendar year to replay (2026-2030; default: the year after ``previous``, else 2026). A later year opens on the years before it, each where the one before closed (dials, money owed, open work, services off, devices). ``actions``, ``outages``, ``episodes`` and ``asOf`` are the year's own.",
+            "title": "Year"
           }
         },
         "required": [
@@ -964,6 +1054,22 @@
             "title": "Pagesize",
             "type": "integer"
           },
+          "previous": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/YearInputs"
+                },
+                "maxItems": 4,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The inputs of the years before ``year``, from 2026 on, one each. Omitted: the earlier years run with this request's settings and nothing else.",
+            "title": "Previous"
+          },
           "seed": {
             "anyOf": [
               {
@@ -1006,6 +1112,20 @@
             "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
             "type": "string"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "maximum": 2030.0,
+                "minimum": 2026.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The calendar year to replay (2026-2030; default: the year after ``previous``, else 2026). A later year opens on the years before it, each where the one before closed (dials, money owed, open work, services off, devices). ``actions``, ``outages``, ``episodes`` and ``asOf`` are the year's own.",
+            "title": "Year"
           }
         },
         "required": [
@@ -1270,6 +1390,22 @@
             "title": "Outages",
             "type": "array"
           },
+          "previous": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/YearInputs"
+                },
+                "maxItems": 4,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The inputs of the years before ``year``, from 2026 on, one each. Omitted: the earlier years run with this request's settings and nothing else.",
+            "title": "Previous"
+          },
           "readId": {
             "title": "Readid",
             "type": "string"
@@ -1307,6 +1443,20 @@
             "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
             "type": "string"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "maximum": 2030.0,
+                "minimum": 2026.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The calendar year to replay (2026-2030; default: the year after ``previous``, else 2026). A later year opens on the years before it, each where the one before closed (dials, money owed, open work, services off, devices). ``actions``, ``outages``, ``episodes`` and ``asOf`` are the year's own.",
+            "title": "Year"
           }
         },
         "required": [
@@ -1426,6 +1576,22 @@
             "title": "Outages",
             "type": "array"
           },
+          "previous": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/YearInputs"
+                },
+                "maxItems": 4,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The inputs of the years before ``year``, from 2026 on, one each. Omitted: the earlier years run with this request's settings and nothing else.",
+            "title": "Previous"
+          },
           "seed": {
             "anyOf": [
               {
@@ -1459,6 +1625,20 @@
             "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
             "type": "string"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "maximum": 2030.0,
+                "minimum": 2026.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The calendar year to replay (2026-2030; default: the year after ``previous``, else 2026). A later year opens on the years before it, each where the one before closed (dials, money owed, open work, services off, devices). ``actions``, ``outages``, ``episodes`` and ``asOf`` are the year's own.",
+            "title": "Year"
           }
         },
         "required": [
@@ -1530,6 +1710,22 @@
             "title": "Pagesize",
             "type": "integer"
           },
+          "previous": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/YearInputs"
+                },
+                "maxItems": 4,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The inputs of the years before ``year``, from 2026 on, one each. Omitted: the earlier years run with this request's settings and nothing else.",
+            "title": "Previous"
+          },
           "query": {
             "default": "",
             "description": "Case-insensitive text in the id or its short text.",
@@ -1570,6 +1766,20 @@
             "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
             "type": "string"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "maximum": 2030.0,
+                "minimum": 2026.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The calendar year to replay (2026-2030; default: the year after ``previous``, else 2026). A later year opens on the years before it, each where the one before closed (dials, money owed, open work, services off, devices). ``actions``, ``outages``, ``episodes`` and ``asOf`` are the year's own.",
+            "title": "Year"
           }
         },
         "required": [
@@ -1583,7 +1793,7 @@
         "description": "A scenario inflicted from a day: setting overrides in force from ``from`` to ``to`` (inclusive; null = the\nyear's end), sliding from the base to the target over ``ramp`` days. A value is a number or boolean, or an\noperator on the value in force before the episode: ``\"*0.5\"``, ``\"+2\"``, ``\"-1\"`` (numeric settings).",
         "properties": {
           "from": {
-            "description": "First day (YYYY-MM-DD, in 2026).",
+            "description": "First day (YYYY-MM-DD, in the run's year).",
             "title": "From",
             "type": "string"
           },
@@ -1954,6 +2164,22 @@
             "title": "Outages",
             "type": "array"
           },
+          "previous": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/YearInputs"
+                },
+                "maxItems": 4,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The inputs of the years before ``year``, from 2026 on, one each. Omitted: the earlier years run with this request's settings and nothing else.",
+            "title": "Previous"
+          },
           "seed": {
             "anyOf": [
               {
@@ -1992,6 +2218,20 @@
             "default": false,
             "title": "Truth",
             "type": "boolean"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "maximum": 2030.0,
+                "minimum": 2026.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The calendar year to replay (2026-2030; default: the year after ``previous``, else 2026). A later year opens on the years before it, each where the one before closed (dials, money owed, open work, services off, devices). ``actions``, ``outages``, ``episodes`` and ``asOf`` are the year's own.",
+            "title": "Year"
           }
         },
         "required": [
@@ -2086,6 +2326,22 @@
             "description": "Billing portion (export pages); default: all.",
             "title": "Portion"
           },
+          "previous": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/YearInputs"
+                },
+                "maxItems": 4,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The inputs of the years before ``year``, from 2026 on, one each. Omitted: the earlier years run with this request's settings and nothing else.",
+            "title": "Previous"
+          },
           "seed": {
             "anyOf": [
               {
@@ -2119,6 +2375,20 @@
             "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
             "type": "string"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "maximum": 2030.0,
+                "minimum": 2026.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The calendar year to replay (2026-2030; default: the year after ``previous``, else 2026). A later year opens on the years before it, each where the one before closed (dials, money owed, open work, services off, devices). ``actions``, ``outages``, ``episodes`` and ``asOf`` are the year's own.",
+            "title": "Year"
           }
         },
         "required": [
@@ -2179,6 +2449,22 @@
             "title": "Outages",
             "type": "array"
           },
+          "previous": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/YearInputs"
+                },
+                "maxItems": 4,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The inputs of the years before ``year``, from 2026 on, one each. Omitted: the earlier years run with this request's settings and nothing else.",
+            "title": "Previous"
+          },
           "readId": {
             "anyOf": [
               {
@@ -2236,6 +2522,20 @@
             "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
             "type": "string"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "maximum": 2030.0,
+                "minimum": 2026.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The calendar year to replay (2026-2030; default: the year after ``previous``, else 2026). A later year opens on the years before it, each where the one before closed (dials, money owed, open work, services off, devices). ``actions``, ``outages``, ``episodes`` and ``asOf`` are the year's own.",
+            "title": "Year"
           }
         },
         "required": [
@@ -2247,7 +2547,7 @@
       "Outage": {
         "properties": {
           "day": {
-            "description": "Local date the interruption began (YYYY-MM-DD), in 2026.",
+            "description": "Local date the interruption began (YYYY-MM-DD), in the run's year.",
             "title": "Day",
             "type": "string"
           },
@@ -2387,6 +2687,22 @@
             "title": "Pagesize",
             "type": "integer"
           },
+          "previous": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/YearInputs"
+                },
+                "maxItems": 4,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The inputs of the years before ``year``, from 2026 on, one each. Omitted: the earlier years run with this request's settings and nothing else.",
+            "title": "Previous"
+          },
           "search": {
             "anyOf": [
               {
@@ -2459,6 +2775,20 @@
               }
             ],
             "title": "Utility"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "maximum": 2030.0,
+                "minimum": 2026.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The calendar year to replay (2026-2030; default: the year after ``previous``, else 2026). A later year opens on the years before it, each where the one before closed (dials, money owed, open work, services off, devices). ``actions``, ``outages``, ``episodes`` and ``asOf`` are the year's own.",
+            "title": "Year"
           }
         },
         "required": [
@@ -2511,6 +2841,22 @@
             "title": "Premiseid",
             "type": "string"
           },
+          "previous": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/YearInputs"
+                },
+                "maxItems": 4,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The inputs of the years before ``year``, from 2026 on, one each. Omitted: the earlier years run with this request's settings and nothing else.",
+            "title": "Previous"
+          },
           "seed": {
             "anyOf": [
               {
@@ -2550,6 +2896,20 @@
             "description": "Include simulation ground truth (never send it to a VEE engine).",
             "title": "Truth",
             "type": "boolean"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "maximum": 2030.0,
+                "minimum": 2026.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The calendar year to replay (2026-2030; default: the year after ``previous``, else 2026). A later year opens on the years before it, each where the one before closed (dials, money owed, open work, services off, devices). ``actions``, ``outages``, ``episodes`` and ``asOf`` are the year's own.",
+            "title": "Year"
           }
         },
         "required": [
@@ -2807,6 +3167,22 @@
             "title": "Pagesize",
             "type": "integer"
           },
+          "previous": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/YearInputs"
+                },
+                "maxItems": 4,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The inputs of the years before ``year``, from 2026 on, one each. Omitted: the earlier years run with this request's settings and nothing else.",
+            "title": "Previous"
+          },
           "queue": {
             "anyOf": [
               {
@@ -2903,6 +3279,20 @@
               }
             ],
             "title": "Type"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "maximum": 2030.0,
+                "minimum": 2026.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The calendar year to replay (2026-2030; default: the year after ``previous``, else 2026). A later year opens on the years before it, each where the one before closed (dials, money owed, open work, services off, devices). ``actions``, ``outages``, ``episodes`` and ``asOf`` are the year's own.",
+            "title": "Year"
           }
         },
         "required": [
@@ -2951,6 +3341,22 @@
             "title": "Outages",
             "type": "array"
           },
+          "previous": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/YearInputs"
+                },
+                "maxItems": 4,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The inputs of the years before ``year``, from 2026 on, one each. Omitted: the earlier years run with this request's settings and nothing else.",
+            "title": "Previous"
+          },
           "readId": {
             "description": "Meter-reading document id: READ-{townId}-{registerId}-{YYYY-MM-DD}.",
             "title": "Readid",
@@ -2994,6 +3400,20 @@
             "default": false,
             "title": "Truth",
             "type": "boolean"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "maximum": 2030.0,
+                "minimum": 2026.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The calendar year to replay (2026-2030; default: the year after ``previous``, else 2026). A later year opens on the years before it, each where the one before closed (dials, money owed, open work, services off, devices). ``actions``, ``outages``, ``episodes`` and ``asOf`` are the year's own.",
+            "title": "Year"
           }
         },
         "required": [
@@ -3103,6 +3523,22 @@
             "title": "Outages",
             "type": "array"
           },
+          "previous": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/YearInputs"
+                },
+                "maxItems": 4,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The inputs of the years before ``year``, from 2026 on, one each. Omitted: the earlier years run with this request's settings and nothing else.",
+            "title": "Previous"
+          },
           "seed": {
             "anyOf": [
               {
@@ -3136,6 +3572,20 @@
             "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
             "type": "string"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "maximum": 2030.0,
+                "minimum": 2026.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The calendar year to replay (2026-2030; default: the year after ``previous``, else 2026). A later year opens on the years before it, each where the one before closed (dials, money owed, open work, services off, devices). ``actions``, ``outages``, ``episodes`` and ``asOf`` are the year's own.",
+            "title": "Year"
           }
         },
         "required": [
@@ -3210,6 +3660,22 @@
             "title": "Outages",
             "type": "array"
           },
+          "previous": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/YearInputs"
+                },
+                "maxItems": 4,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The inputs of the years before ``year``, from 2026 on, one each. Omitted: the earlier years run with this request's settings and nothing else.",
+            "title": "Previous"
+          },
           "seed": {
             "anyOf": [
               {
@@ -3255,6 +3721,20 @@
             "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
             "type": "string"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "maximum": 2030.0,
+                "minimum": 2026.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The calendar year to replay (2026-2030; default: the year after ``previous``, else 2026). A later year opens on the years before it, each where the one before closed (dials, money owed, open work, services off, devices). ``actions``, ``outages``, ``episodes`` and ``asOf`` are the year's own.",
+            "title": "Year"
           }
         },
         "required": [
@@ -3352,6 +3832,22 @@
             "title": "Pagesize",
             "type": "integer"
           },
+          "previous": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/YearInputs"
+                },
+                "maxItems": 4,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The inputs of the years before ``year``, from 2026 on, one each. Omitted: the earlier years run with this request's settings and nothing else.",
+            "title": "Previous"
+          },
           "search": {
             "anyOf": [
               {
@@ -3417,6 +3913,20 @@
             "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
             "type": "string"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "maximum": 2030.0,
+                "minimum": 2026.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The calendar year to replay (2026-2030; default: the year after ``previous``, else 2026). A later year opens on the years before it, each where the one before closed (dials, money owed, open work, services off, devices). ``actions``, ``outages``, ``episodes`` and ``asOf`` are the year's own.",
+            "title": "Year"
           }
         },
         "required": [
@@ -3515,6 +4025,22 @@
             "title": "Pagesize",
             "type": "integer"
           },
+          "previous": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/YearInputs"
+                },
+                "maxItems": 4,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The inputs of the years before ``year``, from 2026 on, one each. Omitted: the earlier years run with this request's settings and nothing else.",
+            "title": "Previous"
+          },
           "search": {
             "anyOf": [
               {
@@ -3580,6 +4106,20 @@
             "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
             "type": "string"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "maximum": 2030.0,
+                "minimum": 2026.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The calendar year to replay (2026-2030; default: the year after ``previous``, else 2026). A later year opens on the years before it, each where the one before closed (dials, money owed, open work, services off, devices). ``actions``, ``outages``, ``episodes`` and ``asOf`` are the year's own.",
+            "title": "Year"
           }
         },
         "required": [
@@ -3978,6 +4518,54 @@
           "type"
         ],
         "title": "ValidationError",
+        "type": "object"
+      },
+      "YearInputs": {
+        "additionalProperties": false,
+        "description": "An earlier year of a chain: what that year ran with (its own settings, scenarios, Studio work and outages).",
+        "properties": {
+          "actions": {
+            "items": {
+              "$ref": "#/components/schemas/Action"
+            },
+            "maxItems": 2000,
+            "title": "Actions",
+            "type": "array"
+          },
+          "episodes": {
+            "items": {
+              "$ref": "#/components/schemas/Episode"
+            },
+            "maxItems": 40,
+            "title": "Episodes",
+            "type": "array"
+          },
+          "outages": {
+            "items": {
+              "$ref": "#/components/schemas/Outage"
+            },
+            "maxItems": 500,
+            "title": "Outages",
+            "type": "array"
+          },
+          "settings": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "That year's run settings (as ``settings``).",
+            "title": "Settings"
+          }
+        },
+        "title": "YearInputs",
         "type": "object"
       }
     }

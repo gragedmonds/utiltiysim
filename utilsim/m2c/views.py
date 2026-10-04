@@ -139,6 +139,7 @@ def summary(run: M2CRun, as_of: str | None = None, since: str | None = None) -> 
     return {
         "schemaVersion": SUMMARY_VERSION, "simulationId": run.simulation_id, "townId": tw.id,
         "asOf": run.cal.date_of(day).isoformat(), "period": {"start": run.cal.start, "end": run.cal.end},
+        "year": run.cal.year, "opening": opening_json(run),
         "settingsHash": run.settings_hash, "seed": run.run_seed, "warnings": run.warnings,
         "kpis": {
             "registers": tw.n_registers, "reads": int(read.sum()), "actual": int(got.sum()),
@@ -166,6 +167,14 @@ def summary(run: M2CRun, as_of: str | None = None, since: str | None = None) -> 
         "premises": {"ids": tw.premise_ids, "status": premise_status(run, T).tolist(), "legend": list(PREMISE_STATUS)},
         **({"window": _window(run, since, as_of)} if since else {}),
     }
+
+
+def opening_json(run: M2CRun) -> dict | None:
+    """What a chained year opened with (the year before's close), or None for a year that opened on the town."""
+    c = run.opening
+    if c is None:
+        return None
+    return {"year": c.year, "simulationId": c.simulation_id, **c.totals}
 
 
 def _window(run: M2CRun, since: str, as_of: str | None) -> dict:
