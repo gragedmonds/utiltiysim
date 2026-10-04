@@ -300,9 +300,10 @@ def test_a_meter_exchanged_outcome_installs_the_new_device(town, swapped):
 def test_the_simulated_crews_register_the_meters_they_exchange():
     run = run_for(RunRequest(town="small_town"))
     exchanged = [(c, e) for c in run.cases for e in c.events if e[1] == "METER_EXCHANGE"]
-    assert exchanged and len(run.installs) == len(exchanged)
+    corrective = [x for x in run.installs if not x.planned]  # planned exchanges (seal, age, AMI) have no case
+    assert exchanged and len(corrective) == len(exchanged)
     for _, e in exchanged:
-        assert e[2]["deviceId"] in {x.device for x in run.installs}
+        assert e[2]["deviceId"] in {x.device for x in corrective}
     # No register went backwards after its exchange: later reads are diffed against the new register.
     for x in run.installs:
         for r, m in x.period.items():

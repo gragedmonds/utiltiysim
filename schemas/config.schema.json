@@ -380,7 +380,7 @@
             "disconnections",
             "field disconnects and reconnects"
           ],
-          "x-impact": "Disconnection notices a collections rule approves as they are issued: disconnections, reconnections, disconnected contacts and the field crews' disconnects and reconnects follow. 0 (the default): every disconnection waits for your approval.",
+          "x-impact": "Disconnection notices a collections rule approves as they are issued: the crews' disconnects and reconnects follow, disconnected meters are not read or billed until reconnected, and disconnected contacts come in. 0 (the default): every disconnection waits for you.",
           "x-reach": "year"
         },
         "first_bill_limit": {
@@ -1807,7 +1807,7 @@
     },
     "FieldConfig": {
       "additionalProperties": false,
-      "description": "The work the field crews do over the year and the crews that do it: customer emergencies, service orders (disconnects, reconnects, move-ins and move-outs), meter maintenance (seal exchanges, batteries, removals), preventative maintenance on the networks and capital construction (new sets, upgrades, main renewal). Work follows the year: collections, moves, VEE field visits, the contact centre's calls, the year's outages and leaks, the meters' install years and the town's assets.",
+      "description": "The work the field crews do over the year and the crews that do it: customer emergencies, service orders (disconnects, reconnects, move-ins and move-outs), meter maintenance (seal exchanges, batteries, removals), preventative maintenance on the networks and capital construction (new sets, upgrades, main renewal). Work follows the year: collections, moves, VEE field visits, the contact centre's calls, the year's outages and leaks, the meters' install years and the town's assets. What the crews do changes the year: a disconnected or removed meter is not read or billed, an exchange registers a new meter, and maintenance left overdue fails (dead batteries, drifting meters, outages, gas leaks).",
       "properties": {
         "ami_battery": {
           "$ref": "#/$defs/FieldWorkType",
@@ -1832,7 +1832,7 @@
           },
           "description": "AMI conversion: share of AMR and manually read meters converted to AMI this year (capital, priority 4).",
           "title": "AMI conversion",
-          "x-impact": "AMR and manually read meters converted to AMI, route by route in the season. Off by default.",
+          "x-impact": "AMR and manually read meters converted to AMI, route by route in the season: fewer missed reads and no-access visits after. Off by default.",
           "x-reach": "year"
         },
         "battery_years": {
@@ -1961,6 +1961,46 @@
           "x-impact": "Water crews: main break repairs, valve and hydrant programmes and their repairs.",
           "x-reach": "year"
         },
+        "dead_battery_miss": {
+          "default": 0.9,
+          "description": "Share of reads a radio module misses once its battery has died (past its life and not replaced): estimates follow.",
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Dead Battery Miss",
+          "type": "number",
+          "x-impact": "Reads a module misses once its battery died (not replaced by its anniversary): estimates, estimation cases and contacts follow.",
+          "x-reach": "year"
+        },
+        "deferred_leak_escalation": {
+          "default": 1.0,
+          "description": "Chance a year that a leak found by survey becomes a public gas leak (odour calls, an emergency) once its repair is overdue.",
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Deferred Leak Escalation",
+          "type": "number",
+          "x-impact": "How likely a surveyed leak overdue for repair becomes a public gas leak: odour calls and emergency response.",
+          "x-reach": "year"
+        },
+        "deferred_pole_failures": {
+          "default": 2.0,
+          "description": "Chance a year that a pole found needing replacement fails once its replacement is overdue (ten times as likely on a storm day): an outage.",
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Deferred Pole Failures",
+          "type": "number",
+          "x-impact": "How likely an overdue pole replacement fails: an outage (use lost, AMI meters dark), outage reports and repairs on the line crews.",
+          "x-reach": "year"
+        },
+        "deferred_tree_faults": {
+          "default": 0.02,
+          "description": "Chance on a storm day that an overhead span overdue for trimming faults: an outage.",
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Deferred Tree Faults",
+          "type": "number",
+          "x-impact": "How likely a span overdue for trimming faults on a storm day: an outage (use lost, AMI meters dark) and outage reports.",
+          "x-reach": "year"
+        },
         "disconnect": {
           "$ref": "#/$defs/FieldWorkType",
           "default": {
@@ -1970,7 +2010,17 @@
             "target_days": 0.0
           },
           "description": "Disconnect for non-payment: share of collections disconnections worked (AMI electric with a switch is done remotely).",
-          "x-impact": "Disconnect orders: follow the disconnections approved in Collections.",
+          "x-impact": "Disconnections the crews carry out (approved in Collections). A disconnected meter is not read and not billed until it is reconnected.",
+          "x-reach": "year"
+        },
+        "failed_lot_drift": {
+          "default": 0.04,
+          "description": "Under-registration of a failed seal lot's meters, from the failed test until each is exchanged.",
+          "maximum": 0.5,
+          "minimum": 0,
+          "title": "Failed Lot Drift",
+          "type": "number",
+          "x-impact": "How much a failed seal lot's meters under-register until exchanged: less billed against the truth while the exchanges wait.",
           "x-reach": "year"
         },
         "gas_leak_repair": {
@@ -2123,6 +2173,16 @@
           "x-impact": "Single-premise no-supply reports that need a truck; follows the contact centre's outage reports.",
           "x-reach": "year"
         },
+        "old_water_meter_drift": {
+          "default": 0.03,
+          "description": "Under-registration of water meters at or past their service life, until replaced (read at the start of the year).",
+          "maximum": 0.5,
+          "minimum": 0,
+          "title": "Old Water Meter Drift",
+          "type": "number",
+          "x-impact": "How much water meters past their life under-register until replaced: the revenue a replacement programme recovers.",
+          "x-reach": "year"
+        },
         "outage_repair": {
           "$ref": "#/$defs/FieldWorkType",
           "default": {
@@ -2180,7 +2240,7 @@
             "target_days": 1.0
           },
           "description": "Reconnect after payment: share of reconnections worked, due the next business day.",
-          "x-impact": "Reconnect orders: follow the reconnections after payment.",
+          "x-impact": "Reconnections the crews do after payment; the rest come back without a visit.",
           "x-reach": "year"
         },
         "regulator_inspection": {
@@ -2215,7 +2275,7 @@
           },
           "description": "Meter removal (vacant premise, service abandoned): removals per 1,000 premises a year.",
           "title": "Meter removal",
-          "x-impact": "Meter removals at vacant premises.",
+          "x-impact": "Meter removals at vacant premises: the removed meters are not read or billed again.",
           "x-reach": "year"
         },
         "seal_exchange": {
@@ -2227,7 +2287,7 @@
             "target_days": 20.0
           },
           "description": "Seal-expiry exchange: share of the meters due (the sample of every expiring lot, every meter of a failed lot) exchanged. A failed lot's meters are due by 31 December.",
-          "x-impact": "Seal-expiry exchanges: the samples and failed lots due this year.",
+          "x-impact": "Seal-expiry exchanges: the samples and failed lots due this year, each a new meter on the installation (reads and bills on the new register).",
           "x-reach": "year"
         },
         "seal_lot_pass_rate": {
@@ -2373,7 +2433,7 @@
             "target_days": 20.0
           },
           "description": "Water meter replacement by age: share of over-age water meters replaced this year.",
-          "x-impact": "Over-age water meters replaced this year; the rest stay due.",
+          "x-impact": "Over-age water meters replaced this year (new meters, no more drift); the rest keep under-registering.",
           "x-reach": "year"
         }
       },
@@ -3146,7 +3206,7 @@
           "description": "Draw outages and leaks across the year.",
           "title": "Enabled",
           "type": "boolean",
-          "x-impact": "Draw the operations day's incidents for every day of the year. Off: outage and gas odour contacts are background only.",
+          "x-impact": "Draw the operations day's incidents for every day of the year: customers out lose their use and AMI meters go dark. Off: no outages, and outage and gas odour contacts are background only.",
           "x-reach": "year"
         },
         "incident_factor": {
@@ -3156,7 +3216,7 @@
           "minimum": 0,
           "title": "Incident Factor",
           "type": "number",
-          "x-impact": "Multiplies every incident rate: more outages, main breaks and gas leaks, and the contacts they bring.",
+          "x-impact": "Multiplies every incident rate: more outages, main breaks and gas leaks, the use they cut and the contacts they bring.",
           "x-reach": "year"
         },
         "restore_factor": {
@@ -3166,7 +3226,7 @@
           "minimum": 0.1,
           "title": "Restore Factor",
           "type": "number",
-          "x-impact": "Multiplies the time to restore service: longer outages bring twice the outage reports past two hours.",
+          "x-impact": "Multiplies the time to restore service: more use lost, more AMI reads falling inside an outage, and twice the outage reports past two hours.",
           "x-reach": "year"
         },
         "storm_factor": {
@@ -3176,7 +3236,7 @@
           "minimum": 0,
           "title": "Storm Factor",
           "type": "number",
-          "x-impact": "Multiplies the chance of a storm day: more overhead line faults, outages and outage reports, mostly May to September.",
+          "x-impact": "Multiplies the chance of a storm day: more overhead line faults, outages (use lost, a read missed when one falls inside) and outage reports, mostly May to September.",
           "x-reach": "year"
         }
       },

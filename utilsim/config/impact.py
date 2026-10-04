@@ -512,9 +512,9 @@ IMPACT: dict[str, tuple[str, str]] = {
                                                "disconnection. Acts only on disconnections you approve: the "
                                                "engine never disconnects on its own."),
     "billing.disconnect_rule_share": ("year", "Disconnection notices a collections rule approves as they are "
-                                             "issued: disconnections, reconnections, disconnected contacts and the "
-                                             "field crews' disconnects and reconnects follow. 0 (the default): every "
-                                             "disconnection waits for your approval."),
+                                             "issued: the crews' disconnects and reconnects follow, disconnected "
+                                             "meters are not read or billed until reconnected, and disconnected "
+                                             "contacts come in. 0 (the default): every disconnection waits for you."),
     "billing.disconnect_payment_rate": ("year", "Disconnected customers who pay within a week and are "
                                                 "reconnected the next business day. Acts only on "
                                                 "disconnections you approve in the Collections worklist."),
@@ -587,14 +587,16 @@ IMPACT: dict[str, tuple[str, str]] = {
     "contact.complaint": ("year", "Complaints after a second unresolved contact or giving up on hold twice: long waits "
                                   "and low first-contact resolution drive them."),
     # ---- outages & leaks over the year (run) ------------------------------------------------------------------------
-    "outages.enabled": ("year", "Draw the operations day's incidents for every day of the year. Off: outage and gas "
-                                "odour contacts are background only."),
-    "outages.storm_factor": ("year", "Multiplies the chance of a storm day: more overhead line faults, outages and "
-                                     "outage reports, mostly May to September."),
-    "outages.incident_factor": ("year", "Multiplies every incident rate: more outages, main breaks and gas leaks, and "
-                                        "the contacts they bring."),
-    "outages.restore_factor": ("year", "Multiplies the time to restore service: longer outages bring twice the outage "
-                                       "reports past two hours."),
+    "outages.enabled": ("year", "Draw the operations day's incidents for every day of the year: customers out lose "
+                                "their use and AMI meters go dark. Off: no outages, and outage and gas odour contacts "
+                                "are background only."),
+    "outages.storm_factor": ("year", "Multiplies the chance of a storm day: more overhead line faults, outages (use "
+                                     "lost, a read missed when one falls inside) and outage reports, mostly May to "
+                                     "September."),
+    "outages.incident_factor": ("year", "Multiplies every incident rate: more outages, main breaks and gas leaks, the "
+                                        "use they cut and the contacts they bring."),
+    "outages.restore_factor": ("year", "Multiplies the time to restore service: more use lost, more AMI reads falling "
+                                       "inside an outage, and twice the outage reports past two hours."),
     # ---- field work (run) ---------------------------------------------------------------------------------------------
     "field.shift_start_hour": ("year", "When the business-day crews start. It moves when work is done in the day and "
                                        "which emergencies fall after hours (call-out and overtime)."),
@@ -622,6 +624,18 @@ IMPACT: dict[str, tuple[str, str]] = {
                                                "conversion and main renewal wait for it."),
     "field.construction_end_month": ("year", "Last month of the construction season: work not built by then waits "
                                              "for next year."),
+    "field.dead_battery_miss": ("year", "Reads a module misses once its battery died (not replaced by its "
+                                        "anniversary): estimates, estimation cases and contacts follow."),
+    "field.failed_lot_drift": ("year", "How much a failed seal lot's meters under-register until exchanged: less "
+                                       "billed against the truth while the exchanges wait."),
+    "field.old_water_meter_drift": ("year", "How much water meters past their life under-register until replaced: "
+                                            "the revenue a replacement programme recovers."),
+    "field.deferred_pole_failures": ("year", "How likely an overdue pole replacement fails: an outage (use lost, AMI "
+                                             "meters dark), outage reports and repairs on the line crews."),
+    "field.deferred_tree_faults": ("year", "How likely a span overdue for trimming faults on a storm day: an outage "
+                                           "(use lost, AMI meters dark) and outage reports."),
+    "field.deferred_leak_escalation": ("year", "How likely a surveyed leak overdue for repair becomes a public gas "
+                                               "leak: odour calls and emergency response."),
     "field.crew_emergency": ("year", "On-call responders: fewer stretch emergency response when emergencies "
                                      "overlap; the cost prices their time."),
     "field.crew_meter": ("year", "Meter technicians: service orders, VEE visits, exchanges, batteries and meter sets "
@@ -637,8 +651,9 @@ IMPACT: dict[str, tuple[str, str]] = {
                                 "outage reports."),
     "field.outage_repair": ("year", "Outage and leak repairs on the utilities' crews, timed by the incident model; "
                                     "follows the outages settings."),
-    "field.disconnect": ("year", "Disconnect orders: follow the disconnections approved in Collections."),
-    "field.reconnect": ("year", "Reconnect orders: follow the reconnections after payment."),
+    "field.disconnect": ("year", "Disconnections the crews carry out (approved in Collections). A disconnected "
+                                 "meter is not read and not billed until it is reconnected."),
+    "field.reconnect": ("year", "Reconnections the crews do after payment; the rest come back without a visit."),
     "field.move_out": ("year", "Move-out visits: account closings at premises without AMI."),
     "field.move_in": ("year", "Move-in visits: account openings at premises without AMI (not the day after a "
                               "move-out there)."),
@@ -646,12 +661,14 @@ IMPACT: dict[str, tuple[str, str]] = {
                                           "settings (field orders a day, field days) and the anomalies."),
     "field.corrective_exchange": ("year", "Faulty meters exchanged on field visits: follows the anomalies (stuck, "
                                           "slow, tamper) and the field visits that find them."),
-    "field.seal_exchange": ("year", "Seal-expiry exchanges: the samples and failed lots due this year."),
+    "field.seal_exchange": ("year", "Seal-expiry exchanges: the samples and failed lots due this year, each a new "
+                                    "meter on the installation (reads and bills on the new register)."),
     "field.ami_battery": ("year", "Module battery replacements due this year."),
-    "field.water_meter_replacement": ("year", "Over-age water meters replaced this year; the rest stay due."),
-    "field.removal": ("year", "Meter removals at vacant premises."),
-    "field.ami_conversion": ("year", "AMR and manually read meters converted to AMI, route by route in the season. "
-                                     "Off by default."),
+    "field.water_meter_replacement": ("year", "Over-age water meters replaced this year (new meters, no more drift); "
+                                              "the rest keep under-registering."),
+    "field.removal": ("year", "Meter removals at vacant premises: the removed meters are not read or billed again."),
+    "field.ami_conversion": ("year", "AMR and manually read meters converted to AMI, route by route in the season: "
+                                     "fewer missed reads and no-access visits after. Off by default."),
     "field.pole_inspection": ("year", "Poles inspected a year; inspections find poles to replace."),
     "field.pole_replacement": ("year", "Inspected poles found needing replacement: long, costly line crew jobs."),
     "field.tree_trimming": ("year", "Overhead spans trimmed a year."),

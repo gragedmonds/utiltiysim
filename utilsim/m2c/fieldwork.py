@@ -29,16 +29,27 @@ service_upgrade            homes with an EV or electric heat upgrading their ele
 main_replacement           100 m segments of cast-iron water and gas main renewed in the construction season
 =========================  ===========================================================================================
 
-The crews: on-call responders work emergencies around the clock (first come, first served, several crews at once).
-Meter technicians, the three utilities' crews and the construction crews work business days from
-``shift_start_hour`` for ``shift_hours``: an order is released on its day, and each crew type works its released
-orders by priority, then due date. Work the run or an incident has already timed (VEE visits, outage repairs) takes
-the crews' time on its day first. A long job carries over to the next day. Customer work (priority 1 and 2) due today
-or overdue may run into overtime, up to ``overtime_max_hours`` per crew.
+The crews work inside the replay (``FieldEngine``, ``run.field``), day by day with the reads, bills and collections.
+On-call responders work emergencies around the clock (first come, first served, several crews at once). Meter
+technicians, the three utilities' crews and the construction crews work business days from ``shift_start_hour`` for
+``shift_hours``: an order is released on its day, and each crew type works its released orders by priority, then due
+date. Work the run or an incident has already timed (VEE visits, outage repairs) takes the crews' time on its day
+first. A long job carries over to the next day. Customer work (priority 1 and 2) due today or overdue may run into
+overtime, up to ``overtime_max_hours`` per crew.
 
-Field settings never change the rest of the year: reads, cases, bills, collections and contacts are the same with
-any field settings (a test checks). Field work does not feed back into the year yet: a late disconnect does not move
-the collections timeline, and a removal does not end the premise's billing.
+What the crews do changes the year from that moment:
+
+* **Disconnect, removal:** the service is off (nothing flows); its scheduled reads are not taken, so no bill is made
+  for those months. A reconnect switches it back; the next bill runs from the last read before the disconnection.
+  Collections asks for the disconnect on the earliest day; it happens when the crew (or the remote switch) does it, and
+  a customer who paid before the crew arrived is not disconnected.
+* **Exchanges** (seal, water meter replacement, AMI conversion) register a new meter: reads are measured on the new
+  register, a fault on the old meter ends, an AMI conversion reads the meter as AMI from then on.
+* **Deferred maintenance fails:** a module battery not replaced by its anniversary dies and misses reads
+  (``dead_battery_miss``); a failed seal lot's meters and water meters past their life under-register until exchanged
+  (``failed_lot_drift``, ``old_water_meter_drift``); a pole found needing replacement, a span overdue for trimming (on
+  storm days) and a surveyed leak overdue for repair can fail (``deferred_*``): an outage or a public gas leak, with
+  its customers, contacts, emergency response and repair.
 
 Every draw is a counter-based hash of the run seed and the order's identity, so episodes on ``field`` settings apply
 from their day.
@@ -105,12 +116,13 @@ PLANNED = ("seal_exchange", "ami_battery", "water_meter_replacement", "ami_conve
            "service_upgrade", "main_replacement")  # orders from a programme plan (compliance)
 FINDINGS = {"pole_inspection": "pole_replacement", "valve_exercise": "valve_repair", "hydrant_flush": "hydrant_repair",
             "leak_survey": "gas_leak_repair", "new_set": "meter_set"}
-STATUSES = ("planned", "open", "in_progress", "completed")
+STATUSES = ("planned", "open", "in_progress", "completed", "cancelled")
 REMOTE_MINUTES = 5.0
 SURVEY_ROUTE_M = 1000.0
 MAIN_SEGMENT_M = 100.0
 DESIGN_BDAYS = 15  # a new service: request to construction release (design, locates, permits)
 _M64 = 0xFFFFFFFFFFFFFFFF
+P_FAIL = 901  # draw key: overdue work failing (apart from the work types' own draws)
 
 
 def _mix(z: int) -> int:
@@ -182,6 +194,10 @@ class Order:
     crew_id: str = ""
     then: tuple | None = None  # follow-up raised on completion
     parent: int = -1  # the order whose finding raised this one
+    meter: int = -1  # the meter slot it works on (meter work, disconnects)
+    inv: str = ""  # the invoice a disconnect or reconnect is for
+    cancelled: bool = False  # called off before a crew started it (paid, held, failed first)
+    outcome: str = ""  # what came of it, when not simply done (not needed, skipped: meter off, failed first)
     id: str = ""
 
 
@@ -195,6 +211,7 @@ class FieldWork:
     premises: int
     notes: list[str]
     cols: dict = field(default_factory=dict)  # column arrays over orders, for the views
+    failures: list[dict] = field(default_factory=list)  # overdue work that failed: {t, kind, orderId, incident}
 
 
 class _Build:
@@ -243,7 +260,7 @@ class _Build:
             prem: int = -1, asset: str = "", xz: tuple | None = None, cause: str = "", crew: str | None = None,
             minutes: float | None = None, materials: float | None = None, travel: bool = True,
             fixed: tuple[float, float] | None = None, remote: bool = False, then: tuple | None = None,
-            crew_id: str = "") -> Order | None:
+            crew_id: str = "", meter: int = -1) -> Order | None:
         if not 0 <= created < YEAR_DAYS:
             return None
         _, _, _, tcrew, prio = TYPES[IDX[key]]
@@ -260,7 +277,7 @@ class _Build:
                   travel=fc.travel_minutes if travel and not remote else 0.0,
                   materials=float(wt.materials if materials is None else materials), prem=int(prem), asset=asset,
                   x=float(xz[0]) if xz else math.nan, z=float(xz[1]) if xz else math.nan, cause=cause,
-                  remote=remote, then=then, crew_id=crew_id)
+                  remote=remote, then=then, crew_id=crew_id, meter=int(meter))
         o.left = o.minutes + o.travel
         if remote:
             o.crew, o.start = "remote", float(release)
@@ -275,7 +292,8 @@ class _Build:
         return o
 
     # ---- customer emergencies -----------------------------------------------------------------------------------
-    def emergencies(self) -> None:
+    def responses(self) -> None:
+        """After the year: gas odour and no-supply calls a responder attends (the contact centre's contacts)."""
         from utilsim.m2c import contact
 
         run = self.run
@@ -293,18 +311,20 @@ class _Build:
                     self.add("gas_odour", t, prem=p, cause=trig if trig != "background" else "odour report")
             elif trig == "background" and _u(run, IDX["no_supply"], i, 0) < self.w("no_supply", t).rate:
                 self.add("no_supply", t, prem=p, cause="no supply report")
-        for j, inc in enumerate(cx.incidents):
-            t0 = float(inc["t"])
-            if _u(run, IDX["outage_repair"], j, 0) >= self.w("outage_repair", t0).rate:
-                continue
-            util = inc["utility"]
-            crew = util if util in ("electric", "water", "gas") else "electric"  # AMI collectors: line crews
-            wt = self.w("outage_repair", t0)
-            start = t0 + 30.0 / 1440.0  # detection, dispatch and driving
-            back = float(np.max(inc["restoredAt"])) if len(inc["restoredAt"]) else start + wt.minutes / 1440.0
-            self.add("outage_repair", t0, prem=-1, asset=inc["id"], xz=(inc["x"], inc["z"]),
-                     cause=inc["label"], crew=crew, minutes=max(30.0, (back - start) * 1440.0),
-                     fixed=(start, back))
+
+    def repair(self, inc: dict, j: int) -> None:
+        """An incident's repair on the utility's crew, timed by the incident model (detection, travel, restoration)."""
+        run = self.run
+        t0 = float(inc["t"])
+        if _u(run, IDX["outage_repair"], j, 0) >= self.w("outage_repair", t0).rate:
+            return
+        util = inc["utility"]
+        crew = util if util in ("electric", "water", "gas") else "electric"  # AMI collectors: line crews
+        wt = self.w("outage_repair", t0)
+        start = t0 + 30.0 / 1440.0  # detection, dispatch and driving
+        back = float(np.max(inc["restoredAt"])) if len(inc["restoredAt"]) else start + wt.minutes / 1440.0
+        self.add("outage_repair", t0, prem=-1, asset=inc["id"], xz=(inc["x"], inc["z"]), cause=inc["label"],
+                 crew=crew, minutes=max(30.0, (back - start) * 1440.0), fixed=(start, back))
 
     # ---- service orders -----------------------------------------------------------------------------------------
     def service_meter(self, prem: int) -> int:
@@ -313,30 +333,6 @@ class _Build:
             if mi is not None:
                 return mi
         return -1
-
-    def collections(self) -> None:
-        run, tw = self.run, self.tw
-        col = run.books.collections
-        for aid, A in col.accounts.items():
-            p = tw.premise_index.get((tw.accounts.get(aid) or {}).get("premiseId"), -1)
-            if p < 0:
-                continue
-            mi = self.service_meter(p)
-            for inv in A.invs:
-                d = inv.get("disc")
-                if not d or d.get("at") is None:
-                    continue
-                n = str_key(inv["id"])
-                switch = mi >= 0 and tw.meter_tech[mi] == "AMI" and tw.meter_commodity[mi] == "electric"
-                for key, t in (("disconnect", d["at"]), ("reconnect", d.get("reconnected"))):
-                    if t is None or not 0 <= t < YEAR_DAYS:
-                        continue
-                    if _u(run, IDX[key], n, 0) >= self.w(key, t).rate:
-                        continue
-                    remote = switch and _u(run, IDX["disconnect"], int(tw.meter_keys[mi]), 1) < \
-                        self.fc[int(t)].remote_switch_share
-                    self.add(key, t, prem=p, asset=tw.meter_ids[mi] if mi >= 0 else "", cause=inv["id"],
-                             remote=remote)
 
     def moves(self) -> None:
         run, tw = self.run, self.tw
@@ -362,31 +358,6 @@ class _Build:
                 continue
             release = self.morning(day)
             self.add(key, max(0.0, release - 5.0), release=release, prem=p, asset=", ".join(visits[p]), cause=aid)
-
-    def visits(self) -> None:
-        """The run's own field visits: VEE truck rolls (meter investigations) and the meters they exchanged."""
-        run, tw = self.run, self.tw
-        for case in run.cases:
-            for t, kind, payload, _ in case.events:
-                if kind != "TRUCK_ROLL" or not 0 <= t < YEAR_DAYS:
-                    continue
-                if _u(run, IDX["meter_investigation"], case.idx, int(t * 1440)) >= self.w("meter_investigation", t).rate:
-                    continue
-                wt = self.w("meter_investigation", t)
-                travel = self.fc[int(t)].travel_minutes
-                self.add("meter_investigation", t, prem=int(tw.prem[case.r]), asset=tw.meter_ids[tw.meter_of[case.r]],
-                         cause=case.id, fixed=(t, t + (wt.minutes + travel) / 1440.0),
-                         crew_id=str(payload.get("crew") or ""))
-        for x in run.installs:
-            if not x.physical or not 0 <= x.t_reg < YEAR_DAYS:
-                continue
-            if _u(run, IDX["corrective_exchange"], int(tw.meter_keys[x.meter]), int(x.t_reg * 1440)) >= \
-                    self.w("corrective_exchange", x.t_reg).rate:
-                continue
-            wt = self.w("corrective_exchange", x.t_reg)
-            self.add("corrective_exchange", x.t_reg, prem=int(tw.meter_prem[x.meter]), asset=x.device,
-                     cause=x.case or x.order or x.previous, travel=False,
-                     fixed=(x.t_reg, x.t_reg + wt.minutes / 1440.0), crew_id=x.by)
 
     # ---- meter maintenance --------------------------------------------------------------------------------------
     def seals(self) -> None:
@@ -416,13 +387,17 @@ class _Build:
                     continue
                 state["left"] += 1
                 self.add("seal_exchange", 0.0, release=self.morning(day), prem=int(tw.meter_prem[mi]),
-                         asset=tw.meter_ids[mi], cause=f"{lot} sample", then=("lot", lot))
+                         asset=tw.meter_ids[mi], cause=f"{lot} sample", then=("lot", lot), meter=mi)
 
     def lot_failed(self, lot: str, t: float) -> None:
-        """A failed lot's sample is all tested: every other meter of the lot is exchanged by 31 December."""
+        """A failed lot's sample is all tested: every other meter of the lot is exchanged by 31 December. Until a
+        meter is exchanged it under-registers (``failed_lot_drift``)."""
         run, tw = self.run, self.tw
         state = self.lots[lot]
         self.plan["seal_exchange"]["due"] += len(state["rest"])
+        drift = self.fc[min(int(t), YEAR_DAYS - 1)].failed_lot_drift
+        for mi in state["rest"]:
+            run.set_drift(mi, drift, t)
         days = [d for d in self.bdays if d > t] or [YEAR_DAYS - 1]
         for i, mi in enumerate(state["rest"]):
             day = self.spread(i, len(state["rest"]), days)
@@ -430,7 +405,7 @@ class _Build:
                 self.plan["seal_exchange"]["skipped"] += 1
                 continue
             self.add("seal_exchange", t, release=self.morning(day), due=float(YEAR_DAYS),
-                     prem=int(tw.meter_prem[mi]), asset=tw.meter_ids[mi], cause=f"{lot} failed")
+                     prem=int(tw.meter_prem[mi]), asset=tw.meter_ids[mi], cause=f"{lot} failed", meter=mi)
 
     def meters(self) -> None:
         run, tw, fc = self.run, self.tw, self.fc[0]
@@ -446,15 +421,18 @@ class _Build:
             wt = self.w("ami_battery", anniv)
             day = add_bdays(max(0, int(anniv - wt.target_days * 7 / 5)), 0)  # due by the anniversary
             self.plan["ami_battery"]["due"] += 1
+            run.battery_dead[mi] = float(anniv)  # the battery dies on the anniversary unless replaced before
             if _u(run, IDX["ami_battery"], int(tw.meter_keys[mi]), 0) >= self.w("ami_battery", day).rate:
                 self.plan["ami_battery"]["skipped"] += 1
                 continue
             self.add("ami_battery", 0.0, release=self.morning(day), prem=int(tw.meter_prem[mi]),
-                     asset=tw.meter_ids[mi], cause=f"battery {int(tw.meter_battery[mi])}")
+                     asset=tw.meter_ids[mi], cause=f"battery {int(tw.meter_battery[mi])}", meter=mi)
         # Water meters at or past their service life.
         old = [mi for mi in range(n_m) if tw.meter_commodity[mi] == "water" and 0 < tw.meter_installed[mi]
                and int(tw.meter_installed[mi]) <= YEAR - fc.water_meter_life_years]
         old.sort(key=lambda m: (self.meter_mru.get(m, ""), int(tw.meter_keys[m])))
+        for mi in old:  # an old water meter under-registers until it is replaced
+            run.set_drift(mi, fc.old_water_meter_drift, 0.0)
         days = self.days_in(2, 11)
         for i, mi in enumerate(old):
             day = self.spread(i, len(old), days)
@@ -464,7 +442,7 @@ class _Build:
                 self.plan["water_meter_replacement"]["skipped"] += 1
                 continue
             self.add("water_meter_replacement", 0.0, release=self.morning(day), prem=int(tw.meter_prem[mi]),
-                     asset=tw.meter_ids[mi], cause=f"installed {int(tw.meter_installed[mi])}")
+                     asset=tw.meter_ids[mi], cause=f"installed {int(tw.meter_installed[mi])}", meter=mi)
         # AMI conversion, route by route through the construction season.
         conv = [mi for mi in range(n_m) if tw.meter_tech[mi] in ("AMR", "MANUAL")]
         conv.sort(key=lambda m: (self.meter_mru.get(m, ""), int(tw.meter_keys[m])))
@@ -475,7 +453,7 @@ class _Build:
                 continue
             self.plan["ami_conversion"]["due"] += 1
             self.add("ami_conversion", 0.0, release=self.morning(day), prem=int(tw.meter_prem[mi]),
-                     asset=tw.meter_ids[mi], cause=f"{tw.meter_tech[mi]} to AMI")
+                     asset=tw.meter_ids[mi], cause=f"{tw.meter_tech[mi]} to AMI", meter=mi)
         # Removals at vacant premises (service abandoned).
         vacant = [p for p in range(self.n_prem) if not tw.occupied[p] and self.prem_meters.get(p)]
         done: set[int] = set()
@@ -593,12 +571,10 @@ class _Build:
         from utilsim.m2c import contact
 
         run, tw = self.run, self.tw
-        cx = contact.contacts(run)
         streets = sorted({s for s in tw.premise_street if s})
-        req = np.flatnonzero((cx.reason == contact.IDX["new_connection"]) & (cx.attempt == 1) & ~cx.repeat)
         n = 0
-        for i in req.tolist():
-            t = float(cx.t[i])
+        for t, _, d, j in contact.background_arrivals(run, "new_connection"):
+            i = d * 1000 + j  # the request's key: its day and draw
             if _u(run, IDX["new_set"], i, 0) >= self.w("new_set", t).rate:
                 continue
             n += 1
@@ -642,21 +618,316 @@ class _Build:
                                  None, None))
         self.programme("main_replacement", segs, days)
 
-    # ---- the crews ----------------------------------------------------------------------------------------------
-    def simulate(self) -> dict:
-        orders = self.orders
-        crews = {c: {"crews": np.zeros(YEAR_DAYS), "availableMin": np.zeros(YEAR_DAYS),
-                     "busyMin": np.zeros(YEAR_DAYS), "overtimeMin": np.zeros(YEAR_DAYS)} for c in CREWS}
-        for d, fc in enumerate(self.fc):
+
+# ---- the field engine (steps with the run's days) ------------------------------------------------------------------
+WATCH = ("pole_replacement", "gas_leak_repair", "tree_trimming")  # overdue work that can fail
+STORM_POLE = 10.0  # a pole overdue for replacement is ten times as likely to fail on a storm day
+
+
+class FieldEngine:
+    """The field crews inside the replay (``run.field``). Built before the first day with the planned work; each day
+    ``step`` draws the day's incidents and the failures overdue maintenance causes, takes in the work the run and
+    collections raised (VEE visits, corrective exchanges, disconnects, reconnects) and lets the business-day crews
+    work. What a crew finishes changes the year from then on: a disconnect or removal switches the service off (no
+    read, so no bill), a reconnect switches it back, an exchange registers a new meter, a battery keeps a module
+    reading, a repair removes a defect before it fails."""
+
+    def __init__(self, run: M2CRun):
+        self.run = run
+        b = self.b = _Build(run)
+        b.engine = self
+        b.moves()
+        b.seals()
+        b.meters()
+        b.maintenance()
+        b.construction()
+        self.ops = b.ops
+        self.crews = {c: {"crews": np.zeros(YEAR_DAYS), "availableMin": np.zeros(YEAR_DAYS),
+                          "busyMin": np.zeros(YEAR_DAYS), "overtimeMin": np.zeros(YEAR_DAYS)} for c in CREWS}
+        for d, fc in enumerate(b.fc):
             for c in CREWS:
-                crews[c]["crews"][d] = crews_on(fc, c, self.n_prem)
-        # On-call responders: around the clock, first come first served, several crews at once.
-        em = sorted((o for o in orders if o.crew == "emergency"), key=lambda o: (o.created, o.k))
-        free = np.zeros(max(1, int(crews["emergency"]["crews"].max())))
+                self.crews[c]["crews"][d] = crews_on(fc, c, b.n_prem)
+        self.pending: list = []
+        self.queues: dict[str, list] = {c: [] for c in DAY_CREWS}
+        self.fixed_on: dict[tuple[str, int], float] = {}
+        self.scan = 0
+        self.watch: list[int] = []
+        self.incidents: list[dict] = []
+        self.storm = np.zeros(YEAR_DAYS, dtype=bool)
+        self.failures: list[dict] = []  # {t, kind, orderId k, incident id}
+        self.responded = False
+
+    @property
+    def orders(self) -> list[Order]:
+        return self.b.orders
+
+    # ---- work the run and collections raise -----------------------------------------------------------------------
+    def vee_visit(self, case, t: float, crew: str) -> None:
+        """A VEE truck roll (the run timed it): the meter technicians' time on its day."""
+        run, b = self.run, self.b
+        tw = run.town
+        if not 0 <= t < YEAR_DAYS or _u(run, IDX["meter_investigation"], case.idx, int(t * 1440)) >= \
+                b.w("meter_investigation", t).rate:
+            return
+        wt = b.w("meter_investigation", t)
+        travel = b.fc[int(t)].travel_minutes
+        b.add("meter_investigation", t, prem=int(tw.prem[case.r]), asset=tw.meter_ids[tw.meter_of[case.r]],
+              cause=case.id, fixed=(t, t + (wt.minutes + travel) / 1440.0), crew_id=str(crew or ""),
+              meter=int(tw.meter_of[case.r]))
+
+    def exchanged(self, x) -> None:
+        """A meter a crew swapped on a VEE visit or your order (the run timed it)."""
+        run, b = self.run, self.b
+        tw = run.town
+        if not 0 <= x.t_reg < YEAR_DAYS or _u(run, IDX["corrective_exchange"], int(tw.meter_keys[x.meter]),
+                                              int(x.t_reg * 1440)) >= b.w("corrective_exchange", x.t_reg).rate:
+            return
+        wt = b.w("corrective_exchange", x.t_reg)
+        b.add("corrective_exchange", x.t_reg, prem=int(tw.meter_prem[x.meter]), asset=x.device,
+              cause=x.case or x.order or x.previous, travel=False, fixed=(x.t_reg, x.t_reg + wt.minutes / 1440.0),
+              crew_id=x.by, meter=int(x.meter))
+
+    def request(self, kind: str, inv: dict, release: float, now: float) -> Order | None:
+        """A disconnect or reconnect collections needs at ``release`` (asked at ``now``): an AMI electric meter with
+        a remote switch is switched at ``release``; anything else goes to the meter technicians. None when the work
+        is not done (its ``rate``) or the account has no meter."""
+        run, b = self.run, self.b
+        tw = run.town
+        p = tw.premise_index.get((tw.accounts.get(inv["account"]) or {}).get("premiseId"), -1)
+        mi = b.service_meter(p) if p >= 0 else -1
+        if mi < 0 or not 0 <= release < YEAR_DAYS:
+            return None
+        n = str_key(inv["id"])
+        if _u(run, IDX[kind], n, 0) >= b.w(kind, release).rate:
+            return None
+        remote = str(run.meter_tech_now[mi]) == "AMI" and tw.meter_commodity[mi] == "electric" and \
+            _u(run, IDX["disconnect"], int(tw.meter_keys[mi]), 1) < b.fc[int(release)].remote_switch_share
+        o = b.add(kind, min(now, release), release=release, prem=p, asset=tw.meter_ids[mi], cause=inv["id"],
+                  remote=remote, meter=mi)
+        if o is not None:
+            o.inv = inv["id"]
+        return o
+
+    def cancel(self, o: Order, t: float, why: str) -> None:
+        """Call off an order no crew has started (paid, held, or the asset failed first)."""
+        if o.start == INF and not o.fixed and not o.remote:
+            o.cancelled, o.outcome = True, why
+            o.end = o.start = o.arrive = float(t)
+            o.left = 0.0
+
+    # ---- the day ------------------------------------------------------------------------------------------------
+    def step(self, day: int) -> None:
+        run, b = self.run, self.b
+        if self.ops is not None:
+            from utilsim.m2c import incidents as incs
+
+            todays, storm = incs.draw_day(run, self.ops, day)
+            self.storm[day] = storm
+            failed = self._failures(day, storm)
+            for inc, background in [*((x, True) for x in todays), *((x, False) for x in failed)]:
+                self.incidents.append(inc)
+                b.repair(inc, len(self.incidents) - 1)
+                run.incident_outage(inc, background)  # customers out: no use, dark AMI meters
+        self._absorb(day)
+        if add_bdays(day, 0) == day:
+            self._work(day)
+        self._absorb(day)
+
+    def _absorb(self, day: int) -> None:
+        """Orders raised since the last look: queued for their crew, or their timed work booked on its day."""
+        orders, b = self.b.orders, self.b
+        while self.scan < len(orders):
+            o = orders[self.scan]
+            self.scan += 1
+            key = KEYS[o.type]
+            if key in WATCH:
+                self.watch.append(o.k)
+            if o.remote:
+                if KEYS[o.type] in ("disconnect", "reconnect"):
+                    self._done(o)
+                continue
+            if o.fixed:
+                if o.crew == "emergency":
+                    continue
+                sd = min(int(o.start), YEAR_DAYS - 1)
+                fc = b.fc[sd]
+                c = getattr(fc, f"crew_{o.crew}")
+                mins = max(0.0, (o.end - o.start) * 1440.0)
+                h = (o.start - sd) * 24.0
+                shift_end = fc.shift_start_hour + fc.shift_hours
+                reg = min(mins, (shift_end - h) * 60.0) if add_bdays(sd, 0) == sd and \
+                    fc.shift_start_hour <= h < shift_end else 0.0
+                o.regular, o.overtime = reg, mins - reg
+                o.labour = (reg + (mins - reg) * c.overtime_factor) / 60.0 * c.cost_per_hour
+                self.fixed_on[(o.crew, sd)] = self.fixed_on.get((o.crew, sd), 0.0) + reg
+                self.crews[o.crew]["overtimeMin"][sd] += mins - reg
+                continue
+            if o.crew in DAY_CREWS:
+                heapq.heappush(self.pending, (o.release, o.k))
+
+    def _work(self, day: int) -> None:
+        """The business-day crews: timed work first, then released orders by priority and due date, overtime for
+        customer work due today or overdue."""
+        orders, fc = self.b.orders, self.b.fc[day]
+        shift_end = fc.shift_start_hour + fc.shift_hours
+        while self.pending and self.pending[0][0] < day + shift_end / 24.0:
+            _, k = heapq.heappop(self.pending)
+            o = orders[k]
+            heapq.heappush(self.queues[o.crew], (o.prio, o.due, o.release, o.k))
+        for c in DAY_CREWS:
+            n = float(self.crews[c]["crews"][day])
+            if n <= 0:
+                continue
+            slots = max(1, math.ceil(n))
+            cc = getattr(fc, f"crew_{c}")
+            cap = n * fc.shift_hours * 60.0
+            self.crews[c]["availableMin"][day] = cap
+            used = min(cap, self.fixed_on.get((c, day), 0.0))
+            q = self.queues[c]
+            t0 = day + fc.shift_start_hour / 24.0
+            started = 0
+            while q and used < cap - 1e-9:
+                o = orders[q[0][3]]
+                if o.cancelled:
+                    heapq.heappop(q)
+                    continue
+                if o.start == INF:
+                    o.start = max(o.release, t0 + used / n / 1440.0)
+                    o.arrive = o.start + o.travel / 2880.0
+                    o.crew_id = f"{CREW_CODE[c]}-{started % slots + 1}"
+                    started += 1
+                take = min(o.left, cap - used)
+                used += take
+                o.left -= take
+                o.regular += take
+                o.labour += take / 60.0 * cc.cost_per_hour
+                if o.left > 1e-9:
+                    break
+                heapq.heappop(q)
+                o.end = max(o.arrive, t0 + used / n / 1440.0)
+                self._done(o)
+            ot_cap, ot = n * fc.overtime_max_hours * 60.0, 0.0
+            while q and ot < ot_cap - 1e-9:
+                o = orders[q[0][3]]
+                if o.cancelled:
+                    heapq.heappop(q)
+                    continue
+                if o.prio > 2 or o.due > day + 1:
+                    break
+                if o.start == INF:
+                    o.start = max(o.release, day + shift_end / 24.0)
+                    o.arrive = o.start + o.travel / 2880.0
+                    o.crew_id = f"{CREW_CODE[c]}-{started % slots + 1}"
+                    started += 1
+                take = min(o.left, ot_cap - ot)
+                ot += take
+                o.left -= take
+                o.overtime += take
+                o.labour += take / 60.0 * cc.cost_per_hour * cc.overtime_factor
+                if o.left > 1e-9:
+                    break
+                heapq.heappop(q)
+                o.end = max(o.arrive, day + shift_end / 24.0 + ot / n / 1440.0)
+                self._done(o)
+            self.crews[c]["busyMin"][day] += used
+            self.crews[c]["overtimeMin"][day] += ot
+
+    # ---- what a finished order changes ----------------------------------------------------------------------------
+    def _done(self, o: Order) -> None:
+        run, b = self.run, self.b
+        tw = run.town
+        key = KEYS[o.type]
+        if key in ("disconnect", "reconnect"):
+            col = run.books.collections
+            inv = col.invoice.get(o.inv)
+            if inv is not None:
+                col._push(col._account(inv["account"]), o.end, "field_done", inv, key, o.k)
+        elif key == "removal" and o.prem >= 0:
+            rows = np.flatnonzero(np.isin(tw.meter_of, b.prem_meters.get(o.prem, [])))
+            run.service_off(rows, o.end, "removed")
+        elif key in ("seal_exchange", "water_meter_replacement", "ami_conversion") and o.meter >= 0:
+            x = run.exchange_meter(o.meter, o.end, by=o.crew_id or "MT", note=TYPES[o.type][1],
+                                   tech="AMI" if key == "ami_conversion" else None)
+            if x is None:
+                o.outcome = "skipped: the meter was off, already read on a new register, or not the registered meter"
+        elif key == "ami_battery" and o.meter >= 0:
+            if o.end < run.battery_dead[o.meter]:
+                run.battery_dead[o.meter] = INF  # replaced before it died
+            else:
+                run.battery_new[o.meter] = o.end
+        if o.then:
+            b.finding(o)
+
+    # ---- overdue maintenance fails ----------------------------------------------------------------------------------
+    def _failures(self, day: int, storm: bool) -> list[dict]:
+        """Overdue work that fails today: a pole found needing replacement, a span overdue for trimming (storm
+        days), a surveyed leak overdue for repair. Each failure is an incident (an outage, or a public gas leak)."""
+        from utilsim.m2c import incidents as incs
+
+        run, b, orders = self.run, self.b, self.b.orders
+        fc = b.fc[day]
+        out, keep = [], []
+        for k in self.watch:
+            o = orders[k]
+            if o.cancelled or o.end <= day:
+                continue
+            keep.append(k)
+            if o.due > day:
+                continue
+            key = KEYS[o.type]
+            if key == "pole_replacement":
+                p = fc.deferred_pole_failures / 365.0 * (STORM_POLE if storm else 1.0)
+                kind = "pole_failure"
+            elif key == "gas_leak_repair":
+                p, kind = fc.deferred_leak_escalation / 365.0, "gas_leak_escalated"
+            else:
+                p, kind = (fc.deferred_tree_faults if storm else 0.0), "tree_contact"
+            if p <= 0 or _u(run, P_FAIL, o.k, day) >= p:
+                continue
+            edge = self._edge(o)
+            t0 = day + 0.05 + 0.9 * _u(run, P_FAIL, o.k, day, 1)
+            ident = f"INC-{date_of(day).strftime('%Y%m%d')}-F{len(self.failures) + 1}"
+            out.append(incs.consequence(run, self.ops, kind, t0, o.x, o.z, edge=edge, ident=ident, storm=storm))
+            self.failures.append({"t": t0, "kind": kind, "order": o.k, "incident": ident})
+            if key != "tree_trimming":  # the emergency repair replaces the pole or fixes the leak
+                self.cancel(o, t0, f"failed first ({ident})")
+        self.watch = keep
+        return out
+
+    def _edge(self, o: Order) -> int | None:
+        """The electric span a pole stands on, or the span itself (tree trimming)."""
+        el = self.ops.nets["electric"]
+        if KEYS[o.type] == "tree_trimming":
+            return el.edge_index.get(o.asset)
+        if KEYS[o.type] == "pole_replacement":
+            if not hasattr(self, "_pole_edge"):
+                self._pole_edge = {q["id"]: el.edge_index.get(q.get("edgeId")) for q in el.equipment
+                                   if q["kind"] == "pole"}
+            return self._pole_edge.get(o.asset)
+        return None
+
+    def finish(self) -> None:
+        """After the last day: the year's incidents (background and failures) for the contact centre."""
+        self.incidents.sort(key=lambda r: r["t"])
+        self.run.__dict__["_year_incidents"] = self.incidents
+
+    # ---- after the year: the on-call responders ---------------------------------------------------------------------
+    def respond(self) -> None:
+        """Gas odour and no-supply calls (the contact centre's contacts) for the on-call responders: around the
+        clock, first come first served, several crews at once; after hours a responder first gets on the road."""
+        if self.responded:
+            return
+        self.responded = True
+        b = self.b
+        start = len(b.orders)
+        b.responses()
+        crews = self.crews["emergency"]
+        em = sorted(b.orders[start:], key=lambda o: (o.created, o.k))
+        free = np.zeros(max(1, int(crews["crews"].max())))
         for o in em:
             d = min(int(o.created), YEAR_DAYS - 1)
-            fc = self.fc[d]
-            n = int(crews["emergency"]["crews"][d])
+            fc = b.fc[d]
+            n = int(crews["crews"][d])
             if n <= 0:
                 continue
             i = int(np.argmin(free[:n]))
@@ -674,104 +945,10 @@ class _Build:
                 o.regular, o.labour = mins, mins / 60.0 * cost
             else:
                 o.overtime, o.labour = mins, mins / 60.0 * cost * fc.crew_emergency.overtime_factor
-            crews["emergency"]["busyMin"][sd] += mins
+            crews["busyMin"][sd] += mins
             o.left = 0.0
         for d in range(YEAR_DAYS):
-            crews["emergency"]["availableMin"][d] = crews["emergency"]["crews"][d] * 1440.0
-        # Work timed elsewhere (VEE visits, outage repairs): the crews' time on its day first.
-        fixed_on: dict[tuple[str, int], float] = {}
-        for o in orders:
-            if not o.fixed:
-                continue
-            fc = self.fc[min(int(o.start), YEAR_DAYS - 1)]
-            c = getattr(fc, f"crew_{o.crew}")
-            sd = min(int(o.start), YEAR_DAYS - 1)
-            mins = max(0.0, (o.end - o.start) * 1440.0)
-            h = (o.start - sd) * 24.0
-            shift_end = fc.shift_start_hour + fc.shift_hours
-            if add_bdays(sd, 0) == sd and fc.shift_start_hour <= h < shift_end:
-                reg = min(mins, (shift_end - h) * 60.0)
-            else:
-                reg = 0.0
-            o.regular, o.overtime = reg, mins - reg
-            o.labour = (reg + (mins - reg) * c.overtime_factor) / 60.0 * c.cost_per_hour
-            fixed_on[(o.crew, sd)] = fixed_on.get((o.crew, sd), 0.0) + reg
-            crews[o.crew]["overtimeMin"][sd] += mins - reg
-        # The business-day crews: released work by priority, then due date.
-        pending = [(o.release, o.k) for o in orders if not o.fixed and not o.remote and o.crew in DAY_CREWS]
-        heapq.heapify(pending)
-        queues: dict[str, list] = {c: [] for c in DAY_CREWS}
-        for d in range(YEAR_DAYS):
-            fc = self.fc[d]
-            shift_end = fc.shift_start_hour + fc.shift_hours
-            while pending and pending[0][0] < d + shift_end / 24.0:
-                _, k = heapq.heappop(pending)
-                o = orders[k]
-                heapq.heappush(queues[o.crew], (o.prio, o.due, o.release, o.k))
-            if add_bdays(d, 0) != d:
-                continue
-            spawned: list[Order] = []
-            for c in DAY_CREWS:
-                n = float(crews[c]["crews"][d])
-                if n <= 0:
-                    continue
-                slots = max(1, math.ceil(n))
-                cc = getattr(fc, f"crew_{c}")
-                cap = n * fc.shift_hours * 60.0
-                crews[c]["availableMin"][d] = cap
-                used = min(cap, fixed_on.get((c, d), 0.0))
-                q = queues[c]
-                t0 = d + fc.shift_start_hour / 24.0
-                started = 0
-                while q and used < cap - 1e-9:
-                    o = orders[q[0][3]]
-                    if o.start == INF:
-                        o.start = max(o.release, t0 + used / n / 1440.0)
-                        o.arrive = o.start + o.travel / 2880.0
-                        o.crew_id = f"{CREW_CODE[c]}-{started % slots + 1}"
-                        started += 1
-                    take = min(o.left, cap - used)
-                    used += take
-                    o.left -= take
-                    o.regular += take
-                    o.labour += take / 60.0 * cc.cost_per_hour
-                    if o.left > 1e-9:
-                        break
-                    heapq.heappop(q)
-                    o.end = max(o.arrive, t0 + used / n / 1440.0)
-                    if o.then:
-                        spawned.append(o)
-                ot_cap, ot = n * fc.overtime_max_hours * 60.0, 0.0
-                while q and ot < ot_cap - 1e-9:
-                    o = orders[q[0][3]]
-                    if o.prio > 2 or o.due > d + 1:
-                        break
-                    if o.start == INF:
-                        o.start = max(o.release, d + shift_end / 24.0)
-                        o.arrive = o.start + o.travel / 2880.0
-                        o.crew_id = f"{CREW_CODE[c]}-{started % slots + 1}"
-                        started += 1
-                    take = min(o.left, ot_cap - ot)
-                    ot += take
-                    o.left -= take
-                    o.overtime += take
-                    o.labour += take / 60.0 * cc.cost_per_hour * cc.overtime_factor
-                    if o.left > 1e-9:
-                        break
-                    heapq.heappop(q)
-                    o.end = max(o.arrive, d + shift_end / 24.0 + ot / n / 1440.0)
-                    if o.then:
-                        spawned.append(o)
-                crews[c]["busyMin"][d] += used
-                crews[c]["overtimeMin"][d] += ot
-            for o in spawned:  # follow-ups (repairs, lot exchanges, meter sets) from tomorrow
-                before = len(orders)
-                self.finding(o)
-                for k in range(before, len(orders)):
-                    x = orders[k]
-                    if x.crew in DAY_CREWS and not x.fixed and not x.remote:
-                        heapq.heappush(pending, (x.release, x.k))
-        return crews
+            crews["availableMin"][d] = crews["crews"][d] * 1440.0
 
 
 def _columns(fw: FieldWork) -> dict:
@@ -790,25 +967,22 @@ def _columns(fw: FieldWork) -> dict:
             "labour": np.array([x.labour for x in o], dtype=float),
             "materials": np.array([x.materials for x in o], dtype=float),
             "remote": np.array([x.remote for x in o], dtype=bool),
+            "cancelled": np.array([x.cancelled for x in o], dtype=bool),
             # when an order meets its due date: on site for an emergency, finished for everything else
             "met": np.array([x.arrive if KEYS[x.type] in EMERGENCY else x.end for x in o], dtype=float)}
 
 
 def fieldwork(run: M2CRun) -> FieldWork:
-    """The year's field work (computed once per run, after the replay and the contact centre)."""
+    """The year's field work: the orders the crews worked during the replay (``run.field``) and, after the year, the
+    gas odour and no-supply calls the on-call responders attended (cached per run)."""
     hit = run.__dict__.get("_fieldwork")
     if hit is not None:
         return hit
-    b = _Build(run)
-    b.emergencies()
-    b.collections()
-    b.moves()
-    b.visits()
-    b.seals()
-    b.meters()
-    b.maintenance()
-    b.construction()
-    crews = b.simulate()
+    eng = run.field if getattr(run, "field", None) is not None else None
+    if eng is None:  # a run replayed before field work joined the replay
+        raise ValueError("this run has no field engine")
+    eng.respond()
+    b = eng.b
     orders = sorted(b.orders, key=lambda o: (o.created, o.release, o.k))
     for n, o in enumerate(orders, start=1):
         o.id = f"WO-{n:06d}"
@@ -817,7 +991,9 @@ def fieldwork(run: M2CRun) -> FieldWork:
         if o.parent >= 0:
             p = by_k[o.parent]
             o.cause = f"{p.id} {TYPES[p.type][1].lower()}"
-    fw = FieldWork(orders=orders, crews=crews, plan=b.plan, premises=b.n_prem, notes=b.notes)
+    fw = FieldWork(orders=orders, crews=eng.crews, plan=b.plan, premises=b.n_prem, notes=b.notes)
+    fw.failures = [{**f, "orderId": by_k[f["order"]].id, "work": TYPES[by_k[f["order"]].type][1]}
+                   for f in eng.failures]
     fw.cols = _columns(fw)
     run.__dict__["_fieldwork"] = fw
     return fw
@@ -828,6 +1004,8 @@ def status_at(o: Order, T: float) -> str | None:
     """An order's status at ``T`` (None before it is created)."""
     if o.created > T:
         return None
+    if o.cancelled and o.end <= T:
+        return "cancelled"
     if o.end <= T:
         return "completed"
     if o.start <= T:
@@ -843,7 +1021,8 @@ def _stats(fw: FieldWork, k: np.ndarray, T: float, lo: float) -> dict:
     """Figures for the orders selected by ``k``: created and completed in [lo, T], open and overdue at T."""
     c = fw.cols
     made = k & (c["created"] >= lo) & (c["created"] <= T)
-    done = k & (c["end"] >= lo) & (c["end"] <= T)
+    gone = k & c["cancelled"] & (c["end"] >= lo) & (c["end"] <= T)
+    done = k & ~c["cancelled"] & (c["end"] >= lo) & (c["end"] <= T)
     live = k & (c["created"] <= T) & (c["end"] > T)
     released = live & (c["release"] <= T)
     overdue = released & (c["due"] < T)
@@ -852,7 +1031,7 @@ def _stats(fw: FieldWork, k: np.ndarray, T: float, lo: float) -> dict:
     resp = (c["arrive"][em] - c["created"][em]) * 1440.0
     lab, mat = float(c["labour"][done].sum()), float(c["materials"][done].sum())
     n_done = int(done.sum())
-    return {"created": int(made.sum()), "completed": n_done, "open": int(released.sum()),
+    return {"created": int(made.sum()), "completed": n_done, "cancelled": int(gone.sum()), "open": int(released.sum()),
             "planned": int((live & (c["release"] > T)).sum()), "overdue": int(overdue.sum()),
             "onTimePct": round(int(ontime.sum()) / n_done, 4) if n_done else None,
             "remote": int((done & c["remote"]).sum()),
@@ -872,6 +1051,37 @@ def _crew_stats(fw: FieldWork, crew: str, d0: int, d1: int) -> dict:
     return {"availableHours": _r(avail / 60.0, 1), "busyHours": _r(busy / 60.0, 1),
             "overtimeHours": _r(cr["overtimeMin"][s].sum() / 60.0, 1),
             "utilisationPct": round(busy / avail, 4) if avail else None}
+
+
+def effects(run: M2CRun, fw: FieldWork, T: float, lo: float = 0.0) -> dict:
+    """What the field work did to the rest of the year in [lo, T]: reads not taken because the service was off,
+    disconnections and reconnections, removals, meters exchanged and converted, reads a dead module battery missed,
+    meters under-registering at T, and overdue maintenance that failed."""
+    from utilsim.m2c.run import BATTERY_REASON, OFF
+
+    rt = run.read_t[:, 1:]
+    win = (rt >= lo) & (rt <= T)
+    c = fw.cols
+    done = ~c["cancelled"] & (c["end"] >= lo) & (c["end"] <= T)
+
+    def n(*keys: str) -> int:
+        return int((done & np.isin(c["type"], [IDX[k] for k in keys])).sum())
+
+    disc = [i["disc"] for i in run.books.invoices if i.get("disc")]
+    m = np.arange(len(run.drift_k))
+    fails = [f for f in fw.failures if lo <= f["t"] <= T]
+    by_kind: dict[str, int] = {}
+    for f in fails:
+        by_kind[f["kind"]] = by_kind.get(f["kind"], 0) + 1
+    return {"readsOff": int((win & (run.status[:, 1:] == OFF)).sum()),
+            "disconnected": sum(1 for d in disc if d.get("at") is not None and lo <= d["at"] <= T),
+            "reconnected": sum(1 for d in disc if d.get("reconnected") is not None and lo <= d["reconnected"] <= T),
+            "remote": int((done & c["remote"]).sum()), "removed": n("removal"),
+            "exchanged": n("seal_exchange", "water_meter_replacement", "ami_conversion"),
+            "convertedToAmi": n("ami_conversion"), "batteries": n("ami_battery"),
+            "deadBatteryMisses": int((win & (run.reason[:, 1:] == BATTERY_REASON)).sum()),
+            "driftingMeters": int(((run.drift_k > 0) & (run.drift_t <= T) & (run.drift_end > T)).sum()) if len(m) else 0,
+            "failures": len(fails), "failuresByKind": by_kind}
 
 
 def monthly(run: M2CRun, day: int, T: float, starts) -> list[dict | None]:
@@ -894,6 +1104,7 @@ def monthly(run: M2CRun, day: int, T: float, starts) -> list[dict | None]:
         busy = sum(float(fw.crews[x]["busyMin"][start:end_day + 1].sum()) for x in DAY_CREWS)
         avail = sum(float(fw.crews[x]["availableMin"][start:end_day + 1].sum()) for x in DAY_CREWS)
         s["utilisationPct"] = round(busy / avail, 4) if avail else None
+        s["effects"] = effects(run, fw, Tm, float(start))
         out.append(s)
     return out
 
@@ -952,6 +1163,10 @@ def summary(run: M2CRun, as_of: str | None = None) -> dict:
     if not run.cfg.billing.disconnect_rule_share and not any(a["type"] == "disconnect_approve" for a in run.actions):
         notes.append("Disconnects and reconnects follow the disconnections you approve in Collections (or the "
                      "collections rule, billing.disconnect_rule_share); none are approved in this run.")
+    fails = [{**f, "date": date_of(int(f["t"])).isoformat(), "kind": f["kind"]} for f in fw.failures if f["t"] <= T]
     return {"schemaVersion": FIELD_VERSION, "simulationId": run.simulation_id, "asOf": date_of(day).isoformat(),
-            "kpis": kpis, "programs": programs, "types": types, "crews": crews, "plan": plan, "daily": series,
+            "kpis": kpis, "effects": effects(run, fw, T), "failures": [
+                {"date": f["date"], "kind": f["kind"], "incidentId": f["incident"], "orderId": f["orderId"],
+                 "work": f["work"]} for f in fails[-50:]],
+            "programs": programs, "types": types, "crews": crews, "plan": plan, "daily": series,
             "labels": {"programs": PROGRAMS, "crews": CREWS}, "notes": notes}

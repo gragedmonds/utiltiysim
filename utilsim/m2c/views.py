@@ -22,6 +22,7 @@ from utilsim.m2c.run import (
     FAULTS,
     INF,
     METHODS,
+    OFF,
     OUTAGE_REASON,
     STATUS,
     SUMMARY_VERSION,
@@ -61,7 +62,7 @@ def summary(run: M2CRun, as_of: str | None = None, since: str | None = None) -> 
     tw, c = run.town, run.cfg
     day, T = as_of_t(run, as_of)
     months = slice(1, 13)
-    read = run.read_t[:, months] <= T
+    read = (run.read_t[:, months] <= T) & (run.status[:, months] != OFF)  # not the reads of a service off
     got = read & ~np.isnan(run.obs[:, months])
     rel = run.release_t[:, months] <= T
     st = run.status[:, months]
@@ -246,12 +247,15 @@ def read_type(run: M2CRun, r: int, m: int, T: float) -> str:
 
 
 def billed_use(run: M2CRun, r: int, m: int) -> float:
-    """Consumption between the released registers of months ``m - 1`` and ``m``, as billing computes it (a device
-    change in the period bills the new register from its initial read, plus the old register's last stretch)."""
+    """Consumption between the released registers of the period's start month (the previous month, or the last month
+    read before the service was off) and month ``m``, as billing computes it (a device change in the period bills the
+    new register from its initial read, plus the old register's last stretch)."""
     mod = 10.0 ** int(run.town.digits[r])
-    x = run.dev_change[r, m]
-    prev = float(run.released[r, m - 1]) if x is None else x.carry(r, float(run.released[r, m - 1]),
-                                                                  float(run.normal_at[r, m - 1]))
+    s0 = run.period_start(r, m)
+    x = run.dev_change[r, m] if s0 == m - 1 else run.change_between(r, float(run.read_t[r, s0]),
+                                                                     float(run.read_t[r, m]))
+    prev = float(run.released[r, s0]) if x is None else x.carry(r, float(run.released[r, s0]),
+                                                               float(run.normal_at[r, s0]))
     d = float(run.released[r, m]) - prev
     return d + mod if d < -0.5 * mod else d
 
@@ -1134,13 +1138,14 @@ def doc_json(run: M2CRun, doc: dict, T: float, truth: bool = False) -> dict:
     r = int(bk.main[i])
     rows = tw.inst_rows[i]
     inv = bk.invoices[doc["invoice"]] if doc["invoice"] >= 0 and bk.invoices[doc["invoice"]]["created"] <= T else None
-    ctr, acct = tw.contract_at(r, int(np.floor(run.read_t[r, m - 1])))
+    s0 = doc.get("from", m - 1)
+    ctr, acct = tw.contract_at(r, int(np.floor(run.read_t[r, s0])))
     status = doc_status(run, doc, T)
     tariff = tw.tariffs.get(doc["rate"], {})
     out = {"id": bk.doc_id(doc), "schemaVersion": "billing-document/1.0", "contractId": ctr, "accountId": acct,
            "installationId": tw.inst_ids[i], "premiseId": tw.premise_ids[tw.prem[r]], "commodity": str(tw.commodity[r]),
-           "rateCategory": doc["rate"], "periodStart": run.iso(run.read_t[r, m - 1]), "periodEnd": run.iso(run.read_t[r, m]),
-           "days": round(float(run.read_t[r, m] - run.read_t[r, m - 1]), 2),
+           "rateCategory": doc["rate"], "periodStart": run.iso(run.read_t[r, s0]), "periodEnd": run.iso(run.read_t[r, m]),
+           "days": round(float(run.read_t[r, m] - run.read_t[r, s0]), 2),
            "readIds": [run.read_id(int(x), m) for x in rows], "version": doc["version"],
            "replaces": bk.doc_id(bk.docs[doc["replaces"]]) if doc["replaces"] >= 0 else None,
            # Built on an estimated read (or rebilled on an estimate): which of its reads were estimated.

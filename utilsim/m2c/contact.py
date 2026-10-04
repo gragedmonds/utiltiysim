@@ -316,28 +316,42 @@ class _Builder:
 
     def background(self) -> None:
         """``per_1000`` contacts a month per 1,000 accounts: business hours (Monday-heavy), or any hour for emergencies."""
-        from utilsim.ops.hazards import poisson
+        for key in KEYS:
+            for t, a, d, j in background_arrivals(self.run, key, self):
+                self.add(t, key, a, -1, "background", "bg", d, j)
 
-        run, n_acc = self.run, max(1, len(self.accounts))
-        bdays = [d for d in range(YEAR_DAYS) if add_bdays(d, 0) == d]
-        wsum = sum(WEEKDAY_WEIGHT[date_of(d).weekday()] for d in bdays) or 1.0
-        for i, key in enumerate(KEYS):
-            emergency = key in ("outage", "gas_odour")
-            days = range(YEAR_DAYS) if emergency else bdays
-            for d in days:
-                c = self.cc[d]
-                rate = getattr(c, key).per_1000 * c.volume_factor * n_acc / 1000.0 * 12.0
-                if rate <= 0:
-                    continue
-                lam = rate / YEAR_DAYS if emergency else rate * WEEKDAY_WEIGHT[date_of(d).weekday()] / wsum
-                for j in range(poisson(lam, _u(run, i, d, 0, 0))):
-                    a = int(_u(run, i, d, j, 1) * n_acc)
-                    for _ in range(5):  # an account open that day
-                        if self.acct_from[a] <= d < self.acct_to[a]:
-                            break
-                        a = (a + 7919) % n_acc
-                    t = d + _u(run, i, d, j, 2) if emergency else self.open_time(d, _u(run, i, d, j, 2))
-                    self.add(t, key, a, -1, "background", "bg", d, j)
+
+def background_arrivals(run: M2CRun, key: str, b: _Builder | None = None) -> list[tuple[float, int, int, int]]:
+    """``(t, account index, day, draw)`` for reason ``key``'s background contacts. They depend only on master data
+    and the day's contact settings, so the field crews can plan new services from the new-connection requests during
+    the replay, on the very draws the contact centre counts."""
+    from utilsim.ops.hazards import poisson
+
+    if b is None:
+        b = run.__dict__.get("_contact_master")
+        if b is None:
+            b = run.__dict__["_contact_master"] = _Builder(run)
+    i = IDX[key]
+    n_acc = max(1, len(b.accounts))
+    bdays = [d for d in range(YEAR_DAYS) if add_bdays(d, 0) == d]
+    wsum = sum(WEEKDAY_WEIGHT[date_of(d).weekday()] for d in bdays) or 1.0
+    emergency = key in ("outage", "gas_odour")
+    out = []
+    for d in (range(YEAR_DAYS) if emergency else bdays):
+        c = b.cc[d]
+        rate = getattr(c, key).per_1000 * c.volume_factor * n_acc / 1000.0 * 12.0
+        if rate <= 0:
+            continue
+        lam = rate / YEAR_DAYS if emergency else rate * WEEKDAY_WEIGHT[date_of(d).weekday()] / wsum
+        for j in range(poisson(lam, _u(run, i, d, 0, 0))):
+            a = int(_u(run, i, d, j, 1) * n_acc)
+            for _ in range(5):  # an account open that day
+                if b.acct_from[a] <= d < b.acct_to[a]:
+                    break
+                a = (a + 7919) % n_acc
+            t = d + _u(run, i, d, j, 2) if emergency else b.open_time(d, _u(run, i, d, j, 2))
+            out.append((t, a, d, j))
+    return out
 
 
 def _simulate(run: M2CRun, b: _Builder, incidents: list) -> Contacts:

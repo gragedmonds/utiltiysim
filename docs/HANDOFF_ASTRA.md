@@ -492,3 +492,32 @@ What the Studio shows:
 types with their settings, crews, the maintenance plan's compliance, the last 60 days and notes. There is no field
 work page yet; the Year charts and the Data tables cover it. A dispatch board (orders by crew and day) and orders on
 the map are the natural next steps.
+
+## 20. Field work feeds back into the year
+
+The field crews now work inside the replay, day by day with the reads, bills and collections (collections steps day
+by day too). What they do changes the year ([M2C.md](M2C.md) "What field work changes"):
+
+- **Disconnects and removals stop reads and bills.** A disconnection happens when the crew (or the remote switch of
+  an AMI electric meter) gets there; a customer who paid first is not disconnected. While the service is off its
+  scheduled reads are not taken and no bill is made; a reconnection brings it back, and the next bill runs from the
+  last read before the gap. A removed meter is never read again.
+- **Exchanges register new meters** (seal, water meter replacement, AMI conversion): a converted meter is read as AMI.
+- **Maintenance left overdue fails:** dead module batteries miss reads, failed seal lots and old water meters
+  under-register until exchanged, overdue poles, spans and leaks cause outages and gas leaks.
+
+What the Studio shows:
+
+- **Reads:** a read whose service was off has status `off` (reason `SIM_DISCONNECTED` or `SIM_REMOVED`); in Data ›
+  Meter reads its VEE status is `service_off` and its billing status `not_billed`. A dead battery's miss has reason
+  `SIM_BATTERY_DEAD`.
+- **Billing documents** carry `from`, the read month the period starts at (the previous month, or the last read
+  before a disconnection); `periodStart` in the document view follows it.
+- **Year:** a fifth field chart, **What field work changed** (reads not taken because the service was off, reads a
+  dead battery missed; disconnections, reconnections, exchanges, drifting meters and failures in the detail). The
+  trend's `field` block carries `effects`.
+- **Data › Work orders** gains an `outcome` column (called off, not needed on arrival, skipped, failed first).
+- **Configuration › Field work** gains `dead_battery_miss`, `failed_lot_drift`, `old_water_meter_drift`,
+  `deferred_pole_failures`, `deferred_tree_faults` and `deferred_leak_escalation`; the scenario library adds **Line
+  crews short**.
+- `POST /api/m2c/fieldwork` adds `effects` and `failures`; order status may be `cancelled`.

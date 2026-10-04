@@ -88,8 +88,11 @@ CAPABILITIES = (
      "where": ["Configuration › Contact centre", "Year", "Data › Contact centre"]},
     {"id": "incidents", "title": "Outages and leaks over the year",
      "text": "The operations day's background incidents drawn for every date of the year (the same storm or leak the "
-             "map shows on that date): who loses power or water, for how long, and who smells gas. Storm, incident "
-             "and restoration factors are run settings, so Storm season can be inflicted from a day.",
+             "map shows on that date): who loses power or water, for how long, and who smells gas. The replay "
+             "applies each as it happens: customers out lose their use until restored, an AMI meter dark at its read "
+             "misses it (VEE sees the outage event), a collector outage mutes the meters behind it, and reliability "
+             "counts it. Storm, incident and restoration factors are run settings, so Storm season can be inflicted "
+             "from a day.",
      "where": ["Configuration › Outages & leaks over the year", "Data › Outages & leaks"]},
     {"id": "fieldwork", "title": "Field work over the year",
      "text": "Work orders in five programmes, each raised by what happens in the year: customer emergencies (gas "
@@ -101,8 +104,11 @@ CAPABILITIES = (
              "capital construction (new services from new-connection calls, then meter sets; service upgrades; "
              "cast-iron main renewal in the construction season). On-call responders work emergencies around the "
              "clock; meter technicians, line, water, gas and construction crews work business days by priority and "
-             "due date, with overtime for customer work due today. Crews, shifts, travel, rates, minutes, targets and "
-             "costs are run settings.",
+             "due date, with overtime for customer work due today, inside the replay. What they do changes the year: "
+             "a disconnected or removed meter is not read or billed, an exchange registers a new meter, a converted "
+             "meter is read as AMI, and maintenance left overdue fails (dead batteries miss reads, old and failed-lot "
+             "meters under-register, overdue poles, spans and leaks cause outages and gas leaks). Crews, shifts, "
+             "travel, rates, minutes, targets, costs and failure rates are run settings.",
      "where": ["Configuration › Field work", "Year", "Data › Field work"]},
     {"id": "weather", "title": "Weather year",
      "text": "Daily temperatures drive usage, flows, state frames and reading conditions through the year.",
@@ -164,17 +170,13 @@ LIMITS = (
 )
 
 GAPS = (
-    {"title": "Outages in the year's reads", "text": "The year's outages and leaks reach the contact centre, but not "
-     "yet the reads, VEE or bills: only interruptions you carry from a day on the map do.", "plan": "Feed the year's "
-     "incidents into the replay as interruptions (AMI misses, lost use, VEE outage events)."},
     {"title": "Contact centre feedback", "text": "Contacts do not create back-office work yet: a bill dispute or a "
      "complaint is answered and counted, but opens no case for the analysts.", "plan": "Disputes and complaints open "
      "Billing cases; long queues and failed resolutions raise churn and collections risk."},
-    {"title": "Field work feedback", "text": "Field work follows the year but does not change it yet: a late "
-     "disconnect does not move collections, a removal does not end billing, an AMI conversion does not change how "
-     "the meter is read, and crews do not route between jobs (travel is a flat time).", "plan": "Feed completed "
-     "orders back into the replay (disconnection and reconnection times, device changes, technology) and route "
-     "crews on the street graph."},
+    {"title": "Field crews on the map", "text": "Crews do not route between jobs (travel is a flat time), a "
+     "disconnection's final read is not taken (use before it is billed after reconnection), and main renewal does "
+     "not yet lower the break and leak rates.", "plan": "Route crews on the street graph, take final reads at "
+     "disconnection, and let renewed main change the network's incident rates."},
     {"title": "Undetected water loss", "text": "No mains leakage fraction and no supplied-versus-billed water "
      "balance.", "plan": "Per-zone unbilled loss that shows in flows but never in bills, and a monthly water-balance "
      "report."},

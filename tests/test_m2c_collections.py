@@ -317,12 +317,13 @@ def outages(base):
 def test_outage_followup_lists_last_gasps_lost_use_and_missed_reads(outages):
     run = outages["run"]
     f = followup.outage_followup(run, as_of="2026-12-31", page_size=200)
-    by = {o["utility"]: o for o in f["outages"]}
+    carried = [o for o in f["outages"] if o["outageId"].startswith("OUT-")]  # the year's own incidents are INC-
+    by = {o["utility"]: o for o in carried}
     assert by["electric"]["premises"] == len(outages["power"]) and by["electric"]["lastGasps"] == len(outages["power"])
     assert by["electric"]["lostUse"] > 0 and by["electric"]["missedReads"] > 0
     assert by["ami"]["collectorOutage"] and by["ami"]["lostUse"] == 0 and by["ami"]["missedReads"] > 0
-    rows = [r for r in f["rows"] if r["utility"] == "electric"]
-    assert all(r["lastGasp"] and r["lostUse"] > 0 and r["unit"] == "kWh" for r in rows)
+    rows = followup.outage_followup(run, as_of="2026-12-31", outage=by["electric"]["outageId"], page_size=200)["rows"]
+    assert rows and all(r["lastGasp"] and r["lostUse"] > 0 and r["unit"] == "kWh" for r in rows)
     hit = next(r for r in rows if r["missedReads"])
     read = hit["missedReads"][0]
     c = views.case_view(run, read["caseId"], as_of="2026-12-31")
@@ -334,7 +335,7 @@ def test_outage_followup_lists_last_gasps_lost_use_and_missed_reads(outages):
     assert sum(r["collectorId"] == outages["col"] for r in silent["rows"]) > silent["total"] / 2
     page = followup.outage_followup(run, as_of="2026-12-31", page=2, page_size=5)
     assert page["page"] == 2 and len(page["rows"]) <= 5 and page["total"] == f["total"]
-    assert followup.outage_followup(run, as_of=iso(outages["d1"] - 1))["total"] == 0  # not yet happened
+    assert followup.outage_followup(run, as_of=iso(outages["d1"] - 1), outage="OUT-1")["total"] == 0  # not yet
     with pytest.raises(ValueError):
         followup.outage_followup(run, kind="nope")
 
@@ -404,7 +405,8 @@ def test_collections_api(plan):
     assert view["schemaVersion"] == "m2c-collections-account/1.0" and view["overdue"] > 0 and view["invoices"]
     assert client.post("/api/m2c/collections/account", json={**body, "accountId": "CA-nope"}).status_code == 404
     assert client.post("/api/m2c/collections", json={**body, "list": "nope"}).status_code == 422
-    assert client.post("/api/m2c/outage-followup", json=body).json()["total"] == 0
+    fu = client.post("/api/m2c/outage-followup", json=body).json()  # no outages carried in: the year's own
+    assert fu["total"] > 0 and all(r["outageId"].startswith("INC-") for r in fu["rows"])
     assert client.post("/api/m2c/collector-groups", json={**body, "status": "all"}).json()["schemaVersion"] == \
         "m2c-collector-groups/1.0"
     s = client.post("/api/m2c/summary", json={**body, "since": "2026-07-06"}).json()

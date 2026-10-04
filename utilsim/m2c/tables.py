@@ -24,7 +24,7 @@ from utilsim.m2c import catalog as cat
 from utilsim.m2c import collections as colls
 from utilsim.m2c import views
 from utilsim.m2c.base import date_of
-from utilsim.m2c.run import INF, METHODS, M2CRun
+from utilsim.m2c.run import INF, METHODS, OFF, M2CRun
 
 TABLE_VERSION = "m2c-table/1.0"
 CATALOG_VERSION = "m2c-tables/1.0"
@@ -553,6 +553,8 @@ def _billed_use(run: M2CRun, T: float) -> np.ndarray:
         x = run.dev_change[r, m + 1]
         if x is not None and x.t_reg <= T:
             use[r, m] = views.billed_use(run, int(r), int(m) + 1)
+    for r, m in zip(*np.nonzero((run.status[:, :-1] == OFF) & ~np.isnan(rel[:, 1:]))):  # after the service was off
+        use[r, m] = views.billed_use(run, int(r), int(m) + 1)
     done = (run.read_t[:, 1:] <= T) & (run.release_t[:, 1:] <= T)
     return np.where(done, use, np.nan)
 
@@ -582,6 +584,7 @@ def b_reads(c) -> list[list]:
                       ["accepted_after_review", "estimated", "adjusted"], "accepted")
     vee = np.where(~has_case, np.where(released, "accepted", "not_processed"),
                    np.where(~released, np.where(missing, "missing", np.where(held, "held", open_disp)), after))
+    vee = np.where(status == OFF, "service_off", vee)
     reg_ids = np.array(tw.reg_ids, dtype=object)
     read_ids = [f"READ-{tw.id}-{g}-{_d(d)}" for g, d in zip(reg_ids[rr].tolist(), day.tolist())]
     da = _doc_arrays(run)
@@ -593,6 +596,7 @@ def b_reads(c) -> list[list]:
                                                doc_state == "reversed"],
                                               ["billed", "billing_blocked", "rebilled"], "billing"),
                            np.where(released, "released_for_billing", np.where(has_case, "blocked", "pending")))
+    bill_status = np.where(status == OFF, "not_billed", bill_status)
     doc_ids = np.array(da["ids"] + [None], dtype=object)[np.where(has_doc, kk, len(da["ids"]))]
     inv = np.where(has_doc, da["invoice"][kk], -1)
     has_inv = (inv >= 0) & (da["inv_created"][np.maximum(inv, 0)] <= T)
@@ -642,7 +646,7 @@ def b_usage(c) -> list[list]:
     last = run.read_t[np.arange(R), last_m]
     per_day = ytd / np.maximum(last - first, 1e-9)
     est = ((run.status[:, 1:] == 2) & (run.release_t[:, 1:] <= T)).sum(1)
-    missed = (np.isnan(run.obs[:, 1:]) & seen).sum(1)
+    missed = (np.isnan(run.obs[:, 1:]) & seen & (run.status[:, 1:] != OFF)).sum(1)
     accounts = [tw.contract_at(r, c.day)[1] for r in range(R)]
     rate = [tw.inst_rate[i] for i in tw.inst_of.tolist()]
     return [list(tw.reg_ids), _pick(tw.premise_ids, tw.prem), _pick(tw.address, tw.prem), accounts,
@@ -1171,7 +1175,9 @@ WORK_ORDERS = (Col("orderId", "Work order", "id", search=True), Col("type", "Wor
                Col("hours", "Crew hours", "num", unit="h"), Col("overtimeHours", "Overtime", "num", unit="h"),
                Col("labour", "Labour", "money"), Col("materials", "Materials", "money"),
                Col("premiseId", "Premise", "id", link="premise", search=True), Col("address", "Address", search=True),
-               Col("asset", "Asset", search=True), Col("cause", "Because of", search=True))
+               Col("asset", "Asset", search=True), Col("cause", "Because of", search=True),
+               Col("outcome", "Outcome", search=True, hint="When it was not simply done: called off, not needed on "
+                   "arrival, skipped, or the asset failed first."))
 
 
 def b_work_orders(c) -> list[list]:
@@ -1196,7 +1202,8 @@ def b_work_orders(c) -> list[list]:
                      round((o.regular + o.overtime) / 60.0, 2) if done else None,
                      round(o.overtime / 60.0, 2) if done and o.overtime else None,
                      round(o.labour, 2) if done else None, round(o.materials, 2) if done else None, pid,
-                     _address(c, pid) if pid else None, o.asset or None, o.cause or None])
+                     _address(c, pid) if pid else None, o.asset or None, o.cause or None,
+                     (o.outcome or None) if st in ("completed", "cancelled") else None])
     rows.reverse()  # newest first
     return _rows_to_cols(WORK_ORDERS, rows)
 

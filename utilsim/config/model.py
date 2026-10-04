@@ -772,7 +772,10 @@ class FieldConfig(BaseModel):
                          "meter maintenance (seal exchanges, batteries, removals), preventative maintenance on the "
                          "networks and capital construction (new sets, upgrades, main renewal). Work follows the "
                          "year: collections, moves, VEE field visits, the contact centre's calls, the year's outages "
-                         "and leaks, the meters' install years and the town's assets.", applies="run")
+                         "and leaks, the meters' install years and the town's assets. What the crews do changes the "
+                         "year: a disconnected or removed meter is not read or billed, an exchange registers a new "
+                         "meter, and maintenance left overdue fails (dead batteries, drifting meters, outages, gas "
+                         "leaks).", applies="run")
     shift_start_hour: float = F(7.0, "Crews start their day (local time, business days).", unit="h", ge=0, le=20)
     shift_hours: float = F(8.0, "Hours in a crew's working day.", unit="h", ge=1, le=16)
     travel_minutes: float = F(20.0, "Driving to the job and back, added to every visit.", unit="min", ge=0,
@@ -793,6 +796,19 @@ class FieldConfig(BaseModel):
                            "power).", unit="yr", ge=1, le=40)
     water_meter_life_years: int = F(15, "Water meters this old or older are due for replacement.", unit="yr", ge=1,
                                     le=60)
+    dead_battery_miss: float = F(0.9, "Share of reads a radio module misses once its battery has died (past its life "
+                                 "and not replaced): estimates follow.", ge=0, le=1)
+    failed_lot_drift: float = F(0.04, "Under-registration of a failed seal lot's meters, from the failed test until "
+                                "each is exchanged.", ge=0, le=0.5)
+    old_water_meter_drift: float = F(0.03, "Under-registration of water meters at or past their service life, until "
+                                     "replaced (read at the start of the year).", ge=0, le=0.5)
+    deferred_pole_failures: float = F(2.0, "Chance a year that a pole found needing replacement fails once its "
+                                      "replacement is overdue (ten times as likely on a storm day): an outage.",
+                                      ge=0, le=100)
+    deferred_tree_faults: float = F(0.02, "Chance on a storm day that an overhead span overdue for trimming faults: "
+                                    "an outage.", ge=0, le=1)
+    deferred_leak_escalation: float = F(1.0, "Chance a year that a leak found by survey becomes a public gas leak "
+                                        "(odour calls, an emergency) once its repair is overdue.", ge=0, le=100)
     construction_start_month: int = F(4, "First month of the construction season (digging is frost-free).", ge=1,
                                       le=12)
     construction_end_month: int = F(11, "Last month of the construction season.", ge=1, le=12)

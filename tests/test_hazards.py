@@ -173,5 +173,7 @@ def test_a_collector_outage_silences_its_meters_until_the_day_shift(small_town):
     assert np.array_equal(run.truth[r], base.truth[r])  # nothing stopped flowing
     case = run.cases[int(run.case_of[r, m])]
     assert case.type == "COMM_FAIL" and case.events[0][1] == "AMI_COLLECTOR_OUTAGE"
-    assert views.summary(run, "2026-12-31")["reliability"] == {}  # no service was interrupted
+    # No service was interrupted: reliability counts only the year's own outages (none on that day).
+    assert not [o for o in base.outage_log if int(o["t0"]) == d]
+    assert views.summary(run, "2026-12-31")["reliability"] == views.summary(base, "2026-12-31")["reliability"]
     assert views.premise(run, pid, as_of="2026-12-31")["outages"][0]["collectorOutage"]

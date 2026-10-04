@@ -131,6 +131,9 @@ test('the field work charts read the trend field block',()=>{
  assert.deepEqual(c.fieldOnTime.detail(months[0])[0],['Emergency response (min)',34]);
  assert.deepEqual(c.fieldBacklog.detail(months[0]),[['Overdue',4],['Crew utilisation','61%']]);
  assert.equal(chartModel(c.fieldDone,[{month:1,label:'Jan',start:'2026-01-01',end:'2026-01-31',complete:true,field:null}]).latest,-1);
+ const eff=[{month:1,label:'Jan',start:'2026-01-01',end:'2026-01-31',complete:true,field:{effects:{readsOff:12,deadBatteryMisses:30,disconnected:4,reconnected:3,exchanged:40,driftingMeters:90,failures:2}}}];
+ assert.deepEqual(chartModel(c.fieldEffects,eff).series.map(s=>s.values[0]),[12,30]);
+ assert.deepEqual(c.fieldEffects.detail(eff[0]).at(-1),['Overdue work that failed',2]);
 });
 
 test('inflicting runs to the last period end, including open-ended and year-clamped periods',async()=>{

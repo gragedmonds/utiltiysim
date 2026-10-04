@@ -14,7 +14,7 @@ RPA may release a high bill or a large credit only up to ``outsort_auto_release_
 true-up block wait for a person. A document says whether it was built on an estimated read (``estimated``).
 
 Analysts work the queue: they release the bill, rebill it on an estimate, or fix the rate class. Payments, dunning and
-collections run after the year, because nothing upstream depends on them (``collections.py``):
+collections step with the run's days (``collections.py``), so a disconnection can stop an account's later reads:
 - payment timing comes from the account's payment method and its partner's payer profile;
 - pre-authorized debits can be returned;
 - unpaid invoices get reminders, overdue notices with late fees, and disconnection notices (held by the winter
@@ -35,6 +35,8 @@ from utilsim.m2c import billing as bl
 from utilsim.m2c import catalog as cat
 from utilsim.m2c import registers as regs
 from utilsim.m2c.vee import MIN_EXPECTED
+
+OFF = 6  # run.OFF: the service was off at the read
 
 P_BILL = Purpose.M2C_BILL
 INF = float("inf")
@@ -73,29 +75,45 @@ class Books:
         self.held: dict[str, list[int]] = {}  # account -> released documents held back by an invoice hold
         self.invoices: list[dict] = []
         self.ledger: dict[str, list[tuple]] = {}
+        self.collections = None  # started by the run before its first day (start_collections)
 
     # ---- documents -------------------------------------------------------------------------------------------
     def rate_at(self, i: int, t: float) -> str:
         rate = self.run.town.inst_rate[i]
         return _swap(rate) if self.rate_err_t[i] <= t < self.rate_fix_t[i] else rate
 
+    def starts(self, i: np.ndarray, m: np.ndarray) -> np.ndarray:
+        """The read month each installation period ending at month ``m`` starts from: the previous month, or the
+        last month read before its service was off (a disconnection: no read, so no bill for the months between)."""
+        run = self.run
+        rows = self.main[i]
+        sm = np.asarray(m) - 1
+        for k in np.flatnonzero(run.status[rows, sm] == OFF):
+            sm[k] = run.period_start(int(rows[k]), int(m[k]))
+        return sm
+
     def quantities(self, i: np.ndarray, m: np.ndarray, src: np.ndarray,
-                   device: bool = False) -> tuple[np.ndarray, np.ndarray]:
-        """Import and export quantities per installation period from register values ``src`` (released or truth).
-        ``device``: a period with a device change bills the new register from its initial read, plus the old
-        register's last stretch (``Install.carry``)."""
+                   device: bool = False, sm: np.ndarray | None = None) -> tuple[np.ndarray, np.ndarray]:
+        """Import and export quantities per installation period from register values ``src`` (released or truth),
+        from start month ``sm`` (default the previous month). ``device``: a period with a device change bills the
+        new register from its initial read, plus the old register's last stretch (``Install.carry``)."""
         run = self.run
         digits = run.town.digits
+        sm = np.asarray(m) - 1 if sm is None else np.asarray(sm)
         out = []
         for rows in (self.main[i], self.export_row[i]):
             ok = rows >= 0
             rr = np.where(ok, rows, 0)
             mod = 10.0 ** digits[rr]
-            prev = src[rr, m - 1].astype(float)
+            prev = src[rr, sm].astype(float)
             if device:
-                for k in np.flatnonzero(ok & (run.dev_change[rr, m] != None)):  # noqa: E711 (object array)
-                    r, mm = int(rr[k]), int(m[k])
-                    prev[k] = run.dev_change[r, mm].carry(r, float(src[r, mm - 1]), float(run.normal_at[r, mm - 1]))
+                gap = sm != np.asarray(m) - 1
+                for k in np.flatnonzero(ok & (gap | (run.dev_change[rr, m] != None))):  # noqa: E711 (objects)
+                    r, mm, s0 = int(rr[k]), int(m[k]), int(sm[k])
+                    x = run.dev_change[r, mm] if s0 == mm - 1 else run.change_between(
+                        r, float(run.read_t[r, s0]), float(run.read_t[r, mm]))
+                    if x is not None:
+                        prev[k] = x.carry(r, float(src[r, s0]), float(run.normal_at[r, s0]))
             d = src[rr, m] - prev
             out.append(np.where(ok, np.where(d < -0.5 * mod, d + mod, d), 0.0))
         return out[0], out[1]
@@ -105,22 +123,25 @@ class Books:
         rows = self.export_row[i]
         return exp[self.main[i], m], np.where(rows >= 0, exp[np.maximum(rows, 0), m], 0.0)
 
-    def compute(self, items: list[tuple[int, int, str, float, float]]) -> list[tuple]:
-        """[(inst, month, rate, q_imp, q_exp)] → [(subtotal, tax, total)] in the same order (vectorised per rate)."""
+    def compute(self, items: list[tuple]) -> list[tuple]:
+        """[(inst, month, rate, q_imp, q_exp[, start month])] → [(subtotal, tax, total)] in the same order (vectorised
+        per rate); the period runs from the start month's read (default the previous month's) to the month's."""
         run, tw = self.run, self.run.town
         out: list[tuple] = [None] * len(items)  # type: ignore[list-item]
         groups: dict[str, list[int]] = {}
-        for k, (_, _, rate, _, _) in enumerate(items):
+        for k, item in enumerate(items):
+            rate = item[2]
             groups.setdefault(rate, []).append(k)
         pct = run.cfg.billing.rate_change_pct
         for rate, ks in groups.items():
             tariff = tw.tariffs.get(rate, {})
             i = np.array([items[k][0] for k in ks])
             m = np.array([items[k][1] for k in ks])
+            sm = np.array([items[k][5] if len(items[k]) > 5 else items[k][1] - 1 for k in ks])
             rows = self.main[i]
             comm = str(tw.commodity[rows[0]])
             _, sub, tax = bl.charges(tariff, comm, np.array([items[k][3] for k in ks]),
-                                     np.array([items[k][4] for k in ks]), run.read_t[rows, m - 1], run.read_t[rows, m],
+                                     np.array([items[k][4] for k in ks]), run.read_t[rows, sm], run.read_t[rows, m],
                                      self.change, pct, self.export_row[i] >= 0)
             for j, k in enumerate(ks):
                 out[k] = (float(sub[j]), float(tax[j]), round(float(sub[j] + tax[j]), 2))
@@ -131,7 +152,8 @@ class Books:
         i, m = doc["inst"], doc["month"]
         rows = self.main[[i]]
         comps, _, _ = bl.charges(tw.tariffs.get(doc["rate"], {}), str(tw.commodity[rows[0]]), np.array([doc["qImp"]]),
-                                 np.array([doc["qExp"]]), run.read_t[rows, m - 1], run.read_t[rows, m], self.change,
+                                 np.array([doc["qExp"]]), run.read_t[rows, doc.get("from", m - 1)], run.read_t[rows, m],
+                                 self.change,
                                  run.cfg.billing.rate_change_pct, np.array([self.export_row[i] >= 0]))
         return bl.lines(comps, 0)
 
@@ -152,12 +174,14 @@ class Books:
         m = np.array([x[1] for x in ready])
         rates = [self.rate_at(a, t) for a in i.tolist()]
         right = [run.town.inst_rate[a] for a in i.tolist()]
-        qi, qe = self.quantities(i, m, run.released, device=True)
-        ti, te = self.quantities(i, m, run.truth)
+        sm = self.starts(i, m)
+        qi, qe = self.quantities(i, m, run.released, device=True, sm=sm)
+        ti, te = self.quantities(i, m, run.truth, sm=sm)
         ei, ee = self.expected(i, m)
-        totals = self.compute(list(zip(i.tolist(), m.tolist(), rates, qi.tolist(), qe.tolist(), strict=True)))
-        true_totals = self.compute(list(zip(i.tolist(), m.tolist(), right, ti.tolist(), te.tolist(), strict=True)))
-        expected = self.compute(list(zip(i.tolist(), m.tolist(), right, ei.tolist(), ee.tolist(), strict=True)))
+        il, ml, sl = i.tolist(), m.tolist(), sm.tolist()
+        totals = self.compute(list(zip(il, ml, rates, qi.tolist(), qe.tolist(), sl, strict=True)))
+        true_totals = self.compute(list(zip(il, ml, right, ti.tolist(), te.tolist(), sl, strict=True)))
+        expected = self.compute(list(zip(il, ml, right, ei.tolist(), ee.tolist(), sl, strict=True)))
         b = run.cfg_at(day).billing
         tw = run.town
         for k, (a, mm) in enumerate(ready):
@@ -165,7 +189,8 @@ class Books:
             est = [int(r) for r in tw.inst_rows[a] if run.status[r, mm] == 2]  # registers billed on an estimate
             doc = {"k": len(self.docs), "inst": a, "month": mm, "rate": rates[k], "qImp": float(qi[k]),
                    "qExp": float(qe[k]), "subtotal": sub, "tax": tax, "total": total, "truthTotal": true_totals[k][2],
-                   "expectedTotal": expected[k][2], "created": t, "released": None, "reversed": None, "version": 1,
+                   "expectedTotal": expected[k][2], "from": int(sm[k]), "created": t, "released": None,
+                   "reversed": None, "version": 1,
                    "case": -1, "invoice": -1, "replaces": -1, "estimated": bool(est), "estRows": est}
             self.docs.append(doc)
             self.doc_of[a, mm] = doc["k"]
@@ -232,7 +257,7 @@ class Books:
             est = [float(run.expected[r, m]) for r in rows]
             qi, qe = est[0], (est[1] if len(est) > 1 else 0.0)
         rate = rate or doc["rate"]
-        ((sub, tax, total),) = self.compute([(i, m, rate, qi, qe)])
+        ((sub, tax, total),) = self.compute([(i, m, rate, qi, qe, doc.get("from", m - 1))])
         new = {**doc, "k": len(self.docs), "rate": rate, "qImp": qi, "qExp": qe, "subtotal": sub, "tax": tax,
                "total": total, "created": t, "released": None, "reversed": None, "version": doc["version"] + 1,
                "invoice": -1, "replaces": doc["k"], "estimated": bool(estimate or doc.get("estimated")),
@@ -287,6 +312,7 @@ class Books:
             by_acct.setdefault(self.account(doc), []).append(k)
         b, due_days = run.cfg_at(day).billing, run.cfg.customers_billing.due_days
         issued = run.next_bday(day, b.print_lag_days) if b.print_lag_days else day
+        new: list[dict] = []
         for acct, docs in sorted(by_acct.items()):
             hold = run.hold_on(acct, day + 20.0 / 24)
             if hold is not None:  # an invoice hold on the account: its documents wait for invoice_unhold
@@ -299,25 +325,32 @@ class Books:
                    "created": day + 20.0 / 24, "issued": issued, "due": issued + due_days,
                    "total": round(sum(self.docs[k]["total"] for k in docs), 2), "payments": [], "dunning": []}
             self.invoices.append(inv)
+            new.append(inv)
             for k in docs:
                 self.docs[k]["invoice"] = n
+        if self.collections is not None:
+            self.collections.issue(new)
 
     def account(self, doc: dict) -> str:
         return self.run.town.contract_at(int(self.main[doc["inst"]]), int(np.floor(self.run.read_t[
-            self.main[doc["inst"]], doc["month"] - 1])))[1]
+            self.main[doc["inst"]], doc.get("from", doc["month"] - 1)])))[1]
 
     def doc_id(self, doc: dict) -> str:
         tw = self.run.town
         stamp = self.run.date_of(int(tw.read_day[self.main[doc["inst"]], doc["month"]])).strftime("%Y%m")
         return f"BD-{tw.inst_ids[doc['inst']]}-{stamp}" + (f"-v{doc['version']}" if doc["version"] > 1 else "")
 
-    # ---- payments and collections (after the year) -------------------------------------------------------------
-    def collect(self) -> None:
-        """Payments, dunning and collections work per account (utilsim/m2c/collections.py)."""
+    # ---- payments and collections (day by day with the run) ------------------------------------------------------
+    def start_collections(self) -> None:
+        """Payments, dunning and collections work per account (utilsim/m2c/collections.py), from the first day."""
         from utilsim.m2c.collections import Collections
 
         self.collections = Collections(self.run)
-        self.collections.replay()
+        self.collections.start()
+
+    def collect(self) -> None:
+        """After the last day: the rest of the year's collections events."""
+        self.collections.finish()
 
     def balance(self, acct: str, T: float) -> float:
         return round(sum(a for t, _, a, _ in self.ledger.get(acct, []) if t <= T), 2)

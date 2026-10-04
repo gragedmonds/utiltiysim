@@ -1,6 +1,7 @@
 """Field work over the year (utilsim/m2c/fieldwork.py): orders follow what happens in the year, the crews work them
-by priority within their capacity, the settings move the work the way their explanations say, episodes apply from
-their day, the rest of the year does not change, and the views and tables stay bounded."""
+by priority within their capacity inside the replay, what they do changes the year (a disconnected or removed meter is
+not read or billed, an exchange registers a new meter, maintenance left overdue fails), the settings move the work the
+way their explanations say, episodes apply from their day, and the views and tables stay bounded."""
 
 from __future__ import annotations
 
@@ -9,11 +10,11 @@ import orjson
 import pytest
 from fastapi.testclient import TestClient
 
-from api._m2c import RunRequest, _master, run_for
+from api._m2c import RunRequest, _master, _town, run_for
 from api.index import app
-from utilsim.m2c import contact, tables, trend
+from utilsim.m2c import contact, tables, trend, views
 from utilsim.m2c import fieldwork as fwk
-from utilsim.m2c.run import YEAR_DAYS, parse_day
+from utilsim.m2c.run import BATTERY_REASON, OFF, YEAR_DAYS, M2CRun, parse_day
 
 TOWN = "small_town"
 DAY = "2026-12-31"
@@ -36,11 +37,10 @@ def base():
 
 def test_orders_are_deterministic_ordered_and_consistent(base):
     run, fw = base
-    cached = run.__dict__.pop("_fieldwork")
-    again = fwk.fieldwork(run)
-    run.__dict__["_fieldwork"] = cached
-    assert [(o.id, o.type, o.created, o.end) for o in again.orders] == [(o.id, o.type, o.created, o.end)
-                                                                          for o in fw.orders]
+    from api._m2c import _ops_town
+
+    a, b = (fwk.fieldwork(M2CRun(_town("village"), ops_factory=lambda: _ops_town("village"))) for _ in range(2))
+    assert [(o.id, o.type, o.created, o.end) for o in a.orders] == [(o.id, o.type, o.created, o.end) for o in b.orders]
     ids = [o.id for o in fw.orders]
     assert len(set(ids)) == len(ids) and len(ids) > 500
     created = [o.created for o in fw.orders]
@@ -68,8 +68,21 @@ def test_orders_point_at_what_raised_them(base):
     rolls = sum(1 for c in run.cases for t, kind, _, _ in c.events if kind == "TRUCK_ROLL" and t < YEAR_DAYS)
     assert len(_of(fw, "meter_investigation")) == rolls > 0
     assert all(o.fixed for o in _of(fw, "meter_investigation"))
-    swaps = [x for x in run.installs if x.physical and x.t_reg < YEAR_DAYS]
+    swaps = [x for x in run.installs if x.physical and not x.planned and x.t_reg < YEAR_DAYS]
     assert len(_of(fw, "corrective_exchange")) == len(swaps)
+    planned = [x for x in run.installs if x.planned]  # seal and age exchanges registered as new meters
+    done = [o for o in _of(fw, "seal_exchange") + _of(fw, "water_meter_replacement") if o.end < YEAR_DAYS
+            and not o.outcome and not o.cancelled]
+    assert len(planned) == len(done) > 100
+    # An exchange on a meter's read day, after the overnight read and before the evening batch: that read is diffed on
+    # the old meter and the next one on the new meter, so neither bills the old register's whole dial as use.
+    same_day = [(r, x.period[r]) for x in planned for r in x.period
+                if 2 <= x.period[r] < 13 and run.town.read_day[r, x.period[r] - 1] == int(x.t)]
+    assert same_day
+    for r, m in same_day:
+        for j in (m - 1, m):
+            if not np.isnan(run.cons[r, j]):
+                assert 0 <= run.cons[r, j] < 5 * run.expected[r, j] + 50, (r, j)
     # Move visits only at premises with a meter that cannot be read remotely.
     tw = run.town
     for o in _of(fw, "move_in") + _of(fw, "move_out"):
@@ -87,20 +100,34 @@ def test_orders_point_at_what_raised_them(base):
     assert not _of(fw, "disconnect") and fwk.summary(run, DAY)["notes"]
 
 
-def test_rule_disconnections_become_field_orders_remote_where_switched():
+def test_disconnections_happen_when_the_crew_does_them_and_stop_reads_and_bills():
     run = _run({"billing": {"disconnect_rule_share": 1.0}})
     fw = fwk.fieldwork(run)
-    at = sorted(d["at"] for A in run.books.collections.accounts.values() for inv in A.invs
-                if (d := inv.get("disc")) and d.get("at") is not None)
-    disc = _of(fw, "disconnect")
-    assert len(at) > 0 and len(disc) == len(at)
-    assert sorted(o.created for o in disc) == pytest.approx(at)
-    remote = [o for o in disc if o.remote]
+    by_k = {o.k: o for o in fw.orders}
+    disc = [inv["disc"] for inv in run.books.invoices if (inv.get("disc") or {}).get("at") is not None]
+    assert len(disc) > 50
+    for d in disc:  # each disconnection is the moment its crew (or remote switch) finished
+        o = by_k[d["orders"]["disconnect"]]
+        assert o.end == pytest.approx(d["at"]) and o.end >= d["scheduled"] - 1e-9
+    remote = [o for o in _of(fw, "disconnect") if o.remote]
     assert remote and all(o.crew == "remote" and o.labour == 0 for o in remote)
-    assert any(not o.remote for o in disc)
-    assert _of(fw, "reconnect")
-    off = fwk.fieldwork(_run({"billing": {"disconnect_rule_share": 1.0}, "field": {"remote_switch_share": 0.0}}))
-    assert not [o for o in _of(off, "disconnect") if o.remote]
+    assert any(not o.remote for o in _of(fw, "disconnect")) and _of(fw, "reconnect")
+    # No read while the service is off, so no bill for those months; the next bill starts from the last read.
+    tw, bk = run.town, run.books
+    off = np.argwhere(run.status == OFF)
+    assert len(off) > 20
+    for r, m in off[:200].tolist():
+        assert np.isnan(run.obs[r, m]) and bk.doc_of[tw.inst_of[r], m] < 0
+        assert run.off_reason(r, float(run.read_t[r, m])) in ("disconnected", "removed")
+    gaps = [d for d in bk.docs if d["from"] != d["month"] - 1]
+    assert gaps and all(run.status[bk.main[d["inst"]], d["month"] - 1] == OFF for d in gaps)
+    # Nothing flows while off: the bill after the gap is below the normal use of its period.
+    d = gaps[0]
+    r = int(bk.main[d["inst"]])
+    normal = tw.true_advance(np.array([r, r]), tw.read_day[r, [d["from"], d["month"]]], tw.hour[[r, r]])
+    assert d["qImp"] < 0.95 * (normal[1] - normal[0])
+    plain = fwk.fieldwork(_run({"billing": {"disconnect_rule_share": 1.0}, "field": {"remote_switch_share": 0.0}}))
+    assert not [o for o in _of(plain, "disconnect") if o.remote]
 
 
 def test_crews_and_rates_move_the_work_the_way_they_say(base):
@@ -121,15 +148,38 @@ def test_crews_and_rates_move_the_work_the_way_they_say(base):
     assert any(o.cause.endswith("failed") for o in _of(none, "seal_exchange"))
 
 
-def test_field_settings_never_change_the_rest_of_the_year(base):
-    run, _ = base
-    other = _run({"field": {"crew_meter": {"per_1000_premises": 2.0}, "travel_minutes": 60, "gas_odour": {"rate": 0}}})
-    a, b = run.books, other.books
-    assert [i["total"] for i in a.invoices] == [i["total"] for i in b.invoices]
-    assert [(c.id, c.resolved) for c in run.cases] == [(c.id, c.resolved) for c in other.cases]
-    ca, cb = contact.contacts(run), contact.contacts(other)
-    assert np.array_equal(ca.t, cb.t) and np.array_equal(ca.outcome, cb.outcome)
-    assert fwk.summary(other, DAY)["kpis"]["hours"] != fwk.summary(run, DAY)["kpis"]["hours"]
+def test_deferred_maintenance_fails_and_shows_in_reads_and_bills(base):
+    run, fw = base
+    short = _run({"field": {"crew_meter": {"per_1000_premises": 0.1}, "crew_electric": {"per_1000_premises": 0.03},
+                            "crew_gas": {"per_1000_premises": 0.02}, "deferred_pole_failures": 40,
+                            "deferred_tree_faults": 0.5, "deferred_leak_escalation": 40}})
+    fs = fwk.fieldwork(short)
+    e0, e1 = fwk.summary(run, DAY)["effects"], fwk.summary(short, DAY)["effects"]
+    # Batteries not replaced by their anniversary die and miss reads; old and failed-lot meters keep drifting.
+    assert e1["deadBatteryMisses"] > e0["deadBatteryMisses"] and e1["deadBatteryMisses"] > 50
+    assert int((short.reason == BATTERY_REASON).sum()) == e1["deadBatteryMisses"]
+    assert e1["driftingMeters"] > e0["driftingMeters"]
+    # Overdue poles, spans and leaks fail: incidents with customers out and their repairs.
+    assert e1["failures"] > 0 and len(fs.failures) == e1["failures"]
+    incs = {x["id"]: x for x in contact.contacts(short).incidents}
+    for f in fs.failures:
+        assert f["incident"] in incs and incs[f["incident"]]["kind"] == f["kind"]
+    assert {o.asset for o in _of(fs, "outage_repair")} >= {f["incident"] for f in fs.failures}
+    # Each failure cuts its customers' supply in the replay: their use stops while they are out.
+    out = [o for o in short.outage_log if o.get("incident") in {f["incident"] for f in fs.failures}]
+    assert out and all(len(o["prem"]) and o["t1"] > o["t0"] for o in out)
+    rows = np.concatenate([o["rows"] for o in out])
+    rows = rows[short.town.direction[rows] == "import"]
+    assert short._outage_loss(rows, np.full(len(rows), float(YEAR_DAYS)))[0].sum() > 0
+    # So do the year's background incidents, in the default run too: the reliability KPIs count them.
+    assert any(o.get("incident") for o in run.outage_log) and views.reliability(run, float(YEAR_DAYS))
+    # Less revenue against the truth when meters drift longer.
+    gap = lambda r: sum(d["total"] - d["truthTotal"] for d in r.books.docs if d["reversed"] is None)  # noqa: E731
+    assert gap(short) < gap(run)
+    # A converted meter is read as AMI from its exchange.
+    conv = _run({"field": {"ami_conversion": {"rate": 0.6}}})
+    moved = np.flatnonzero(conv.meter_tech_now != conv.town.meter_tech)
+    assert len(moved) > 100 and set(conv.meter_tech_now[moved].tolist()) == {"AMI"}
 
 
 def test_an_episode_applies_from_its_day():
@@ -174,9 +224,7 @@ def test_views_trend_and_tables_are_bounded(base):
 
 
 def test_without_networks_field_work_has_no_assets():
-    run = _run(seed="NO-NETWORK-FIELD")
-    run.ops_factory = None
-    run.__dict__.pop("_ops", None)
+    run = M2CRun(_town(TOWN), seed="NO-NETWORK-FIELD")  # no ops_factory: a town without networks
     fw = fwk.fieldwork(run)
     assert not _of(fw, "pole_inspection") and not _of(fw, "outage_repair") and not _of(fw, "main_replacement")
     assert _of(fw, "seal_exchange") and fwk.summary(run, DAY)["notes"]

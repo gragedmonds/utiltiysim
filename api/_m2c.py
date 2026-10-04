@@ -321,12 +321,12 @@ def run_for(req: RunRequest, *, strict: bool = True) -> M2CRun:
         _RUNS.move_to_end(key)
         return hit
     try:
-        run = M2CRun(town, req.settings, actions, outages, strict=strict, seed=seed, episodes=episodes)
+        run = M2CRun(town, req.settings, actions, outages, strict=strict, seed=seed, episodes=episodes,
+                     ops_factory=lambda ref=req.town: _ops_town(ref))  # networks: incidents, assets, failures
     except ValidationError as exc:
         raise HTTPException(422, orjson.loads(exc.json(include_url=False))) from exc
     except ValueError as exc:
         raise HTTPException(422, getattr(exc, "detail", None) or str(exc)) from exc
-    run.ops_factory = lambda ref=req.town: _ops_town(ref)  # the year's outages and leaks (contact centre), on demand
     _RUNS[key] = run
     while len(_RUNS) > RUN_CACHE:
         _RUNS.popitem(last=False)
