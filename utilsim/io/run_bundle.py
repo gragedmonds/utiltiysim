@@ -147,6 +147,8 @@ def export_run(snapshot: dict, request: dict, store: str | Path, *, on_stage=lam
               "episodes": [e.model_dump(by_alias=True, exclude_none=True) for e in req.episodes]}
     if req.staffing:
         inputs["staffing"] = req.staffing
+    if req.upstream:
+        inputs["upstream"] = req.upstream
     if year > FIRST_YEAR:  # a later year: the years it opens on are part of what it is
         inputs.update(year=year, previous=chain[:-1])
     build = engine_build()
@@ -166,9 +168,11 @@ def export_run(snapshot: dict, request: dict, store: str | Path, *, on_stage=lam
 
     if year == FIRST_YEAR:
         run = M2CRun(town, inputs["settings"], inputs["actions"], inputs["outages"], seed=seed,
-                     episodes=inputs["episodes"], staffing=inputs.get("staffing"), strict=True, ops_factory=_ops)
+                     episodes=inputs["episodes"], staffing=inputs.get("staffing"), upstream=inputs.get("upstream"),
+                     strict=True, ops_factory=_ops)
     else:
-        last = {k: inputs[k] for k in ("settings", "actions", "outages", "episodes", "staffing") if k in inputs}
+        last = {k: inputs[k] for k in ("settings", "actions", "outages", "episodes", "staffing", "upstream")
+                if k in inputs}
         run = yearclose.replay(snapshot, [*inputs["previous"], last], seed=seed, strict=True, ops_factory=_ops)
     runs.mkdir(parents=True, exist_ok=True)
     staging = Path(tempfile.mkdtemp(prefix=f".tmp-{key}-", dir=runs))

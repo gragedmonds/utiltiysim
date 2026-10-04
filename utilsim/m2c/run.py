@@ -354,7 +354,8 @@ def resolve_episode_days(cfg: SimConfig, episodes: list[dict], cal: RunCalendar 
 class M2CRun:
     def __init__(self, town: M2CTown, settings: dict | None = None, actions: list[dict] | None = None,
                  outages: list[dict] | None = None, *, strict: bool = True, seed: str | None = None,
-                 episodes: list[dict] | None = None, ops_factory=None, opening=None, staffing: dict | None = None):
+                 episodes: list[dict] | None = None, ops_factory=None, opening=None, staffing: dict | None = None,
+                 upstream: dict | None = None):
         self.town = town
         self.cal = town.cal  # the calendar year the run replays
         # A chained year opens on the previous year's close (utilsim/m2c/yearclose.py; its town from open_town).
@@ -383,7 +384,16 @@ class M2CRun:
         self.meter_index = {mid: i for i, mid in enumerate(town.meter_ids)}
         self.actions = self._check_actions(actions or [])
         self.outages = self._check_outages(outages or [])
+        # Events upstream of the town (utilsim/m2c/upstream.py): its supply lost in the utility's wider networks.
+        from utilsim.m2c import upstream as up
+
+        self.upstream = up.parse(upstream, self.cal)
+        if self.upstream and self.upstream["events"] and ops_factory is None:
+            raise ValueError("upstream events need the town's networks (a run with its operations model)")
+        self.storm_seed = self.upstream["stormSeed"] if self.upstream else None
         inputs = _hash([self.actions, self.outages]) if self.outages else (_hash(self.actions) if self.actions else "0")
+        if self.upstream:
+            inputs = _hash([inputs, upstream])
         year = "" if self.cal.year == FIRST_YEAR else f"{self.cal.year}-"
         chain = f"-{_hash(opening.simulation_id)}" if opening is not None else ""
         self.simulation_id = f"m2c-{town.id}-{year}{self.settings_hash}-{inputs}{chain}"

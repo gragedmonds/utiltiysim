@@ -160,7 +160,7 @@ def draw_day(run: M2CRun, ops, d: int, keep=None) -> tuple[list[dict], bool]:
     s["stormDaysPerYear"] = float(base["stormDaysPerYear"]) * c.storm_factor
     for k in RATE_SETTINGS:
         s[k] = float(base[k]) * c.incident_factor
-    items, info = hazards.draw(ops, run.cal.date_of(d), s, ctx["seed"])
+    items, info = hazards.draw(ops, run.cal.date_of(d), s, ctx["seed"], storm_seed=getattr(run, "storm_seed", None))
     storm = bool(info.get("stormDay"))
     out = []
     for n, b in enumerate(items, start=1):

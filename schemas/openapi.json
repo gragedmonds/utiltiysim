@@ -586,6 +586,19 @@
             "title": "Truth",
             "type": "boolean"
           },
+          "upstream": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Events upstream of the town (upstream/1.0): {stormSeed?, events: [{id, utility, day, start, end, label?, storm?}]}: its supply lost in the utility's wider networks (an outage here without a repair order; tanks and line pack carry water and gas for a while, gas premises are relit after); stormSeed shares storm days with the utility's other towns.",
+            "title": "Upstream"
+          },
           "year": {
             "anyOf": [
               {
@@ -799,6 +812,19 @@
             "title": "Town",
             "type": "string"
           },
+          "upstream": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Events upstream of the town (upstream/1.0): {stormSeed?, events: [{id, utility, day, start, end, label?, storm?}]}: its supply lost in the utility's wider networks (an outage here without a repair order; tanks and line pack carry water and gas for a while, gas premises are relit after); stormSeed shares storm days with the utility's other towns.",
+            "title": "Upstream"
+          },
           "year": {
             "anyOf": [
               {
@@ -998,6 +1024,19 @@
             "title": "Town",
             "type": "string"
           },
+          "upstream": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Events upstream of the town (upstream/1.0): {stormSeed?, events: [{id, utility, day, start, end, label?, storm?}]}: its supply lost in the utility's wider networks (an outage here without a repair order; tanks and line pack carry water and gas for a while, gas premises are relit after); stormSeed shares storm days with the utility's other towns.",
+            "title": "Upstream"
+          },
           "year": {
             "anyOf": [
               {
@@ -1164,6 +1203,19 @@
             "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
             "type": "string"
+          },
+          "upstream": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Events upstream of the town (upstream/1.0): {stormSeed?, events: [{id, utility, day, start, end, label?, storm?}]}: its supply lost in the utility's wider networks (an outage here without a repair order; tanks and line pack carry water and gas for a while, gas premises are relit after); stormSeed shares storm days with the utility's other towns.",
+            "title": "Upstream"
           },
           "year": {
             "anyOf": [
@@ -1509,6 +1561,19 @@
             "title": "Town",
             "type": "string"
           },
+          "upstream": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Events upstream of the town (upstream/1.0): {stormSeed?, events: [{id, utility, day, start, end, label?, storm?}]}: its supply lost in the utility's wider networks (an outage here without a repair order; tanks and line pack carry water and gas for a while, gas premises are relit after); stormSeed shares storm days with the utility's other towns.",
+            "title": "Upstream"
+          },
           "year": {
             "anyOf": [
               {
@@ -1704,6 +1769,19 @@
             "title": "Town",
             "type": "string"
           },
+          "upstream": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Events upstream of the town (upstream/1.0): {stormSeed?, events: [{id, utility, day, start, end, label?, storm?}]}: its supply lost in the utility's wider networks (an outage here without a repair order; tanks and line pack carry water and gas for a while, gas premises are relit after); stormSeed shares storm days with the utility's other towns.",
+            "title": "Upstream"
+          },
           "year": {
             "anyOf": [
               {
@@ -1857,6 +1935,19 @@
             "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
             "type": "string"
+          },
+          "upstream": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Events upstream of the town (upstream/1.0): {stormSeed?, events: [{id, utility, day, start, end, label?, storm?}]}: its supply lost in the utility's wider networks (an outage here without a repair order; tanks and line pack carry water and gas for a while, gas premises are relit after); stormSeed shares storm days with the utility's other towns.",
+            "title": "Upstream"
           },
           "year": {
             "anyOf": [
@@ -2323,6 +2414,19 @@
             "title": "Truth",
             "type": "boolean"
           },
+          "upstream": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Events upstream of the town (upstream/1.0): {stormSeed?, events: [{id, utility, day, start, end, label?, storm?}]}: its supply lost in the utility's wider networks (an outage here without a repair order; tanks and line pack carry water and gas for a while, gas premises are relit after); stormSeed shares storm days with the utility's other towns.",
+            "title": "Upstream"
+          },
           "year": {
             "anyOf": [
               {
@@ -2493,6 +2597,19 @@
             "title": "Town",
             "type": "string"
           },
+          "upstream": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Events upstream of the town (upstream/1.0): {stormSeed?, events: [{id, utility, day, start, end, label?, storm?}]}: its supply lost in the utility's wider networks (an outage here without a repair order; tanks and line pack carry water and gas for a while, gas premises are relit after); stormSeed shares storm days with the utility's other towns.",
+            "title": "Upstream"
+          },
           "year": {
             "anyOf": [
               {
@@ -2652,6 +2769,19 @@
             "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
             "type": "string"
+          },
+          "upstream": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Events upstream of the town (upstream/1.0): {stormSeed?, events: [{id, utility, day, start, end, label?, storm?}]}: its supply lost in the utility's wider networks (an outage here without a repair order; tanks and line pack carry water and gas for a while, gas premises are relit after); stormSeed shares storm days with the utility's other towns.",
+            "title": "Upstream"
           },
           "year": {
             "anyOf": [
@@ -2902,6 +3032,19 @@
             "title": "Town",
             "type": "string"
           },
+          "upstream": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Events upstream of the town (upstream/1.0): {stormSeed?, events: [{id, utility, day, start, end, label?, storm?}]}: its supply lost in the utility's wider networks (an outage here without a repair order; tanks and line pack carry water and gas for a while, gas premises are relit after); stormSeed shares storm days with the utility's other towns.",
+            "title": "Upstream"
+          },
           "utility": {
             "anyOf": [
               {
@@ -3052,6 +3195,19 @@
             "description": "Include simulation ground truth (never send it to a VEE engine).",
             "title": "Truth",
             "type": "boolean"
+          },
+          "upstream": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Events upstream of the town (upstream/1.0): {stormSeed?, events: [{id, utility, day, start, end, label?, storm?}]}: its supply lost in the utility's wider networks (an outage here without a repair order; tanks and line pack carry water and gas for a while, gas premises are relit after); stormSeed shares storm days with the utility's other towns.",
+            "title": "Upstream"
           },
           "year": {
             "anyOf": [
@@ -3449,6 +3605,19 @@
             ],
             "title": "Type"
           },
+          "upstream": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Events upstream of the town (upstream/1.0): {stormSeed?, events: [{id, utility, day, start, end, label?, storm?}]}: its supply lost in the utility's wider networks (an outage here without a repair order; tanks and line pack carry water and gas for a while, gas premises are relit after); stormSeed shares storm days with the utility's other towns.",
+            "title": "Upstream"
+          },
           "year": {
             "anyOf": [
               {
@@ -3582,6 +3751,19 @@
             "default": false,
             "title": "Truth",
             "type": "boolean"
+          },
+          "upstream": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Events upstream of the town (upstream/1.0): {stormSeed?, events: [{id, utility, day, start, end, label?, storm?}]}: its supply lost in the utility's wider networks (an outage here without a repair order; tanks and line pack carry water and gas for a while, gas premises are relit after); stormSeed shares storm days with the utility's other towns.",
+            "title": "Upstream"
           },
           "year": {
             "anyOf": [
@@ -3768,6 +3950,19 @@
             "title": "Town",
             "type": "string"
           },
+          "upstream": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Events upstream of the town (upstream/1.0): {stormSeed?, events: [{id, utility, day, start, end, label?, storm?}]}: its supply lost in the utility's wider networks (an outage here without a repair order; tanks and line pack carry water and gas for a while, gas premises are relit after); stormSeed shares storm days with the utility's other towns.",
+            "title": "Upstream"
+          },
           "year": {
             "anyOf": [
               {
@@ -3929,6 +4124,19 @@
             "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
             "type": "string"
+          },
+          "upstream": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Events upstream of the town (upstream/1.0): {stormSeed?, events: [{id, utility, day, start, end, label?, storm?}]}: its supply lost in the utility's wider networks (an outage here without a repair order; tanks and line pack carry water and gas for a while, gas premises are relit after); stormSeed shares storm days with the utility's other towns.",
+            "title": "Upstream"
           },
           "year": {
             "anyOf": [
@@ -4135,6 +4343,19 @@
             "title": "Town",
             "type": "string"
           },
+          "upstream": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Events upstream of the town (upstream/1.0): {stormSeed?, events: [{id, utility, day, start, end, label?, storm?}]}: its supply lost in the utility's wider networks (an outage here without a repair order; tanks and line pack carry water and gas for a while, gas premises are relit after); stormSeed shares storm days with the utility's other towns.",
+            "title": "Upstream"
+          },
           "year": {
             "anyOf": [
               {
@@ -4340,6 +4561,19 @@
             "description": "Pack preset (e.g. 'small_town') or town id.",
             "title": "Town",
             "type": "string"
+          },
+          "upstream": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Events upstream of the town (upstream/1.0): {stormSeed?, events: [{id, utility, day, start, end, label?, storm?}]}: its supply lost in the utility's wider networks (an outage here without a repair order; tanks and line pack carry water and gas for a while, gas premises are relit after); stormSeed shares storm days with the utility's other towns.",
+            "title": "Upstream"
           },
           "year": {
             "anyOf": [
@@ -4810,6 +5044,19 @@
             ],
             "description": "That year's staffing schedule (as ``staffing``).",
             "title": "Staffing"
+          },
+          "upstream": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "That year's upstream events (as ``upstream``).",
+            "title": "Upstream"
           }
         },
         "title": "YearInputs",

@@ -802,6 +802,13 @@ class FieldEngine:
                 self.incidents.append(inc)
                 b.repair(inc, len(self.incidents) - 1)
                 run.incident_outage(inc, background)  # customers out: no use, dark AMI meters
+            if run.upstream:  # the supply lost upstream: an outage here, its repair upstream (no order)
+                from utilsim.m2c import upstream as up
+
+                for ev in run.upstream["byDay"].get(day, ()):
+                    inc = up.incident(run, self.ops, ev)
+                    self.incidents.append(inc)
+                    run.incident_outage(inc, False)
         self._absorb(day)
         if self.run.cal.add_bdays(day, 0) == day:
             self._work(day)

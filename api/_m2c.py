@@ -154,6 +154,7 @@ class YearInputs(BaseModel):
     actions: list[Action] = Field(default_factory=list, max_length=2000)
     outages: list[Outage] = Field(default_factory=list, max_length=500)
     staffing: dict[str, Any] | None = Field(None, description="That year's staffing schedule (as ``staffing``).")
+    upstream: dict[str, Any] | None = Field(None, description="That year's upstream events (as ``upstream``).")
 
 
 STAFFING_DOC = ("A day-by-day staffing schedule (staff-schedule/1.0): {pools: {pool: [[date, n], ...]}}, pools "
@@ -161,6 +162,12 @@ STAFFING_DOC = ("A day-by-day staffing schedule (staff-schedule/1.0): {pools: {p
                 "crew_construction, crew_emergency (crews); from each date the pool has n until the next entry, and "
                 "the settings hold before the first. A utility pooling its people across districts gives each its "
                 "people per day.")
+
+
+UPSTREAM_DOC = ("Events upstream of the town (upstream/1.0): {stormSeed?, events: [{id, utility, day, start, end, "
+                "label?, storm?}]}: its supply lost in the utility's wider networks (an outage here without a repair "
+                "order; tanks and line pack carry water and gas for a while, gas premises are relit after); "
+                "stormSeed shares storm days with the utility's other towns.")
 
 
 class RunRequest(BaseModel):
@@ -181,6 +188,7 @@ class RunRequest(BaseModel):
                                          "work, bill checks) on the same town. Blank or null: the town's seed (GET "
                                          "/api/m2c/settings?town= shows it).")
     staffing: dict[str, Any] | None = Field(None, description=STAFFING_DOC)
+    upstream: dict[str, Any] | None = Field(None, description=UPSTREAM_DOC)
     year: int | None = Field(None, ge=FIRST_YEAR, le=LAST_YEAR,
                              description=f"The calendar year to replay ({FIRST_YEAR}-{LAST_YEAR}; default: the year "
                                          f"after ``previous``, else {FIRST_YEAR}). A later year opens on the years "
@@ -347,12 +355,14 @@ def _master(ref: str) -> dict:
     return master
 
 
-def _inputs(settings, episodes, actions, outages, staffing=None) -> dict:
+def _inputs(settings, episodes, actions, outages, staffing=None, upstream=None) -> dict:
     out = {"settings": settings, "actions": [a.model_dump(exclude_none=True) for a in actions],
            "outages": [o.model_dump(exclude_none=True) for o in outages],
            "episodes": [e.model_dump(by_alias=True, exclude_none=True) for e in episodes]}
     if staffing:
         out["staffing"] = staffing
+    if upstream:
+        out["upstream"] = upstream
     return out
 
 
@@ -370,15 +380,16 @@ def chain_of(req: RunRequest) -> list[dict]:
         raise ValueError(f"year {year} opens on {n} earlier year{'' if n == 1 else 's'}"
                          f"{f' ({FIRST_YEAR}-{year - 1})' if n else ''}: previous gives {len(prev)}")
     else:
-        earlier = [_inputs(p.settings, p.episodes, p.actions, p.outages, p.staffing) for p in prev]
-    return [*earlier, _inputs(req.settings, req.episodes, req.actions, req.outages, req.staffing)]
+        earlier = [_inputs(p.settings, p.episodes, p.actions, p.outages, p.staffing, p.upstream) for p in prev]
+    return [*earlier, _inputs(req.settings, req.episodes, req.actions, req.outages, req.staffing, req.upstream)]
 
 
 def _run_key(town_id: str, chain: list[dict], strict: bool, seed: str | None) -> bytes:
     x = chain[-1]
     key = [town_id, x["settings"], x["actions"], x["outages"], strict, seed, x["episodes"]]  # the first year's as ever
-    if x.get("staffing"):
-        key.append({"staffing": x["staffing"]})
+    for extra in ("staffing", "upstream"):
+        if x.get(extra):
+            key.append({extra: x[extra]})
     return orjson.dumps(key + [chain[:-1]] if len(chain) > 1 else key, option=orjson.OPT_SORT_KEYS)
 
 
@@ -410,7 +421,7 @@ def _year_run(ref: str, town: M2CTown, chain: list[dict], seed: str | None, stri
         if opening is None:
             run = M2CRun(town, inputs["settings"], inputs["actions"], inputs["outages"], strict=strict, seed=seed,
                          episodes=inputs["episodes"], staffing=inputs.get("staffing"),
-                         ops_factory=lambda: _ops_town(ref))
+                         upstream=inputs.get("upstream"), ops_factory=lambda: _ops_town(ref))
         else:
             run = yearclose.run_year(load_snapshot(ref), FIRST_YEAR + len(chain) - 1, inputs, opening=opening,
                                      strict=strict, seed=seed, ops_factory=lambda: _ops_town(ref))

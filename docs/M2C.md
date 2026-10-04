@@ -49,6 +49,8 @@ A run is stateless and deterministic: `(town, settings, actions, outages, seed)`
   timeline reports them as `interruptions`. See "Outages from the map" below.
 - `staffing` (optional, `staff-schedule/1.0`) gives the people and crews the run has day by day instead of the
   settings' team sizes; see "Staffing day by day" below.
+- `upstream` (optional, `upstream/1.0`) gives events upstream of the town (its supply lost in the utility's wider
+  networks) and a storm seed the utility's towns share; see "Upstream events and shared storms" below.
 - `year` (2026 to 2030, default 2026) is the calendar year the run replays, and `previous` gives the inputs of the
   years before it (`[{settings, episodes, actions, outages}]`, one per year from 2026; omitted: the earlier years
   run with the request's settings and nothing else). See "Years" below.
@@ -743,6 +745,35 @@ across towns (ratios come as their numerator and denominator):
 - `outages`: customers interrupted and customer-hours without service, per utility.
 
 Run bundles save it as `daily.json.gz`.
+
+## Upstream events and shared storms
+
+A town's own incidents start inside its networks. A utility's towns also share what feeds them: transmission
+circuits and bulk substations, the treatment plant and transmission mains, the gas gate stations. `upstream`
+(`utilsim/m2c/upstream.py`) hands a town the events that reach it:
+
+```json
+{"stormSeed": "UTILITY-2026",
+ "events": [{"id": "UP-1", "utility": "electric", "day": "2026-03-10", "start": 36000, "end": 43200,
+             "label": "Transmission circuit T2 tripped", "storm": false}]}
+```
+
+`start` and `end` are seconds since local midnight of `day` (the end may pass midnight, up to a week). The town's
+networks decide what its customers see:
+- **electric:** every premise fed from the town's supply points is off from `start` to `end` (its normally-open ties
+  join its own feeders, not another supply);
+- **water:** each elevated tank keeps the mains up for 12 hours; a shorter loss goes unnoticed, a longer one leaves
+  the town dry from when the tanks empty until the supply is back;
+- **gas:** line pack carries the town for 2 hours; after that every gas premise is off until the supply is back and
+  then until a crew relights it (40 premises an hour, nearest the gate first).
+
+The outage is the town's like any other (no use, dark AMI electric meters, estimated reads, outage calls to the
+contact centre, and the same `outages` in `POST /api/m2c/daily`), but the town raises no repair order: the repair
+is upstream. Its own incidents that day still happen.
+
+`stormSeed` makes the town's storm days and hours the utility's: towns on the same storm seed share their weather
+(the storm days, and when the storms blow), each with its own faults on its own lines. Without it a town draws its
+own storms, as before. Events and the storm seed are part of the run's identity (`simulationId`) only when given.
 
 ## Run statistics for a period
 
