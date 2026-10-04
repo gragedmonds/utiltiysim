@@ -156,8 +156,9 @@ LIMITS = (
     {"title": "Beyond one town",
      "text": "The local batch-run command plans up to 500,000 homes as independent districts, processed sequentially "
              "with saved archives, resume, measured ETA and additive billing/case totals. Each district has its own "
-             "teams and networks. A 5,000-home run has been verified; full 50,000/500,000 benchmarks and shared "
-             "utility-wide resources are still outstanding."},
+             "teams and networks. One development run of 50,000 homes in 25 districts completed in 505 seconds "
+             "with 313 MB of archives; this is not a hardware-independent estimate. A full 500,000-home benchmark "
+             "and shared utility-wide resources are still outstanding."},
     {"title": "Calendar",
      "text": f"One calendar year (2026, {YEAR_DAYS} days), twelve billing cycles, twenty-one portions. Multi-year "
              "needs chaining (see Gaps)."},

@@ -162,8 +162,11 @@ Outputs under the chosen store:
 
 Record IDs are local to a district. Cross-district references must use `(districtId, recordId)`.
 The first release is a local CLI path; the hosted wizard still enforces its single-town generation limit.
-A 5,000-home, five-district run is used for execution/resume verification. The 50,000/500,000 plans are bounded
-and deterministic, but full runs at those sizes still need performance and storage benchmarks.
+Verification included a 5,000-home, five-district pause/resume run and a full 50,000-home run in 25 districts
+of 2,000 homes. The latter took 505 seconds and wrote 313 MB of archives (61,104 accounts, 164,985 registers);
+monthly totals were checked against all district files. Reported peak child-process RSS was 744 MiB. These
+are measurements from one development environment, not guaranteed estimates for other hardware or settings.
+A full 500,000-home run remains unbenchmarked.
 
 ### Shared utility-wide resources
 
