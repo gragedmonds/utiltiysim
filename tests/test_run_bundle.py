@@ -191,3 +191,38 @@ console.log(JSON.stringify(csv));
             for x, y, kind in zip(a, b, kinds):
                 # JSON has a single number type: 0 and 0.0 must carry the same CSV value.
                 assert x == y or (kind in ("int", "num", "money", "pct") and x and y and float(x) == float(y))
+
+
+def test_map_free_archive_preserves_all_analysis(archive, town120, tmp_path, monkeypatch):
+    import jsonschema
+
+    from utilsim.io import snapshot as S
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("analysis snapshot ran visual map work")
+
+    from utilsim.sim import state
+    monkeypatch.setattr(state, "initial_frame", forbidden)
+    monkeypatch.setattr(S.shapely, "voronoi_polygons", forbidden)
+    monkeypatch.setattr(type(town120.geo.terrain), "heightmap", forbidden)
+    snap = orjson.loads(orjson.dumps(S.build_snapshot(town120, detail="analysis"), option=orjson.OPT_SERIALIZE_NUMPY))
+    from referencing import Registry, Resource
+    schemas = [json.loads(p.read_text()) for p in (ROOT / "schemas").glob("*.schema.json")]
+    registry = Registry().with_resources((s["$id"], Resource.from_contents(s)) for s in schemas if "$id" in s)
+    jsonschema.Draft202012Validator(json.loads((ROOT / "schemas/utility-town-2.0.schema.json").read_text()),
+                                    registry=registry).validate(snap)
+    assert snap["terrain"] is None and snap["districts"] == []
+    assert snap["buildings"] == [] and snap["parcels"] == []
+    assert snap["mapAvailable"] is False
+    phases = []
+    directory, manifest, _ = B.export_run(snap, REQUEST, tmp_path, on_stage=phases.append)
+    assert "replay.reads_vee_billing" in phases and phases[-1] == "archive.verify"
+    original = archive[2]
+    for entry in manifest["files"]:
+        name = entry["name"]
+        if name not in {"snapshot.json.gz", "inputs.json"}:
+            saved, expected = read(directory, name), read(original, name)
+            if name == "aggregates.json":
+                saved.pop("runKey")
+                expected.pop("runKey")
+            assert saved == expected, name

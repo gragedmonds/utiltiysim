@@ -8,6 +8,11 @@
                "premiseCount", "config", "source", "bounds", "terrain", "roads", "premises", "buildings", "networks",
                "servicePoints", "meters", "sampleReads", "billingDocuments", "invoices", "simulation", "validation",
                "detail"],
+  "allOf": [{
+    "if": {"properties": {"detail": {"const": "analysis"}}},
+    "then": {"properties": {"terrain": {"type": "null"}}},
+    "else": {"properties": {"terrain": {"type": "object"}}}
+  }],
   "properties": {
     "schemaVersion": {"const": "utility-town/2.0"},
     "generatorVersion": {"type": "string", "minLength": 1},
@@ -22,7 +27,7 @@
     "units": {"enum": ["ontario", "us", "uk"]},
     "config": {"type": "object", "description": "Complete SimConfig (see config.schema.json)."},
     "configHash": {"type": "string"},
-    "detail": {"enum": ["full", "viewer"], "description": "viewer omits reads and customer tables (fetch per premise)."},
+    "detail": {"enum": ["full", "viewer", "analysis"], "description": "viewer omits reads and customer tables; analysis omits visual map geometry and initial state."},
     "source": {
       "type": "object",
       "required": ["type", "utilityOffsets", "coordinateSystem", "origin"],
@@ -43,7 +48,7 @@
                      "maxZ": {"type": "number"}}
     },
     "terrain": {
-      "type": "object",
+      "type": ["object", "null"],
       "description": "values[row*cols+col] is ground elevation (m) at x = originX + col*cellSizeM, z = originZ + row*cellSizeM; bilinear between samples.",
       "required": ["cols", "rows", "cellSizeM", "originX", "originZ", "order", "values"],
       "properties": {

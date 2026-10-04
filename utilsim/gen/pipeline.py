@@ -18,7 +18,7 @@ from utilsim.net.gas import build_gas
 from utilsim.net.water import build_water
 
 
-def generate(cfg: SimConfig, *, with_customers: bool = True) -> Town:
+def generate(cfg: SimConfig, *, with_customers: bool = True, on_stage=lambda _: None) -> Town:
     timings: dict[str, float] = {}
     t0 = time.perf_counter()
 
@@ -28,20 +28,26 @@ def generate(cfg: SimConfig, *, with_customers: bool = True) -> Town:
         timings[name] = round(t1 - t0, 3)
         t0 = t1
 
+    on_stage("generation.roads")
     geo = build_geography(cfg)
     mark("roads")
+    on_stage("generation.land_use")
     lu = plan_land_use(geo, cfg)
     geo.roads = lu.roads
     mark("land_use")
+    on_stage("generation.buildings")
     prem = build_premises(lu, cfg, geo.terrain, geo.era)
     assign_households(prem, cfg, geo.era)
     assign_addresses(prem, lu.roads, geo.center)
     mark("buildings")
+    on_stage("generation.electric")
     ctx = NetContext(cfg, lu, prem, geo.terrain, geo.era, cfg.seeds.for_("town"))
     networks = {"electric": build_electric(ctx)}
     mark("electric")
+    on_stage("generation.water")
     networks["water"] = build_water(ctx)
     mark("water")
+    on_stage("generation.gas")
     networks["gas"] = build_gas(ctx)
     mark("gas")
     for net in networks.values():
@@ -53,6 +59,7 @@ def generate(cfg: SimConfig, *, with_customers: bool = True) -> Town:
     if with_customers:
         from utilsim.customers.generate import build_customers
 
+        on_stage("generation.customers")
         town.customers = build_customers(town)
         mark("customers")
     timings["total"] = round(sum(v for k, v in timings.items()), 3)
