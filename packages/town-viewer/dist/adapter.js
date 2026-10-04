@@ -45,9 +45,17 @@ export function inspectSnapshot(snapshot, {legacyTerrain}={}) {
  return {snapshot,legacy,networks,sampleHeight,topologyRevision:snapshot.topologyRevision||'legacy-1',indexRevision:snapshot.indexRevision||'legacy-1'};
 }
 
+/** The networks a premise is connected to: `connections` when the engine sends it (the utility does not provide every
+ * service there), else the services it has. */
+export function premiseConnections(home){return Array.isArray(home?.connections)?UTILITIES.filter(u=>home.connections.includes(u)):UTILITIES.filter(u=>home?.services?.[u]);}
+export const OTHER_UTILITY='Served by another utility';
+/** How a premise takes `utility`: 'served' (the utility's service point), 'other' (connected to a network another
+ * utility serves) or null (not connected). */
+export function serviceOf(home,utility){return home?.services?.[utility]?'served':premiseConnections(home).includes(utility)?'other':null;}
+
 /** Loop-safe connectivity route. This is not a hydraulic solution or a complete set of flow paths. */
 export function traceConnection(snapshot,premiseId,utility,enabledOverrides=null){
- const net=snapshot.networks[utility],home=snapshot.premises.find(h=>h.id===premiseId);if(!home?.services[utility])return {connected:false,edges:[],reason:'No service'};
+ const net=snapshot.networks[utility],home=snapshot.premises.find(h=>h.id===premiseId);if(!home?.services[utility])return {connected:false,edges:[],reason:serviceOf(home,utility)==='other'?OTHER_UTILITY:'No service'};
  const target=net.nodes.find(n=>n.kind==='meter'&&(n.premiseId===premiseId||n.servicePointId===home.services[utility]));if(!target)return {connected:false,edges:[],reason:'Meter node missing'};
  const sources=new Set(net.sourceIds||[net.sourceId]),adj=new Map(net.nodes.map(n=>[n.id,[]]));
  for(const edge of net.edges){const active=enabledOverrides?.get(edge.id)??edge.enabled??(edge.normallyOpen!==true);if(!active)continue;adj.get(edge.from)?.push({edge,next:edge.to});adj.get(edge.to)?.push({edge,next:edge.from});}

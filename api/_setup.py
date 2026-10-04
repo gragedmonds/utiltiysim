@@ -59,8 +59,9 @@ REGIONS = [
 @lru_cache(maxsize=1)
 def gas_district_min_homes() -> int | None:
     """The smallest town drawn with more than one district. A smaller town is one district, which always keeps its gas
-    mains, so gas cannot be switched off there; from this size ``gas.all_electric_district_share`` = 1 leaves no gas
-    mains at all. None when this function cannot import the generation stack."""
+    mains, so the share of districts without gas mains has no effect there; from this size
+    ``gas.all_electric_district_share`` = 1 leaves no gas mains at all. That is physical: whether the utility provides
+    gas is ``customers_billing.services``. None when this function cannot import the generation stack."""
     try:
         from utilsim.gen.roads.build import district_count
     except ImportError:

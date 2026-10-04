@@ -3,7 +3,8 @@
 // town's own configuration. Generate posts the edited config to a local engine (POST /api/towns), polls until the
 // town is built and loads it. The hosted engine serves only prebuilt towns, so there the form stays editable and the
 // config downloads for `utilsim gen --config`. The engine decides every outcome; this page only edits its input.
-import {renderSchemaForm,prettyKey} from './schema-form.js';
+// Settings for a service the edited town's utility does not provide (customers_billing.services) show as not applicable.
+import {renderSchemaForm,prettyKey,servedServices} from './schema-form.js';
 // Only for a snapshot whose engine does not publish the schema: the SimConfig groups that belong to a run.
 const RUN_FALLBACK=['process','anomalies','scenario','reading','vee','billing'];
 export const isTownGroup=(key,g)=>g['x-applies']!=='run';
@@ -64,7 +65,7 @@ export function installTownConfig({getContext,api,probe,toast,download,load}){
   if(!draft||draft.townId!==town.id)draft={townId:town.id,values:townValues(cfg,schema)};
   $('town-config-id').textContent=`${townLabel(town)} · ${town.id}${town.generatorVersion?' · generator '+town.generatorVersion:''}${schema['x-inferred']?' · this engine does not publish its settings schema, so bounds and descriptions are missing':''}`;
   if(shownFor!==town.id||!form||$('town-config-form').childElementCount===0){shownFor=town.id;
-   form=renderSchemaForm($('town-config-form'),schema,{values:draft.values,base:cfg,groups:isTownGroup,showAdvanced:true,collapsible:true,open:'all',skip:['seeds.master'],baseLabel:'This town',onChange:()=>{draft.values=form.values;update();}});
+   form=renderSchemaForm($('town-config-form'),schema,{values:draft.values,base:cfg,groups:isTownGroup,services:servedServices(draft.values),showAdvanced:true,collapsible:true,open:'all',skip:['seeds.master'],baseLabel:'This town',onChange:()=>{draft.values=form.values;form.setServices(servedServices(form.values));update();}});
    draft.values=form.values;form.filter($('town-config-filter').value);}
   $('town-master-seed').value=draft.values.seeds?.master??'';
   if(capability===null){capability=undefined;update();Promise.resolve(probe()).then(h=>generateCapability(base,h)).then(c=>{capability=c;update();});}else update();}

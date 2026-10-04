@@ -3281,7 +3281,10 @@
           ],
           "x-impact": "Electric crews: how long outages last on the operations day.",
           "x-reach": "operations",
-          "x-run-setting": "electricCrews"
+          "x-run-setting": "electricCrews",
+          "x-services": [
+            "electric"
+          ]
         },
         "gas_crews": {
           "default": 2,
@@ -3295,7 +3298,10 @@
           ],
           "x-impact": "Gas crews: how fast leaks are made safe on the operations day.",
           "x-reach": "operations",
-          "x-run-setting": "gasCrews"
+          "x-run-setting": "gasCrews",
+          "x-services": [
+            "gas"
+          ]
         },
         "gas_response_target_min": {
           "default": 60.0,
@@ -3307,6 +3313,9 @@
           "x-impact": "The response target gas crews are measured against on the operations day.",
           "x-reach": "operations",
           "x-run-setting": "gasResponseTargetMinutes",
+          "x-services": [
+            "gas"
+          ],
           "x-unit": "min"
         },
         "meter_techs": {
@@ -3424,7 +3433,10 @@
           "type": "integer",
           "x-impact": "Water crews: how long main breaks keep customers off.",
           "x-reach": "operations",
-          "x-run-setting": "waterCrews"
+          "x-run-setting": "waterCrews",
+          "x-services": [
+            "water"
+          ]
         }
       },
       "title": "Field operations",

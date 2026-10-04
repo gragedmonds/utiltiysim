@@ -729,6 +729,8 @@ SERVICES_OF: dict[str, tuple[str, ...]] = {
     **{f"customers_billing.{k}": ("water",) for k in ("water_fixed_monthly", "water_price_m3", "wastewater_ratio")},
     "ami.meter_digits_electric": ("electric",), "ami.meter_digits_water": ("water",), "ami.meter_digits_gas": ("gas",),
     "anomalies.leak": ("water",), "anomalies.tamper": ("electric",),
+    "operations.electric_crews": ("electric",), "operations.water_crews": ("water",), "operations.gas_crews": ("gas",),
+    "operations.gas_response_target_min": ("gas",),
     "billing.winter_moratorium": ("electric", "water"),
     "contact.gas_odour": ("gas",),
     "field.crew_electric": ("electric",), "field.crew_water": ("water",), "field.crew_gas": ("gas",),

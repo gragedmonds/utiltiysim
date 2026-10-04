@@ -26,9 +26,11 @@ The manual wizard has four steps:
 3. **Utility & operations**: services, billing analysts, contact-centre agents and Year field crews, followed by
    scenario intensity and view date. Advanced contains utility networks and metering, Year workflows and costs,
    and a separately labelled map-day operations section. Year field crews are expressed per 1,000 total premises.
-   Services are three checkbox cards. Electricity and water are always served (locked on). Natural gas maps to
-   `gas.all_electric_district_share` (off = 1, no gas mains); it is locked on below the engine's
-   `gasDistrictMinHomes` (2,251), where the town is one district that keeps its gas mains. Analysts and agents start
+   Services are three checkbox cards bound to `customers_billing.services` (what the utility provides; another
+   utility serves the rest, whose network stays on the map and whose settings show as not applicable). The last
+   one on cannot be switched off; all three on leaves the key out of the town overrides. Having no gas mains is the
+   separate, physical `gas.all_electric_district_share` in Advanced, which only bites from the engine's
+   `gasDistrictMinHomes` (2,251), below which the town is one district that keeps its gas mains. Analysts and agents start
    from a suggestion that scales the engine defaults (2 and 1, fitted to the 1,900-home small town) linearly with
    homes, rounded, at least one (`suggestedStaffing` in `setup-utility.js`). Changing the size updates the values
    nobody typed, including ones the chosen focus hides; a typed value is kept (`draft.staffing.edited`) and "Use n"
@@ -56,8 +58,8 @@ AC, irrigation and pool inputs. They are not observed local statistics or calibr
 service-area label does not geocode or fetch weather; the selected regional starter supplies those assumptions.
 Tariffs and regulations retain the engine defaults unless edited. Claude receives the same regional catalogue.
 
-Every town currently includes electricity and water. The service selector adds gas districts or chooses
-all-electric heating through `gas.all_electric_district_share`; Advanced exposes the exact coverage share.
+Every town has its electric, water and gas networks; the utility provides any of them (`customers_billing.services`).
+Districts without gas mains (all-electric heating) are `gas.all_electric_district_share` in Advanced.
 Pool activity still follows the engine's May–September model even in the warm-region starter.
 
 ## Chat

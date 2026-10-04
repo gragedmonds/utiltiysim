@@ -1,6 +1,6 @@
-import {renderSchemaForm,schemaFields} from './schema-form.js';
+import {renderSchemaForm,schemaFields,servedServices} from './schema-form.js';
 import {proposalInput,applyAgentProposal} from './setup-agent.js';
-import {STAFFING,SERVICES,GAS_PATH,staffingBase,applySuggestedStaffing,markStaffingEdited,staffingHint,crewHint,migrateServices,servicesState,gasShareFor} from './setup-utility.js';
+import {STAFFING,SERVICES,GAS_PATH,SERVICES_PATH,staffingBase,applySuggestedStaffing,markStaffingEdited,staffingHint,crewHint,migrateServices,servicesState,servicesNote,toggleService,withServices} from './setup-utility.js';
 
 const ENVIRONMENT=new Set(['seeds','town','housing','weather']);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -27,8 +27,9 @@ const at=(value,path)=>path.split('.').reduce((o,k)=>o?.[k],value);
 const fieldId=path=>'basic-'+path.replace(/[^a-z0-9]+/gi,'-');
 // A basic input with a hint line under it (a staffing suggestion, or what a crew rate means at this size).
 function input(scope,path,label,{min=0,max=200,step=1,suffix=''}={}){const id=fieldId(path);return `<div class="basic-field"><label for="${id}">${label}${suffix?` <span>${suffix}</span>`:''}</label><input id="${id}" type="number" data-basic-scope="${scope}" data-basic-path="${path}" min="${min}" max="${max}" step="${step}" required aria-describedby="${id}-hint"><p class="basic-hint" id="${id}-hint" data-basic-hint="${path}"></p></div>`;}
-// Services: one card per service, a real (visually hidden) checkbox inside its label. syncBasic sets their state.
-function serviceCards(){return `<fieldset class="service-picker"><legend>Services in this town</legend><p class="field-note" id="services-intro">Tick what your utility serves here.</p><div class="service-cards">${SERVICES.map(v=>`<label class="service-card ${v.key}"><input type="checkbox" class="service-input" data-service="${v.key}" checked aria-describedby="service-${v.key}-line service-${v.key}-lock"><span class="service-icon" aria-hidden="true">${v.icon}</span><span class="service-text"><strong>${v.label}</strong><small id="service-${v.key}-line">Served by your utility</small><em class="service-lock" id="service-${v.key}-lock" hidden></em></span><span class="service-check" aria-hidden="true"></span></label>`).join('')}</div><p class="field-note" id="services-note"></p></fieldset>`;}
+// Services: one card per service, a real (visually hidden) checkbox inside its label, bound to the town's
+// customers_billing.services. syncBasic sets their state.
+function serviceCards(){return `<fieldset class="service-picker"><legend>Services in this town</legend><p class="field-note" id="services-intro">Tick what your utility provides here. Another utility serves the rest.</p><div class="service-cards">${SERVICES.map(v=>`<label class="service-card ${v.key}"><input type="checkbox" class="service-input" data-service="${v.key}" checked aria-describedby="service-${v.key}-line service-${v.key}-lock"><span class="service-icon" aria-hidden="true">${v.icon}</span><span class="service-text"><strong>${v.label}</strong><small id="service-${v.key}-line">Served by your utility</small><em class="service-lock" id="service-${v.key}-lock" hidden></em></span><span class="service-check" aria-hidden="true"></span></label>`).join('')}</div><p class="field-note" id="services-note"></p></fieldset>`;}
 export function stageMarkup(stage,data,draft){if(!data)return '<div class="help-card" role="status">Loading the engine’s setup settings…</div>';
  const allowed=(scope,key)=>focusGroup(data,draft,scope,stage,key,{'x-applies':scope==='town'?'town':'run'});
  const advanced=`<details class="setup-advanced" id="stage-advanced" ${(draft.advanced?.[stage]??(stage===1&&draft.goals?.length===1&&draft.goals[0]==='operations'))?'open':''}><summary><span>Advanced ${stage===0?'environment':'utility & operations'} settings</span><small>Browse every setting for this stage</small></summary><div class="advanced-body">${draft.goals?.includes('everything')?'':`<label class="show-all-settings"><input id="show-all-settings" type="checkbox" ${draft.showAllSettings?.[stage]?'checked':''}> Show all settings for this step</label>`}<label class="sr-only" for="advanced-filter">Find a setting</label><input id="advanced-filter" type="search" placeholder="Find a setting, e.g. ${stage===0?'pools or temperature':'crew, billing or meter'}"><p class="field-note">Use ⓘ for an input’s effect and limits. Basic and advanced controls edit the same values. Fraction fields use 0–1 (0.15 = 15%).</p>${(stage===0?['town']:['town','run']).map(scope=>`<section ${scope==='run'&&!schemaFields(data.schemas.run,{groups:(key,g)=>focusGroup(data,draft,'run',stage,key,g)}).length?'hidden':''}><h3 class="advanced-section-title">${scope==='town'?(stage===0?'Town, households & weather':'Utility networks & town defaults'):scope==='run'?'Year staffing & workflow':'Map-day operations'}</h3>${scope==='operations'?'<p class="field-note">These controls govern the map’s operations day. Year field staffing and workloads are above.</p>':''}<div data-config-scope="${scope}"></div></section>`).join('')}${stage===1&&(draft.showAllSettings?.[stage]||selectedGoals(data,draft).some(g=>g.map))?'<details id="map-defaults-panel" class="map-defaults-panel"><summary>Map-day operations</summary><p class="field-note">These controls govern the map’s operations day. Defaults follow your town settings; Year field staffing is above.</p><div data-config-scope="operations"></div></details>':''}</div></details>`;
@@ -41,27 +42,38 @@ export function stageMarkup(stage,data,draft){if(!data)return '<div class="help-
 export function installStageControls({root,stage,data,getDraft,onChange,onRegion,onError,getOperationDefaults,onShowAll}){
  if(!data)return {invalid:()=>true};
  const forms={},values={},base=staffingBase(data.defaults.run),homesOf=()=>forms.town?.values.town?.houses??mergeValues(data.defaults.town,getDraft().townOverrides).town?.houses;
+ // The town as the draft has it, and the services its utility provides: the forms show the settings for the others
+ // as not applicable.
+ const townValues=()=>mergeValues(data.defaults.town,getDraft().townOverrides),served=()=>servedServices(townValues());
+ // The physical gas share's size note, on the Advanced setting itself.
+ const decorate=(f,row)=>{if(f.path!==GAS_PATH||!Number.isFinite(data.gasDistrictMinHomes))return;const note=document.createElement('small');note.className='schema-hint';note.textContent=`Physical: districts without gas mains. A town under ${data.gasDistrictMinHomes.toLocaleString('en-US')} homes is one district and keeps its gas mains whatever this share. Whether your utility provides gas is the Natural gas card.`;row.append(note);};
  // Staffing nobody chose follows the town's size (also when the focus hides it): on opening the utility stage, and
  // whenever the size changes.
  const suggested=stage===1&&applySuggestedStaffing(getDraft(),homesOf(),base).length>0;
- let seen={},lastGasShare=null;
+ let seen={};
  for(const scope of stage===0?['town']:['town','run']){
   values[scope]=mergeValues(data.defaults[scope],getDraft()[bucket(scope)]);
   forms[scope]=renderSchemaForm(root.querySelector(`[data-config-scope="${scope}"]`),data.schemas[scope],{
-   values:values[scope],base:data.defaults[scope],groups:(key,g)=>focusGroup(data,getDraft(),scope,stage,key,g),showAdvanced:true,collapsible:true,open:[],baseLabel:'Starting town',
+   values:values[scope],base:data.defaults[scope],groups:(key,g)=>focusGroup(data,getDraft(),scope,stage,key,g),services:served(),decorate:scope==='town'?decorate:null,showAdvanced:true,collapsible:true,open:[],baseLabel:'Starting town',
    onChange:overrides=>{replaceStageOverrides(getDraft(),scope,stage,overrides,data.schemas[scope],(key,g)=>focusGroup(data,getDraft(),scope,stage,key,g));if(scope==='run')trackStaffing();else if(stage===0)applySuggestedStaffing(getDraft(),homesOf(),base);onChange();syncBasic();if(scope==='town'&&root.querySelector('#map-defaults-panel'))root.querySelector('#map-defaults-panel').open=false;}
   });
  }
  // A staffing value that changes in the run form (basic input or Advanced) was typed: suggestions leave it alone.
  function trackStaffing(){for(const s of STAFFING){const v=at(forms.run.values,s.path);if(seen[s.path]!==undefined&&v!==seen[s.path])markStaffingEdited(getDraft(),s.path);seen[s.path]=v;}}
  if(forms.run)trackStaffing();
- function syncServices(){const cards=root.querySelectorAll('.service-card');if(!cards.length)return;const share=at(forms.town.values,GAS_PATH),homes=homesOf(),state=servicesState({share,homes,gasMinHomes:data.gasDistrictMinHomes});
-  if(share!==1)lastGasShare=share;
+ // The service cards follow the draft's services (and the forms' not-applicable settings with them).
+ function syncServices(){const list=served();for(const form of Object.values(forms))form.setServices?.(list);
+  const cards=root.querySelectorAll('.service-card');if(!cards.length)return;
+  const state=servicesState({served:list,share:at(townValues(),GAS_PATH),homes:homesOf(),gasMinHomes:data.gasDistrictMinHomes});
   for(const card of cards){const input=card.querySelector('.service-input'),key=input.dataset.service,st=state[key];input.checked=st.on;card.classList.toggle('is-on',st.on);card.classList.toggle('is-locked',st.locked);
    if(st.locked)input.setAttribute('aria-disabled','true');else input.removeAttribute('aria-disabled');
-   card.querySelector('small').textContent=st.on?'Served by your utility':'Not served · homes heat with electricity';
+   card.querySelector('small').textContent=st.line;
    const lock=card.querySelector('.service-lock');lock.hidden=!st.locked;lock.textContent=st.note;card.title=st.reason||'';}
-  const note=root.querySelector('#services-note'),min=data.gasDistrictMinHomes;if(note)note.textContent=state.gas.locked?`${state.gas.reason} From ${min.toLocaleString('en-US')} homes you can switch gas off.`:state.gas.on?'Electricity and water are always served. Gas reaches most districts; Advanced sets the share of districts without gas mains.':'Electricity and water are always served. With gas off there are no gas mains: every home heats with electricity, mostly heat pumps.';}
+  const note=root.querySelector('#services-note');if(note)note.textContent=servicesNote(state,{gasMinHomes:data.gasDistrictMinHomes});}
+ // Sets the services through the town form when it shows customers_billing (so a later edit there keeps them), else
+ // straight into the draft's overrides. All three leave the key out.
+ function setServices(list){if(forms.town?.fields.some(f=>f.path===SERVICES_PATH)){forms.town.set(SERVICES_PATH,list);return;}
+  const d=getDraft();d.townOverrides=withServices(d.townOverrides,list);onChange();syncBasic();}
  function syncHints(){const homes=homesOf();for(const el of root.querySelectorAll('[data-basic-hint]')){const path=el.dataset.basicHint,value=at(forms.run?.values,path),s=STAFFING.find(s=>s.path===path);
    if(s){const h=staffingHint(s,homes,value,base);el.innerHTML=`<span>${esc(h.text)}</span>${h.differs?` <button type="button" class="text-button" data-use-suggested="${esc(path)}" aria-label="Use the suggested ${esc(s.label.toLowerCase())}: ${h.suggested}">Use ${h.suggested}</button>`:''}`;el.querySelector('[data-use-suggested]')?.addEventListener('click',()=>useSuggested(s));}
    else if(/per_1000_premises$/.test(path))el.textContent=crewHint(value,homes);else el.textContent='';}}
@@ -76,9 +88,9 @@ export function installStageControls({root,stage,data,getDraft,onChange,onRegion
  // "Use 5": back to the suggestion, which then follows the town's size again.
  function useSuggested(s){if(!forms.run)return;const v=staffingHint(s,homesOf(),0,base).suggested;set('run',s.path,v);markStaffingEdited(getDraft(),s.path,false);getDraft().staffing.applied[s.path]=v;onChange(false);syncBasic();root.querySelector(`[data-basic-path="${s.path}"]`)?.focus();}
  for(const input of root.querySelectorAll('.service-input')){
-  // A locked service stays ticked; its "always served" note pulses instead.
+  // A locked service stays ticked; the note on why pulses instead.
   input.addEventListener('click',e=>{if(input.getAttribute('aria-disabled')!=='true')return;e.preventDefault();const card=input.closest('.service-card');card.classList.remove('is-nudged');void card.offsetWidth;card.classList.add('is-nudged');});
-  input.onchange=()=>{if(input.dataset.service!=='gas')return;set('town',GAS_PATH,gasShareFor(input.checked,lastGasShare??at(data.defaults.town,GAS_PATH)));};}
+  input.onchange=()=>{const next=toggleService(served(),input.dataset.service,input.checked);if(!next.length){input.checked=true;return;}setServices(next);};}
  for(const b of root.querySelectorAll('[data-town-size]'))b.onclick=()=>{if(forms.town.invalid()){onError('Fix the highlighted environment settings before changing size.');return;}const n=Number(b.dataset.townSize);getDraft().execution=n>data.homeLimit?'local':'hosted';getDraft().totalHomes=n>data.homeLimit?n:null;set('town','town.houses',n>data.homeLimit?Math.min(n,2000):n);};
  const all=root.querySelector('#show-all-settings');if(all)all.onchange=()=>{if(Object.values(forms).some(f=>f.invalid())){all.checked=!all.checked;onError('Fix the highlighted settings first.');return;}onShowAll(all.checked);};
  const region=root.querySelector('#setup-region-profile');if(region)region.onchange=()=>{if(Object.values(forms).some(f=>f.invalid())){region.value=getDraft().environmentProfile||'custom';onError('Fix the highlighted settings before changing region.');return;}const r=data.regions.find(r=>r.id===region.value);onRegion(r);};
