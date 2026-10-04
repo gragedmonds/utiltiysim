@@ -225,3 +225,15 @@ the seed and each district's events.
 `rollup.json` adds `daily`: the utility day by day, every district's `daily.json.gz` added up (queues, staff and
 work waiting, crews, contacts, outages; the oldest waiting work is the oldest anywhere). Shared staffing takes two
 replays per district (about twice the time); resume works in either pass.
+
+**Utility page.** `UTILSIM_RUN_STORE=out/store node web/serve.mjs` also serves `<store>/batches/`; open
+`http://localhost:5175/utility.html?batch=/batches/<jobKey>/` to see the batch as one utility (read-only, no engine):
+the utility's and the year's key figures (homes, districts, accounts, registers, staffing and network modes; billed,
+collected, receivable and case backlog at year end, cases opened, contacts and the share answered, outage
+customer-hours per utility), its days as small multiples (work waiting and the oldest waiting, crew work waiting,
+calls answered and abandoned, outage customer-hours, backlog by queue), the staff allocation of a chosen pool
+(shared staffing: staff per district and day for the eight districts with the most staff-days and "Other", home
+teams, float days, the predicted work waiting), the districts (50 a page, accounts and registers from each run's
+manifest, an **Open run** link to `runs.html?run=/runs/<runKey>/`) and the upstream events once each with the
+network layout (connected networks). A paused batch shows the finished districts; a missing `rollup.json`,
+`staffing.json` or `network.json` leaves a message in its section rather than failing the page.

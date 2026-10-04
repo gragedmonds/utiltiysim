@@ -3,7 +3,7 @@
 // Run `npm install` in packages/town-viewer first (it vendors Three.js into dist/vendor).
 import http from 'node:http'; import fs from 'node:fs'; import path from 'node:path'; import {fileURLToPath} from 'node:url';
 const repo = fileURLToPath(new URL('../', import.meta.url));
-const roots = [...(process.env.UTILSIM_RUN_STORE ? [['/runs/', path.resolve(process.env.UTILSIM_RUN_STORE, 'runs')]] : []),
+const roots = [...(process.env.UTILSIM_RUN_STORE ? [['/runs/', path.resolve(process.env.UTILSIM_RUN_STORE, 'runs')], ['/batches/', path.resolve(process.env.UTILSIM_RUN_STORE, 'batches')]] : []),
   ['/examples/', path.join(repo, 'examples')], ['/packs/', path.join(repo, 'packs')],
   ['/', path.join(repo, 'packages/town-viewer/dist')]];
 const mime = {'.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json',
