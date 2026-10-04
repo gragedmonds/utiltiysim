@@ -2,19 +2,24 @@
 one or more episode templates (dated setting overrides on the run's base settings, relative to the day it is
 inflicted) with what to watch afterwards. The engine only lists them; the Year page turns a template into the run's
 ``episodes`` and the run replays the year with the day's settings (``M2CRun.cfg_at``). Values are absolute or
-operators on the base (``"*0.5"``, ``"+2"``, ``"-1"``), so a scenario fits any town.
+operators on the base (``"*0.5"``, ``"+2"``, ``"-1"``), so a scenario fits any town. A template with a ``pattern`` is
+sporadic: over its window it strikes only some days (a few spikes, or a share of the days), drawn by the engine.
 """
 
 from __future__ import annotations
 
 SCENARIOS_VERSION = "m2c-scenarios/1.0"
-GROUPS = (("starters", "Starter setups"), ("staffing", "Staffing"), ("reading", "Meter reading"), ("vee", "VEE"), ("billing", "Billing"),
+GROUPS = (("starters", "Starter setups"), ("sporadic", "Spikes here and there"), ("staffing", "Staffing"), ("reading", "Meter reading"), ("vee", "VEE"), ("billing", "Billing"),
           ("collections", "Collections"), ("anomalies", "Meters & anomalies"), ("contact", "Contact centre"),
           ("field", "Field work"), ("operations", "Operations"))
 
 
-def _ep(title: str, settings: dict, *, start: int = 0, days: int | None = None, ramp: int = 0) -> dict:
-    return {"title": title, "startOffset": start, "durationDays": days, "ramp": ramp, "settings": settings}
+def _ep(title: str, settings: dict, *, start: int = 0, days: int | None = None, ramp: int = 0,
+        pattern: dict | None = None) -> dict:
+    out = {"title": title, "startOffset": start, "durationDays": days, "ramp": ramp, "settings": settings}
+    if pattern is not None:
+        out["pattern"] = pattern
+    return out
 
 
 SCENARIOS: tuple[dict, ...] = (
@@ -246,6 +251,55 @@ SCENARIOS += (
      "episodes": [_ep("Migration errors", {"billing": {"data_error_rate": "*5"}}, days=30),
                   _ep("Manual checks only", {"process": {"rpa_coverage": 0}}, days=14),
                   _ep("Catch-up shift", {"process": {"analyst_hours_per_day": "*1.5"}}, start=30, days=28)]},
+)
+# Sporadic: the same kind of trouble, but a day or a few here and there instead of one long stretch, to see how
+# spikes cascade (a missed read becomes an estimate, a case, a call, a true-up; a short-staffed day leaves work that
+# the next days inherit).
+_SICK = {"process": {"analysts": "*0.5", "supervisors": "*0.5"}, "contact": {"agents": "*0.5"},
+         "field": {"crew_meter": {"per_1000_premises": "*0.5"}}}
+SCENARIOS += (
+    {"id": "headend_hiccups", "title": "Head-end hiccups", "group": "sporadic",
+     "description": "Over six months the AMI head end goes down six times, for a day or two each time, every so "
+                    "often: most AMI billing reads due those days never arrive. The other days are normal.",
+     "watch": "Missing reads and estimates come in bursts (only the routes read on those days), the Missing reads "
+              "queue spikes and drains, estimated bills go out and are trued up at the next read, and a few "
+              "customers call. Compare with Head end down for a week: the same trouble all at once.",
+     "tags": ["sporadic", "missed reads", "estimates", "AMI"],
+     "episodes": [_ep("Head end down", {"reading": {"ami_missed_read": 0.9}}, days=182,
+                      pattern={"kind": "spikes", "count": 6, "length": [1, 2], "strength": [0.7, 1.0]})]},
+    {"id": "headend_week", "title": "Head end down for a week", "group": "sporadic",
+     "description": "The AMI head end is down for seven working days in a row: about as many days as Head-end "
+                    "hiccups, all at once.",
+     "watch": "One block of missing reads and estimates instead of several small ones; the Missing reads queue's "
+              "peak and how long it takes to drain, against the hiccups spread over six months.",
+     "tags": ["missed reads", "estimates", "AMI"],
+     "episodes": [_ep("Head end down", {"reading": {"ami_missed_read": 0.9}}, days=9)]},
+    {"id": "reader_no_shows", "title": "Readers off now and then", "group": "sporadic",
+     "description": "Over six months the meter readers and the drive-by van miss their routes six times, for one "
+                    "to three working days: the walked and drive-by reads due those days are not taken.",
+     "watch": "Missed and estimated reads on manual and AMR routes in bursts; a route missed again next month "
+              "becomes a consecutive-estimate case and a field read.",
+     "tags": ["sporadic", "missed reads", "estimates", "field"],
+     "episodes": [_ep("Routes not read", {"reading": {"manual_no_access": 1.0, "amr_missed_read": 1.0}}, days=182,
+                      pattern={"kind": "spikes", "count": 6, "length": [1, 3], "strength": [0.8, 1.0]})]},
+    {"id": "sickness_here_and_there", "title": "Sickness here and there", "group": "sporadic",
+     "description": "For four months, on about three working days in ten someone is off sick: an analyst, the "
+                    "supervisor, an agent on the phones or the meter technicians, a different mix each day and "
+                    "rarely everyone at once. No single day is a crisis.",
+     "watch": "Work each short day leaves behind for the next: backlog and case age creep up, calls wait and hang "
+              "up on the days the phones are short, field visits slip. Small towns feel one person out most.",
+     "tags": ["sporadic", "staffing", "backlog", "contact centre"],
+     "episodes": [_ep("Off sick", _SICK, days=122,
+                      pattern={"kind": "days", "share": 0.3, "strength": [0.2, 1.0], "independent": True})]},
+    {"id": "flu_spikes", "title": "Flu spikes", "group": "sporadic",
+     "description": "Over four months, three waves of flu of three to five working days each: half of every team "
+                    "is off at once, then back.",
+     "watch": "Each wave leaves a backlog that takes longer to clear than the wave lasted; calls abandoned and "
+              "work waiting peak in the waves. Compare with Sickness here and there: about as many person-days "
+              "lost, scattered instead of bunched.",
+     "tags": ["sporadic", "staffing", "backlog"],
+     "episodes": [_ep("Flu wave", _SICK, days=122,
+                      pattern={"kind": "spikes", "count": 3, "length": [3, 5], "strength": [0.7, 1.0]})]},
 )
 COMING: tuple[dict, ...] = (
     {"id": "water_loss", "title": "Undetected water loss", "group": "operations",

@@ -123,13 +123,29 @@ adds onsets from March and keeps every earlier one. Settings read once for the w
 change (``billing.rate_change_date``/``pct``), prior-year history noise, the price used for bill impact, and the
 carry rates and read costs in the summary's cost figures.
 
+**Sporadic episodes.** With a ``pattern`` an episode strikes only some days of its window instead of every day, to
+see how spikes in off days cascade (a missed read becomes an estimate, a case, a call and a true-up; a short-staffed
+day leaves work the next days inherit). ``{"kind": "spikes", "count": 6, "length": [1, 2]}`` puts six bursts of one
+or two days in the window, one in each equal stretch of it, so they come every so often; ``{"kind": "days",
+"share": 0.3}`` strikes 30% of the window's days, scattered. Working days only unless ``"workdays": false`` (a spike
+then runs over consecutive working days). Each day struck has a ``strength`` (a number, or ``[min, max]`` drawn per
+spike or day; default 1): how far the settings go from the value in force towards the episode's, so a struck day can
+be mild or severe. A whole number rounds up with chance its fraction (two analysts at half strength towards one are
+one short about half the days struck). ``"independent": true`` draws the strength per setting: a bit of everything,
+some days the analysts, some days the phones, rarely everyone at once. The days are drawn from the run's seed and
+the episode's title, window and shape (``utilsim/m2c/run.py`` ``_pattern``): re-rolling the run moves them, changing a
+value keeps them, and the pattern's own ``seed`` fixes them across runs. A ramp still applies (it scales the
+strength). The trend echoes ``pattern`` and ``hits`` (``[date, strength]``) so the Command Center marks the days
+struck; days not struck keep the settings in force, so the year before the first strike is byte-identical.
+
 **The scenario library** (``GET /api/m2c/scenarios``, ``utilsim/m2c/scenarios.py``) lists situations as episode
 templates relative to the day they are inflicted (start offset, duration, ramp, settings) with what to watch:
 staffing (half staff, nobody on the queues, supervisor away, automation off), reading (no-access summer, AMI heat
 dropouts), meters (ERT/AMR fleet drift, anomaly wave), VEE (loosened, tightened), billing (master data slips, blocks
 wait for you), collections (bank debit failures, lenient and aggressive dunning, a longer moratorium), the contact
-centre (lines open mornings only, IVR and website down, a second agent) and operations (storm season, which triples
-the storm days the year draws). Undetected water loss is listed as coming: it needs the unbilled-loss physics.
+centre (lines open mornings only, IVR and website down, a second agent), operations (storm season, which triples
+the storm days the year draws) and spikes here and there (head-end hiccups with a steady week to compare, readers
+off now and then, sickness here and there, flu spikes). Undetected water loss is listed as coming: it needs the unbilled-loss physics.
 ``tests/test_m2c_episodes.py`` checks that every template parses and that the ones that must show on a small town do.
 
 **The trend** (``POST /api/m2c/trend``, ``m2c-trend/1.0``) reports the year month by month as of the view date:

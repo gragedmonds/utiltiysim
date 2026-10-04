@@ -42,7 +42,8 @@ def inflicted(scenario: str, day: str = DAY) -> list[dict]:
         f = d0 + timedelta(days=e["startOffset"])
         t = None if e["durationDays"] is None else min(f + timedelta(days=e["durationDays"] - 1), date(2026, 12, 31))
         out.append({"id": f"EP-{i + 1}", "title": e["title"], "scenario": scenario, "from": f.isoformat(),
-                    "to": t.isoformat() if t else None, "ramp": e["ramp"], "settings": e["settings"]})
+                    "to": t.isoformat() if t else None, "ramp": e["ramp"], "settings": e["settings"],
+                    **({"pattern": e["pattern"]} if e.get("pattern") else {})})
     return out
 
 

@@ -131,10 +131,33 @@ class Outage(BaseModel):
     premiseIds: list[str] = Field(..., min_length=1, max_length=20000)
 
 
+class EpisodePattern(BaseModel):
+    """Sporadic instead of steady: the episode strikes only some days between ``from`` and ``to``, drawn from the
+    run's seed (utilsim/m2c/run.py ``_pattern``). ``spikes``: ``count`` bursts of ``length`` days, one in each equal
+    stretch of the window; ``days``: a ``share`` of the window's days, scattered. Each day struck has a ``strength``:
+    how far the settings go from the value in force towards the episode's (1: all the way; a whole number rounds up
+    with chance its fraction)."""
+    model_config = ConfigDict(extra="forbid")
+    kind: Literal["spikes", "days"] = Field(..., description="spikes: a few bursts; days: a share of the days.")
+    count: int | None = Field(None, ge=1, le=60, description="spikes: how many bursts in the window.")
+    length: int | list[int] | None = Field(None, description="spikes: days per burst, or [min, max] (1–30; "
+                                                             "default 1).")
+    share: float | None = Field(None, gt=0, le=1, description="days: the share of the window's days struck.")
+    strength: float | list[float] | None = Field(None, description="How hard each day strikes, or [min, max] (0–1; "
+                                                                   "default 1).")
+    workdays: bool | None = Field(None, description="Strike working days only (default true); a spike then runs "
+                                                    "over consecutive working days.")
+    independent: bool | None = Field(None, description="Draw the strength per setting each day (default false): a "
+                                                       "bit of everything, some days one team, some days another.")
+    seed: str | None = Field(None, min_length=1, max_length=64, description="Draw the days from this instead of "
+                                                                            "the run's seed (the same on every run).")
+
+
 class Episode(BaseModel):
     """A scenario inflicted from a day: setting overrides in force from ``from`` to ``to`` (inclusive; null = the
     year's end), sliding from the base to the target over ``ramp`` days. A value is a number or boolean, or an
-    operator on the value in force before the episode: ``"*0.5"``, ``"+2"``, ``"-1"`` (numeric settings)."""
+    operator on the value in force before the episode: ``"*0.5"``, ``"+2"``, ``"-1"`` (numeric settings). With a
+    ``pattern`` it strikes only some of those days (sporadic spikes, or scattered days)."""
     model_config = ConfigDict(populate_by_name=True)
     id: str | None = Field(None, max_length=40)
     title: str | None = Field(None, max_length=120)
@@ -144,6 +167,7 @@ class Episode(BaseModel):
     ramp: int = Field(0, ge=0, le=366, description="Days over which numeric values slide to the target (0: a step).")
     settings: dict[str, dict[str, Any]] = Field(..., description=f"Run-scoped groups ({', '.join(M2C_GROUPS)}) → "
                                                                  "setting → value or operator.")
+    pattern: EpisodePattern | None = Field(None, description="Sporadic: the days it strikes within its window.")
 
 
 class YearInputs(BaseModel):

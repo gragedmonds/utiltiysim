@@ -133,11 +133,123 @@ def _episode_value(base, target, path: str):
     return target
 
 
-def parse_episodes(cfg: SimConfig, episodes: list[dict] | None, cal: RunCalendar | None = None) -> list[dict]:
+PATTERN_KINDS = ("spikes", "days")
+PATTERN_FIELDS = {"kind", "count", "length", "share", "strength", "workdays", "independent", "seed"}
+PATTERN_MAX_COUNT = 60
+PATTERN_MAX_LENGTH = 30
+
+
+def _pattern_pair(v, name: str, eid: str, cast, default: tuple, lo, hi) -> tuple:
+    """A pattern's ``[min, max]`` (or one value for both) within ``lo``–``hi``."""
+    if v is None:
+        return default
+    pair = list(v) if isinstance(v, (list, tuple)) else [v, v]
+    if len(pair) != 2 or any(isinstance(x, bool) or not isinstance(x, (int, float)) for x in pair) \
+            or (cast is int and any(float(x) != int(x) for x in pair)):
+        kind = "a whole number" if cast is int else "a number"
+        raise ValueError(f"episode {eid}: pattern.{name} is {kind} or [min, max]")
+    a, b = cast(pair[0]), cast(pair[1])
+    if not lo <= a <= b <= hi:
+        raise ValueError(f"episode {eid}: pattern.{name} must be {lo}–{hi}, min no more than max")
+    return a, b
+
+
+def _pattern(p, eid: str, title: str, start: int, end: int, cal: RunCalendar, seed: str,
+             paths: list[str]) -> tuple[dict, list]:
+    """A sporadic episode's pattern, checked and normalised, and the days it strikes: ``[[day, strength]]``
+    (``strength``: one number, or one per setting in ``paths`` order when ``independent``).
+
+    ``spikes``: ``count`` bursts of ``length`` days (min–max), one in each equal stretch of the window, so they come
+    every so often; ``days``: a ``share`` of the window's days, scattered. Working days only unless ``workdays`` is
+    false (a spike then runs over consecutive working days). Each hit has a ``strength`` (min–max): how far the
+    settings go from the value in force towards the episode's (1: all the way); ``independent`` draws it per setting.
+    The draws come from the run's seed (or the pattern's own ``seed``) and the episode's title, window and shape, so
+    changing a setting's value keeps the days."""
+    if not isinstance(p, dict):
+        raise ValueError(f"episode {eid}: pattern must be an object")
+    unknown = sorted(set(p) - PATTERN_FIELDS)
+    if unknown:
+        raise ValueError(f"episode {eid}: unknown pattern field(s) {', '.join(unknown)}")
+    kind = p.get("kind")
+    if kind not in PATTERN_KINDS:
+        raise ValueError(f"episode {eid}: pattern.kind is 'spikes' (a few bursts) or 'days' (a share of the days)")
+    for name in (("share",) if kind == "spikes" else ("count", "length")):
+        if p.get(name) is not None:
+            raise ValueError(f"episode {eid}: pattern.{name} is not used by {kind}")
+    flags = {}
+    for name, default in (("workdays", True), ("independent", False)):
+        v = p.get(name, default)
+        if not isinstance(v, bool):
+            raise ValueError(f"episode {eid}: pattern.{name} is true or false")
+        flags[name] = v
+    s0, s1 = _pattern_pair(p.get("strength"), "strength", eid, float, (1.0, 1.0), 0.0, 1.0)
+    if s1 <= 0:
+        raise ValueError(f"episode {eid}: pattern.strength must reach above 0")
+    own = p.get("seed")
+    if own is not None and (not isinstance(own, str) or not own.strip() or len(own) > MAX_SEED):
+        raise ValueError(f"episode {eid}: pattern.seed is text of 1–{MAX_SEED} characters")
+    days = [d for d in range(start, end + 1) if not flags["workdays"] or cal.is_bday(d)]
+    what = "working days" if flags["workdays"] else "days"
+    if not days:
+        raise ValueError(f"episode {eid}: no {what} between 'from' and 'to'")
+    out = {"kind": kind}
+    if kind == "spikes":
+        n = p.get("count")
+        if isinstance(n, bool) or not isinstance(n, int) or not 1 <= n <= PATTERN_MAX_COUNT:
+            raise ValueError(f"episode {eid}: pattern.count is a whole number of spikes, 1–{PATTERN_MAX_COUNT}")
+        if n > len(days):
+            raise ValueError(f"episode {eid}: {n} spikes do not fit in {len(days)} {what}")
+        l0, l1 = _pattern_pair(p.get("length"), "length", eid, int, (1, 1), 1, PATTERN_MAX_LENGTH)
+        out.update(count=n, length=[l0, l1])
+        shape = f"{n}|{l0}|{l1}"
+    else:
+        share = p.get("share")
+        if isinstance(share, bool) or not isinstance(share, (int, float)) or not 0 < share <= 1:
+            raise ValueError(f"episode {eid}: pattern.share is the share of the {what} struck, above 0 up to 1")
+        out["share"] = float(share)
+        shape = repr(float(share))
+    out.update(strength=[s0, s1], **flags)
+    if own is not None:
+        out["seed"] = own
+    src = own if own is not None else seed
+    key = str_key(f"{title}|{start}|{end}|{kind}|{shape}|{flags['workdays']}")
+
+    def u(*k):
+        return float(hash_u01(src, Purpose.EPISODE, cal.year, key, *k))
+
+    def strength(*k):
+        if flags["independent"]:
+            return [round(s0 + (s1 - s0) * u(*k, str_key(path)), 3) for path in paths]
+        return round(s0 + (s1 - s0) * u(*k, 2), 3)
+
+    hits: dict[int, object] = {}
+    if kind == "spikes":
+        seg = len(days) / n
+        for k in range(n):
+            a, b = int(round(k * seg)), int(round((k + 1) * seg))
+            length = min(l0 + int(u(k, 0) * (l1 - l0 + 1)), l1, b - a)
+            at = a + int(u(k, 1) * (b - a - length + 1))
+            s = strength(k)
+            for d in days[at:at + length]:
+                hits[d] = s
+    else:
+        arr = np.array(days)
+        k = max(1, int(round(out["share"] * len(days))))
+        draw = hash_u01(src, Purpose.EPISODE, cal.year, key, arr, 0)
+        for d in sorted(arr[np.argsort(draw, kind="stable")[:k]].tolist()):
+            hits[d] = strength(d)
+    return out, [[d, hits[d]] for d in sorted(hits)]
+
+
+def parse_episodes(cfg: SimConfig, episodes: list[dict] | None, cal: RunCalendar | None = None,
+                   seed: str | None = None) -> list[dict]:
     """Dated setting overrides, checked and normalised: ``{id, title, scenario, start, end, ramp, settings}`` with
     ``start``/``end`` as inclusive run days of ``cal``'s year (default 2026). A setting is a run-scoped group's field;
-    its value is absolute or an operator on the value in force before the episode. ValueError says what is wrong."""
+    its value is absolute or an operator on the value in force before the episode. A sporadic episode (``pattern``)
+    also has ``pattern`` and ``hits``, the days it strikes (``_pattern``), drawn from ``seed`` (the run's draw seed;
+    default the town's). ValueError says what is wrong."""
     cal = cal or calendar()
+    seed = seed or f"{town_seed(cfg)}:m2c"
     out = []
     for k, ep in enumerate(episodes or []):
         if k >= EPISODE_MAX:
@@ -170,8 +282,14 @@ def parse_episodes(cfg: SimConfig, episodes: list[dict] | None, cal: RunCalendar
                     raise ValueError(f"episode {eid}: unknown setting {g}.{key}")
                 _episode_value(getattr(getattr(cfg, g), key), target, f"{g}.{key}")  # type check against the base
                 clean.setdefault(g, {})[key] = target
-        out.append({"id": eid, "title": str(ep.get("title") or eid)[:120], "scenario": ep.get("scenario"),
-                    "start": start, "end": end, "ramp": ramp, "settings": clean})
+        title = str(ep.get("title") or eid)[:120]
+        item = {"id": eid, "title": title, "scenario": ep.get("scenario"), "start": start, "end": end, "ramp": ramp,
+                "settings": clean}
+        if ep.get("pattern") is not None:
+            paths = [f"{g}.{key}" for g, vals in clean.items() for key in vals]
+            item["pattern"], item["hits"] = _pattern(ep["pattern"], eid, title, start, end, cal, seed, paths)
+            item["draw"] = ep["pattern"].get("seed") or seed  # the integer settings' rounding draws (_blend)
+        out.append(item)
     out.sort(key=lambda e: (e["start"], e["id"]))
     return out
 
@@ -306,6 +424,22 @@ def run_seed(cfg: SimConfig, seed: str | None) -> str | None:
     return s if s and s != town_seed(cfg) else None
 
 
+def _blend(was, tgt, frac: float, seed: str, year: int, day: int, path: str):
+    """A sporadic episode's value on a day it strikes: a number ``frac`` of the way from the value in force to the
+    target (a whole number rounds up with chance its fraction, so a team of two at 30% strength is one short on about
+    three days in five); the parts of a setting made of parts each so; other values (true/false, text) are the
+    target's."""
+    if isinstance(was, dict) and isinstance(tgt, dict):
+        return {k: _blend(was[k], tgt[k], frac, seed, year, day, f"{path}.{k}") if k in was else tgt[k] for k in tgt}
+    if isinstance(was, bool) or isinstance(tgt, bool) or not isinstance(was, _NUMERIC) \
+            or not isinstance(tgt, _NUMERIC):
+        return tgt
+    v = was + (tgt - was) * frac
+    if isinstance(was, int):
+        return int(np.floor(v + float(hash_u01(seed, Purpose.EPISODE, year, str_key(path), day, 9))))
+    return v
+
+
 def resolve_episode_days(cfg: SimConfig, episodes: list[dict], cal: RunCalendar | None = None,
                          staffing: dict | None = None, premises: int = 0) -> list[SimConfig]:
     """The configuration in force on each day of ``cal``'s year (default 2026): the base, then every active episode
@@ -320,12 +454,26 @@ def resolve_episode_days(cfg: SimConfig, episodes: list[dict], cal: RunCalendar 
     base = {g: dict(full[g]) for g in M2C_GROUPS}
     cache: dict[bytes, SimConfig] = {}
     out: list[SimConfig] = []
+    hitmaps = [{d: s for d, s in ep["hits"]} if ep.get("hits") is not None else None for ep in episodes]
     for day in range(cal.days):
         cur = {g: dict(v) for g, v in base.items()}
-        for ep in episodes:
+        for ep, hit in zip(episodes, hitmaps):
             if not ep["start"] <= day <= ep["end"]:
                 continue
             frac = 1.0 if ep["ramp"] <= 0 else min(1.0, (day - ep["start"] + 1) / ep["ramp"])
+            if hit is not None:  # a sporadic episode: only on the days it strikes, as hard as the day's strength
+                s = hit.get(day)
+                if s is None:
+                    continue
+                j = 0
+                for g, vals in ep["settings"].items():
+                    for key, target in vals.items():
+                        path = f"{g}.{key}"
+                        tgt = _episode_value(cur[g][key], target, path)
+                        cur[g][key] = _blend(cur[g][key], tgt, frac * (s[j] if isinstance(s, list) else s),
+                                             ep["draw"], cal.year, day, path)
+                        j += 1
+                continue
             for g, vals in ep["settings"].items():
                 for key, target in vals.items():
                     was = cur[g][key]
@@ -365,15 +513,19 @@ class M2CRun:
         self.ops_factory = ops_factory
         self.strict = strict  # refuse (raise) when the newest action does not apply; else skip it with a warning
         self.cfg = resolve_settings(town.cfg, settings)  # the year's base settings
+        # A run seed re-rolls every draw of the run (reads, anomalies, work, bill checks); the town stays the same.
+        self.run_seed = run_seed(town.cfg, seed)
+        # Each year draws anew: a later year's draws are salted with it (the snapshot's year keeps the town's own).
+        year = "" if self.cal.year == FIRST_YEAR else f"{self.cal.year}-"
+        self.seed = f"{self.run_seed or town_seed(town.cfg)}:m2c" + (f":{self.cal.year}" if year else "")
         # Episodes: dated overrides on the base (a scenario inflicted from a day); the day's config is cfg_at(day).
-        self.episodes = parse_episodes(self.cfg, episodes, self.cal)
+        # A sporadic episode strikes on days drawn from the run's seed.
+        self.episodes = parse_episodes(self.cfg, episodes, self.cal, seed=self.seed)
         # A day-by-day staffing schedule (utilsim/m2c/staffing.py): headcounts over the settings' team sizes.
         from utilsim.m2c import staffing as staff
 
         self.staffing = staff.parse(staffing, self.cal)
         self._cfg_day: list[SimConfig] | None = self._resolve_days() if self.episodes or self.staffing else None
-        # A run seed re-rolls every draw of the run (reads, anomalies, work, bill checks); the town stays the same.
-        self.run_seed = run_seed(town.cfg, seed)
         groups = {g: self.cfg.model_dump(mode="json")[g] for g in M2C_GROUPS}
         if self.episodes:
             groups["episodes"] = self.episodes
@@ -394,11 +546,8 @@ class M2CRun:
         inputs = _hash([self.actions, self.outages]) if self.outages else (_hash(self.actions) if self.actions else "0")
         if self.upstream:
             inputs = _hash([inputs, upstream])
-        year = "" if self.cal.year == FIRST_YEAR else f"{self.cal.year}-"
         chain = f"-{_hash(opening.simulation_id)}" if opening is not None else ""
         self.simulation_id = f"m2c-{town.id}-{year}{self.settings_hash}-{inputs}{chain}"
-        # Each year draws anew: a later year's draws are salted with it (the snapshot's year keeps the town's own).
-        self.seed = f"{self.run_seed or town_seed(town.cfg)}:m2c" + (f":{self.cal.year}" if year else "")
         self._setup()
         self._setup_outages()
         self._simulate()

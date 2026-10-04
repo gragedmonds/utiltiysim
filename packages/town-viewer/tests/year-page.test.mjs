@@ -204,3 +204,60 @@ test('the year bar: a switcher of the years opened, Continue on the last one (wi
  const archive={readOnly:true,year:2027,years:[2027],asOf:'2027-03-31'};assert.equal(yearsBar(archive),'<p class="year-opening is-loading">Opened on 2026\'s close</p>','an archived run has no switcher');
  const last=new EngineM2C({townRef:'village',townId:'t2',storage:memory()});for(let i=0;i<4;i++)last.continueYear();assert.match(yearsBar(last),/The simulation runs to 2030\./);
 });
+
+test('sporadic episodes: the strike controls become the engine\'s pattern, checked as the engine checks it',async()=>{
+ const {strikeDraft,draftPattern,windowDays,STRIKE_KINDS}=await import('../dist/year-page.js');
+ const base={title:'Head end down',scenario:'headend_hiccups',from:'2026-01-12',to:'2026-07-12',ramp:0,settings:{reading:{ami_missed_read:'0.9'}}};
+ assert.deepEqual(Object.keys(STRIKE_KINDS),['steady','spikes','days']);
+ assert.deepEqual(strikeDraft(null),{kind:'steady',count:'4',lenMin:'1',lenMax:'2',share:'20',strMin:'100',strMax:'100',workdays:true,independent:false},'steady starts the other kinds from sensible values');
+ const spikes=strikeDraft({kind:'spikes',count:6,length:[1,2],strength:[0.7,1.0]});
+ assert.deepEqual(spikes,{kind:'spikes',count:'6',lenMin:'1',lenMax:'2',share:'20',strMin:'70',strMax:'100',workdays:true,independent:false},'an edit fills the controls from the pattern');
+ assert.deepEqual(strikeDraft({kind:'days',share:0.3,strength:[0.2,1],workdays:false,independent:true,seed:'x'}),{kind:'days',count:'4',lenMin:'1',lenMax:'2',share:'30',strMin:'20',strMax:'100',workdays:false,independent:true,seed:'x'});
+ assert.deepEqual(strikeDraft({kind:'spikes',count:3}),{kind:'spikes',count:'3',lenMin:'1',lenMax:'1',share:'20',strMin:'100',strMax:'100',workdays:true,independent:false},'the engine\'s defaults: 1 day, full strength, working days');
+ // Valid: spikes, scattered days (share and strength as fractions), and every day (no pattern key at all).
+ assert.deepEqual(draftEpisode({...base,strike:spikes}).episode,{title:'Head end down',scenario:'headend_hiccups',from:'2026-01-12',to:'2026-07-12',ramp:0,settings:{reading:{ami_missed_read:0.9}},pattern:{kind:'spikes',count:6,length:[1,2],strength:[0.7,1],workdays:true,independent:false}});
+ assert.deepEqual(draftEpisode({...base,to:'',strike:{...strikeDraft(null),kind:'days',share:'20',strMin:'50',strMax:'80',independent:true}}).episode.pattern,{kind:'days',share:0.2,strength:[0.5,0.8],workdays:true,independent:true});
+ assert.equal('pattern' in draftEpisode({...base,strike:{...spikes,kind:'steady'}}).episode,false,'every day: a steady episode');
+ assert.equal('pattern' in draftEpisode(base).episode,false);
+ assert.deepEqual(draftEpisode({...base,pattern:{kind:'days',share:0.3,seed:'flu'}}).episode.pattern,{kind:'days',share:0.3,strength:[1,1],workdays:true,independent:false,seed:'flu'},'a draft without controls keeps its own pattern (and seed)');
+ assert.equal(draftEpisode({...base,strike:{...spikes,count:' 6 ',strMin:'70.5'}}).episode.pattern.strength[0],0.705);
+ // Invalid, each with its own message.
+ const bad=(patch,re,msg)=>assert.match(draftEpisode({...base,strike:{...spikes,...patch}}).error,re,msg);
+ bad({kind:'bursts'},/every day, spikes or scattered days/);
+ for(const count of ['','2.5','0','61','x'])bad({count},/how many is a whole number, 1–60/,`count ${JSON.stringify(count)}`);
+ for(const lenMin of ['','0','1.5','31'])bad({lenMin},/Days each is a whole number of days, 1–30/,`length ${JSON.stringify(lenMin)}`);
+ bad({lenMax:'31'},/1–30/);bad({lenMin:'3',lenMax:'2'},/Days each: the first number is more than the second/);
+ for(const share of ['','0','-5','101','x'])bad({kind:'days',share},/share of days is above 0% and up to 100%/,`share ${JSON.stringify(share)}`);
+ for(const [strMin,strMax] of [['-1','100'],['0','101'],['','100'],['0','x']])bad({strMin,strMax},/Strength is 0–100%/,`strength ${strMin}–${strMax}`);
+ bad({strMin:'80',strMax:'60'},/Strength: the first number is more than the second/);bad({strMin:'0',strMax:'0'},/Strength must reach above 0%/);
+ assert.match(draftEpisode({...base,from:'2026-01-12',to:'2026-01-14',strike:{...spikes,count:'4'}}).error,/4 spikes do not fit in 3 working days/,'more spikes than working days');
+ assert.equal(draftEpisode({...base,from:'2026-01-12',to:'2026-01-14',strike:{...spikes,count:'3',workdays:false}}).error,undefined);
+ assert.match(draftEpisode({...base,from:'2026-01-10',to:'2026-01-11',strike:{...spikes,kind:'days'}}).error,/no working days between the start and the end/,'a weekend has no working days');
+ assert.match(draftEpisode({...base,from:'2026-01-10',to:'2026-01-11',strike:{...spikes,count:'2',workdays:false}}).error??'',/^$/,'every day of a weekend counts without working days only');
+ assert.match(draftEpisode({...base,settings:{},strike:spikes}).error,/at least one setting/,'the episode\'s own checks come first');
+ assert.equal(windowDays('2026-01-12','2026-01-18'),5);assert.equal(windowDays('2026-01-12','2026-01-18',false),7);assert.deepEqual(draftPattern(null),{pattern:null});
+});
+
+test('sporadic episodes: labels, library lines, the struck days matched by id, and the chart ticks',async()=>{
+ const {patternLabel,scenarioPatternLine,episodeStrikes,strikeTitle}=await import('../dist/year-page.js');
+ const spikes={kind:'spikes',count:6,length:[1,2],strength:[0.7,1]},days={kind:'days',share:0.3,strength:[0.2,1],independent:true};
+ assert.equal(patternLabel(spikes),'6 spikes · 1–2 d');assert.equal(patternLabel(spikes,9),'6 spikes · 1–2 d · 9 days struck');assert.equal(patternLabel({kind:'spikes',count:1,length:3},1),'1 spike · 3 d · 1 day struck');
+ assert.equal(patternLabel(days),'30% of working days · mixed');assert.equal(patternLabel({kind:'days',share:0.125,workdays:false},0),'12.5% of days · 0 days struck');assert.equal(patternLabel(null),'');
+ assert.equal(scenarioPatternLine({episodes:[{durationDays:182,pattern:spikes}]}),'Sporadic: 6 spikes of 1–2 days over 6 months');
+ assert.equal(scenarioPatternLine({episodes:[{durationDays:122,pattern:days}]}),'Sporadic: 30% of working days over 4 months, a different mix each day');
+ assert.equal(scenarioPatternLine({episodes:[{durationDays:21,pattern:{kind:'spikes',count:2,length:1}},{durationDays:null,pattern:{kind:'days',share:.1,workdays:false}}]}),'Sporadic: 2 spikes of 1 day over 3 weeks; 10% of days to the year end');
+ assert.equal(scenarioPatternLine(LIBRARY.scenarios[0]),'','a steady scenario has no line');
+ const eps=[{id:'EP-1',title:'Head end down',from:'2026-01-12',to:'2026-07-12',pattern:spikes},{id:'EP-2',title:'Off sick',from:'2026-03-02',to:null,pattern:days},{id:'EP-3',title:'Steady',from:'2026-02-01',to:null}];
+ const trend={episodes:[{id:'EP-2',title:'Off sick',from:'2026-03-02',to:'2026-12-31',pattern:{kind:'days',share:0.3,strength:[0.2,1.0],workdays:true,independent:true},hits:[['2026-03-03',0.6],['2026-03-10',0.25]]},
+  {id:'EP-1',title:'Head end down',from:'2026-01-12',to:'2026-07-12',pattern:{kind:'spikes',count:6,length:[1,2],strength:[0.7,1.0],workdays:true,independent:false},hits:[['2026-01-20',0.885],['2026-01-21',0.885],['2026-02-13',0.71]]},
+  {id:'EP-3',title:'Steady',from:'2026-02-01',to:'2026-12-31'},{id:'EP-9',title:'Gone',from:'2026-01-01',to:'2026-12-31',pattern:spikes,hits:[['2026-01-02',1]]}]};
+ const hits=episodeStrikes(trend,eps);assert.deepEqual([...hits.keys()].sort(),['EP-1','EP-2'],'matched by id; a steady episode and one no longer here are not');
+ assert.deepEqual(hits.get('EP-1'),[['2026-01-20',0.885],['2026-01-21',0.885],['2026-02-13',0.71]]);assert.equal(hits.get('EP-2').length,2);
+ assert.equal(episodeStrikes(trend,[{...eps[0],pattern:{...spikes,count:5}}]).size,0,'a trend for another shape of the episode is not drawn');
+ assert.equal(episodeStrikes(trend,[{...eps[0],to:'2026-06-30'}]).size,0,'nor one for another window');assert.equal(episodeStrikes(trend,[{...eps[0],pattern:undefined}]).size,0,'nor for an episode now steady');
+ assert.equal(episodeStrikes(null,eps).size,0);assert.equal(strikeTitle(eps[0],'2026-02-13',0.885),'Head end down · Fri 13 Feb 2026 · strength 89%');
+ const model=chartModel(CHARTS[0],fakeTrend());const svg=chartSvg(model,{asOf:'2026-03-15',episodes:eps,strikes:hits,id:'s'});
+ assert.equal((svg.match(/class="yr-band is-sporadic"/g)||[]).length,2,'a sporadic episode\'s band is faint');assert.equal((svg.match(/class="yr-band"/g)||[]).length,1,'a steady one as before');
+ const ticks=[...svg.matchAll(/<path class="yr-strike" d="([^"]+)"/g)].map(x=>x[1].match(/M/g).length);assert.deepEqual(ticks,[3,2],'one tick per struck day, per episode');
+ assert.match(svg,/6 spikes · 1–2 d · 3 days struck/);assert.doesNotMatch(chartSvg(model,{episodes:eps,id:'t'}),/yr-strike/,'before the trend: the faint band alone');
+});

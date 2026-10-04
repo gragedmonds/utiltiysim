@@ -513,10 +513,13 @@ class AnomaliesConfig(BaseModel):
 class ReadingConfig(BaseModel):
     model_config = group("Meter reading", 14, "How periodic billing reads succeed or fail, by meter technology.",
                          applies="run")
-    ami_missed_read: float = F(0.012, "AMI billing reads still missing after the head-end retry window.", ge=0, le=0.5,
+    ami_missed_read: float = F(0.012, "AMI billing reads still missing after the head-end retry window (1: a day "
+                                      "the head end is down).", ge=0, le=1,
                                effects=["comm-fail exceptions", "estimates"])
-    amr_missed_read: float = F(0.03, "Drive-by reads missed (no signal, street skipped).", ge=0, le=0.5)
-    manual_no_access: float = F(0.06, "Manual reads with no access (locked gate, dog, meter inside).", ge=0, le=0.8,
+    amr_missed_read: float = F(0.03, "Drive-by reads missed (no signal, street skipped; 1: the van does not go out).",
+                               ge=0, le=1)
+    manual_no_access: float = F(0.06, "Manual reads with no access (locked gate, dog, meter inside; 1: nobody "
+                                      "walks the route).", ge=0, le=1,
                                 effects=["no-access exceptions", "consecutive estimates"])
     no_access_repeat: float = F(0.4, "Chance a missed manual read is missed again the next month.", ge=0, le=1,
                                 advanced=True)
