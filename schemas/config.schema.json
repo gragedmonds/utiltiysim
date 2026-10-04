@@ -1988,7 +1988,7 @@
           "minimum": 0,
           "title": "Deferred Pole Failures",
           "type": "number",
-          "x-impact": "How likely an overdue pole replacement fails: outages, outage reports and repairs on the line crews.",
+          "x-impact": "How likely an overdue pole replacement fails: an outage (use lost, AMI meters dark), outage reports and repairs on the line crews.",
           "x-reach": "year"
         },
         "deferred_tree_faults": {
@@ -1998,7 +1998,7 @@
           "minimum": 0,
           "title": "Deferred Tree Faults",
           "type": "number",
-          "x-impact": "How likely a span overdue for trimming faults on a storm day: outages and outage reports.",
+          "x-impact": "How likely a span overdue for trimming faults on a storm day: an outage (use lost, AMI meters dark) and outage reports.",
           "x-reach": "year"
         },
         "disconnect": {
@@ -3206,7 +3206,7 @@
           "description": "Draw outages and leaks across the year.",
           "title": "Enabled",
           "type": "boolean",
-          "x-impact": "Draw the operations day's incidents for every day of the year. Off: outage and gas odour contacts are background only.",
+          "x-impact": "Draw the operations day's incidents for every day of the year: customers out lose their use and AMI meters go dark. Off: no outages, and outage and gas odour contacts are background only.",
           "x-reach": "year"
         },
         "incident_factor": {
@@ -3216,7 +3216,7 @@
           "minimum": 0,
           "title": "Incident Factor",
           "type": "number",
-          "x-impact": "Multiplies every incident rate: more outages, main breaks and gas leaks, and the contacts they bring.",
+          "x-impact": "Multiplies every incident rate: more outages, main breaks and gas leaks, the use they cut and the contacts they bring.",
           "x-reach": "year"
         },
         "restore_factor": {
@@ -3226,7 +3226,7 @@
           "minimum": 0.1,
           "title": "Restore Factor",
           "type": "number",
-          "x-impact": "Multiplies the time to restore service: longer outages bring twice the outage reports past two hours.",
+          "x-impact": "Multiplies the time to restore service: more use lost, more AMI reads falling inside an outage, and twice the outage reports past two hours.",
           "x-reach": "year"
         },
         "storm_factor": {
@@ -3236,7 +3236,7 @@
           "minimum": 0,
           "title": "Storm Factor",
           "type": "number",
-          "x-impact": "Multiplies the chance of a storm day: more overhead line faults, outages and outage reports, mostly May to September.",
+          "x-impact": "Multiplies the chance of a storm day: more overhead line faults, outages (use lost, a read missed when one falls inside) and outage reports, mostly May to September.",
           "x-reach": "year"
         }
       },

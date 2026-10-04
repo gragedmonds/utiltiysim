@@ -463,10 +463,10 @@ The operations day's background incidents drawn for every day of the year (same 
 
 | Field | Reaches | Default | Range | Unit | Description | How it changes the results |
 |---|---|---|---|---|---|---|
-| `enabled` | year | `True` |  |  | Draw outages and leaks across the year. | Draw the operations day's incidents for every day of the year. Off: outage and gas odour contacts are background only. |
-| `storm_factor` | year | `1.0` | 0–30 |  | Multiplies the chance that a day is a storm day. | Multiplies the chance of a storm day: more overhead line faults, outages and outage reports, mostly May to September. |
-| `incident_factor` | year | `1.0` | 0–30 |  | Multiplies every incident rate (leaks, breaks, failures, faults). | Multiplies every incident rate: more outages, main breaks and gas leaks, and the contacts they bring. |
-| `restore_factor` | year | `1.0` | 0.1–20 |  | Multiplies the time to restore service. | Multiplies the time to restore service: longer outages bring twice the outage reports past two hours. |
+| `enabled` | year | `True` |  |  | Draw outages and leaks across the year. | Draw the operations day's incidents for every day of the year: customers out lose their use and AMI meters go dark. Off: no outages, and outage and gas odour contacts are background only. |
+| `storm_factor` | year | `1.0` | 0–30 |  | Multiplies the chance that a day is a storm day. | Multiplies the chance of a storm day: more overhead line faults, outages (use lost, a read missed when one falls inside) and outage reports, mostly May to September. |
+| `incident_factor` | year | `1.0` | 0–30 |  | Multiplies every incident rate (leaks, breaks, failures, faults). | Multiplies every incident rate: more outages, main breaks and gas leaks, the use they cut and the contacts they bring. |
+| `restore_factor` | year | `1.0` | 0.1–20 |  | Multiplies the time to restore service. | Multiplies the time to restore service: more use lost, more AMI reads falling inside an outage, and twice the outage reports past two hours. |
 
 ## Field work
 
@@ -489,8 +489,8 @@ The work the field crews do over the year and the crews that do it: customer eme
 | `dead_battery_miss` | year | `0.9` | 0–1 |  | Share of reads a radio module misses once its battery has died (past its life and not replaced): estimates follow. | Reads a module misses once its battery died (not replaced by its anniversary): estimates, estimation cases and contacts follow. |
 | `failed_lot_drift` | year | `0.04` | 0–0.5 |  | Under-registration of a failed seal lot's meters, from the failed test until each is exchanged. | How much a failed seal lot's meters under-register until exchanged: less billed against the truth while the exchanges wait. |
 | `old_water_meter_drift` | year | `0.03` | 0–0.5 |  | Under-registration of water meters at or past their service life, until replaced (read at the start of the year). | How much water meters past their life under-register until replaced: the revenue a replacement programme recovers. |
-| `deferred_pole_failures` | year | `2.0` | 0–100 |  | Chance a year that a pole found needing replacement fails once its replacement is overdue (ten times as likely on a storm day): an outage. | How likely an overdue pole replacement fails: outages, outage reports and repairs on the line crews. |
-| `deferred_tree_faults` | year | `0.02` | 0–1 |  | Chance on a storm day that an overhead span overdue for trimming faults: an outage. | How likely a span overdue for trimming faults on a storm day: outages and outage reports. |
+| `deferred_pole_failures` | year | `2.0` | 0–100 |  | Chance a year that a pole found needing replacement fails once its replacement is overdue (ten times as likely on a storm day): an outage. | How likely an overdue pole replacement fails: an outage (use lost, AMI meters dark), outage reports and repairs on the line crews. |
+| `deferred_tree_faults` | year | `0.02` | 0–1 |  | Chance on a storm day that an overhead span overdue for trimming faults: an outage. | How likely a span overdue for trimming faults on a storm day: an outage (use lost, AMI meters dark) and outage reports. |
 | `deferred_leak_escalation` | year | `1.0` | 0–100 |  | Chance a year that a leak found by survey becomes a public gas leak (odour calls, an emergency) once its repair is overdue. | How likely a surveyed leak overdue for repair becomes a public gas leak: odour calls and emergency response. |
 | `construction_start_month` | year | `4` | 1–12 |  | First month of the construction season (digging is frost-free). | First month of the construction season: new services, upgrades, AMI conversion and main renewal wait for it. |
 | `construction_end_month` | year | `11` | 1–12 |  | Last month of the construction season. | Last month of the construction season: work not built by then waits for next year. |
