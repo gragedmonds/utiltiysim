@@ -145,7 +145,7 @@ def build_water(ctx: NetContext) -> Network:
         t = prem_tap[i]
         meter_xy = meter_w[i]
         mid = net.add_node(meter_node_id("water", prem.ids[i]), "meter", meter_xy, premiseId=prem.ids[i],
-                           servicePointId=service_point_id(prem.ids[i], "water"))
+                           servicePointId=service_point_id(prem.ids[i], "water") if ctx.cfg.serves("water") else None)
         peak_lps = avg[i] * 8.0
         mm, label = 19, '3/4" copper'
         if prem.ptype[i] != 0 or prem.attrs["irrigation"][i] or prem.lot_area[i] > 1500:

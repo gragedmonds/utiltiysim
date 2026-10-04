@@ -272,6 +272,7 @@ Accounts, reading routes, calendars and tariffs.
 
 | Field | Reaches | Default | Range | Unit | Description | How it changes the results |
 |---|---|---|---|---|---|---|
+| `services` | town | `['electric', 'water', 'gas']` |  |  | The services your utility provides in this town. The networks are there either way; for a service you do not provide, another utility runs it: no accounts, meters, reads, bills, crews, maintenance or calls of yours, and its settings do not apply. *Affects: accounts and meters, bills, field work, outage and odour calls.* | The services your utility provides here. For a service it does not provide, another utility runs the network: no accounts, meters, reads, bills, crews, maintenance, incidents or calls of yours, and its settings do not apply. A new town (the networks are the same; the customers change). |
 | `mru_target_meters` | town | `450` | 50–3000 |  | Target premises per meter reading unit (route). *Affects: route count, read workload per day.* | Premises per reading route. Every town gets at least one route per billing portion (21), so it only bites above about 9,500 premises; then smaller routes mean more of them and a different split of AMI, AMR and walked routes. |
 | `bill_cycles` | town | `21` | 1–31 |  | Billing portions per month (one per working day). | Billing portions per month: how reads and bills spread across working days, so daily queue load and when bills go out. |
 | `currency` | display | `CAD` |  |  | Billing currency. | The currency label on bills. Amounts do not change. |

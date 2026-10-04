@@ -70,7 +70,7 @@ class UsageInputs:
                    np.array([ERA_NAMES.index(p["era"]) for p in ps], dtype=np.int64), col("floorAreaM2"),
                    col("occupants"), col("occupied", bool), np.array([p["heatingFuel"] for p in ps]),
                    col("hasAC", bool), col("hasEV", bool), col("hasPool", bool), col("irrigation", bool),
-                   np.array([bool((p.get("services") or {}).get("gas")) for p in ps]), col("solarKW"))
+                   np.array(["gas" in (p.get("connections") or p.get("services") or {}) for p in ps]), col("solarKW"))
 
 
 def monthly_typical_day(u: UsageInputs, cfg, year: int = 2026) -> dict[str, np.ndarray]:

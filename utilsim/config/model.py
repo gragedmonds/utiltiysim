@@ -14,17 +14,24 @@ from typing import Any, Literal
 import orjson
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from utilsim.config.impact import IMPACT, REACHES, REMOVED
+from utilsim.config.impact import IMPACT, REACHES, REMOVED, SERVICES_OF
 from utilsim.version import GENERATOR_VERSION
+
+SERVICES = ("electric", "water", "gas")  # what a utility can serve, in canonical order
 
 
 def F(default: Any, description: str, *, unit: str | None = None, ge: float | None = None,
       le: float | None = None, advanced: bool = False, effects: list[str] | None = None,
-      not_modelled: str | None = None, deprecated: tuple[str, str] | None = None, **kw: Any):
+      not_modelled: str | None = None, deprecated: tuple[str, str] | None = None,
+      services: tuple[str, ...] | None = None, **kw: Any):
     """A config field with its UI hints. ``not_modelled``: why the engine does not use it yet (``x-status:
     not-modelled`` + ``x-status-reason``). ``deprecated``: (replacement, reason) for a field another setting replaces
-    (``x-status: deprecated``, ``x-deprecated``, ``x-status-reason``). A viewer shows both disabled with the reason."""
+    (``x-status: deprecated``, ``x-deprecated``, ``x-status-reason``). A viewer shows both disabled with the reason.
+    ``services``: the setting matters only when the utility serves one of these (``x-services``); a viewer shows it
+    as not applicable otherwise (``customers_billing.services``)."""
     extra: dict[str, Any] = {}
+    if services:
+        extra["x-services"] = list(services)
     if unit:
         extra["x-unit"] = unit
     if advanced:
@@ -428,6 +435,11 @@ class RateBlock(BaseModel):
 
 class CustomersBillingConfig(BaseModel):
     model_config = group("Customers & billing", 10, "Accounts, reading routes, calendars and tariffs.")
+    services: list[Literal["electric", "water", "gas"]] = F(
+        list(SERVICES), "The services your utility provides in this town. The networks are there either way; for a "
+        "service you do not provide, another utility runs it: no accounts, meters, reads, bills, crews, maintenance "
+        "or calls of yours, and its settings do not apply.",
+        effects=["accounts and meters", "bills", "field work", "outage and odour calls"])
     mru_target_meters: int = F(450, "Target premises per meter reading unit (route).", ge=50, le=3000,
                                effects=["route count", "read workload per day"])
     bill_cycles: int = F(21, "Billing portions per month (one per working day).", ge=1, le=31)
@@ -449,6 +461,19 @@ class CustomersBillingConfig(BaseModel):
     late_payer_share: float = F(0.14, "Share that pay late.", ge=0, le=1)
     pre_authorized_share: float = F(0.45, "Share on pre-authorized debit.", ge=0, le=1, advanced=True)
     due_days: int = F(20, "Days from invoice to due date.", ge=5, le=60)
+
+    @model_validator(mode="after")
+    def _services(self):
+        got = list(self.services)
+        if not got:
+            raise ValueError("customers_billing.services: the utility serves at least one of electric, water, gas")
+        if len(set(got)) != len(got):
+            raise ValueError("customers_billing.services: each service once")
+        self.services = [s for s in SERVICES if s in got]  # canonical order
+        return self
+
+    def serves(self, commodity: str) -> bool:
+        return commodity in self.services
 
 
 class ProcessConfig(BaseModel):
@@ -977,11 +1002,18 @@ class SimConfig(BaseModel):
 
     # ---- identity ---------------------------------------------------------------------------------------------
     def generation_dict(self) -> dict[str, Any]:
-        """The part of the config that determines the generated town and its fixtures."""
+        """The part of the config that determines the generated town and its fixtures. A utility serving every
+        service leaves ``customers_billing.services`` out, so the towns made before it keep their ids."""
         d = self.model_dump(mode="json")
         for k in ("name", "description", *RUN_GROUPS):
             d.pop(k, None)
+        if d.get("customers_billing", {}).get("services") == list(SERVICES):
+            d["customers_billing"].pop("services")
         return d
+
+    def serves(self, commodity: str) -> bool:
+        """Whether the utility provides ``commodity`` in this town (``customers_billing.services``)."""
+        return commodity in self.customers_billing.services
 
     def canonical_json(self) -> bytes:
         return orjson.dumps(self.generation_dict(), option=orjson.OPT_SORT_KEYS)
@@ -1006,6 +1038,8 @@ def annotate_group(name: str, group_schema: dict[str, Any]) -> dict[str, Any]:
         hit = IMPACT.get(f"{name}.{key}")
         if hit:
             prop["x-reach"], prop["x-impact"] = hit
+        if f"{name}.{key}" in SERVICES_OF:
+            prop["x-services"] = list(SERVICES_OF[f"{name}.{key}"])
     return group_schema
 
 

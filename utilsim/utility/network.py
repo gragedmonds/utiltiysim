@@ -33,8 +33,10 @@ ASSETS = {
 _KIND = {k: i for i, k in enumerate(ASSETS)}
 
 
-def layout(districts: list[str], *, per_circuit: int = 4, per_main: int = 4, per_gate: int = 6) -> dict:
-    """The shared assets over ``districts`` (in order: neighbours share assets) and the districts each one feeds."""
+def layout(districts: list[str], *, per_circuit: int = 4, per_main: int = 4, per_gate: int = 6,
+           services=("electric", "water", "gas")) -> dict:
+    """The shared assets over ``districts`` (in order: neighbours share assets) and the districts each one feeds;
+    only the networks of the utility's ``services`` (another utility runs the others, upstream too)."""
     if not districts:
         raise ValueError("a utility needs at least one district")
     if min(per_circuit, per_main, per_gate) < 1:
@@ -48,6 +50,7 @@ def layout(districts: list[str], *, per_circuit: int = 4, per_main: int = 4, per
               *runs("M", "main", per_main), *runs("G", "gate", per_gate)]
     for a in assets:
         a["utility"] = ASSETS[a["kind"]][0]
+    assets = [a for a in assets if a["utility"] in services]
     return {"schemaVersion": LAYOUT_VERSION, "districts": list(districts), "assets": assets}
 
 

@@ -89,13 +89,25 @@ def build_customers(town) -> Customers:
     U = hash_u01(seed, Purpose.CUSTOMER, keys[:, None], np.arange(16)[None, :])
     cust = Customers()
     a = prem.attrs
+    # The services the utility provides (customers_billing.services): a premise is a customer when one of its
+    # connections is served; another utility serves the rest. Serving every service, every premise is a customer.
+    served = list(cb.services)
+    physical = np.stack([np.ones(n, dtype=bool), np.ones(n, dtype=bool), a["has_gas"].astype(bool)])
+    customer = physical[[("electric", "water", "gas").index(c) for c in served]].any(0)
+    if not customer.any():
+        raise ValueError(f"no premise takes the services the utility provides ({', '.join(served)}): "
+                         "with no gas mains in the town, serve electric or water too")
 
     # ---------------- routes (MRUs), portions, technology
     minx, miny, maxx, maxy = town.bounds
     hx = (prem.xy[:, 0] - minx) / max(maxx - minx, 1)
     hy = (prem.xy[:, 1] - miny) / max(maxy - miny, 1)
     order = np.argsort(_hilbert(hx, hy), kind="stable")
-    n_routes = max(math.ceil(n / cb.mru_target_meters), min(cb.bill_cycles, math.ceil(n / 25)))
+    n_cust = n
+    if not customer.all():  # routes over the customers only (the order of the others is kept out)
+        order = order[customer[order]]
+        n_cust = len(order)
+    n_routes = max(math.ceil(n_cust / cb.mru_target_meters), min(cb.bill_cycles, math.ceil(n_cust / 25)))
     chunks = np.array_split(order, n_routes)
     r_u = hash_u01(seed, Purpose.ROUTE, np.arange(n_routes))
     rank = np.argsort(r_u, kind="stable")
@@ -105,8 +117,8 @@ def build_customers(town) -> Customers:
     tech[rank[:n_ami]] = "AMI"
     tech[rank[n_ami:n_ami + n_amr]] = "AMR"
     tech[rank[n_ami + n_amr:]] = "MANUAL"
-    mru_of = np.empty(n, dtype=np.int64)
-    seq_of = np.empty(n, dtype=np.int64)
+    mru_of = np.full(n, -1, dtype=np.int64)
+    seq_of = np.zeros(n, dtype=np.int64)
     for r, ch in enumerate(chunks):
         mru_of[ch] = r
         seq_of[ch] = np.arange(1, len(ch) + 1)
@@ -130,7 +142,7 @@ def build_customers(town) -> Customers:
             d = scheduled_read_date(READ_YEAR, mo, int(portion_of_route[r]))
             cust.read_schedules.append({"mruId": f"MRU-{r + 1:03d}", "period": f"{READ_YEAR}-{mo:02d}",
                                         "scheduledReadDate": d.isoformat(), "billingDate": d.isoformat()})
-    route_tech = tech[mru_of]
+    route_tech = np.where(mru_of >= 0, tech[np.maximum(mru_of, 0)], None)
     ami_year_of_route = 2014 + (hash_u01(seed, Purpose.AMI_ROLLOUT, np.arange(n_routes)) * 6).astype(int)
 
     # ---------------- AMI collectors (greedy k-centre over AMI meters, snapped to poles/tank/substation sites)
@@ -175,7 +187,7 @@ def build_customers(town) -> Customers:
                 "collectors": collectors, "pollWindowLocal": [cfg.ami.poll_start_hour, cfg.ami.poll_end_hour]}
 
     # ---------------- tariffs
-    cust.tariffs = [
+    tariffs = [
         {"id": "RES-E", "commodity": "electric", "fixedMonthly": cb.electric_fixed_monthly,
          "energyBlocks": [b.model_dump() for b in cb.electric_blocks], "variableDelivery": cb.electric_variable_delivery,
          "netMeteringCredit": cb.net_metering_credit, "taxRate": cb.tax_rate, "currency": cb.currency},
@@ -187,6 +199,7 @@ def build_customers(town) -> Customers:
         {"id": "COM-G", "commodity": "gas", "basedOn": "RES-G"},
         {"id": "COM-W", "commodity": "water", "basedOn": "RES-W"},
     ]
+    cust.tariffs = [t for t in tariffs if t["commodity"] in served]
 
     # ---------------- monthly energy for reads
     energy = monthly_energy(prem, cfg)
@@ -200,6 +213,8 @@ def build_customers(town) -> Customers:
                                                         max(0.0, 1 - cb.on_time_payer_share - cb.late_payer_share)])
     pay_names = np.array(["on_time", "late", "at_risk"])
     for i in range(n):
+        if not customer[i]:  # another utility's customer only: no partner, account, route or service of ours
+            continue
         pid = prem.ids[i]
         ptype = int(prem.ptype[i])
         u = U[i]
@@ -253,7 +268,7 @@ def build_customers(town) -> Customers:
                  "accountId": ca_current}
         cust.premise_extra[pid] = extra
         # Services.
-        commodities = ["electric", "water"] + (["gas"] if a["has_gas"][i] else [])
+        commodities = [c for c in ["electric", "water"] + (["gas"] if a["has_gas"][i] else []) if c in served]
         for c in ("electric", "water", "gas"):
             if c not in commodities:
                 continue

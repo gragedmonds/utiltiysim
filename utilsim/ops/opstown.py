@@ -110,7 +110,7 @@ class OpsTown:
             key = (r["premiseId"], r["commodity"], r.get("direction", "import"))
             if r.get("readAt") and (key not in self.last_reads or r["readAt"] > self.last_reads[key]["readAt"]):
                 self.last_reads[key] = r
-        has_gas = np.array([bool(p["services"].get("gas")) for p in prem])
+        has_gas = np.array(["gas" in (p.get("connections") or p["services"]) for p in prem])  # connected, whoever serves it
         n = len(prem)
         self.flow_inputs = FlowInputs(
             nets={u: self._net_inputs(u, snap["networks"][u]) for u in UTILITIES},

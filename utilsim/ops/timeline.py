@@ -309,6 +309,8 @@ class Run:
         items, info = draw(self.ops, d, self.settings, seed)
         out = []
         for n, b in enumerate(items, start=1):
+            if b["utility"] in UTILITIES and not cfg.serves(b["utility"]):
+                continue  # another utility's network: its incidents are not this utility's (the others keep their ids)
             net = self.ops.nets.get(b["utility"])
             payload = {"utility": b["utility"], "x": b["x"], "z": b["z"], "incident": b["kind"]}
             if "edge" in b:

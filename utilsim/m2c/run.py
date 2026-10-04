@@ -539,7 +539,10 @@ class M2CRun:
         # Events upstream of the town (utilsim/m2c/upstream.py): its supply lost in the utility's wider networks.
         from utilsim.m2c import upstream as up
 
-        self.upstream = up.parse(upstream, self.cal)
+        self.upstream = up.parse(upstream, self.cal, self.cfg.customers_billing.services)
+        if self.upstream and self.upstream.get("skipped"):
+            self.warnings.append(f"upstream events on a service another utility provides were left out: "
+                                 f"{', '.join(self.upstream['skipped'][:5])}")
         if self.upstream and self.upstream["events"] and ops_factory is None:
             raise ValueError("upstream events need the town's networks (a run with its operations model)")
         self.storm_seed = self.upstream["stormSeed"] if self.upstream else None
@@ -675,7 +678,7 @@ class M2CRun:
         """Interruptions from the operations simulator: ``{day, utility, start, end, premiseIds}``, where start and
         end are seconds since local midnight of ``day`` (end may run past midnight, up to a week). ``utility: "ami"``
         is an AMI collector outage: the premises keep their service, but their AMI meters cannot report."""
-        out, unknown = [], 0
+        out, unknown, other = [], 0, 0
         for k, o in enumerate(outages):
             day = self.cal.parse_day(o.get("day"), -1)
             if not 0 <= day < self.cal.days:
@@ -692,10 +695,15 @@ class M2CRun:
                 raise ValueError(f"outage {k}: premiseIds lists the premises that lost service")
             known = sorted({p for p in pids if p in self.town.premise_index})
             unknown += len(set(pids)) - len(known)
+            if o["utility"] != "ami" and not self.cfg.serves(o["utility"]):
+                other += 1  # another utility's network: not this utility's customers or work
+                continue
             out.append({"id": o.get("id") or f"OUT-{k + 1}", "day": self.cal.date_of(day).isoformat(), "utility": o["utility"],
                         "start": float(start), "end": float(end), "premiseIds": known})
         if unknown:
             self.warnings.append(f"{unknown} outage premise id(s) are not in this town and were ignored")
+        if other:
+            self.warnings.append(f"{other} outage(s) on a service another utility provides were left out")
         return out
 
     def _u(self, purpose: int, *keys) -> np.ndarray:

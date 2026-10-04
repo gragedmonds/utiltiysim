@@ -34,8 +34,9 @@ LABELS = {"electric": "Supply lost upstream (transmission)", "water": "Water sup
           "gas": "Gas supply lost upstream"}
 
 
-def parse(upstream: dict | None, cal) -> dict | None:
-    """``{stormSeed, events: [...with t0, t1 (run days)], byDay: {day: [events]}}``; ValueError for a bad input."""
+def parse(upstream: dict | None, cal, served=None) -> dict | None:
+    """``{stormSeed, events: [...with t0, t1 (run days)], byDay: {day: [events]}}``; ValueError for a bad input.
+    ``served``: the utility's services; an event on a network another utility serves is left out (``skipped``)."""
     if not upstream:
         return None
     if not isinstance(upstream, dict) or set(upstream) - {"schemaVersion", "stormSeed", "events"}:
@@ -72,10 +73,12 @@ def parse(upstream: dict | None, cal) -> dict | None:
         out.append({"id": ident, "utility": e["utility"], "day": day, "t0": day + start / 86400.0,
                     "t1": day + end / 86400.0, "label": str(e.get("label") or LABELS[e["utility"]])[:120],
                     "storm": bool(e.get("storm", False))})
+    skipped = [e["id"] for e in out if served is not None and e["utility"] not in served]
+    out = [e for e in out if e["id"] not in skipped]
     by_day: dict[int, list[dict]] = {}
     for e in sorted(out, key=lambda x: (x["t0"], x["id"])):
         by_day.setdefault(e["day"], []).append(e)
-    return {"stormSeed": seed, "events": out, "byDay": by_day}
+    return {"stormSeed": seed, "events": out, "byDay": by_day, **({"skipped": skipped} if skipped else {})}
 
 
 def incident(run, ops, ev: dict) -> dict:

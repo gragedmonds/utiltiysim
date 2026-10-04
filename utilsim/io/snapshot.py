@@ -107,8 +107,10 @@ def build_snapshot(town, *, include_reads: bool = True, units: str | None = None
         fx, fy = prem.front_xy[i]
         rd = int(prem.edge[i])
         premises.append({
-            "id": pid, "uid": prem.uid[i], "buildingId": f"B-{pid}", "accountId": ex.get("accountId") or f"CA-{pid}",
-            "businessPartnerId": (ex.get("accountId") or f"CA-{pid}").replace("CA-", "BP-", 1),
+            "id": pid, "uid": prem.uid[i], "buildingId": f"B-{pid}",
+            "accountId": ex.get("accountId") or (None if cust and not ex else f"CA-{pid}"),
+            "businessPartnerId": (ex.get("accountId") or f"CA-{pid}").replace("CA-", "BP-", 1)
+            if not (cust and not ex) else None,
             "address": f"{int(prem.number[i])} {prem.street[i]}", "street": prem.street[i],
             "houseNumber": int(prem.number[i]), "x": _r(prem.xy[i, 0]), "z": _r(-prem.xy[i, 1]),
             "angle": round(angle, 5), "side": side, "roadId": f"R-{rd}",
@@ -120,6 +122,11 @@ def build_snapshot(town, *, include_reads: bool = True, units: str | None = None
             "dailyWaterM3": float(daily["dailyWaterM3"][i]), "dailyGasM3": float(daily["dailyGasM3"][i]),
             "roofTone": float(a["roof_tone"][i]), "billingCycle": int(ex.get("billingCycle", 1)),
             "services": services_of[pid],
+            # The networks the premise is connected to, when the utility does not serve them all (another utility
+            # serves the rest); absent when they are the same as ``services``.
+            **({"connections": conn} if (conn := [c for c in ("electric", "water", "gas")
+                                                   if c != "gas" or a["has_gas"][i]]) != list(services_of[pid])
+               and cust else {}),
             "premiseType": PTYPE[int(prem.ptype[i])], "buildingType": prem.building_type[i],
             "stories": int(prem.stories[i]), "roof": prem.roof[i], "yearBuilt": int(a["year_built"][i]),
             "era": ERA_NAMES[int(prem.era[i])], "districtId": f"D-{int(prem.district[i]) + 1:02d}",
