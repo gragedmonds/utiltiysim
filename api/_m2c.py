@@ -7,12 +7,14 @@ view *as of* a date. Warm instances keep the last few runs, so scrubbing dates a
 
 from __future__ import annotations
 
+import base64
+import zlib
 from collections import OrderedDict
 from typing import Any, Literal
 
 import numpy as np
 import orjson
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import Response
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
@@ -710,6 +712,114 @@ def post_table_csv(req: TableCsvRequest):
     name = f"{town_key(req.town)}-{req.table}-{req.asOf or 'asof'}-p{req.page}.csv"
     return Response(text, media_type="text/csv; charset=utf-8",
                     headers={"Content-Disposition": f'inline; filename="{name}"'})
+
+
+# ---- connecting other systems: a table as a link ------------------------------------------------------------------
+# A run is stateless (every request carries its inputs), so a link carries them too: the table request without its
+# page, as compact JSON, deflated and base64url-encoded (``r1.`` + data). Anyone with the link reads the same table of
+# the same run; a different run date, setting or scenario is a different link.
+LINK_PREFIX = "r1."
+LINK_MAX = 12_000  # characters in the token: a URL every tool accepts
+LINK_RAW_MAX = 2_000_000  # bytes of JSON a token may inflate to
+LINK_VERSION = "m2c-table-link/1.0"
+EXPORT_JSON_PAGE = 1000
+
+
+def link_token(req: TableRequest) -> str:
+    """The token for ``req``'s table selection and run (its page left out)."""
+    body = req.model_dump(by_alias=True, exclude_none=True, exclude={"page", "pageSize"})
+    raw = orjson.dumps(body, option=orjson.OPT_SORT_KEYS)
+    return LINK_PREFIX + base64.urlsafe_b64encode(zlib.compress(raw, 9)).rstrip(b"=").decode()
+
+
+def link_request(token: str, table: str, page: int, page_size: int) -> TableCsvRequest:
+    """The table request a token stands for (HTTP 400 when it is not one; 422 when its request is not valid)."""
+    if not token.startswith(LINK_PREFIX) or len(token) > LINK_MAX:
+        raise HTTPException(400, "run: not a table link (copy it again from the Data page's Connect panel)")
+    try:
+        data = base64.urlsafe_b64decode(token[len(LINK_PREFIX):] + "=" * (-len(token) % 4))
+        inflate = zlib.decompressobj()
+        raw = inflate.decompress(data, LINK_RAW_MAX)
+        if inflate.unconsumed_tail:
+            raise ValueError("too large")
+        body = orjson.loads(raw)
+    except (ValueError, zlib.error, orjson.JSONDecodeError) as exc:
+        raise HTTPException(400, "run: not a table link (copy it again from the Data page's Connect panel)") from exc
+    if not isinstance(body, dict):
+        raise HTTPException(400, "run: not a table link")
+    if body.get("table") != table:
+        raise HTTPException(400, f"run: this link is for the {body.get('table')!r} table, not {table!r}")
+    try:
+        return TableCsvRequest.model_validate({**body, "page": page, "pageSize": page_size})
+    except ValidationError as exc:
+        raise HTTPException(422, exc.errors(include_url=False, include_context=False)) from exc
+
+
+def _export(req: TableCsvRequest, request: Request, as_csv: bool) -> tuple[dict, dict]:
+    try:
+        out = tables.export_page(run_for(req), _master(req.town), req.table, as_of=req.asOf, page=req.page,
+                                 page_size=req.pageSize, sort=req.sort, desc=req.desc, search=req.search,
+                                 filters=req.filters, columns=req.columns, as_csv=as_csv)
+    except KeyError as exc:
+        raise HTTPException(404, f"not found: {exc.args[0]}") from exc
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    nxt = str(request.url.include_query_params(page=req.page + 1)) if req.page < out["pages"] else None
+    out["next"] = nxt
+    headers = {"X-Total-Rows": str(out["total"]), "X-Page": str(req.page), "X-Pages": str(out["pages"]),
+               "Access-Control-Expose-Headers": "X-Total-Rows, X-Page, X-Pages, Link"}
+    if nxt:
+        headers["Link"] = f'<{nxt}>; rel="next"'
+    return out, headers
+
+
+@router.post("/api/m2c/table/link")
+def post_table_link(req: TableRequest):
+    """``m2c-table-link/1.0``: links another system (Celonis, Power BI, Excel, a script) can GET for this table of
+    this run, with the same selection (search, filters, sort, columns) and run date: ``paths.csv`` and
+    ``paths.json`` (relative to the API root; add ``page``), the rows that match and the pages at each page size.
+    ``token`` is null (``tooLarge``) when the run's inputs do not fit a link: POST the request body to
+    /api/m2c/table.csv or /api/m2c/table instead."""
+    try:
+        total = tables.page(run_for(req), _master(req.town), req.table, as_of=req.asOf, page=1, page_size=1,
+                            sort=req.sort, desc=req.desc, search=req.search, filters=req.filters,
+                            columns=req.columns)["total"]
+    except KeyError as exc:
+        raise HTTPException(404, f"not found: {exc.args[0]}") from exc
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    token = link_token(req)
+    big = len(token) > LINK_MAX
+    q = None if big else f"run={token}"
+    size = {"csv": tables.CSV_MAX, "json": EXPORT_JSON_PAGE}
+    return {"schemaVersion": LINK_VERSION, "table": req.table, "asOf": req.asOf, "total": total,
+            "token": None if big else token, "tooLarge": big, "pageSize": size,
+            "pages": {k: max(1, -(-total // v)) for k, v in size.items()},
+            "paths": None if big else {"csv": f"m2c/export/{req.table}.csv?{q}&page=1&pageSize={size['csv']}",
+                                       "json": f"m2c/export/{req.table}.json?{q}&page=1&pageSize={size['json']}"},
+            "post": {"csv": "m2c/table.csv", "json": "m2c/table", "pageSize": {"csv": tables.CSV_MAX,
+                                                                              "json": tables.PAGE_MAX}}}
+
+
+@router.get("/api/m2c/export/{table}.csv")
+def get_export_csv(table: str, request: Request, run: str = Query(..., description="The link's run token."),
+                   page: int = Query(1, ge=1), pageSize: int = Query(tables.CSV_MAX, ge=1, le=tables.CSV_MAX)):
+    """One CSV page of a linked table (``run`` from POST /api/m2c/table/link): header on every page; the total, page
+    count and next page in the ``X-Total-Rows``/``X-Pages`` and ``Link`` headers."""
+    out, headers = _export(link_request(run, table, page, pageSize), request, as_csv=True)
+    headers["Content-Disposition"] = f'inline; filename="{table}-{out["asOf"]}-p{page}.csv"'
+    return Response(out["csv"], media_type="text/csv; charset=utf-8", headers=headers)
+
+
+@router.get("/api/m2c/export/{table}.json")
+def get_export_json(table: str, request: Request, run: str = Query(..., description="The link's run token."),
+                    page: int = Query(1, ge=1),
+                    pageSize: int = Query(EXPORT_JSON_PAGE, ge=1, le=tables.CSV_MAX)):
+    """``m2c-export/1.0``: one page of a linked table as JSON, each row an object keyed by column; ``total``,
+    ``pages`` and ``next`` (the next page's URL, null on the last)."""
+    out, headers = _export(link_request(run, table, page, pageSize), request, as_csv=False)
+    return Response(orjson.dumps(out, option=orjson.OPT_SERIALIZE_NUMPY | orjson.OPT_NON_STR_KEYS),
+                    media_type="application/json", headers=headers)
 
 
 @router.post("/api/process/graph")

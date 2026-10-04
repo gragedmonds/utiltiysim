@@ -1,6 +1,6 @@
 name: Local runner packages
-# Cost (see CLAUDE.md): four operating systems per run, about 10 minutes each. Free while the repository is public;
-# if it goes private, GitHub bills Windows minutes at 2x and macOS at 10x (about 230 billed minutes a run), so keep
+# Cost (see CLAUDE.md): four operating systems per run, 2 to 7 minutes each. Free while the repository is public;
+# if it goes private, GitHub bills Windows minutes at 2x and macOS at 10x (about 100 billed minutes a run), so keep
 # this to merges that change what the runner ships, and cancel a run that a newer merge supersedes.
 # Merges to main publish a release (pull requests are tested before they merge; CI no longer runs on main).
 on:

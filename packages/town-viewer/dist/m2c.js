@@ -124,6 +124,10 @@ export class EngineM2C{
  // Data pages: the table catalog, one page of a table (rows as arrays in column order) and one CSV page of it.
  async tables(){if(!this._tables){const r=await this.fetch(this.api+'/m2c/tables');if(!r.ok)throw Error('Engine '+r.status);this._tables=await r.json();}return this._tables;}
  table(params){return this.post('/m2c/table',params,'table');}
+ async tableLink(params){const r=await this.fetch(this.api+'/m2c/table/link',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(this.body(params))});
+  if(!r.ok){let d='';try{d=(await r.json()).detail;}catch{}const e=Error('Engine '+r.status+(d?': '+(typeof d==='string'?d:d.message||JSON.stringify(d)):''));e.status=r.status;throw e;}return r.json();}
+ // The request body that stands for this run (as POST /api/m2c/table.csv takes it), for a system that POSTs.
+ requestBody(params){return this.body(params);}
  async tableCsv(params){const r=await this.fetch(this.api+'/m2c/table.csv',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(this.body(params))});
   if(!r.ok){let d='';try{d=(await r.json()).detail;}catch{}const e=Error('Engine '+r.status+(d?': '+(typeof d==='string'?d:d.message||JSON.stringify(d)):''));e.status=r.status;throw e;}return r.text();}
  async vocabulary(){if(!this._vocab){const r=await this.fetch(this.api+'/m2c/vocabulary?town='+encodeURIComponent(this.townRef));if(!r.ok)throw Error('Engine '+r.status);this._vocab=await r.json();}return this._vocab;}

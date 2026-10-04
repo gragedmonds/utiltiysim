@@ -218,6 +218,7 @@ net-exports at noon in July. M2 weather-driven profiles replace them.
 | `POST /api/m2c/contact` | `m2c-contact/1.0`: the contact centre as of `asOf` (KPIs, `feedback` (disputes, rebills, credits, complaints, customers paying later, autopay cancelled), the sixteen reasons, groups, the last 60 days, the year's outages and leaks); also served by the hosted engine, see [M2C.md](M2C.md) "Contact centre" |
 | `POST /api/m2c/fieldwork` | `m2c-fieldwork/1.0`: the field crews' year as of `asOf` (work orders by programme and type, on time, emergency response, crews' utilisation and overtime, cost, the maintenance plan, the last 60 days); also served by the hosted engine, see [M2C.md](M2C.md) "Field work" |
 | `GET /api/m2c/tables` · `POST /api/m2c/table` · `POST /api/m2c/table.csv` | flat tables of the town and its meter-to-cash run as of a date, paged (the Studio's Data tab); also served by the hosted engine, see [M2C.md](M2C.md) "Data tables" |
+| `POST /api/m2c/table/link` · `GET /api/m2c/export/<table>.csv` · `GET /api/m2c/export/<table>.json` | a table of a run as a link another system (Celonis, Power BI, a script) GETs page by page; the link carries the run's inputs, see [M2C.md](M2C.md) "Connecting other systems" |
 
 Scenarios: `normal`, `solar_noon`, `leak` (`target` = premise id; default the first premise), `substation_outage`.
 

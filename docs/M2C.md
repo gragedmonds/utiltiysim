@@ -957,6 +957,8 @@ opening each case.
 | `GET /api/m2c/tables` | `m2c-tables/1.0`: the Data pages' catalog: table groups, each table's source, description and columns (key, label, kind, facet, link), and the page limits (see "Data tables") |
 | `POST /api/m2c/table` | `m2c-table/1.0`: one page (≤ 500 rows) of a table as of `asOf`, filtered (`search`, `filters`), sorted (`sort`, `desc`) and paged; rows as arrays in `columns` order, `facets` over the whole table, `total` matching rows |
 | `POST /api/m2c/table.csv` | one CSV page (≤ 5,000 rows, header on every page) of the same selection; a client stitches the pages |
+| `POST /api/m2c/table/link` | `m2c-table-link/1.0`: links another system can GET for the same selection of the same run (see "Connecting other systems") |
+| `GET /api/m2c/export/<table>.csv` · `.json` | a linked table page by page (`run` token, `page`, `pageSize` ≤ 5,000): CSV, or `m2c-export/1.0` JSON rows as objects; total, pages and the next page in headers and body |
 
 Every response stays under the hosted 4.5 MB limit; `tests/test_m2c.py` checks this.
 
@@ -988,6 +990,24 @@ one column (missing values last either way) and takes one page. Built tables are
 `tests/test_m2c_tables.py` builds every table for the small town, bounds the pages (JSON and CSV under the hosted 4.5 MB), and
 checks the counts against the run (reads taken, documents and invoices created by the date, usage against
 `billed_use`, collections phases covering every account).
+
+
+## Connecting other systems
+
+A run is stateless (every request carries its inputs), so a link to a table carries them too. `POST /api/m2c/table/link`
+takes a table request (the run's inputs, the table, its search, filters, sort and columns) and returns
+`m2c-table-link/1.0`: a `token` (`r1.` + the request without its page, as compact JSON, deflated and base64url), the
+`paths` to GET it as CSV (`m2c/export/<table>.csv?run=…&page=1&pageSize=5000`) or JSON (`.json`, 1,000 a page by
+default, up to 5,000), the rows that match and the pages. Anyone with a link reads the same table of the same run as of
+the same date, with no login: Celonis (a REST extraction paging on `page`), Power BI or Excel (From Web), a database job
+or a script. Each page gives the total (`X-Total-Rows`, `X-Pages`; `total`, `pages` in JSON) and the next page (`Link:
+rel="next"`; `next` in JSON, null on the last). JSON rows are objects keyed by column. A different run date, setting,
+scenario or action is a different run and a different link; a run whose inputs do not fit a link (over 12,000
+characters, `tooLarge`) is read by POSTing its body to `POST /api/m2c/table.csv` or `/api/m2c/table` instead. A token
+is refused if it is not one, names another table, or inflates past 2 MB. The engine computes the run when asked (cached
+afterwards), so the first page can take 5–15 s; results come from the engine deployed at the time. The Studio's Data page
+shows the links, with Celonis, Power BI, curl and Python examples, under **Connect** beside Download CSV (which downloads
+every row of the current selection).
 
 ## In the simulator (operations day)
 
