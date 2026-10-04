@@ -2583,6 +2583,15 @@
             "title": "Episodes",
             "type": "array"
           },
+          "goals": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 8,
+            "minItems": 1,
+            "title": "Goals",
+            "type": "array"
+          },
           "limitations": {
             "items": {
               "type": "string"
@@ -3817,6 +3826,15 @@
             },
             "maxItems": 40,
             "title": "Episodes",
+            "type": "array"
+          },
+          "goals": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 8,
+            "minItems": 1,
+            "title": "Goals",
             "type": "array"
           },
           "homes": {

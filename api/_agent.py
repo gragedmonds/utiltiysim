@@ -30,6 +30,7 @@ from api._agent_config import (
 )
 from api._setup import REGIONAL_NOTE, REGIONS, TOWN_SIZES, configuration, operation_defaults
 from api._towns import MAX_HOUSES
+from utilsim.config.goals import GOALS
 from utilsim.m2c.scenarios import catalog
 
 router = APIRouter()
@@ -94,6 +95,11 @@ SYSTEM = """You are Utility Studio's setup guide, powered by Claude. Help a pers
 utility simulation in their own words. Ask at most two short, relevant questions at a time. Learn their region,
 utility focus, approximate scale, problem, severity, timing and recovery/comparison goal. Build the BASELINE first through several short exchanges, then discuss disruptions. Explore these topics in order,
 skipping details already supplied and adapting questions to the chosen utility:
+0. First establish what they want to test, using the supplied testGoals catalogue. Preserve currentDraft.goals;
+ask only if missing or they want to change focus. Return goals in every proposal. Multiple focused goals are
+allowed; everything is exclusive. Prioritise those goals' settings and outcomes. Leave unrelated inputs at
+current/default values and say so; do not force an interview about every subsystem. Goals tailor setup only:
+they do not turn off generation or make runs faster. Operations-only setups open the map; others open Year.
 1. Place: country, state/province, nearest city/region; urban/suburban/rural service area, terrain and seasonal conditions.
 2. Utility and scale: electric/water/gas services, homes versus accounts, residential/commercial mix and growth.
 3. Normal metering: AMI versus manual reads, reliability, missed reads and estimation practices.
@@ -104,7 +110,7 @@ skipping details already supplied and adapting questions to the chosen utility:
 Usually spend several exchanges learning the baseline; do not jump from a location answer directly to a final proposal.
 Never ask every question in one message, repeat answered questions, or demand exact numbers. Offer a default for
 unknowns and honor a request to use defaults/skip ahead. Briefly recap the baseline before proposing disruptions.
-Follow the wizard: first environment (home count, region, weather and housing), then utility services, staffing
+Follow the wizard: first test goals, then relevant environment inputs (home count, region, weather and housing), then utility services, staffing
 and workflow. Regional starters are editable illustrative assumptions. Use their explicit overrides when the
 user chooses one, preserving later manual edits. Do not infer real local statistics from a place name.
 Geographic answers are context: explain when terrain/climate/tariffs cannot be calibrated by the engine.
@@ -206,7 +212,7 @@ async def conversation(req: ChatRequest, key: str) -> dict:
     allowed = set(Proposal.model_fields)
     current = {k: v for k, v in req.draft.items() if k in allowed}
     context = {"homeLimit": MAX_HOUSES, "townSizes": TOWN_SIZES, "towns": presets(), "configurationGroups": group_index(),
-               "regionalStarters": REGIONS, "regionalNote": REGIONAL_NOTE,
+               "testGoals": GOALS, "regionalStarters": REGIONS, "regionalNote": REGIONAL_NOTE,
                "scenarioLibrary": catalog(), "currentDraft": current}
     if req.mode == "inflict":
         assert req.currentRun is not None
@@ -237,6 +243,10 @@ async def conversation(req: ChatRequest, key: str) -> dict:
                 if not isinstance(data, dict):
                     raise ValueError("Tool inputs must be an object.")
                 if call["name"] == "respond":
+                    candidate = data.get("proposal")
+                    if (req.mode == "setup" and isinstance(candidate, dict) and "goals" not in candidate
+                            and current.get("goals")):
+                        data = {**data, "proposal": {**candidate, "goals": current["goals"]}}
                     reply = (InflictReply if req.mode == "inflict" else AgentReply).model_validate(data)
                     proposal = None
                     if reply.proposal:

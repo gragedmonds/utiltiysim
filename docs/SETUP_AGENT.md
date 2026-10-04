@@ -8,20 +8,28 @@ it again and fills in the draft; **Open simulation** opens Year with those setti
 
 ## Environment and utility wizard
 
-The manual wizard has three steps:
+The manual wizard has four steps:
 
-1. **Environment**: simulation name, residential home count, regional starting point and location label. The
+1. **What to test**: choose operations day, reading, VEE, billing, collections, field work, contact centre,
+   any combination, or Test everything. These profiles map to engine-guide capabilities and live config groups.
+2. **Environment**: simulation name, residential home count, regional starting point and location label. The
    preview shows seasonal mean temperatures, eligible-lot pool share, construction era and two-storey shares.
    Advanced contains seeds, geography, housing and weather, with search, bounds and effect descriptions.
-2. **Utility & operations**: services, billing analysts, contact-centre agents and Year field crews, followed by
+3. **Utility & operations**: services, billing analysts, contact-centre agents and Year field crews, followed by
    scenario intensity and view date. Advanced contains utility networks and metering, Year workflows and costs,
    and a separately labelled map-day operations section. Year field crews are expressed per 1,000 total premises.
-3. **Review & open**: the editable per-input summary, validation and links back to either setup stage.
+4. **Review & open**: the editable per-input summary, validation and links back to either setup stage.
 
-Town-size starters are **500, 5,000, 50,000 and 500,000 residential homes**. New drafts start at 500.
+Town-size starters are **500, 5,000, 25,000 and 50,000 residential homes**. New drafts start at 500.
 The last two choices are visibly unavailable: the current hosted engine caps detailed towns at 6,000 homes
 (local default: 10,000), so large-city simulation requires further engine work. Advanced retains custom
 counts within the connected engine’s limit; existing saved sizes are preserved. Claude receives the same size catalogue.
+
+Focused setup shows relevant controls and Advanced groups. **Show all settings for this step** reveals the rest,
+without changing any values. Switching focus preserves hidden edits. Test everything exposes all groups.
+These are presentation profiles; generation and replay still include their full dependencies. Operations-only
+setups open the map and expose map-day controls first; other setups open Year. Claude receives the same goal
+catalogue and focuses its interview on the chosen experiment. Existing drafts retain their stage and settings.
 
 Basic and advanced controls edit the same values. Region changes preserve home count and utility settings;
 scenario changes replace dated periods while preserving the environment and operating baseline. Existing drafts

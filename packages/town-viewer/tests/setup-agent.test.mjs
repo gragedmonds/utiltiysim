@@ -36,5 +36,5 @@ test('Year context includes live settings and existing episodes while omitting c
  const context=runInput({...currentRunInput(m,'2026-06-01'),agent:{messages:[{role:'user',content:'Private history'}]},actions:[{id:'ACT-1'}]});
  assert.equal(context.settings.process.analysts,5);assert.equal(context.startDate,'2026-06-01');assert.equal(context.episodes[0].id,'EP-1');assert.equal(context.agent,undefined);assert.equal(context.actions,undefined);
  const tweak=inflictInput({name:'Half staff',summary:'Six weeks',episodes:proposal.episodes,runTo:'2026-05-28',townOverrides:{bad:true}});
- assert.equal(tweak.runTo,undefined);assert.equal(tweak.townOverrides,undefined);assert.equal(BASELINE_TOPICS.length,7);
+ assert.equal(tweak.runTo,undefined);assert.equal(tweak.townOverrides,undefined);assert.equal(BASELINE_TOPICS.length,8);
 });

@@ -108,7 +108,7 @@ def _open_worklist(run: M2CRun, as_of: str) -> dict:
             "status": "open", "total": len(rows), "rows": rows}
 
 
-def export_run(snapshot: dict, request: dict, store: str | Path) -> tuple[Path, dict, bool]:
+def export_run(snapshot: dict, request: dict, store: str | Path, *, on_stage=lambda _: None) -> tuple[Path, dict, bool]:
     """Write ``store/runs/<key>``; identical inputs reuse a verified bundle before replaying.
 
     ``request`` accepts the Studio's viewer-m2c-run/1.0 export or the usual RunRequest fields.
@@ -116,6 +116,7 @@ def export_run(snapshot: dict, request: dict, store: str | Path) -> tuple[Path, 
     """
     from api._m2c import RunRequest
 
+    on_stage("archive.prepare")
     snapshot = orjson.loads(_json(snapshot))
     # Generation timings describe the machine, not the town. Keep archived snapshots and
     # their identity stable when a self-describing town is rebuilt on another machine.
@@ -145,7 +146,10 @@ def export_run(snapshot: dict, request: dict, store: str | Path) -> tuple[Path, 
     runs = Path(store).expanduser() / "runs"
     destination = runs / key
     if destination.exists():
+        on_stage("archive.verify_reused")
         return destination, read_manifest(destination), True
+
+    on_stage("replay.reads_vee_billing")
 
     def _ops():  # the networks: the year's incidents, the field crews' assets, overdue maintenance failing
         from utilsim.ops.opstown import ops_town
@@ -169,27 +173,35 @@ def export_run(snapshot: dict, request: dict, store: str | Path) -> tuple[Path, 
 
     try:
         write("inputs.json", inputs)
+        on_stage("analysis.annual_trends")
         yearly = trend.trend(run, as_of)
+        on_stage("analysis.summary")
         summary = compact_summary(views.summary(run, as_of))
+        on_stage("analysis.scorecard")
         scorecard = views.scorecard(run, as_of=as_of)
         dates = snapshot_dates(as_of)
         aggregates = {"schemaVersion": AGGREGATES_VERSION, "runKey": key,
                       "engineVersion": GENERATOR_VERSION, "engineBuild": build, "asOf": as_of,
                       "towns": [{"id": town.id, "name": town.name, "summary": summary,
                                  "trend": yearly, "scorecard": scorecard}], "episodes": yearly["episodes"]}
+        on_stage("archive.aggregates")
         write("aggregates.json", aggregates)
         write("trend.json", yearly)
         write("scorecard.json", scorecard)
+        on_stage("archive.snapshot")
         write("snapshot.json.gz", snapshot)
         write("tables/catalog.json", tables.catalog())
+        on_stage("archive.master_data")
         master = tables.master_data(snapshot)
         for spec in tables.SPECS:
+            on_stage("archive.table." + spec.name)
             _, table, _ = tables.build(run, master, spec.name, as_of)
             write(f"tables/{spec.name}.json.gz",
                   {"schemaVersion": TABLE_VERSION, "simulationId": run.simulation_id, "asOf": as_of,
                    "table": spec.name, **spec.json(), "columns": [c.json() for c in table.cols],
                    "searchColumns": [i for i, c in enumerate(table.cols) if c.search],
                    "facets": table.facets, "rows": list(map(list, zip(*table.data)))})
+        on_stage("archive.month_end_views")
         for date in dates:
             write(f"worklists/{date}.json.gz", _open_worklist(run, date))
             write(f"summaries/{date}.json", compact_summary(views.summary(run, date)))
@@ -201,6 +213,7 @@ def export_run(snapshot: dict, request: dict, store: str | Path) -> tuple[Path, 
                     "aggregates": "aggregates.json", "tableDates": [as_of],
                     "readOnly": True}
         (staging / "manifest.json").write_bytes(_json(manifest))
+        on_stage("archive.verify")
         read_manifest(staging)
         try:
             os.rename(staging, destination)

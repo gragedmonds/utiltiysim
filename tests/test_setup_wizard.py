@@ -18,7 +18,7 @@ def test_wizard_configuration_without_provider_key(monkeypatch):
         assert "weather" in data["schemas"]["town"]["properties"]
         assert "field" in data["schemas"]["run"]["properties"]
         assert data["defaults"]["operations"]["crews"]["fieldCrews"] >= 0
-        assert data["townSizes"] == [500, 5000, 50000, 500000]
+        assert data["townSizes"] == [500, 5000, 25000, 50000]
         assert len(data["regions"]) == 4
         assert "illustrative" in data["regionalNote"]
         assert client.get("/api/setup/configuration?preset=../../etc/passwd").status_code == 422
@@ -61,3 +61,22 @@ def test_map_defaults_follow_edited_environment_and_town_crews():
         values = {key: value for group in r.json()["defaults"].values() for key, value in group.items()}
         assert values["stormDaysPerYear"] == 40
         assert values["gasCrews"] == 7
+
+
+def test_goal_catalogue_maps_only_to_supported_engine_groups_and_guide():
+    from utilsim.config.goals import GOALS
+    from utilsim.config.model import RUN_GROUPS, SimConfig
+    from utilsim.m2c.guide import CAPABILITIES, guide
+
+    assert guide()["testGoals"] == GOALS
+    capabilities = {c["id"] for c in CAPABILITIES}
+    for goal in GOALS:
+        assert set(goal["capabilities"]) <= capabilities
+        assert set(goal["run"]) - {"*"} <= set(RUN_GROUPS)
+        assert set(goal["town"] + goal["environment"]) - {"*"} <= set(SimConfig.model_fields) - set(RUN_GROUPS)
+    p = validate_proposal(Proposal(name="VEE experiment", preset="village", goals=["reading", "vee"], summary="Test reads"))
+    assert p["goals"] == ["reading", "vee"]
+    with pytest.raises(ValueError):
+        Proposal(name="Unsupported", preset="village", goals=["nuclear"], summary="No")
+    with pytest.raises(ValueError):
+        Proposal(name="Mixed", preset="village", goals=["everything", "vee"], summary="No")

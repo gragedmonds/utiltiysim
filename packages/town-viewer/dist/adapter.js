@@ -23,6 +23,7 @@ export function heightSampler(terrain, legacyFallback) {
 }
 
 export function inspectSnapshot(snapshot, {legacyTerrain}={}) {
+ if(snapshot?.detail==='analysis')throw new Error('This analysis archive has no map. Open it in the saved-run reader.');
  if(!snapshot||!['utility-town/1.0','utility-town/2.0'].includes(snapshot.schemaVersion))throw new Error('Expected utility-town/1.0 or utility-town/2.0 snapshot.');
  text(snapshot.id,'town id');const legacy=snapshot.schemaVersion==='utility-town/1.0';
  const homes=list(snapshot.premises,'premises');if(homes.length<1||homes.length>15000||snapshot.count!==homes.length)throw new Error('Premise count must match count and be 1–15,000 (including nonresidential premises).');
