@@ -1489,6 +1489,38 @@ def page(run: M2CRun, master: dict, name: str, *, as_of: str | None = None, page
             "desc": bool(desc), "search": search or "", "filters": dict(filters or {}), "facets": table.facets}
 
 
+EXPORT_VERSION = "m2c-export/1.0"
+
+
+def export_page(run: M2CRun, master: dict, name: str, *, as_of: str | None = None, page: int = 1,
+                page_size: int = CSV_MAX, sort: str | None = None, desc: bool = False, search: str | None = None,
+                filters: dict[str, str] | None = None, columns: list[str] | None = None,
+                as_csv: bool = False) -> dict:
+    """One page of a table for another system (``m2c-export/1.0``): the selection as ``page`` makes it, pages of up
+    to 5,000 rows, each row an object keyed by column (or, ``as_csv``, the page as CSV text in ``csv``, header on
+    every page); with the ``total`` of rows that match and the number of ``pages``."""
+    spec, table, day = build(run, master, name, as_of)
+    idx = select(table, search=search, filters=filters, sort=sort, desc=desc)
+    js = _columns(table, columns)
+    page, size = max(1, page), min(max(1, page_size), CSV_MAX)
+    start = (page - 1) * size
+    keys = [table.cols[j].key for j in js]
+    out = {"schemaVersion": EXPORT_VERSION, "simulationId": run.simulation_id,
+           "asOf": run.cal.date_of(day).isoformat(), "table": spec.name, "title": spec.title,
+           "columns": [table.cols[j].json() for j in js], "total": len(idx), "page": page, "pageSize": size,
+           "pages": max(1, -(-len(idx) // size))}
+    if as_csv:
+        buf = io.StringIO()
+        w = csv.writer(buf, lineterminator="\n")
+        w.writerow(keys)
+        for i in idx[start:start + size]:
+            w.writerow([_text(table.data[j][i]) for j in js])
+        out["csv"] = buf.getvalue()
+    else:
+        out["rows"] = [{k: table.data[j][i] for k, j in zip(keys, js)} for i in idx[start:start + size]]
+    return out
+
+
 def csv_page(run: M2CRun, master: dict, name: str, *, as_of: str | None = None, page: int = 1,
              page_size: int = CSV_MAX, sort: str | None = None, desc: bool = False, search: str | None = None,
              filters: dict[str, str] | None = None, columns: list[str] | None = None) -> str:

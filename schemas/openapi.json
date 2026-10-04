@@ -5596,6 +5596,150 @@
         "summary": "Post Daily"
       }
     },
+    "/api/m2c/export/{table}.csv": {
+      "get": {
+        "description": "One CSV page of a linked table (``run`` from POST /api/m2c/table/link): header on every page; the total, page\ncount and next page in the ``X-Total-Rows``/``X-Pages`` and ``Link`` headers.",
+        "operationId": "get_export_csv_api_m2c_export__table__csv_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "table",
+            "required": true,
+            "schema": {
+              "title": "Table",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The link's run token.",
+            "in": "query",
+            "name": "run",
+            "required": true,
+            "schema": {
+              "description": "The link's run token.",
+              "title": "Run",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pageSize",
+            "required": false,
+            "schema": {
+              "default": 5000,
+              "maximum": 5000,
+              "minimum": 1,
+              "title": "Pagesize",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Export Csv"
+      }
+    },
+    "/api/m2c/export/{table}.json": {
+      "get": {
+        "description": "``m2c-export/1.0``: one page of a linked table as JSON, each row an object keyed by column; ``total``,\n``pages`` and ``next`` (the next page's URL, null on the last).",
+        "operationId": "get_export_json_api_m2c_export__table__json_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "table",
+            "required": true,
+            "schema": {
+              "title": "Table",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The link's run token.",
+            "in": "query",
+            "name": "run",
+            "required": true,
+            "schema": {
+              "description": "The link's run token.",
+              "title": "Run",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pageSize",
+            "required": false,
+            "schema": {
+              "default": 1000,
+              "maximum": 5000,
+              "minimum": 1,
+              "title": "Pagesize",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Export Json"
+      }
+    },
     "/api/m2c/fieldwork": {
       "post": {
         "description": "``m2c-fieldwork/1.0``: the field crews' year to ``asOf``: work orders created, completed, open and overdue by\nprogramme (customer emergencies, service orders, meter maintenance, preventative maintenance, capital\nconstruction) and work type, on-time and emergency response, crew utilisation and overtime, labour and materials\ncost, and the maintenance plan's compliance. Orders follow the year (collections, moves, VEE field visits, the\ncontact centre's calls, the year's outages, meter ages and the town's assets); ``settings.field`` (and episodes)\nshape the crews and the work.",
@@ -6043,6 +6187,43 @@
           }
         },
         "summary": "Post Table Csv"
+      }
+    },
+    "/api/m2c/table/link": {
+      "post": {
+        "description": "``m2c-table-link/1.0``: links another system (Celonis, Power BI, Excel, a script) can GET for this table of\nthis run, with the same selection (search, filters, sort, columns) and run date: ``paths.csv`` and\n``paths.json`` (relative to the API root; add ``page``), the rows that match and the pages at each page size.\n``token`` is null (``tooLarge``) when the run's inputs do not fit a link: POST the request body to\n/api/m2c/table.csv or /api/m2c/table instead.",
+        "operationId": "post_table_link_api_m2c_table_link_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TableRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Table Link"
       }
     },
     "/api/m2c/tables": {
