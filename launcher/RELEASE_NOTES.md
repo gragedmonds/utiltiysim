@@ -1,7 +1,9 @@
 Download **UtilityStudio** for your computer: Windows opens the `.exe`; macOS and Linux unzip the launcher first.
 The `runtime-*` files are downloaded automatically by the launcher; you do not need to choose one yourself.
 
-Open it, keep or change the storage folder, and click **Open Utility Studio**. The first start downloads and verifies
+Open it (on Windows there is no console window: the page in your browser is the app, with **Quit Utility Studio** at
+the bottom, and opening the executable again brings that page back). Keep or change the storage folder, and click
+**Open Utility Studio**. The first start downloads and verifies
 the engine into that folder; later starts reuse it. Utility Studio then opens in your browser: set up a simulation,
 tweak any setting, run the year and read the results, all on this computer. Nothing is uploaded.
 

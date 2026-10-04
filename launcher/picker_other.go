@@ -18,7 +18,7 @@ func chooseFolder(initial string) (string, error) {
 	var cmd *exec.Cmd
 	if runtime.GOOS == "darwin" {
 		cmd = exec.CommandContext(ctx, "osascript", "-e", `try
-return POSIX path of (choose folder with prompt "Choose storage for Utility Studio")
+return POSIX path of (choose folder with prompt "Choose where Utility Studio keeps its files")
 on error number -128
 return ""
 end try`)
@@ -38,4 +38,21 @@ end try`)
 		return "", fmt.Errorf("Could not open the folder selector. Use ‘Type a path’ instead. %w", err)
 	}
 	return strings.TrimSpace(string(raw)), nil
+}
+
+func fatal(message string) { fmt.Println(message) }
+
+// The terminal this launcher was started from, on macOS and Linux.
+func banner(url string) {
+	fmt.Print(`
+  _   _ _   _ _ _ _          ____  _             _ _
+ | | | | |_(_) (_) |_ _   _ / ___|| |_ _   _  __| (_) ___
+ | | | | __| | | | __| | | |\___ \| __| | | |/ _` + "`" + ` | |/ _ \
+ | |_| | |_| | | | |_| |_| | ___) | |_| |_| | (_| | | (_) |
+  \___/ \__|_|_|_|\__|\__, ||____/ \__|\__,_|\__,_|_|\___/
+                      |___/
+
+`)
+	fmt.Println("Utility Studio is open in your browser:", url)
+	fmt.Println("Keep this window open while you use it. Closing it, or Quit in the page, stops Utility Studio.")
 }

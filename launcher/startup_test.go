@@ -57,3 +57,34 @@ func TestReadinessRejectsExternalURLs(t *testing.T) {
 		t.Fatal("accepted external runner URL")
 	}
 }
+
+func TestOpeningTheExecutableAgainFindsTheRunningLauncher(t *testing.T) {
+	token := strings.Repeat("t", 64)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/status" || r.Header.Get("Authorization") != "Bearer "+token {
+			w.WriteHeader(401)
+			return
+		}
+		fmt.Fprint(w, `{"message":"ok"}`)
+	}))
+	defer server.Close()
+	file := filepath.Join(t.TempDir(), "launcher.json")
+	if got := runningLauncher(file); got != "" {
+		t.Fatal("no file, yet a launcher was found:", got)
+	}
+	address := server.URL + "/#token=" + token
+	os.WriteFile(file, []byte(`{"url":"`+address+`"}`), 0600)
+	if got := runningLauncher(file); got != address {
+		t.Fatal(got)
+	}
+	// A stale file (the launcher it names is gone, or the credential is wrong) is ignored and a new launcher starts.
+	os.WriteFile(file, []byte(`{"url":"`+server.URL+`/#token=wrong"}`), 0600)
+	if got := runningLauncher(file); got != "" {
+		t.Fatal("accepted a stale credential:", got)
+	}
+	server.Close()
+	os.WriteFile(file, []byte(`{"url":"`+address+`"}`), 0600)
+	if got := runningLauncher(file); got != "" {
+		t.Fatal("accepted a launcher that is gone:", got)
+	}
+}

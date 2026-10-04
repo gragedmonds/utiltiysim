@@ -10,16 +10,20 @@ through** with Claude (an Anthropic API key you paste in).
 1. Download **UtilityStudio** for your operating system from the site, or from the repository's latest release
    (`UtilityStudio-windows-x64.exe`, `UtilityStudio-macos-arm64.zip`, `UtilityStudio-macos-x64.zip`,
    `UtilityStudio-linux-x64.zip`; unzip the launcher on macOS and Linux).
-2. Open it. The launcher page shows the storage folder (default `~/UtilitySim`; **Change** opens the native folder
-   selector or lets you type a path, mapped drives such as `P:\UtilitySim` included) and one button, **Open Utility
-   Studio**. The first start downloads the versioned engine (about 135 MB) into `runtime/<version>` under the folder,
+2. Open it. The launcher page opens in your browser: the storage folder (default `~/UtilitySim`; **Change** opens
+   your system's folder window, owned by the browser window so it appears in front, or lets you type a path, mapped
+   drives such as `P:\UtilitySim` included), one button, **Open Utility Studio**, and the list of what you can
+   shape. The first start downloads the versioned engine (about 135 MB) into `runtime/<version>` under the folder,
    checks its size, SHA-256 and Ed25519 signature, and installs it; later starts reuse it. Errors stay on the page
    with the log location (`runner.log` in the folder).
-3. Utility Studio opens in your browser at `http://127.0.0.1:<port>/`, the setup wizard first. Keep the launcher
-   window open while you work; close it to stop everything.
+3. Utility Studio opens in your browser at `http://127.0.0.1:<port>/`, the setup wizard first. On Windows the
+   launcher has no console window: the page is its window, with **Quit Utility Studio** at the bottom, and opening
+   the executable again while it runs brings that page back instead of starting a second one. On macOS and Linux
+   the terminal it started from shows the address; closing it stops Utility Studio.
 
-The launcher remembers the folder in the OS config directory. Choosing another folder opens another library and
-leaves this one where it is. One app runs per library (a lock file refuses a second).
+The launcher remembers the folder in the OS config directory (`UtilityStudio/storage.json`, beside `launcher.json`,
+the running launcher's address). Choosing another folder opens another library and leaves this one where it is. One
+app runs per library (a lock file refuses a second).
 
 Developers run the same server from a checkout: `uv run utilsim studio --store out/library` (any free port; the URL
 with its token is printed and opened). `node web/serve.mjs` with `?engine=http://127.0.0.1:8010` and `uv run utilsim
