@@ -33,11 +33,11 @@ func TestRuntimeVerification(t *testing.T) {
 	runtimeSignature = base64.StdEncoding.EncodeToString(ed25519.Sign(priv, []byte(runtimeSHA)))
 	p := filepath.Join(t.TempDir(), "runtime")
 	os.WriteFile(p, data, 0600)
-	if err := verify(p); err != nil {
+	if err := verify(p, pinned()); err != nil {
 		t.Fatal(err)
 	}
 	os.WriteFile(p, []byte("tampered"), 0600)
-	if err := verify(p); err == nil {
+	if err := verify(p, pinned()); err == nil {
 		t.Fatal("accepted modified runtime")
 	}
 }

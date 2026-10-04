@@ -62,6 +62,28 @@ def smoke_startup(executable, library):
             ready.unlink(missing_ok=True)
 
 
+def signing_key():
+    """The release key (RUNTIME_SIGNING_KEY: an OpenSSH ed25519 private key, the workflow's secret) when it matches
+    the public key the launcher embeds (launcher/release_key.pub), so launchers already installed trust this
+    release's runtime and update to it. Without it, a throwaway key signs the runtime for this build's own launcher
+    only, and installed launchers leave this release alone."""
+    secret = os.environ.get('RUNTIME_SIGNING_KEY', '').strip()
+    committed = (ROOT / 'launcher' / 'release_key.pub').read_text().strip()
+    if not secret:
+        print('RUNTIME_SIGNING_KEY is not set: signing with a throwaway key; installed launchers will not auto-update to this build.')
+        return Ed25519PrivateKey.generate(), False
+    private = serialization.load_ssh_private_key(secret.encode(), password=None)
+    if not isinstance(private, Ed25519PrivateKey):
+        raise SystemExit('RUNTIME_SIGNING_KEY must be an ed25519 key (ssh-keygen -t ed25519).')
+    if not committed:
+        raise SystemExit('RUNTIME_SIGNING_KEY is set but launcher/release_key.pub is empty: commit the public key first.')
+    expected = committed.split()[1]
+    actual = private.public_key().public_bytes(serialization.Encoding.OpenSSH, serialization.PublicFormat.OpenSSH).decode().split()[1]
+    if expected != actual:
+        raise SystemExit('RUNTIME_SIGNING_KEY does not match launcher/release_key.pub: launchers would not trust this release.')
+    return private, True
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--tag', required=True)
@@ -95,13 +117,12 @@ def main():
                 info.external_attr = (0o100700 if os.access(file, os.X_OK) else 0o100600) << 16
                 archive.writestr(info, file.read_bytes(), compress_type=zipfile.ZIP_DEFLATED, compresslevel=6)
     sha = hashlib.sha256(runtime.read_bytes()).hexdigest()
-    # Per-release signing key: only the public key is embedded, the private key is never saved or uploaded.
-    private = Ed25519PrivateKey.generate()
+    private, signed_for_updates = signing_key()
     public = base64.b64encode(private.public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)).decode()
     sig = base64.b64encode(private.sign(sha.encode())).decode()
     values = {'runtimeURL': f'https://github.com/gragedmonds/utiltiysim/releases/download/{args.tag}/{runtime.name}',
               'runtimeSHA': sha, 'runtimeSignature': sig, 'runtimePublicKey': public,
-              'runtimeBytes': str(runtime.stat().st_size), 'releaseVersion': args.tag}
+              'runtimeBytes': str(runtime.stat().st_size), 'releaseVersion': args.tag, 'platformTag': target}
     name = 'UtilityStudio-' + target + ('.exe' if system == 'windows' else '')
     launcher = out / name
     flags = '-s -w ' + ' '.join('-X main.' + key + '=' + value for key, value in values.items())
@@ -116,7 +137,7 @@ def main():
         launcher = out / (name + '.zip')
     (out / ('manifest-' + target + '.json')).write_text(json.dumps({**values, 'platform': target,
         'engineBuild': build_file.read_text(), 'launcherBytes': launcher.stat().st_size,
-        'launcherSha256': hashlib.sha256(launcher.read_bytes()).hexdigest()}, indent=2))
+        'launcherSha256': hashlib.sha256(launcher.read_bytes()).hexdigest(), 'signedForUpdates': signed_for_updates}, indent=2))
     print(json.dumps({'platform': target, 'runtimeBytes': runtime.stat().st_size, 'launcherBytes': launcher.stat().st_size}))
     # Smoke the packaged engine, without Python or a terminal being required by the end user.
     executable = ROOT / 'dist/utility-runner' / ('utility-runner.exe' if system == 'windows' else 'utility-runner')

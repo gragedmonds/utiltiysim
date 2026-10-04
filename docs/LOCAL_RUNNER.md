@@ -102,12 +102,39 @@ field when none is set; the key is saved with `POST /local/claude-key` into the 
 Keychain, an owner-only file on Linux) and read by the engine (`api/_agent.py` `api_key()`); it is never part of
 exports, bundles or codes. `ANTHROPIC_API_KEY` in the environment takes precedence. Everything else works without it.
 
+## Updates
+
+The launcher keeps the engine current by itself. When Utility Studio starts with an engine already installed, it
+starts that engine at once and, in the background, asks GitHub for the newest published release carrying its
+platform's manifest (`manifest-<platform>.json`: the runtime's address, size, SHA-256 and a signature of that
+digest). A manifest signed with the release key is trusted: the runtime is downloaded into its own
+`runtime/<version>` folder, verified like a first install, and recorded in `runtime/staged.json`; the next start
+promotes it (`runtime/current.json`), or **Restart with the new version** on the launcher page switches at once.
+The Studio pages ship inside the runtime, so nearly every change arrives this way. Offline, or when GitHub cannot be
+reached, the installed engine runs unchanged. A release that is not signed with the release key (a build made
+without the secret) is reported on the page and left alone. When a release carries a different launcher, the page
+says a newer launcher is available and links to it; the launcher does not replace itself.
+
+The release key is one long-lived ed25519 pair. Its public half is committed as `launcher/release_key.pub` (an
+OpenSSH public key line) and embedded in every launcher; its private half is the repository's Actions secret
+`RUNTIME_SIGNING_KEY`, used only by the release build. To set it up once:
+
+```sh
+ssh-keygen -t ed25519 -N "" -C "utility-studio-release" -f release_key
+```
+
+Add the contents of `release_key` (the private key) as the Actions secret `RUNTIME_SIGNING_KEY`, commit
+`release_key.pub` as `launcher/release_key.pub`, and delete the private file from the computer. The build refuses a
+secret that does not match the committed public key. Until the secret exists, builds sign with a throwaway key
+(as every release before this did) and installed launchers do not update to them. Rotating the key means a new
+public key in the repository and a new launcher download for everyone.
+
 ## Release
 
 The **Utility Studio packages** workflow (`.github/workflows/runner.yml`) builds and smoke-tests Windows x64,
 Linux x64, macOS arm64 and macOS x64: `scripts/build_runner.py` freezes the engine with PyInstaller (the pages,
-presets, packs and schemas inside), zips it as `runtime-<platform>.zip`, signs its digest with a per-release Ed25519
-key whose public half is compiled into the Go launcher with the pinned URL, size and digest, then runs the engine's
+presets, packs and schemas inside), zips it as `runtime-<platform>.zip`, signs its digest with the release key (or a throwaway key
+without the secret), compiles the pinned URL, size, digest and key into the Go launcher, then runs the engine's
 self-test and starts the packaged server to check the pages, the packs, the API and the authenticated readiness.
 Pull requests produce artifacts; merges to main publish a release, which the site's download buttons read. This is
 runtime integrity, not OS publisher signing: Apple notarization and Windows Authenticode are not configured, so the

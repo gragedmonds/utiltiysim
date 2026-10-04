@@ -14,6 +14,8 @@ such as `brave-otter-harbour.utilitysim.json`.
 **Talk it through** with Claude is optional and needs an internet connection and an Anthropic API key, which you
 paste into the guide's panel; it is kept in your computer's secure storage.
 
-The engine has a pinned SHA-256 digest and Ed25519 signature verified by the launcher. These builds have no Apple
+The launcher keeps the engine up to date: it starts the installed engine at once and downloads a newer signed release
+in the background for the next start (or **Restart with the new version** on its page). The engine has a pinned
+SHA-256 digest and Ed25519 signature verified by the launcher. These builds have no Apple
 notarization or Windows publisher certificate, so the operating system may show an unidentified-publisher prompt.
 Linux needs a desktop browser and glibc 2.35 or newer. Measured sizes are in each platform's manifest JSON.
