@@ -698,6 +698,7 @@ class M2CRun:
         self.drift_end = np.full(M, INF)  # until the meter was exchanged
         self._drift_base: dict[int, float] = {}
         self.field = None  # the field engine, from the first day (_simulate)
+        self.contact = None  # the contact centre, from the first day (_simulate)
 
     def _setup_outages(self) -> None:
         """Per register, the merged spans (start, end as day + fraction) during which it had no service, and those
@@ -953,11 +954,14 @@ class M2CRun:
         self.open: list[Case] = []
         self._unseen: list[tuple[int, dict, float]] = []  # actions on a case id the run has not raised (yet)
         self._handled: set[int] = set()  # of those, the ones a collections case took when it opened
+        from utilsim.m2c.contact import ContactEngine
         from utilsim.m2c.fieldwork import FieldEngine
 
         self.books.start_collections()
         col = self.books.collections
         self.field = FieldEngine(self)
+        self.contact = ContactEngine(self)
+        self.contact.start()
         for day in range(YEAR_DAYS):
             acts = by_day.get(day, [])
             self._roll_orders(day)  # crews for your dispatched orders that start today (07:00-09:00)
@@ -996,8 +1000,10 @@ class M2CRun:
                 self.books.invoice(day)
                 self.open = [c for c in self.open if c.resolved is None]
             col.advance(day + 1)  # the day's payments, dunning and collections work
+            self.contact.step(day)  # the day's contacts: disputes, complaints and bad experiences feed back
         self.books.collect()  # the rest of the year's collections events
         self.field.finish()
+        self.contact.finish()
         for k, a, t in self._unseen:  # raised later (that evening, or a later day), or never: say which
             if k in self._handled:
                 continue
@@ -1238,6 +1244,8 @@ class M2CRun:
     # ---- resolution ---------------------------------------------------------------------------------------------
     def _proposal(self, case: Case) -> str:
         """What a careful analyst concludes after review (wrong with probability 1 − accuracy)."""
+        if case.work == "complaint":
+            return "respond"
         if case.doc >= 0:
             return self.books.proposal(case)
         if case.type == "CONSECUTIVE_ESTIMATES":
@@ -1544,6 +1552,9 @@ class M2CRun:
                          order_id: str | None = None) -> str | None:
         """Why the decision ``typ`` does not apply to the open ``case`` at ``t`` (``hold``: the account's invoice
         hold in force), or None. Case views offer only the decisions this lets through."""
+        if case.work == "complaint":
+            return None if typ in ("accept", "escalate") else \
+                f"{typ} does not apply to {case.id}, a complaint (accept answers it, or escalate)"
         if case.work is not None:
             return f"{typ} does not apply to {case.id}, " + (
                 f"the Field Work case of order {case.ref} (use order_complete)" if case.work == "order" else
@@ -1551,6 +1562,9 @@ class M2CRun:
                 f"the low-income referral of account {case.ref} (the agency decides it)" if case.work == "low_income"
                 else f"the budget billing enrolment of account {case.ref} (billing sets the plan up)")
         if case.doc >= 0:
+            if case.type == "BILL_DISPUTE" and typ not in ("accept", "estimate", "escalate"):
+                return (f"{typ} does not apply to {case.id}, a disputed bill (accept: the bill stands and is explained; "
+                        "estimate: rebill it on a check read; or escalate)")
             if typ in ("override", "field_order"):
                 return f"{typ} does not apply to {case.id}, a billing block (use accept, estimate or escalate)"
             if typ in ("accept", "estimate") and hold is not None:
@@ -1672,7 +1686,9 @@ class M2CRun:
                     self.warnings.append(f"{a['id']} (notice): {case.id} was completed while field service order "
                                          f"{oid} is still {stage}; the order goes on")
         if case.doc >= 0 and typ in ("accept", "estimate"):
-            self._resolve(case, t, "release" if typ == "accept" else "rebill", actor="you")
+            dispute = case.type == "BILL_DISPUTE"
+            self._resolve(case, t, ("explain" if dispute else "release") if typ == "accept" else
+                          ("check_rebill" if dispute else "rebill"), actor="you")
         elif typ == "field_order":
             for c in cover:
                 c.assignee, c.owner = "you", None
@@ -2077,6 +2093,12 @@ class M2CRun:
         r = case.r
         self.series[case.queue][int(t), 1] += 1
         case.by = actor
+        if case.work == "complaint":  # answered in writing; nothing on the reads
+            case.ev(t, "COMPLAINT_ANSWERED", {"accountId": case.ref, "by": actor}, len(case.events) - 1)
+            case.resolved = t
+            case.outcome = "respond"
+            case.move(t, None, "resolved")
+            return
         if case.doc >= 0:
             self.books.resolve(case, t, action, actor)
             case.resolved = t

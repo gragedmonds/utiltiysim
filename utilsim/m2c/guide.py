@@ -83,8 +83,12 @@ CAPABILITIES = (
              "outage report, gas odour, complaint), each triggered by what happens in the year: invoices, billing "
              "errors, rebills and catch-up bills, dunning, returned debits, move-ins and move-outs, no-access reads, "
              "field visits and the year's outages and leaks. Self-service, an emergency line, and agents in opening "
-             "hours with patience, retries, call backs, repeat contacts and complaints. Every rate, handling time and "
-             "staffing level is a run setting, and episodes can change them from a day.",
+             "hours with patience, retries, call backs, repeat contacts and complaints. It answers inside the replay, "
+             "so what it does changes the year: an answered bill dispute opens a Bill Correction case (a rebill on a "
+             "check read, credited on the next invoice, or an explanation) and pauses dunning; a complaint opens a "
+             "case for the analysts; customers with repeated bad experiences pay later and may cancel automatic "
+             "payments. Every rate, handling time, staffing level and feedback threshold is a run setting, and "
+             "episodes can change them from a day.",
      "where": ["Configuration › Contact centre", "Year", "Data › Contact centre"]},
     {"id": "incidents", "title": "Outages and leaks over the year",
      "text": "The operations day's background incidents drawn for every date of the year (the same storm or leak the "
@@ -170,9 +174,6 @@ LIMITS = (
 )
 
 GAPS = (
-    {"title": "Contact centre feedback", "text": "Contacts do not create back-office work yet: a bill dispute or a "
-     "complaint is answered and counted, but opens no case for the analysts.", "plan": "Disputes and complaints open "
-     "Billing cases; long queues and failed resolutions raise churn and collections risk."},
     {"title": "Field crews on the map", "text": "Crews do not route between jobs (travel is a flat time), a "
      "disconnection's final read is not taken (use before it is billed after reconnection), and main renewal does "
      "not yet lower the break and leak rates.", "plan": "Route crews on the street graph, take final reads at "

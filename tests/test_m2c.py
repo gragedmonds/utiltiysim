@@ -392,7 +392,9 @@ def test_an_action_on_a_case_that_is_not_open_is_refused_and_says_when(pack_town
 def test_case_ids_are_content_derived_and_survive_an_earlier_outage(small_town, outage):
     d, out, _ = outage
     key = lambda c: (c.type, c.r, c.month, round(c.created * 1440))  # noqa: E731
-    before, after = {key(c): c for c in small_town.cases}, {key(c): c for c in out.cases}
+    # The contact centre's cases follow the lines' queue, which an earlier change can reorder: compare the rest.
+    before = {key(c): c for c in small_town.cases if c.created_by != "contact_centre"}
+    after = {key(c): c for c in out.cases if c.created_by != "contact_centre"}
     added = [c for k, c in after.items() if k not in before]
     assert added and all(c.type == "COMM_FAIL" and int(c.created) == d for c in added)
     later = [k for k in before if before[k].created > d + 1]
@@ -471,7 +473,8 @@ def test_bills_built_on_estimated_reads_say_so(small_town):
     bk, tw = small_town.books, small_town.town
     for d in bk.docs:
         est = any(small_town.status[r, d["month"]] == 2 for r in tw.inst_rows[d["inst"]])
-        assert d["estimated"] == (est or bool(d.get("rebilledOnEstimate"))), bk.doc_id(d)
+        on_check = bool(d.get("checkRead"))  # a disputed bill rebilled on a check read is not an estimate
+        assert d["estimated"] == (not on_check and (est or bool(d.get("rebilledOnEstimate")))), bk.doc_id(d)
     assert sum(d["estimated"] for d in bk.docs) > 100
     doc = next(d for d in bk.docs if d["estimated"] and d["version"] == 1 and d["invoice"] >= 0)
     j = views.doc_json(small_town, doc, 400.0)
@@ -506,9 +509,10 @@ def test_missing_read_cases_name_their_cause_and_who_raised_them(small_town, slo
     run, c = first["collector_outage"]
     assert views.missing_cause(run, c.r, c.month)["outageSince"] == run.iso(outage[0])
     kinds = {c.created_by for c in small_town.cases}
-    assert kinds == {"ami_head_end", "meter_reading_route", "vee_batch", "billing_run", "collections"}
+    assert kinds == {"ami_head_end", "meter_reading_route", "vee_batch", "billing_run", "collections", "contact_centre"}
     assert all(c.type in cat.COLLECTION_TYPES for c in small_town.cases if c.created_by == "collections")
-    assert all(c.created_by == "billing_run" for c in small_town.cases if c.doc >= 0)
+    assert all(c.created_by == ("contact_centre" if c.type == "BILL_DISPUTE" else "billing_run")
+               for c in small_town.cases if c.doc >= 0)  # a disputed bill is the contact centre's case
     # A missing read has no value to accept or override: estimate, a field order or an escalation.
     c = next(c for c in slow.cases if c.type == "COMM_FAIL" and c.resolved is None and 100 < c.created < 200)
     assert views.case_view(slow, c.id, as_of=iso(int(c.created) + 1))["actions"] == ["estimate", "field_order",

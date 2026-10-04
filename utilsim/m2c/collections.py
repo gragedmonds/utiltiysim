@@ -52,6 +52,7 @@ ACTIONS = (*ACCOUNT_ACTIONS, *INVOICE_ACTIONS)
 FEES = {"late_fee": "late fee", "nsf_fee": "NSF fee"}
 STEPS = ("DUNNING_REMINDER", "DUNNING_NOTICE", "DISCONNECT_NOTICE")
 PAID = ("received", "instalment", "grant")  # payments that settle an invoice (a returned debit does not)
+SETTLES = (*PAID, "credit")  # and a rebill's credit (from a disputed bill), which is not cash
 MAY_1 = regs.day_of(date(2026, 5, 1))  # the default moratorium release (billing.moratorium_end + 1)
 ARRANGEMENT_FIRST_DAYS, ARRANGEMENT_EVERY_DAYS = 7, 30  # first instalment a week after the arrangement, then monthly
 INSTALMENTS = (2, 12)
@@ -159,7 +160,7 @@ def due_at(inv: dict, T: float) -> float:
 
 
 def paid_by(inv: dict, T: float) -> float:
-    return sum(p["amount"] for p in inv["payments"] if p["status"] in PAID and p["at"] <= T)
+    return sum(p["amount"] for p in inv["payments"] if p["status"] in SETTLES and p["at"] <= T)
 
 
 def owed(inv: dict, T: float) -> float:
@@ -217,6 +218,9 @@ class Account:
     waiting: dict = field(default_factory=dict)  # invoice id -> invoice: dunning waiting for an arrangement to end
     referred: bool = False  # the call centre referred it (once a year)
     offered: bool = False  # the call centre enrolled it in budget billing (once a year)
+    bad: int = 0  # bad contact-centre experiences so far (long waits, hang-ups, unresolved contacts, complaints)
+    risk_at: float | None = None  # when bad service tipped it into paying later
+    paused: dict = field(default_factory=dict)  # invoice id -> (invoice, level, ver): a dunning step a hold delayed
 
 
 # ---- the replay ---------------------------------------------------------------------------------------------------
@@ -239,6 +243,7 @@ class Collections:
         self._seq = count()
         self._cur: Account | None = None
         self._late: list[tuple[int, dict]] = []  # invoice actions on an invoice not created yet: judged at the end
+        self.dun_new: list[tuple[dict, int]] = []  # (invoice, dunning index) since the contact centre last looked
         self._master: set[str] = set()
 
     def bcfg(self, t: float):
@@ -367,6 +372,65 @@ class Collections:
         if t < YEAR_DAYS:
             heapq.heappush(self._heap, (t, next(self._seq), A.id, kind, data))
 
+    def _dunning(self, inv: dict, t: float, kind: str) -> None:
+        inv["dunning"].append((t, kind))
+        self.dun_new.append((inv, len(inv["dunning"]) - 1))
+
+    # ---- the contact centre's feedback -----------------------------------------------------------------------------
+    def dispute(self, acct: str, t: float, case_id: str) -> None:
+        """A bill dispute opens: dunning on the account pauses until it is decided (at most dispute_hold_days)."""
+        days = self.run.cfg_at(int(t)).contact.dispute_hold_days
+        if days > 0:
+            A = self._account(acct)
+            A.holds.append({"start": t, "end": t + days, "note": f"bill dispute {case_id}", "caseId": case_id})
+
+    def dispute_done(self, acct: str, case_id: str, t: float) -> None:
+        """The dispute is decided at ``t``: its dunning hold ends and the held dunning goes on."""
+        A = self.accounts.get(acct)
+        if A is None:
+            return
+        for h in A.holds:
+            if h.get("caseId") == case_id and h["end"] > t:
+                h["end"] = t
+                for inv, level, ver in A.paused.values():  # a delayed step resumes now (its later copy is then stale)
+                    if level == inv["level"] and ver == inv["ver"]:
+                        self._push(A, t + 1e-4, "dun", inv, level, ver)
+                A.paused.clear()
+
+    def frustrate(self, acct: str, t: float) -> None:
+        """A bad contact-centre experience. At ``frustration_threshold`` of them the customer pays later from then on
+        (on time → late → at risk), and a pre-authorized debit customer may cancel it (``autopay_cancel_share``)."""
+        c = self.run.cfg_at(int(t)).contact
+        A = self._account(acct)
+        A.bad += 1
+        if c.frustration_threshold <= 0 or A.bad != c.frustration_threshold:
+            return
+        worse = {"on_time": "late", "late": "at_risk"}.get(A.profile)
+        A.risk_at = t
+        if worse:
+            A.log.append((t, "PAYMENT_RISK_RAISED", {"from": A.profile, "to": worse}))
+            A.profile = worse
+        u = float(hash_u01(self.run.seed, P_BILL, str_key(acct), 77))
+        if A.method == "pre_authorized_debit" and u < c.autopay_cancel_share:
+            A.log.append((t, "AUTOPAY_CANCELLED", {"method": "online"}))
+            A.method = "online"
+
+    def _credit(self, A: Account, t: float, inv: dict) -> None:
+        """A credit invoice (a rebill that billed less): it settles the account's open invoices, oldest first; the
+        rest stays on the account as a credit."""
+        left = round(-float(inv["total"]), 2)
+        for x in sorted(A.invs, key=lambda i: (i["issued"], i["n"])):
+            if left <= 0.005:
+                break
+            if x is inv or x["out"] <= 0.005 or x["issued"] > t:
+                continue
+            a = round(min(left, x["out"]), 2)
+            x["payments"].append({"at": t, "amount": a, "status": "credit", "ref": inv["id"]})
+            x["out"] = round(x["out"] - a, 2)
+            left = round(left - a, 2)
+            if x["out"] <= 0.005:
+                x["paid"] = t
+
     # ---- ledger and payments ---------------------------------------------------------------------------------------
     def ledger(self, A: Account, t: float, kind: str, amount: float, ref: str) -> None:
         self.books.ledger.setdefault(A.id, []).append((t, kind, round(amount, 2), ref))
@@ -394,6 +458,10 @@ class Collections:
 
     def _issue(self, A: Account, t: float, inv: dict) -> None:
         self.ledger(A, t, "invoice", inv["total"], inv["id"])
+        if inv["total"] < 0 and inv.get("credited"):  # a rebill's credit (a disputed bill that billed too much)
+            inv.update(amountDue=0.0, out=0.0, paid=t)
+            self._credit(A, t, inv)
+            return
         plan = self.plan_on(A, t)
         if plan is not None and plan["instalment"] is not None:  # budget billing: the plan's instalment is owed
             inv.update(amountDue=plan["instalment"], out=plan["instalment"], budget=True)
@@ -434,7 +502,7 @@ class Collections:
         fee = self.bcfg(t).nsf_fee
         self.ledger(A, t, "nsf_fee", fee, inv["id"])
         inv["fees"].append((t, "nsf_fee", fee))
-        inv["dunning"].append((t, "PAYMENT_REJECTED"))
+        self._dunning(inv, t, "PAYMENT_REJECTED")
 
     def _pay(self, A: Account, t: float, inv: dict) -> None:
         if not self.covering(A, inv, t):  # a payment arrangement replaces the customer's own payment while it runs
@@ -469,6 +537,7 @@ class Collections:
             if end == INF:
                 A.waiting[inv["id"]] = inv
             else:
+                A.paused[inv["id"]] = (inv, level, ver)
                 self.push(end, "dun", inv, level, ver)
             return
         b = self.bcfg(t)
@@ -476,19 +545,19 @@ class Collections:
             if b.winter_moratorium and _winter(date_of(int(t)), b) and self.mains(inv):  # held for the winter
                 if inv["moratorium"] is None:
                     inv["moratorium"] = t
-                    inv["dunning"].append((t, "MORATORIUM_HOLD"))
+                    self._dunning(inv, t, "MORATORIUM_HOLD")
                     self._call_centre(A, inv, t, "referral")
                 release = moratorium_release(b)
                 self.push(release if t < release else INF, "dun", inv, 2, ver)
                 return
-            inv["dunning"].append((t, "DISCONNECT_NOTICE"))
+            self._dunning(inv, t, "DISCONNECT_NOTICE")
             inv["disc"] = {"notice": t}
             inv["level"] = 3
             self._call_centre(A, inv, t, "referral")
             if b.disconnect_rule_share > 0 and inv["u"][8] < b.disconnect_rule_share:  # the collections rule
                 d = inv["disc"]
                 d.update(approved=t, scheduled=int(t) + b.disconnect_notice_days + 10.0 / 24, approvedBy="RULE")
-                inv["dunning"].append((t, "DISCONNECT_APPROVED"))
+                self._dunning(inv, t, "DISCONNECT_APPROVED")
                 self.push(d["scheduled"], "disconnect", inv)
                 self._crew(inv, "disconnect", d["scheduled"], t)
             return
@@ -496,7 +565,7 @@ class Collections:
             fee = round(amount_due(inv) * b.late_fee_pct / 100.0, 2)
             self.ledger(A, t, "late_fee", fee, inv["id"])
             inv["fees"].append((t, "late_fee", fee))
-        inv["dunning"].append((t, STEPS[level]))
+        self._dunning(inv, t, STEPS[level])
         if level == 1:
             self._call_centre(A, inv, t, "budget")
         inv["level"] = level + 1
@@ -715,7 +784,7 @@ class Collections:
                 return
             d["at"] = t
             d["meter"] = o.meter
-            inv["dunning"].append((t, "DISCONNECTED"))
+            self._dunning(inv, t, "DISCONNECTED")
             run.service_off(rows, t, "disconnected")
             pay = inv.get("payAt")
             if (pay is None or pay > t + 7) and inv["u"][6] < self.bcfg(t).disconnect_payment_rate:
@@ -733,7 +802,7 @@ class Collections:
     def _reconnected(self, inv: dict, t: float) -> None:
         d = inv["disc"]
         d["reconnected"] = t
-        inv["dunning"].append((t, "RECONNECTED"))
+        self._dunning(inv, t, "RECONNECTED")
         if d.get("meter") is not None:
             self.run.service_on(np.flatnonzero(self.run.town.meter_of == d["meter"]), t)
 
@@ -763,7 +832,7 @@ class Collections:
                 new = due_at(inv, t) + a["days"]
                 inv["dueChanges"].append((t, new))
                 inv["ver"] += 1
-                inv["dunning"].append((t, "DUE_DATE_EXTENDED"))
+                self._dunning(inv, t, "DUE_DATE_EXTENDED")
                 b, level = self.bcfg(t), inv["level"]
                 if level < 3:
                     offset = (b.reminder_days, b.notice_days, b.disconnect_days)[level]
@@ -773,17 +842,17 @@ class Collections:
                 amt = fee_left(inv, a["fee"], t)
                 inv["waived"].append((t, a["fee"], amt))
                 self.ledger(A, t, "fee_waived", -amt, inv["id"])
-                inv["dunning"].append((t, "FEE_WAIVED"))
+                self._dunning(inv, t, "FEE_WAIVED")
             elif typ == "disconnect_approve":
                 d = inv["disc"]
                 d.update(approved=t, scheduled=max(int(d["notice"]) + self.bcfg(t).disconnect_notice_days, int(t))
                          + 10.0 / 24, approvedBy=a["id"])
-                inv["dunning"].append((t, "DISCONNECT_APPROVED"))
+                self._dunning(inv, t, "DISCONNECT_APPROVED")
                 self.push(d["scheduled"], "disconnect", inv)
                 self._crew(inv, "disconnect", d["scheduled"], t)
             else:
                 inv["disc"]["cancelled"] = t
-                inv["dunning"].append((t, "DISCONNECT_CANCELLED"))
+                self._dunning(inv, t, "DISCONNECT_CANCELLED")
             inv.setdefault("work", []).append((t, typ, a["id"], a.get("note")))
 
     # ---- what applies when (refusals, and the actions a row offers) ------------------------------------------------

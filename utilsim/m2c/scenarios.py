@@ -180,18 +180,30 @@ SCENARIOS: tuple[dict, ...] = (
      "description": "For a month the agents cover the phones only until 1 pm; the rest of the day goes to the "
                     "billing backlog.",
      "watch": "Contacts squeeze into four hours: longer waits, more hang-ups and call backs, more callers who find "
-              "the lines closed and try again.",
+              "the lines closed and try again. Customers who keep hanging up start paying later (Year: What the "
+              "contact centre changed; more overdue notices follow).",
      "tags": ["contact centre", "abandonment"],
      "episodes": [_ep("Phones until 1 pm", {"contact": {"close_hour": 13.0}}, days=30)]},
     {"id": "ivr_down", "title": "IVR and website down", "group": "contact",
      "description": "Self-service is out for ten days: every balance check, password reset and outage report needs "
                     "an agent.",
-     "watch": "Contacts to agents roughly double; the service level drops and hang-ups rise until self-service is back.",
+     "watch": "Contacts to agents roughly double; the service level drops and hang-ups rise until self-service is back, "
+              "and some of the customers who gave up pay later for the rest of the year.",
      "tags": ["contact centre", "self-service"],
      "episodes": [_ep("No self-service", {"contact": {"self_serve_factor": 0}}, days=10)]},
+    {"id": "nobody_on_the_phones", "title": "Nobody on the phones", "group": "contact",
+     "description": "For three weeks the agents are pulled onto the billing backlog: the lines ring out (self-service "
+                    "and the emergency line still work).",
+     "watch": "Every live call is a hang-up or a closed line: retries, then complaints that never get through. "
+              "Hundreds of customers have enough bad experiences to pay later from then on, some cancel their "
+              "pre-authorized debit, and overdue notices climb for the rest of the year (Year: What the contact "
+              "centre changed, Collections).",
+     "tags": ["contact centre", "collections", "churn"],
+     "episodes": [_ep("No agents", {"contact": {"agents": 0}}, days=21)]},
     {"id": "second_agent", "title": "Hire a second agent", "group": "contact",
      "description": "A second agent joins the phones from this day.",
-     "watch": "Waits, hang-ups and call backs fall; staffing cost and idle time rise. Compare with the busiest months.",
+     "watch": "Waits, hang-ups and call backs fall; staffing cost and idle time rise. More disputes get through and "
+              "become Bill Correction cases, and fewer customers start paying late after bad service.",
      "tags": ["contact centre", "staffing"],
      "episodes": [_ep("Second agent", {"contact": {"agents": "+1"}})]},
 )
