@@ -165,7 +165,7 @@ test('server-sent replies are read across arbitrary chunk boundaries, with in-ba
 
 test('the setup guide opens on the selected test goals, or asks what to test',async()=>{
  const focused=guide({draft:{status:'draft',goals:['vee','reading']},replies:[]});await settle();
- assert.match(focused.$('#agent-log').innerHTML,/We’ll focus on vee, reading\. What outcome would you like to test/);assert.match(focused.root.innerHTML,/<li>What to test<\/li>/);focused.close();
+ assert.match(focused.$('#agent-log').innerHTML,/We’ll focus on validation &amp; estimation \(VEE\) and meter reading\. What outcome would you like to test/);assert.match(focused.root.innerHTML,/<li>What to test<\/li>/);focused.close();
  const open=guide({replies:[]});await settle();assert.match(open.$('#agent-log').innerHTML,/What would you like to test—operations day/);open.close();
 });
 
@@ -178,4 +178,11 @@ test('the Year scenario guide keeps its context and suggested start in the chat'
  assert.equal(g.chats()[0].body.mode,'inflict');assert.equal(g.chats()[0].body.currentRun.startDate,'2026-06-01');
  assert.match(g.$('#agent-log').innerHTML,/How long should it last\?/);
  g.close();
+});
+
+test('goal ids read as names in the guide', async () => {
+ const {goalNames}=await import('../dist/setup-agent.js');
+ assert.equal(goalNames(['vee','reading']),'validation & estimation (VEE) and meter reading');
+ assert.equal(goalNames(['contact']),'the contact centre');
+ assert.equal(goalNames(['a','b_c','fieldwork']),'a, b c and field work & maintenance');
 });

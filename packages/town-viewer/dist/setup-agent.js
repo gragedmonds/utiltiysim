@@ -1,4 +1,7 @@
 import {summaryMarkup,editProposalInput,collectEditedProposal,summaryNeedsRefresh} from './proposal-summary.js';
+// The engine's test goals by id (utilsim/config/goals.py), for the guide's opening line.
+const GOAL_NAMES={operations:'the operations day',reading:'meter reading',vee:'validation & estimation (VEE)',billing:'billing quality',collections:'payments & collections',fieldwork:'field work & maintenance',contact:'the contact centre',everything:'everything'};
+export function goalNames(ids){const n=(ids||[]).map(id=>GOAL_NAMES[id]||String(id).replaceAll('_',' '));return n.length>1?n.slice(0,-1).join(', ')+' and '+n.at(-1):n.join('');}
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 export const PROPOSAL_FIELDS=['name','goals','purpose','region','preset','seed','asOf','townOverrides','settings','operations','episodes','summary','assumptions','limitations'];
 export function proposalInput(proposal){return Object.fromEntries(PROPOSAL_FIELDS.filter(k=>proposal[k]!==undefined).map(k=>[k,k==='episodes'?proposal[k].map(({id,scenario,...ep})=>ep):proposal[k]]));}
@@ -90,7 +93,7 @@ export function installSetupAgent({root,api,getDraft,onSave,onApply,onBack,mode=
  const turnNo=()=>state.messages.filter(m=>m.role==='user').length;
  const note=(content,stage)=>({role:'assistant',content,note:true,...(stage?{stage}:{})});
  const opening=()=>inflict?['What would you like to change in this simulation? Tell me the tweak, when it starts, and roughly how long it should last.',`Suggested start: **${getDraft().startDate}** · ${(getDraft().episodes||[]).length} existing period${(getDraft().episodes||[]).length===1?'':'s'} kept. You can ask for another start date.`]
-  :['Hi! I’ll ask a few questions at a time: what you want to test, then where you are and how things work today. Then I’ll shape the setup.',getDraft().goals?.length?`We’ll focus on ${getDraft().goals.join(', ')}. What outcome would you like to test, and where is your service area?`:'What would you like to test—operations day, meter reading, VEE, billing, collections, field work, contact centre, or everything?'];
+  :['Hi! I’ll ask a few questions at a time: what you want to test, then where you are and how things work today. Then I’ll shape the setup.',getDraft().goals?.length?`We’ll focus on ${goalNames(getDraft().goals)}. What outcome would you like to test, and where is your service area?`:'What would you like to test—operations day, meter reading, VEE, billing, collections, field work, contact centre, or everything?'];
  const rows=()=>[...opening().map(content=>({role:'assistant',content})),...state.messages];
  function fail(e){if(e.name==='AbortError'||!alive)return;error=e.message||'The assistant could not finish. Please try again.';paint();}
  async function request(path,body,onEvent){const r=await fetchImpl(api+'/setup-agent/'+path,{method:body?'POST':'GET',headers:body?{'Content-Type':'application/json',...(onEvent?{Accept:'text/event-stream, application/json'}:{})}:undefined,body:body?JSON.stringify(body):undefined,signal:controller.signal});
