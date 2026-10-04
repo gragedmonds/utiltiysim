@@ -331,6 +331,15 @@ invoiced and collected, overdue and receivable, dunning steps, accounts by colle
 so the before and after of a scenario is visible. The engine side (per-day configuration, the library, the trend) is
 described in [M2C.md](M2C.md) "Episodes"; the page's pure helpers are tested in `tests/year-page.test.mjs`.
 
+**Years.** A simulation starts in 2026 and goes on a year at a time to 2030. The Command Center's year switcher shows
+the years opened so far, and on the last one **Continue into {next year}** (after a confirmation) opens the next year
+on this year's close: balances, open cases, bills, field orders, services off and devices carry (engine:
+[M2C.md](M2C.md) "Years"). A later year shows what it opened with (the summary's `opening`). `EngineM2C` keeps each
+year's own actions, episodes, outages and view date (settings and seed are the simulation's), sends `year` and
+`previous` with every request of a later year (2026's requests are unchanged), and refuses new work in a closed
+(earlier) year, which stays viewable. Every page's date bounds follow the active year. The map's operations days are
+2026's: in a later year the map shows a note, and once 2027 is opened the map records nothing more into 2026.
+
 ## 14. The engine guide (Configuration › Engine guide)
 
 The Configuration page's fifth section renders `GET /api/m2c/guide` (`guide.js`, `utilsim/m2c/guide.py`): a summary,

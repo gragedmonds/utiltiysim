@@ -30,6 +30,13 @@ export class SimulationLibrary{
    this.save({...this.create(),id,name:name+' · previous work',status:'ready',step:3,preset:t.preset,townRef:t.preset,townId:t.townId,townName:name,homes:t.homes,asOf:saved.asOf||'2026-03-31',seed:saved.seed||'',scenarioTitle:'Previous work'});
   }}
 }
+// The years a simulation has opened, read from its meter-to-cash state ('utility-town-m2c:<scope>', m2c.js): 2026, and
+// each later year it continued into (`later`), to 2030. `label` is "2026" or "2026–2027".
+export function simulationYears(s,storage=globalThis.localStorage){const first=2026;let last=first,active=first;
+ try{const raw=storage?.getItem('utility-town-m2c:'+simulationKey(s?.id,s?.townId)),saved=raw?JSON.parse(raw):null;
+  for(const y of Array.isArray(saved?.later)?saved.later:[]){if(Number(y?.year)!==last+1||last>=2030)break;last++;}
+  if(Number(saved?.year)>=first&&Number(saved?.year)<=last)active=Number(saved.year);}catch{}
+ return {first,last,active,label:first===last?String(first):`${first}–${last}`};}
 // Where a simulation opens: its Config page until its settings are locked in (simulation-lock.js), then the map for an
 // operations-only experiment and the Command Center (#/year) otherwise.
 export function landingHash(s){return s.locked===false?'#/config':s.goals?.length===1&&s.goals[0]==='operations'?'#/map':'#/year';}

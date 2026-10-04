@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {SimulationLibrary,SIM_PREFIX,DELETED_PREFIX,simulationKey,studioURL} from '../dist/simulation-library.js';
+import {SimulationLibrary,SIM_PREFIX,DELETED_PREFIX,simulationKey,studioURL,simulationYears} from '../dist/simulation-library.js';
 import {EngineM2C} from '../dist/m2c.js';
 import {EngineOperations} from '../dist/engine-operations.js';
 function memory(){const m=new Map();return {get length(){return m.size;},key:i=>[...m.keys()][i],getItem:k=>m.get(k)??null,setItem:(k,v)=>m.set(k,v),removeItem:k=>m.delete(k)};}
@@ -53,4 +53,14 @@ test('a deleted adopted simulation stays deleted; the town-keyed original stays'
  lib.adoptPacks(pack);assert.equal(lib.list().length,0);
  assert.equal(storage.getItem('utility-town-m2c:town-1'),saved);assert.equal(storage.getItem('utility-town-ops-settings:town-1'),'{"crews":2}');
  assert.equal(storage.getItem('utility-town-m2c:'+simulationKey(id,'town-1')),null);
+});
+
+test('a simulation card shows the years its meter-to-cash state has opened',()=>{
+ const storage=memory(),lib=new SimulationLibrary(storage),s=lib.save({...lib.create(),name:'Years',status:'ready',townRef:'village',townId:'town-1'});
+ assert.deepEqual(simulationYears(s,storage),{first:2026,last:2026,active:2026,label:'2026'},'nothing saved yet: 2026');
+ const m=new EngineM2C({townRef:'village',townId:'town-1',simulationId:s.id,storage});m.setAsOf('2026-06-30');assert.equal(simulationYears(s,storage).label,'2026');
+ m.continueYear();assert.deepEqual(simulationYears(s,storage),{first:2026,last:2027,active:2027,label:'2026–2027'});
+ m.setYear(2026);assert.equal(simulationYears(s,storage).active,2026);assert.equal(simulationYears({id:'other',townId:'town-1'},storage).label,'2026');
+ // The record keeps the view date in view and 2026's episodes; reopening from it alone never puts a 2027 date in 2026.
+ const fresh=new EngineM2C({townRef:'village',townId:'town-9',storage:memory(),initial:{asOf:'2027-01-31',episodes:[]}});assert.equal(fresh.year,2026);assert.equal(fresh.asOf,null);
 });

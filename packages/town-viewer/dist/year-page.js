@@ -1,19 +1,21 @@
-// Year: the calendar of the simulated year 2026, the episodes inflicted on it and the month-by-month trends of the run.
+// Year: the calendar of the active simulated year (2026 first, then each year continued from it), the episodes inflicted
+// on it and the month-by-month trends of the run.
 // An episode is a scenario from the engine's library (GET /api/m2c/scenarios) applied from a day the analyst clicks;
 // episodes are run input like actions and settings (EngineM2C.episodes, on every request), so the engine replays the
 // year with them (first request after a change: 5–15 s) and POST /api/m2c/trend returns the twelve months' figures.
+// The year switcher moves between the years opened; Continue opens the next year on this one's close (EngineM2C).
 // This page draws the calendar and the charts, edits episodes and formats; nothing here computes a figure.
-// Route: #/year.
+// Route: #/year (the client's active year).
 import {engineNotice} from './workspace.js';
 import {bindPopovers} from './config-page.js';
-import {episodeDates,YEAR_END} from './m2c.js';
+import {episodeDates,FIRST_YEAR,LAST_YEAR,activeYear,dayYear,yearEnd} from './m2c.js';
 import {fmtCell} from './data-page.js';
 import {prettyKey} from './schema-form.js';
+import {money} from './worklists.js';
 import {installSetupAgent,currentRunInput} from './setup-agent.js';
 export const ROUTE=/^#\/year$/;
-export const YEAR=2026;
 export const MAX_EPISODES=40;
-export function parseYearRoute(hash){return ROUTE.test(String(hash||''))?{year:YEAR}:null;}
+export function parseYearRoute(hash){return ROUTE.test(String(hash||''))?{}:null;}
 export function yearHash(){return '#/year';}
 const e=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const INT=new Intl.NumberFormat('en-CA',{maximumFractionDigits:0});
@@ -22,15 +24,17 @@ const addDays=(day,n)=>new Date(Date.parse(day+'T12:00:00Z')+n*86400000).toISOSt
 const isDay=d=>/^\d{4}-\d{2}-\d{2}$/.test(String(d||''))&&!Number.isNaN(Date.parse(d+'T12:00:00Z'));
 export const longDay=day=>new Intl.DateTimeFormat('en-GB',{weekday:'short',day:'numeric',month:'short',year:'numeric',timeZone:'UTC'}).format(new Date(day+'T12:00:00Z')).replace(',','');
 export const shortDay=day=>new Intl.DateTimeFormat('en-GB',{day:'numeric',month:'short',timeZone:'UTC'}).format(new Date(day+'T12:00:00Z'));
-export const rangeLabel=ep=>`${shortDay(ep.from)} – ${ep.to&&ep.to<YEAR_END?shortDay(ep.to):'year end'}`;
+// An episode's days; an end on 31 December of its year (or none) is the year end.
+export const rangeLabel=ep=>`${shortDay(ep.from)} – ${ep.to&&ep.to<yearEnd(dayYear(ep.from)||FIRST_YEAR)?shortDay(ep.to):'year end'}`;
 // ---- the calendar model ----------------------------------------------------------------------------------------
-// Twelve months with their weekday offset (Monday first: 0..6 for the 1st) and day count, for a 7-column grid.
-export function calendarModel(year=YEAR){return MONTHS.map((label,i)=>{const first=new Date(Date.UTC(year,i,1)),days=new Date(Date.UTC(year,i+1,0)).getUTCDate(),offset=(first.getUTCDay()+6)%7;
+// Twelve months with their weekday offset (Monday first: 0..6 for the 1st) and day count, for a 7-column grid (29 Feb in a leap year).
+export function calendarModel(year=FIRST_YEAR){return MONTHS.map((label,i)=>{const first=new Date(Date.UTC(year,i,1)),days=new Date(Date.UTC(year,i+1,0)).getUTCDate(),offset=(first.getUTCDay()+6)%7;
  const mm=String(i+1).padStart(2,'0');return {month:i+1,label,days,offset,weeks:Math.ceil((offset+days)/7),start:`${year}-${mm}-01`,end:`${year}-${mm}-${String(days).padStart(2,'0')}`};});}
 // The day ranges (1-based, inside the month) each episode covers in a month, in episode order; `to` null runs to the
-// year end. `index` is the episode's position in the list (its colour), `lane` its row under this month.
-export function episodeSpans(episodes,month){const mo=typeof month==='number'?calendarModel()[month-1]:month;if(!mo)return [];const out=[];
- for(let index=0;index<(episodes||[]).length;index++){const ep=episodes[index];if(!ep?.from)continue;const to=ep.to||YEAR_END;if(ep.from>mo.end||to<mo.start)continue;
+// year end. `index` is the episode's position in the list (its colour), `lane` its row under this month. A month number
+// is a month of `year`.
+export function episodeSpans(episodes,month,year=FIRST_YEAR){const mo=typeof month==='number'?calendarModel(year)[month-1]:month;if(!mo)return [];const out=[],end=mo.start.slice(0,4)+'-12-31';
+ for(let index=0;index<(episodes||[]).length;index++){const ep=episodes[index];if(!ep?.from)continue;const to=ep.to||end;if(ep.from>mo.end||to<mo.start)continue;
   const from=ep.from<mo.start?1:Number(ep.from.slice(8,10)),last=to>mo.end?mo.days:Number(to.slice(8,10));
   out.push({id:ep.id,index,lane:out.length,from,to:last,startsHere:ep.from>=mo.start,endsHere:to<=mo.end});}
  return out;}
@@ -44,13 +48,13 @@ export const episodeColor=i=>EPISODE_COLORS[((i%EPISODE_COLORS.length)+EPISODE_C
 export function parseSettingValue(raw){if(typeof raw!=='string')return raw;const s=raw.trim();if(s==='')return undefined;
  if(s==='true')return true;if(s==='false')return false;const op=s.match(/^([*+-])\s*(\d+(?:\.\d+)?)$/);if(op)return op[1]+op[2];
  const n=Number(s);return s!==''&&Number.isFinite(n)?n:s;}
-// A panel draft (dates, ramp and settings rows as typed) as one episode, or the first thing wrong with it.
-export function draftEpisode(d){if(!isDay(d.from)||!d.from.startsWith(YEAR+'-'))return {error:`Start must be a ${YEAR} date.`};
- const to=d.to?String(d.to).trim():'';if(to&&(!isDay(to)||!to.startsWith(YEAR+'-')))return {error:`End must be a ${YEAR} date, or blank for the year end.`};if(to&&to<d.from)return {error:'End is before the start.'};
+// A panel draft (dates, ramp and settings rows as typed) as one episode of `year`, or the first thing wrong with it.
+export function draftEpisode(d,year=FIRST_YEAR){if(!isDay(d.from)||!d.from.startsWith(year+'-'))return {error:`Start must be a ${year} date.`};
+ const to=d.to?String(d.to).trim():'';if(to&&(!isDay(to)||!to.startsWith(year+'-')))return {error:`End must be a ${year} date, or blank for the year end.`};if(to&&to<d.from)return {error:'End is before the start.'};
  const ramp=d.ramp===''||d.ramp==null?0:Number(d.ramp);if(!Number.isInteger(ramp)||ramp<0)return {error:'Ramp is a whole number of days.'};
  const settings={};for(const [g,keys] of Object.entries(d.settings||{}))for(const [k,raw] of Object.entries(keys||{})){const v=parseSettingValue(raw);if(v===undefined)return {error:`${g}.${k} needs a value.`};(settings[g]||={})[k]=v;}
  if(!Object.keys(settings).length)return {error:'An episode changes at least one setting.'};
- return {episode:{title:String(d.title||'').trim()||d.scenario||'Episode',scenario:d.scenario||null,from:d.from,to:to&&to<YEAR_END?to:null,ramp,settings}};}
+ return {episode:{title:String(d.title||'').trim()||d.scenario||'Episode',scenario:d.scenario||null,from:d.from,to:to&&to<yearEnd(year)?to:null,ramp,settings}};}
 // Settings as rows for the panel: [group, key, value as text].
 export const settingRows=settings=>Object.entries(settings||{}).flatMap(([g,keys])=>Object.entries(keys||{}).map(([k,v])=>[g,k,v==null?'':String(v)]));
 // ---- the trend charts ------------------------------------------------------------------------------------------
@@ -112,16 +116,18 @@ export const monthLabel=(model,i)=>MONTHS[i]+(model.partial[i]?` (to ${shortDay(
 export function readout(model,i){const m=model.months[i];if(!m||model.tops[i]==null)return `${MONTHS[i]}: no figures yet`;
  const parts=model.series.filter(s=>s.values[i]!=null).map(s=>`${s.label} ${fmtValue(s.values[i],model.fmt)}`),extra=(model.detail?.(m)||[]).map(([k,v])=>`${k} ${fmtValue(v,'int')}`);
  return `${monthLabel(model,i)}: ${parts.join(' · ')}${extra.length?' · '+extra.join(' · '):''}`;}
+// The year a chart's months are in (the trend's own month starts; 2026 when it has none).
+export const modelYear=model=>dayYear((model?.months||[]).find(m=>m?.start)?.start)||FIRST_YEAR;
 export function describeChart(model){const n=model.tops.filter(v=>v!=null).length,li=model.latest;if(li<0)return `${model.title}, ${model.unit}. No figures yet.`;
- return `${model.title}, ${model.unit}. ${n} month${n===1?'':'s'}, ${MONTHS[model.tops.findIndex(v=>v!=null)]} to ${MONTHS[li]} ${YEAR}${model.partial[li]?`, ${MONTHS[li]} to the run date only`:''}. Latest, ${readout(model,li)}.`;}
+ return `${model.title}, ${model.unit}. ${n} month${n===1?'':'s'}, ${MONTHS[model.tops.findIndex(v=>v!=null)]} to ${MONTHS[li]} ${modelYear(model)}${model.partial[li]?`, ${MONTHS[li]} to the run date only`:''}. Latest, ${readout(model,li)}.`;}
 export const GEOM={w:320,h:150,left:44,right:10,top:10,bottom:22};
 // Inline SVG for one chart: hairline grid and ticks, episode bands, the run date, the marks, and one hit target per month.
-export function chartSvg(model,{asOf=null,episodes=[],id='yr'}={}){const g=GEOM,pw=g.w-g.left-g.right,ph=g.h-g.top-g.bottom,slot=pw/12,cal=calendarModel(),f=n=>Number(n.toFixed(2));
- const x=i=>f(g.left+(i+.5)*slot),y=v=>f(g.top+ph-(v/model.max)*ph),dayX=day=>{if(!day||day>YEAR_END)return g.left+pw;const mi=Number(day.slice(5,7))-1,d=Number(day.slice(8,10));return f(g.left+(mi+(d-1)/cal[mi].days)*slot);};
+export function chartSvg(model,{asOf=null,episodes=[],id='yr',year=modelYear(model)}={}){const g=GEOM,pw=g.w-g.left-g.right,ph=g.h-g.top-g.bottom,slot=pw/12,cal=calendarModel(year),end=yearEnd(year),f=n=>Number(n.toFixed(2));
+ const x=i=>f(g.left+(i+.5)*slot),y=v=>f(g.top+ph-(v/model.max)*ph),dayX=day=>{if(!day||day>end)return g.left+pw;const mi=Number(day.slice(5,7))-1,d=Number(day.slice(8,10));return f(g.left+(mi+(d-1)/cal[mi].days)*slot);};
  const grid=model.ticks.map(t=>`<line class="yr-grid" x1="${g.left}" x2="${g.w-g.right}" y1="${y(t)}" y2="${y(t)}"/><text class="yr-tick" x="${g.left-6}" y="${f(y(t)+3)}" text-anchor="end">${e(fmtTick(t,model.fmt))}</text>`).join('');
  const xl=MONTHS.map((m,i)=>`<text class="yr-tick" x="${x(i)}" y="${g.h-7}" text-anchor="middle">${m[0]}</text>`).join('');
- const bands=episodes.map((ep,k)=>{const a=dayX(ep.from),b=ep.to&&ep.to<YEAR_END?dayX(addDays(ep.to,1)):g.left+pw;return b<=a?'':`<rect class="yr-band" x="${a}" y="${g.top}" width="${f(b-a)}" height="${ph}" fill="${episodeColor(k)}"><title>${e(ep.title)} · ${e(rangeLabel(ep))}</title></rect>`;}).join('');
- const run=asOf&&asOf.startsWith(YEAR+'-')?`<line class="yr-run" x1="${dayX(asOf)}" x2="${dayX(asOf)}" y1="${g.top}" y2="${g.top+ph}"><title>Run date ${e(asOf)}</title></line>`:'';
+ const bands=episodes.map((ep,k)=>{const a=dayX(ep.from),b=ep.to&&ep.to<end?dayX(addDays(ep.to,1)):g.left+pw;return b<=a?'':`<rect class="yr-band" x="${a}" y="${g.top}" width="${f(b-a)}" height="${ph}" fill="${episodeColor(k)}"><title>${e(ep.title)} · ${e(rangeLabel(ep))}</title></rect>`;}).join('');
+ const run=asOf&&asOf.startsWith(year+'-')?`<line class="yr-run" x1="${dayX(asOf)}" x2="${dayX(asOf)}" y1="${g.top}" y2="${g.top+ph}"><title>Run date ${e(asOf)}</title></line>`:'';
  let marks='';
  if(model.kind==='line'){for(const s of model.series){const d=linePath(s.values,x,y);if(!d)continue;marks+=`<path class="yr-line" d="${d}" stroke="${s.color}"/>`;const li=model.latest;if(li>=0&&s.values[li]!=null)marks+=`<circle cx="${x(li)}" cy="${y(s.values[li])}" r="6" fill="#fff"/>`+(model.partial[li]?`<circle cx="${x(li)}" cy="${y(s.values[li])}" r="3" fill="#fff" stroke="${s.color}" stroke-width="2"/>`:`<circle cx="${x(li)}" cy="${y(s.values[li])}" r="4" fill="${s.color}"/>`);}}
  else{const bw=Math.min(24,slot-6);for(let i=0;i<12;i++){if(model.tops[i]==null)continue;const segs=model.series.map(s=>[s,s.values[i]]).filter(([,v])=>v>0);if(!segs.length)continue;let base=g.top+ph;
@@ -133,7 +139,12 @@ export function chartTable(model){const first=model.months.find((m,i)=>model.top
  return `<table><thead><tr><th>Month</th>${model.series.map(s=>`<th>${e(s.label)}</th>`).join('')}${extra.map(k=>`<th>${e(k)}</th>`).join('')}</tr></thead><tbody>${model.months.map((m,i)=>{const det=m&&model.tops[i]!=null&&model.detail?Object.fromEntries(model.detail(m)):{};
   return `<tr><td>${MONTHS[i]}${model.partial[i]?'*':''}</td>${model.series.map(s=>`<td>${fmtValue(s.values[i],model.fmt)}</td>`).join('')}${extra.map(k=>`<td>${fmtValue(det[k],'int')}</td>`).join('')}</tr>`;}).join('')}</tbody></table>${model.partial.some(Boolean)?'<p class="yr-note">* to the run date, not a whole month</p>':''}`;}
 
-export function episodeRunEnd(episodes){return episodes.reduce((end,ep)=>{const day=ep.to||YEAR_END;return day>end?day:end;},'2026-01-01');}
+// The last day the episodes run to (an open end: their year's last day).
+export function episodeRunEnd(episodes,year=dayYear(episodes[0]?.from)||FIRST_YEAR){return episodes.reduce((end,ep)=>{const day=ep.to||yearEnd(year);return day>end?day:end;},`${year}-01-01`);}
+// The figures a later year opened with (the summary's `opening`: what the year before closed with), as short phrases.
+export function openingFigures(o){if(!o)return [];const p=(v,one,many)=>`${INT.format(Number(v)||0)} ${Number(v)===1?one:many}`;
+ return [p(o.openCases,'open case','open cases'),`${money(Number(o.receivable)||0)} receivable`,p(o.unpaidInvoices,'unpaid invoice','unpaid invoices'),p(o.unbilledDocuments,'unbilled document','unbilled documents'),
+  p(o.openOrders,'open field order','open field orders'),p(o.servicesOff,'service off','services off'),p(o.deadBatteries,'dead battery','dead batteries'),p(o.faultyMeters,'faulty meter','faulty meters')];}
 
 export async function inflictReviewedEpisodes(m,proposal,analyse){
  if(m.readOnly)throw Error('Open a live simulation to inflict tweaks.');
@@ -143,33 +154,59 @@ export async function inflictReviewedEpisodes(m,proposal,analyse){
  catch(error){m.episodes=before;m.asOf=date;m.save();throw error;}
 }
 
-export function installYearPage({getClient,getSimulation=()=>null,getEngineState=()=>({state:'idle',towns:[]}),toast=()=>{},onDate=null,root=document.getElementById('year-root')}){
- const ui={library:null,trend:null,busy:false,recalc:false,error:'',panel:null,confirmClear:false,models:[],agent:null,applying:false};
+// The year bar: the years opened (a switcher), Continue into the next year (on the last year opened, to 2030, with a
+// confirm step: `confirm`), a closed year's note, and for a later year what it opened with (`opening`: {year, figures},
+// the summary's `opening`). An archived run shows only its opening.
+export function yearsBar(m,{confirm=false,opening=null,loaded=false}={}){if(!m)return '';const yr=activeYear(m),list=Array.isArray(m.years)&&m.years.length?m.years:[yr],last=list.at(-1),next=yr+1;
+ const sw=m.readOnly?'':`<div class="year-switch" role="group" aria-label="Simulation year">${list.map(y=>`<button type="button" data-year="${y}" aria-pressed="${y===yr}"${y===yr?' aria-current="true"':''}>${y}</button>`).join('')}</div>`;
+ const cont=m.readOnly?'':m.canContinue?.()?(confirm?`<span class="year-continue-confirm" role="group" aria-label="Continue into ${next}"><span>Open ${next} on ${yr}'s close? ${yr} then closes: its actions and episodes stay as they are.</span><button type="button" class="primary-btn" data-act="continue-yes">Continue into ${next}</button><button type="button" class="small-link" data-act="continue-no">Not yet</button></span>`
+  :`<button type="button" class="outline-btn year-continue" data-act="continue">Continue into ${next}</button><span class="year-years-note">${next} opens where ${yr} closes: balances, open cases, bills, field orders, services off and devices carry.</span>`)
+  :m.isClosed?.()?`<span class="year-years-note is-closed">${e(m.closedMessage?.()||`${yr} is closed.`)}</span>`:yr>=LAST_YEAR&&yr===last?`<span class="year-years-note">The simulation runs to ${LAST_YEAR}.</span>`:'';
+ const o=yr>FIRST_YEAR?opening?.year===yr?opening.figures?`<p class="year-opening"><strong>Opened with</strong> ${openingFigures(opening.figures).map(x=>`<span>${e(x)}</span>`).join('')}</p>`:''
+  :`<p class="year-opening is-loading">Opened on ${yr-1}'s close${loaded?' · loading its figures…':''}</p>`:'';
+ return (sw||cont?`<section class="year-years" aria-label="Years">${sw}${cont}</section>`:'')+o;}
+
+// `onYear(year)` hears a year switched to or opened (the Studio's other pages and the map follow the active year).
+export function installYearPage({getClient,getSimulation=()=>null,getEngineState=()=>({state:'idle',towns:[]}),toast=()=>{},onDate=null,onYear=null,root=document.getElementById('year-root')}){
+ const ui={library:null,trend:null,busy:false,recalc:false,opened:false,error:'',panel:null,confirmClear:false,confirmContinue:false,opening:null,models:[],agent:null,applying:false};
  let closePops=null,closeAgent=null,agentClient=null;
  const header=root?.ownerDocument?.querySelector('.studio-header');
  const positionGuide=()=>{if(header)root.style.setProperty('--year-guide-top',header.getBoundingClientRect().bottom+'px');};
  if(header&&globalThis.ResizeObserver)new ResizeObserver(positionGuide).observe(header);
  positionGuide();
  const client=()=>getClient?.()||null;
+ const yearOf=()=>activeYear(client());
+ // The active year takes no new episodes when it is closed (a later year opened on it) or archived.
+ const frozen=m=>!!m&&(m.readOnly||!!m.isClosed?.());
  const scenarioOf=id=>ui.library?.scenarios?.find(s=>s.id===id)||null;
  // ---- loading --------------------------------------------------------------------------------------------------
  async function loadLibrary(){const m=client();if(!m||m.readOnly||ui.library)return;try{ui.library=await m.scenarios();}catch(err){ui.error=err.message;}}
  // The trend for the current run; `recalc` says the run changed (the engine replays the year). Returns the error, if any.
- async function load({recalc=false}={}){const m=client();if(!m)return null;ui.busy=true;ui.recalc=recalc;ui.error='';render();
-  try{ui.trend=await m.trend();ui.busy=false;ui.recalc=false;render();return null;}
-  catch(err){if(err.superseded)return null;ui.busy=false;ui.recalc=false;ui.error=err.message;render();return err;}}
+ // A reply for a year no longer active (switched away while it ran) is dropped.
+ async function load({recalc=false,opened=false}={}){const m=client();if(!m)return null;const yr=activeYear(m);ui.busy=true;ui.recalc=recalc;ui.opened=opened;ui.error='';render();
+  try{const t=await m.trend();if(client()!==m||activeYear(m)!==yr)return null;ui.trend=t;ui.trendYear=yr;ui.busy=false;ui.recalc=false;ui.opened=false;render();loadOpening(m,yr);return null;}
+  catch(err){if(err.superseded||client()!==m||activeYear(m)!==yr)return null;ui.busy=false;ui.recalc=false;ui.opened=false;ui.error=err.message;render();return err;}}
+ // What a later year opened with: the summary's `opening` (the run is warm once the trend is in).
+ async function loadOpening(m,yr){if(yr<=FIRST_YEAR||typeof m.summary!=='function'){ui.opening=null;return;}if(ui.opening?.year===yr&&ui.opening.figures)return;
+  let figures=null;try{figures=(await m.summary())?.opening||null;}catch(err){if(err.superseded)return;}if(client()===m&&activeYear(m)===yr){ui.opening={year:yr,figures};render();}}
+ // ---- years ----------------------------------------------------------------------------------------------------
+ function yearChanged(m,note){ui.panel=null;ui.confirmClear=false;ui.confirmContinue=false;ui.trend=null;ui.opening=null;ui.error='';ui.models=[];
+  try{onYear?.(m.year);}catch(err){toast(err.message);}if(note)toast(note);}
+ function switchYear(y){const m=client();if(!m||m.readOnly||typeof m.setYear!=='function')return;try{if(!m.setYear(y))return;}catch(err){toast(err.message);return;}yearChanged(m);load();}
+ function continueYear(){const m=client();if(!m?.canContinue?.())return;const from=m.year;let y;try{y=m.continueYear();}catch(err){toast(err.message);return;}
+  yearChanged(m,`${y} opened on ${from}'s close.`);load({recalc:true,opened:true});}
  async function open(hash){if(!parseYearRoute(hash))return;await loadLibrary();render();load();}
  function engineRefusal(err){const d=err.detail;return 'The engine refused it: '+(typeof d==='string'?d:Array.isArray(d)?d.map(x=>x?.msg||x?.message||JSON.stringify(x)).join('; '):d?.message||err.message);}
  // ---- episodes -------------------------------------------------------------------------------------------------
  async function inflict(){const m=client(),p=ui.panel;if(!m||p?.kind!=='inflict'||!p.draft)return;const parsed=[];
-  for(const d of p.draft){const r=draftEpisode(d);if(r.error){p.error=r.error;render();return;}parsed.push(r.episode);}
+  for(const d of p.draft){const r=draftEpisode(d,yearOf());if(r.error){p.error=r.error;render();return;}parsed.push(r.episode);}
   if(m.episodes.length+parsed.length>MAX_EPISODES){p.error=`At most ${MAX_EPISODES} episodes in a year.`;render();return;}
   const added=parsed.map(ep=>m.addEpisode(ep)),title=parsed.length>1?scenarioOf(p.scenario)?.title||added[0].title:added[0].title;
-  const previous=m.asOf,end=episodeRunEnd(parsed);m.setAsOf(end);
+  const previous=m.asOf,end=episodeRunEnd(parsed,yearOf());m.setAsOf(end);
   ui.panel=null;toast(`Analysing ${title} through ${longDay(end)}…`);const err=await load({recalc:true});
   if(err?.status===422){for(const a of added)m.removeEpisode(a.id);m.setAsOf(previous);ui.panel={...p,error:engineRefusal(err)};toast('The engine refused the episode.');await load();}
   else if(!err&&onDate){try{await onDate(end);}catch(e){toast('Year updated; the operations day could not refresh: '+e.message);}}}
- async function saveEdit(){const m=client(),p=ui.panel;if(!m||p?.kind!=='edit')return;const r=draftEpisode(p.draft);if(r.error){p.error=r.error;render();return;}
+ async function saveEdit(){const m=client(),p=ui.panel;if(!m||p?.kind!=='edit')return;const r=draftEpisode(p.draft,yearOf());if(r.error){p.error=r.error;render();return;}
   const was=m.episodes.find(x=>x.id===p.id);if(!was)return;const before=JSON.parse(JSON.stringify(was));m.updateEpisode(p.id,r.episode);
   ui.panel=null;toast(`Recalculating the year with ${r.episode.title}…`);const err=await load({recalc:true});
   if(err?.status===422){m.updateEpisode(p.id,before);ui.panel={...p,error:engineRefusal(err)};await load();}}
@@ -187,11 +224,12 @@ export function installYearPage({getClient,getSimulation=()=>null,getEngineState
    if(onDate)try{await onDate(proposal.runTo);}catch(err){toast('Year updated; the operations day could not refresh: '+err.message);}
   }});}
  // ---- rendering ------------------------------------------------------------------------------------------------
- function head(){const m=client(),asOf=ui.trend?.asOf||m?.asOf||'',n=m?.readOnly?0:m?.episodes.length||0;
-  return `<header class="year-head"><div><span class="section-kicker">RUN · ${YEAR}</span><h1 class="has-pop">Command Center<button type="button" class="schema-info" aria-label="About the Command Center" aria-expanded="false" title="About the Command Center">i</button><div class="schema-pop" role="note"><p>The simulated year, day by day. Click a day to inflict a scenario from the engine's library starting that day; the engine replays the whole year with that episode and the charts below show its mark, month by month.</p><p>Episodes are run input like your actions and settings: kept in this browser, sent with every request, applied by the engine. Settings in an episode are absolute (a number, true/false) or relative to the base (*0.5, +2, -1); a ramp slides a number there over that many days.</p></div></h1></div><div class="year-tools">${m&&!m.readOnly?`<button type="button" class="outline-btn" data-act="voice-tweak">● Talk through a tweak</button>`:""}<label>Run date <input type="date" id="year-asof" min="${YEAR}-01-01" max="${YEAR}-12-31" value="${e(asOf)}"></label>${n?ui.confirmClear?`<span class="year-confirm">Clear ${n} episode${n===1?'':'s'}? <button type="button" class="small-link" data-act="clear-yes">Yes, clear</button><button type="button" class="small-link" data-act="clear-no">Keep</button></span>`:`<button type="button" class="small-link" data-act="clear">Clear all episodes</button>`:''}</div></header>`;}
+ function head(){const m=client(),yr=yearOf(),asOf=ui.trend?.asOf||m?.asOf||'',n=frozen(m)?0:m?.episodes.length||0;
+  return `<header class="year-head"><div><span class="section-kicker">RUN · ${yr}</span><h1 class="has-pop">Command Center<button type="button" class="schema-info" aria-label="About the Command Center" aria-expanded="false" title="About the Command Center">i</button><div class="schema-pop" role="note"><p>The simulated year, day by day. Click a day to inflict a scenario from the engine's library starting that day; the engine replays the whole year with that episode and the charts below show its mark, month by month.</p><p>Episodes are run input like your actions and settings: kept in this browser, sent with every request, applied by the engine. Settings in an episode are absolute (a number, true/false) or relative to the base (*0.5, +2, -1); a ramp slides a number there over that many days.</p></div></h1></div><div class="year-tools">${m&&!frozen(m)&&yr===FIRST_YEAR?`<button type="button" class="outline-btn" data-act="voice-tweak">● Talk through a tweak</button>`:""}<label>Run date <input type="date" id="year-asof" min="${yr}-01-01" max="${yr}-12-31" value="${e(asOf)}"></label>${n?ui.confirmClear?`<span class="year-confirm">Clear ${n} episode${n===1?'':'s'}? <button type="button" class="small-link" data-act="clear-yes">Yes, clear</button><button type="button" class="small-link" data-act="clear-no">Keep</button></span>`:`<button type="button" class="small-link" data-act="clear">Clear all episodes</button>`:''}</div></header>`;}
+ function years(){return yearsBar(client(),{confirm:ui.confirmContinue,opening:ui.opening,loaded:!!ui.trend});}
  function status(){const m=client(),t=ui.trend,n=m?.episodes.length||0,eps=`${n} episode${n===1?'':'s'}`;
   if(ui.error)return `<p class="year-status" role="status"><span class="year-error">${e(ui.error)}</span></p>`;
-  if(!t)return `<p class="year-status" role="status">${ui.busy?(m?.readOnly?'Loading saved trends…':ui.recalc?'Recalculating the year… (5–15 s)':'Asking the engine… (a cold engine replays the year first, 5–15 s)'):''}</p>`;
+  if(!t)return `<p class="year-status" role="status">${ui.busy?(m?.readOnly?'Loading saved trends…':ui.opened?`Opening ${yearOf()} on ${yearOf()-1}'s close… (the engine replays each year, 10–30 s)`:ui.recalc?'Recalculating the year… (5–15 s)':'Asking the engine… (a cold engine replays the year first, 5–15 s)'):''}</p>`;
   return `<p class="year-status" role="status">${m?.readOnly?'Saved results':'Engine data'} as of ${e(t.asOf)} · ${eps}${ui.busy?(ui.recalc?' · Recalculating the year…':' · Updating…'):''}</p>`;}
  function month(mo,asOf,eps){const spans=episodeSpans(eps,mo),selected=ui.panel?.kind==='inflict'?ui.panel.day:null,cells=[];
   for(let i=0;i<mo.offset;i++)cells.push('<span class="year-pad"></span>');
@@ -201,46 +239,51 @@ export function installYearPage({getClient,getSimulation=()=>null,getEngineState
   return `<div class="year-month"><h2>${mo.label}</h2><div class="year-grid">${WEEKDAYS.map(w=>`<span class="year-wd" aria-hidden="true">${w}</span>`).join('')}${cells.join('')}</div><div class="year-strip" style="height:${Math.max(1,spans.length)*6+2}px">${bars}</div></div>`;}
  function legend(eps){if(!eps.length)return '<p class="year-legend-empty">No episodes yet. Click a day to inflict a scenario from that date.</p>';
   return `<ul class="year-legend" aria-label="Episodes">${eps.map((ep,i)=>`<li><button type="button" class="year-leg" data-ep="${e(ep.id)}" aria-label="Edit ${e(ep.title)}"><i style="background:${episodeColor(i)}"></i><strong>${e(ep.title)}</strong><span>${e(rangeLabel(ep))}${ep.ramp?` · ramp ${ep.ramp} d`:''}</span></button></li>`).join('')}</ul>`;}
- function calendar(){const m=client(),asOf=ui.trend?.asOf||m?.asOf||'',eps=m?.episodes||[];
-  return `<section class="year-calendar" aria-label="Calendar ${YEAR}"><div class="year-months">${calendarModel().map(mo=>month(mo,asOf,eps)).join('')}</div>${legend(eps)}</section>`;}
+ function calendar(){const m=client(),yr=yearOf(),asOf=ui.trend?.asOf||m?.asOf||'',eps=m?.episodes||[];
+  return `<section class="year-calendar" aria-label="Calendar ${yr}"><div class="year-months">${calendarModel(yr).map(mo=>month(mo,asOf,eps)).join('')}</div>${legend(eps)}</section>`;}
  function card(model,k){const m=client(),asOf=ui.trend?.asOf||m?.asOf||null,eps=m?.episodes||[],li=model.latest,one=model.series.length===1;
   const when=li<0?'':model.partial[li]?`${MONTHS[li]} to ${shortDay(model.months[li].end)}`:MONTHS[li],latest=li<0?'<strong>—</strong><span>no figures yet</span>':one?`<strong>${e(fmtValue(model.series[0].values[li],model.fmt))}</strong><span>${e(when)}</span>`:`<span>latest · ${e(when)}</span>`;
   const leg=one?'':`<ul class="yr-legend">${model.series.map(s=>`<li><i class="${model.kind==='line'?'is-line':''}" style="background:${s.color}"></i><span>${e(s.label)}</span>${li>=0&&s.values[li]!=null?`<strong>${e(fmtValue(s.values[li],model.fmt))}</strong>`:''}</li>`).join('')}</ul>`;
-  return `<article class="yr-card" data-chart="${k}"><header><div><h3>${e(model.title)}</h3><p>${e(model.unit)}</p></div><div class="yr-latest">${latest}</div></header>${chartSvg(model,{asOf,episodes:eps,id:'yr-'+model.id})}<div class="yr-tip" hidden></div>${leg}<details class="yr-table"><summary>Table</summary>${chartTable(model)}</details></article>`;}
+  return `<article class="yr-card" data-chart="${k}"><header><div><h3>${e(model.title)}</h3><p>${e(model.unit)}</p></div><div class="yr-latest">${latest}</div></header>${chartSvg(model,{asOf,episodes:eps,id:'yr-'+model.id,year:yearOf()})}<div class="yr-tip" hidden></div>${leg}<details class="yr-table"><summary>Table</summary>${chartTable(model)}</details></article>`;}
  function trends(){const t=ui.trend;if(!t)return `<section class="year-trends" aria-label="Trends"><div class="yr-empty">${ui.busy?'':'No trend yet.'}</div></section>`;
   ui.models=CHARTS.map(c=>chartModel(c,t.months));return `<section class="year-trends${ui.busy?' is-stale':''}" aria-label="Trends">${ui.models.map(card).join('')}</section>`;}
  function library(p){const lib=ui.library;if(!lib)return `<p class="small-note">${ui.error?e(ui.error):'Loading the scenario library…'}</p>`;
   return (lib.groups||[]).map(g=>{const own=(lib.scenarios||[]).filter(s=>s.group===g.id),soon=(lib.coming||[]).filter(s=>s.group===g.id);if(!own.length&&!soon.length)return '';
    return `<h3>${e(g.title)}</h3>${own.map(s=>`<div class="year-sc"><button type="button" class="year-sc-pick" data-sc="${e(s.id)}"><strong>${e(s.title)}</strong><span>${e(s.description||'')}</span></button>${s.watch?`<details><summary>What to watch</summary><p>${e(s.watch)}</p></details>`:''}${s.tags?.length?`<span class="year-tags">${s.tags.map(t=>`<em>${e(t)}</em>`).join('')}</span>`:''}</div>`).join('')}${soon.map(s=>`<div class="year-sc is-coming" aria-disabled="true"><strong>${e(s.title)}<em class="year-soon">coming soon</em></strong><span>${e(s.description||'')}</span></div>`).join('')}`;}).join('')||'<p class="small-note">The library is empty.</p>';}
- function draftForm(drafts,{single=false}={}){return drafts.map((d,k)=>`<fieldset class="year-ep"><legend>${single?'Episode':`Episode ${k+1}`}</legend><label class="year-f">Title <input type="text" data-k="${k}" data-f="title" value="${e(d.title||'')}" maxlength="80"></label><div class="year-f-row"><label class="year-f">Start <input type="date" data-k="${k}" data-f="from" min="${YEAR}-01-01" max="${YEAR}-12-31" value="${e(d.from||'')}"></label><label class="year-f">End <input type="date" data-k="${k}" data-f="to" min="${YEAR}-01-01" max="${YEAR}-12-31" value="${e(d.to||'')}" placeholder="year end"></label><label class="year-f">Ramp <input type="number" data-k="${k}" data-f="ramp" min="0" max="365" step="1" value="${e(d.ramp??0)}"> days</label></div><table class="year-settings"><thead><tr><th>Setting</th><th>Value</th></tr></thead><tbody>${settingRows(d.settings).map(([g,key,v])=>`<tr><td><span>${e(prettyKey(g))}</span><code>${e(g)}.${e(key)}</code></td><td><input type="text" data-k="${k}" data-g="${e(g)}" data-key="${e(key)}" value="${e(v)}" aria-label="${e(g)}.${e(key)}"></td></tr>`).join('')||'<tr><td colspan="2">No settings.</td></tr>'}</tbody></table></fieldset>`).join('')+'<p class="small-note">A number or true/false sets the value for the episode; *0.5, +2 or -1 change the base value. Blank end: to the year end.</p>';}
+ function draftForm(drafts,{single=false}={}){const yr=yearOf();return drafts.map((d,k)=>`<fieldset class="year-ep"><legend>${single?'Episode':`Episode ${k+1}`}</legend><label class="year-f">Title <input type="text" data-k="${k}" data-f="title" value="${e(d.title||'')}" maxlength="80"></label><div class="year-f-row"><label class="year-f">Start <input type="date" data-k="${k}" data-f="from" min="${yr}-01-01" max="${yr}-12-31" value="${e(d.from||'')}"></label><label class="year-f">End <input type="date" data-k="${k}" data-f="to" min="${yr}-01-01" max="${yr}-12-31" value="${e(d.to||'')}" placeholder="year end"></label><label class="year-f">Ramp <input type="number" data-k="${k}" data-f="ramp" min="0" max="365" step="1" value="${e(d.ramp??0)}"> days</label></div><table class="year-settings"><thead><tr><th>Setting</th><th>Value</th></tr></thead><tbody>${settingRows(d.settings).map(([g,key,v])=>`<tr><td><span>${e(prettyKey(g))}</span><code>${e(g)}.${e(key)}</code></td><td><input type="text" data-k="${k}" data-g="${e(g)}" data-key="${e(key)}" value="${e(v)}" aria-label="${e(g)}.${e(key)}"></td></tr>`).join('')||'<tr><td colspan="2">No settings.</td></tr>'}</tbody></table></fieldset>`).join('')+'<p class="small-note">A number or true/false sets the value for the episode; *0.5, +2 or -1 change the base value. Blank end: to the year end.</p>';}
  function panel(){const p=ui.panel;if(!p)return '';const m=client();
   if(p.kind==='agent')return '<aside class="year-panel year-agent-panel" aria-label="Talk through a tweak"><div id="year-agent-root"></div></aside>';
   if(p.kind==='inflict'){const sc=p.scenario?scenarioOf(p.scenario):null;
-   return `<aside class="year-panel" aria-label="Inflict a scenario"><header><div><span class="section-kicker">INFLICT ON</span><h2>${e(longDay(p.day))}</h2></div><button type="button" class="close-btn" data-act="close" aria-label="Close">×</button></header><div class="year-panel-actions"><button type="button" class="outline-btn" data-act="view-day">View this day</button>${m?.asOf===p.day?'<span class="small-note">This is the run date.</span>':''}</div>${p.error?`<p class="year-error" role="alert">${e(p.error)}</p>`:''}${sc?`<button type="button" class="small-link" data-act="back">← Library</button><h3 class="year-sc-title">${e(sc.title)}</h3><p class="small-note">${e(sc.description||'')}</p>${sc.watch?`<p class="year-watch"><strong>Watch</strong> ${e(sc.watch)}</p>`:''}${draftForm(p.draft)}<div class="year-panel-foot"><button type="button" class="primary-btn" data-act="inflict">Inflict &amp; run to period end</button></div>`:`<p class="small-note">Pick a scenario; its episodes start on this day. Inflicting runs the analysis to the last episode’s end (year end for an open-ended period).</p><button type="button" class="outline-btn" data-act="voice-tweak">● Describe a tweak by voice or text</button><div class="year-library">${library(p)}</div>`}</aside>`;}
+   return `<aside class="year-panel" aria-label="Inflict a scenario"><header><div><span class="section-kicker">INFLICT ON</span><h2>${e(longDay(p.day))}</h2></div><button type="button" class="close-btn" data-act="close" aria-label="Close">×</button></header><div class="year-panel-actions"><button type="button" class="outline-btn" data-act="view-day">View this day</button>${m?.asOf===p.day?'<span class="small-note">This is the run date.</span>':''}</div>${p.error?`<p class="year-error" role="alert">${e(p.error)}</p>`:''}${sc?`<button type="button" class="small-link" data-act="back">← Library</button><h3 class="year-sc-title">${e(sc.title)}</h3><p class="small-note">${e(sc.description||'')}</p>${sc.watch?`<p class="year-watch"><strong>Watch</strong> ${e(sc.watch)}</p>`:''}${draftForm(p.draft)}<div class="year-panel-foot"><button type="button" class="primary-btn" data-act="inflict">Inflict &amp; run to period end</button></div>`:`<p class="small-note">Pick a scenario; its episodes start on this day. Inflicting runs the analysis to the last episode’s end (year end for an open-ended period).</p>${yearOf()===FIRST_YEAR?'<button type="button" class="outline-btn" data-act="voice-tweak">● Describe a tweak by voice or text</button>':''}<div class="year-library">${library(p)}</div>`}</aside>`;}
   const ep=m?.episodes.find(x=>x.id===p.id);if(!ep){return '';}
   return `<aside class="year-panel" aria-label="Edit an episode"><header><div><span class="section-kicker">EPISODE ${e(ep.id)}</span><h2>${e(ep.title)}</h2></div><button type="button" class="close-btn" data-act="close" aria-label="Close">×</button></header>${ep.scenario?`<p class="small-note">From the scenario ${e(scenarioOf(ep.scenario)?.title||ep.scenario)}.</p>`:''}${p.error?`<p class="year-error" role="alert">${e(p.error)}</p>`:''}${draftForm([p.draft],{single:true})}<div class="year-panel-foot"><button type="button" class="primary-btn" data-act="save">Save</button><button type="button" class="small-link" data-act="remove">Remove</button></div></aside>`;}
  function render(){if(!root)return;const m=client();
   const keepAgent=ui.panel?.kind==='agent'&&m===agentClient?root.querySelector('#year-agent-root'):null;
   if(!keepAgent){closeAgent?.();closeAgent=null;agentClient=null;}
   if(!m){root.innerHTML=`<section class="fiori-shell"><div class="fiori-empty ws-empty">${engineNotice(getEngineState(),undefined,'#/year','The Year')}</div></section>`;root.querySelector('[data-ws="retry"]')?.addEventListener('click',()=>location.reload());return;}
-  root.innerHTML=`<div class="year-layout${ui.panel?' has-panel':''}"><main class="year-main">${head()}${status()}${calendar()}${trends()}</main>${panel()}</div>`;
+  root.innerHTML=`<div class="year-layout${ui.panel?' has-panel':''}"><main class="year-main">${head()}${years()}${status()}${calendar()}${trends()}</main>${panel()}</div>`;
   if(keepAgent)root.querySelector('#year-agent-root')?.replaceWith(keepAgent);else if(ui.panel?.kind==='agent')mountAgent();
   if(m.readOnly){root.querySelector('#year-asof').disabled=true;for(const b of root.querySelectorAll('[data-day],[data-ep]')){b.disabled=true;b.removeAttribute('data-day');b.removeAttribute('data-ep');}const pop=root.querySelector('.schema-pop');if(pop)pop.innerHTML='<p>Saved engine results through '+e(m.asOf)+'. Episodes and trends are archived with this run. Open a live engine to change inputs or replay another date.</p>';const empty=root.querySelector('.year-legend-empty');if(empty)empty.textContent='No episodes in this saved run.';}
+  else if(frozen(m)){for(const b of root.querySelectorAll('[data-day],[data-ep]')){b.disabled=true;b.removeAttribute('data-day');b.removeAttribute('data-ep');}const empty=root.querySelector('.year-legend-empty');if(empty)empty.textContent=`No episodes in ${m.year}.`;}
   closePops?.();closePops=bindPopovers(root);if(ui.panel)root.querySelector('.year-panel h2')?.scrollIntoView?.({block:'nearest'});}
  // ---- hover readout ----------------------------------------------------------------------------------------------
  function showTip(hit){const card=hit.closest('.yr-card'),model=ui.models[Number(card?.dataset.chart)],i=Number(hit.dataset.i);if(!card||!model)return;const tip=card.querySelector('.yr-tip'),m=model.months[i];
-  const rows=[];const h=document.createElement('strong');h.textContent=`${MONTHS[i]} ${YEAR}`;rows.push(h);
+  const rows=[];const h=document.createElement('strong');h.textContent=`${MONTHS[i]} ${yearOf()}`;rows.push(h);
   for(const s of model.series){if(s.values[i]==null)continue;const r=document.createElement('div'),key=document.createElement('i'),v=document.createElement('b'),l=document.createElement('span');key.style.background=s.color;v.textContent=fmtValue(s.values[i],model.fmt);l.textContent=s.label;r.append(key,v,l);rows.push(r);}
   for(const [k,v] of (m&&model.detail?model.detail(m):[])){const r=document.createElement('div');r.className='is-detail';const b=document.createElement('b'),l=document.createElement('span');b.textContent=fmtValue(v,'int');l.textContent=k;r.append(b,l);rows.push(r);}
   tip.replaceChildren(...rows);tip.hidden=false;tip.style.left=`${((Number(hit.getAttribute('x'))+Number(hit.getAttribute('width'))/2)/GEOM.w*100).toFixed(1)}%`;tip.classList.toggle('is-right',i>=8);tip.classList.toggle('is-left',i<3);}
  function hideTip(card){card?.querySelector('.yr-tip')?.setAttribute('hidden','');}
  // ---- events ---------------------------------------------------------------------------------------------------
  root?.addEventListener('click',ev=>{const b=ev.target.closest('button');if(!b||!root.contains(b)||ui.applying)return;const m=client();if(m?.readOnly)return;
+  if(b.dataset.year){switchYear(Number(b.dataset.year));return;}
+  if(b.dataset.act==='continue'){ui.confirmContinue=true;render();root.querySelector('[data-act="continue-yes"]')?.focus();return;}
+  if(b.dataset.act==='continue-no'){ui.confirmContinue=false;render();root.querySelector('[data-act="continue"]')?.focus();return;}
+  if(b.dataset.act==='continue-yes'){continueYear();return;}
   if(b.dataset.day){ui.panel={kind:'inflict',day:b.dataset.day,scenario:null,draft:null,error:''};ui.confirmClear=false;render();return;}
   if(b.dataset.ep){const ep=m?.episodes.find(x=>x.id===b.dataset.ep);if(!ep)return;ui.panel={kind:'edit',id:ep.id,draft:{...JSON.parse(JSON.stringify(ep)),to:ep.to||''},error:''};render();return;}
   if(b.dataset.sc){const p=ui.panel,sc=scenarioOf(b.dataset.sc);if(p?.kind!=='inflict'||!sc)return;p.scenario=sc.id;p.draft=episodeDates(sc,p.day).map(d=>({...d,to:d.to||''}));p.error='';render();return;}
   switch(b.dataset.act){
-   case 'voice-tweak':ui.agent=null;ui.panel={kind:'agent',day:ui.panel?.day||m?.asOf||'2026-03-31'};ui.confirmClear=false;render();return;
+   case 'voice-tweak':if(frozen(m)||yearOf()!==FIRST_YEAR)return;ui.agent=null;ui.panel={kind:'agent',day:ui.panel?.day||m?.asOf||`${yearOf()}-03-31`};ui.confirmClear=false;render();return;
    case 'close':ui.panel=null;render();return;
    case 'back':if(ui.panel){ui.panel.scenario=null;ui.panel.draft=null;ui.panel.error='';}render();return;
    case 'view-day':viewDay(ui.panel?.day);return;
@@ -259,5 +302,5 @@ export function installYearPage({getClient,getSimulation=()=>null,getEngineState
  root?.addEventListener('focusout',ev=>{if(ev.target.classList?.contains('yr-hit'))hideTip(ev.target.closest('.yr-card'));});
  root?.addEventListener('keydown',ev=>{if(ev.key==='Escape'&&ui.panel&&!ev.target.closest?.('input,select,textarea')){ui.panel=null;render();}});
  globalThis.addEventListener?.('hashchange',()=>{if(!parseYearRoute(location.hash)&&closeAgent){ui.panel=null;render();}});
- return {open,render,load,refresh(){if(parseYearRoute(location.hash)){if(client()&&!ui.trend)open(location.hash);else render();}},get state(){return ui;}};
+ return {open,render,load,refresh(){if(parseYearRoute(location.hash)){if(client()&&(!ui.trend||ui.trendYear!==yearOf())){ui.trend=null;open(location.hash);}else render();}},get state(){return ui;}};
 }

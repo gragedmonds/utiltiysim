@@ -331,6 +331,8 @@
 .studio-pill{background:#f0ecfc;color:#684bc5;font-size:12px;font-weight:650;border-radius:6px;padding:5px 9px;white-space:nowrap}
 @media (max-width:600px){.studio-config-tabs{gap:14px;overflow-x:auto}.studio-config-tabs button{font-size:13px;white-space:nowrap}}
 /* Map lenses: one analytic view at a time, with its legend. */
+.map-year-note{position:absolute;left:50%;transform:translateX(-50%);top:84px;z-index:3;margin:0;max-width:min(560px,calc(100% - 150px));background:#fffbeeee;border:1px solid #ecd9a3;border-radius:8px;box-shadow:0 3px 15px #18231c12;padding:6px 12px;font-size:12px;line-height:1.4;color:#5c4a12}
+@media (max-width:600px){.map-year-note{top:auto;bottom:150px;max-width:calc(100% - 32px)}}
 .lens-panel{position:absolute;right:16px;top:126px;z-index:8;background:#ffffffee;border:1px solid #dde2da;border-radius:9px;box-shadow:0 3px 15px #18231c12;padding:5px;min-width:0;max-width:300px}
 .lens-tabs{display:flex;gap:2px}
 .lens-tabs button{border:0;background:none;padding:7px 10px;border-radius:6px;font-size:12.5px;color:#56645a;cursor:pointer}
@@ -664,6 +666,26 @@ details.schema-group>.schema-field:last-child{margin-bottom:10px}
 .year-confirm{font-size:12px;color:#b3261e;display:flex;gap:8px;align-items:center}
 .year-status{font-size:12px;color:#737f94;margin:0 0 10px;min-height:16px}
 .year-error{color:#b3261e;font-size:12.5px;margin:0 0 10px}
+/* Years: the switcher (2026 … the last year opened), Continue into the next year, and what a later year opened with. */
+.year-years{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;margin:2px 0 10px;font-size:12.5px;color:#5d5870}
+.year-switch{display:inline-flex;border:1px solid #d7d4e3;border-radius:7px;overflow:hidden;background:#fff}
+.year-switch button{border:0;background:none;font:inherit;font-size:12.5px;padding:5px 13px;min-height:0;color:#3d3750;cursor:pointer;font-variant-numeric:tabular-nums}
+.year-switch button+button{border-left:1px solid #e4e2ee}
+.year-switch button:hover{background:#f0ecfc;color:#5d43b8}
+.year-switch button[aria-pressed=true]{background:#7357d8;color:#fff;font-weight:650}
+.year-switch button:focus-visible{outline:2px solid #7357d8;outline-offset:-2px}
+.year-years .outline-btn{width:auto;margin:0;min-height:30px;padding:4px 12px;font-size:12.5px;border-color:#cfc8ea;color:#5d43b8;border-radius:7px;background:#fff}
+.year-years .outline-btn:hover{background:#f0ecfc}
+.year-years-note{font-size:12px;color:#737f94}
+.year-years-note.is-closed{color:#8a5a00}
+.year-continue-confirm{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center;font-size:12.5px;color:#3d3750;background:#f7f5fd;border:1px solid #e4def8;border-radius:8px;padding:6px 10px}
+.year-continue-confirm .primary-btn{width:auto;margin:0;padding:6px 14px;background:#7357d8;border-radius:7px;font-weight:650;font-size:12.5px}
+.year-continue-confirm .primary-btn:hover{background:#5d43b8}
+.year-continue-confirm .small-link{font-size:12px;color:#5d43b8}
+.year-opening{display:flex;flex-wrap:wrap;gap:4px 6px;align-items:center;margin:0 0 10px;font-size:12px;color:#3d3750}
+.year-opening strong{font-weight:650;margin-right:2px}
+.year-opening span{background:#fff;border:1px solid #e4e2ee;border-radius:6px;padding:2px 8px;font-variant-numeric:tabular-nums}
+.year-opening.is-loading{color:#737f94}
 .year-calendar{background:#fff;border:1px solid #e4e2ee;border-radius:10px;padding:14px 16px 10px;margin-bottom:14px}
 .year-months{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px 16px}
 .year-month h2{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#5d5870;margin:0 0 4px;font-weight:700}
@@ -678,6 +700,7 @@ details.schema-group>.schema-field:last-child{margin-bottom:10px}
 .year-day.is-today{box-shadow:inset 0 0 0 2px #7357d8;font-weight:700;color:#5d43b8}
 .year-day.is-selected,.year-day.is-selected:hover{background:#7357d8;color:#fff}
 .year-day:focus-visible{outline:2px solid #7357d8;outline-offset:1px;z-index:1;position:relative}
+.year-day:disabled{cursor:default;pointer-events:none}
 .year-strip{position:relative;margin-top:4px;min-height:8px}
 .year-bar{position:absolute;height:4px;min-width:3px;border:0;padding:0;border-radius:2px;cursor:pointer;min-height:0}
 .year-bar:not(.starts){border-top-left-radius:0;border-bottom-left-radius:0}
