@@ -26,3 +26,9 @@ test('corrupt data and storage failures are visible and do not silently erase th
  const storage=memory(),lib=new SimulationLibrary(storage);storage.setItem(SIM_PREFIX+'broken','{');assert.throws(()=>lib.list(),/could not be read/);assert.equal(storage.getItem(SIM_PREFIX+'broken'),'{');
  const blocked=new SimulationLibrary({...memory(),setItem(){throw Error('quota');}});assert.throws(()=>blocked.save({...blocked.create(),name:'New'}),/could not be saved/);
 });
+
+test('operations-only experiments open the map; mixed goals and legacy simulations open Year',()=>{
+ assert.match(studioURL({id:'one',townRef:'village',goals:['operations']}),/#\/map$/);
+ assert.match(studioURL({id:'two',townRef:'village',goals:['operations','vee']}),/#\/year$/);
+ assert.match(studioURL({id:'old',townRef:'village'}),/#\/year$/);
+});

@@ -152,5 +152,40 @@ def serve(host: str = "127.0.0.1", port: int = 8010, reload: bool = False):
     uvicorn.run("api.app:app", host=host, port=port, reload=reload)
 
 
+@app.command("batch-run")
+def batch_run_command(
+    homes: int = typer.Option(..., help="Total residential homes, up to 500,000."),
+    staffing: str = typer.Option(..., help="Must be independent-districts; settings apply to EACH district's team."),
+    chunk_size: int = typer.Option(2000, help="Maximum homes per sequential district, 20–5,000."),
+    preset: str = typer.Option("small_town"),
+    config: Path = typer.Option(None, help="Generation configuration overrides JSON."),
+    input_: Path = typer.Option(None, "--input", help="JSON with settings, episodes, seed and asOf."),
+    store: Path = typer.Option(Path("out/store"), help="Output drive/folder; completed districts persist here."),
+    max_batches: int = typer.Option(None, help="Pause after this many newly completed districts; rerun to resume."),
+):
+    """Run independent districts sequentially, archive full results, and resume with a measured ETA."""
+    from utilsim.batch import run_batch
+
+    last = [None]
+
+    def report(status):
+        # Emit once per district or every ten elapsed seconds; unknown ETA stays unknown.
+        marker = (status["completed"], status["status"], status["activeSeconds"] // 10)
+        if marker != last[0]:
+            typer.echo(json.dumps(status))
+            last[0] = marker
+
+    try:
+        cfg = _cfg(preset, None, None, config, None)
+        request = orjson.loads(input_.read_bytes()) if input_ else {}
+        directory, job = run_batch(cfg, homes, store, request, chunk_size=chunk_size,
+                                   staffing=staffing, max_batches=max_batches, on_progress=report)
+    except (ValueError, OSError, RuntimeError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    typer.echo(json.dumps({"directory": str(directory), "status": job["status"],
+                           "rollup": str(directory / "rollup.json"),
+                           "open": "Open each completed district's runs/<runKey> folder in Studio's saved-run reader."}))
+
+
 if __name__ == "__main__":
     app()

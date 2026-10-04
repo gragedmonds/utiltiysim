@@ -124,3 +124,55 @@ The existing hosted and local live engine routes continue to work alongside the 
 Validation includes Python engine-to-archive comparisons for every table and saved worklist date, archive reuse
 without replay, corruption and interrupted-write checks, a Node reader comparison against Python filtering/sorting
 and CSV, browser folder import with networking disabled, and desktop/phone navigation.
+
+
+## Sequential district batches
+
+The local CLI can run up to 500,000 residential homes as independent districts, one process at a time.
+Each completed district becomes a full verified run bundle. Memory is released before the next district.
+This mode explicitly requires independent teams and networks: analysts/agents are **per district**, and
+per-1,000 crew settings scale within each district. It is not a shared utility-wide queue or connected city.
+Districts inherit the same environment and temperature seed; their geography, customers and incident seeds differ.
+
+```sh
+uv run utilsim batch-run --homes 50000 --chunk-size 2000 --staffing independent-districts --store "P:/UtilitySim"
+```
+
+Use `--homes 500000` for 250 districts at 2,000 homes each. Optional `--config` supplies generation overrides;
+`--input` accepts a JSON object containing `settings`, `episodes`, `seed` and `asOf`. Town-specific actions
+and interruptions cannot be copied between districts. The engine still models calendar year 2026 only.
+Use smaller chunks to reduce peak memory. Their size affects network boundaries and per-district staffing,
+so comparisons must keep the same chunk size; chunking is part of the model, not only a performance setting.
+
+Progress reports completed/total districts, homes, elapsed time and remaining ETA. ETA stays unknown until
+one batch finishes, then uses measured time per home including generation, replay and archive writing.
+It is an estimate, not a percentage of internal engine work. A slow batch reports an overrun.
+
+`--max-batches 2` pauses after two new districts. Run the same command again (without that limit) to resume.
+Identical configuration, engine build and chunk size reuse verified completed archives. A changed build or
+configuration creates a different job. An interrupted in-flight district is retried; completed ones are kept.
+An OS lock prevents two processes writing the same job simultaneously and releases on process exit.
+
+Outputs under the chosen store:
+
+- `batches/<jobKey>/job.json`: exact inputs, district identities, archive references, timings and status.
+- `batches/<jobKey>/rollup.json`: completed districts' additive monthly billing and case totals, clearly
+  marked partial until all districts finish. It never averages percentages or invents shared staffing results.
+- `runs/<runKey>/`: each district's existing full archive, openable in Studio's saved-run folder reader.
+
+Record IDs are local to a district. Cross-district references must use `(districtId, recordId)`.
+The first release is a local CLI path; the hosted wizard still enforces its single-town generation limit.
+Verification included a 5,000-home, five-district pause/resume run and a full 50,000-home run in 25 districts
+of 2,000 homes. The latter took 505 seconds and wrote 313 MB of archives (61,104 accounts, 164,985 registers);
+monthly totals were checked against all district files. Reported peak child-process RSS was 744 MiB. These
+are measurements from one development environment, not guaranteed estimates for other hardware or settings.
+A full 500,000-home run remains unbenchmarked.
+
+### Shared utility-wide resources
+
+A fully shared utility requires a daily coordinator: district workers produce reads and candidate work;
+the coordinator allocates analyst, contact and field capacity once across all eligible work; districts then
+apply the assigned outcomes before advancing the day. Independent annual replay cannot reproduce this by
+summing results. Resume checkpoints must include queues, balances, device state and deterministic ordering.
+Connected electric/water/gas simulations additionally need boundary conditions between network partitions.
+Full map detail should load only for a selected district, while the utility view pages archived records.

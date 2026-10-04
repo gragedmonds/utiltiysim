@@ -1,16 +1,16 @@
 import {summaryMarkup,editProposalInput,collectEditedProposal,summaryNeedsRefresh} from './proposal-summary.js';
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-export const PROPOSAL_FIELDS=['name','purpose','region','preset','seed','asOf','townOverrides','settings','operations','episodes','summary','assumptions','limitations'];
+export const PROPOSAL_FIELDS=['name','goals','purpose','region','preset','seed','asOf','townOverrides','settings','operations','episodes','summary','assumptions','limitations'];
 export function proposalInput(proposal){return Object.fromEntries(PROPOSAL_FIELDS.filter(k=>proposal[k]!==undefined).map(k=>[k,k==='episodes'?proposal[k].map(({id,scenario,...ep})=>ep):proposal[k]]));}
 export function applyAgentProposal(draft,p){if(draft.status!=='draft')throw Error('Create a new simulation to apply a new setup.');return {...draft,...proposalInput(p),townRef:p.townRef,townId:p.townId,townName:p.townName,homes:p.homes,opsSettings:p.opsSettings,episodes:p.episodes,scenarioId:'custom',scenarioTitle:p.name,agentProposal:p,step:3};}
 export function inflictInput(p){return Object.fromEntries(['name','summary','episodes','assumptions','limitations'].filter(k=>p[k]!==undefined).map(k=>[k,p[k]]));}
 export function runInput(p){return Object.fromEntries(['townRef','settings','episodes','asOf','startDate','name','region','purpose'].map(k=>[k,p[k]]));}
 export function currentRunInput(m,startDate){return {townRef:m.townRef,settings:m.settings||{},episodes:m.episodes,asOf:m.asOf||'2026-03-31',startDate:startDate||m.asOf||'2026-03-31'};}
-export const BASELINE_TOPICS=['Place & service area','Utility & scale','Meters & reads','Team & workflow','Billing & cash','Starting pressures','What-if & recovery'];
+export const BASELINE_TOPICS=['What to test','Place & service area','Utility & scale','Meters & reads','Team & workflow','Billing & cash','Starting pressures','What-if & recovery'];
 export function supportsVoice(host=globalThis){return !!(host.SpeechRecognition||host.webkitSpeechRecognition);}
 export function installSetupAgent({root,api,getDraft,onSave,onApply,onBack,mode='setup',fetchImpl=globalThis.fetch.bind(globalThis)}){
  const inflict=mode==='inflict';
- const opening=inflict?'What would you like to change in this simulation? Tell me the tweak, when it starts, and roughly how long it should last.':'Let’s build your starting situation first. Which country and state or province are you in, and what city or service area should we use as context?';
+ const opening=inflict?'What would you like to change in this simulation? Tell me the tweak, when it starts, and roughly how long it should last.':getDraft().goals?.length?`We’ll focus on ${getDraft().goals.join(', ')}. What outcome would you like to test, and where is your service area?`:'What would you like to test—operations day, meter reading, VEE, billing, collections, field work, contact centre, or everything?' ;
  const state=structuredClone(getDraft().agent||{messages:[],proposal:null,input:'',readAloud:false});
  let available=null,busy=false,applying=false,error=state.pending?'The previous reply was interrupted. Retry your last message.':'',alive=true,recognition=null,listening=false,partial='',voiceBase='';
  const controller=new AbortController();

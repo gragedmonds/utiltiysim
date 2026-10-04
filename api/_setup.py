@@ -1,6 +1,7 @@
 """Manual wizard inputs and illustrative regional starting points; no provider calls or town generation."""
 from api._agent_config import Proposal, grouped_ops_defaults, preset_config, schemas, validate_proposal
 from api._towns import MAX_HOUSES
+from utilsim.config.goals import GOALS
 from utilsim.config.model import RUN_GROUPS, SimConfig
 
 TOWN_SIZES = [500, 5000, 50000, 500000]
@@ -58,7 +59,7 @@ def configuration(preset: str) -> dict:
     values = cfg.model_dump(mode="json")
     return {"schemas": schemas(), "defaults": {"town": values,
             "run": {k: values[k] for k in RUN_GROUPS}, "operations": grouped_ops_defaults(cfg)},
-            "homeLimit": MAX_HOUSES, "townSizes": TOWN_SIZES, "regions": REGIONS, "regionalNote": REGIONAL_NOTE}
+            "goals": GOALS, "homeLimit": MAX_HOUSES, "townSizes": TOWN_SIZES, "regions": REGIONS, "regionalNote": REGIONAL_NOTE}
 
 
 def operation_defaults(proposal: Proposal) -> dict:

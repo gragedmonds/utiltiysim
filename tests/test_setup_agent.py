@@ -343,3 +343,15 @@ def test_episode_summary_resolves_relative_values_overlapping_periods_and_ramps(
     assert row['after'] == pytest.approx(.3)
     assert row['afterRange'][0] < row['afterRange'][1]
     assert row['percentage'] and row['period'].endswith('2026-04-03')
+
+
+def test_voice_proposal_preserves_selected_goals_when_provider_omits_them(monkeypatch):
+    async def fake(payload, key):
+        assert '"testGoals"' in payload["system"]
+        return tool("respond", {"message": "Review these settings.", "proposal": proposal()})
+
+    monkeypatch.setattr(agent, "anthropic_message", fake)
+    req = agent.ChatRequest(messages=[agent.Message(role="user", content="Use defaults")],
+                            draft={"goals": ["vee", "reading"]})
+    reply = asyncio.run(agent.conversation(req, "test-key"))
+    assert reply["proposal"]["goals"] == ["vee", "reading"]
