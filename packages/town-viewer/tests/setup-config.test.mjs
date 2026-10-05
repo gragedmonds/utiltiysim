@@ -2,9 +2,17 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {schemaFields} from '../dist/schema-form.js';
-import {inStage,mergeValues,applyRegion,wizardDraft,replaceStageOverrides,setupProposal,acceptSetup,focusGroup} from '../dist/setup-config.js';
+import {inStage,mergeValues,applyRegion,wizardDraft,replaceStageOverrides,setupProposal,acceptSetup,focusGroup,setupGoals} from '../dist/setup-config.js';
 
 const schema=JSON.parse(readFileSync(new URL('../../../schemas/config.schema.json',import.meta.url)));
+test('desktop drafts of every size use one offline Command Center',()=>{
+ for(const homes of [500,10000,50000,500000]){
+  const input={preset:'village',homes,wizardVersion:4,settings:{process:{analysts:3}},episodes:[{id:'keep'}]};
+  const draft=wizardDraft(input,{}, {offline:true});
+  assert.equal(draft.execution,'local');assert.equal(draft.totalHomes,homes);
+  assert.deepEqual(draft.settings,input.settings);assert.deepEqual(draft.episodes,input.episodes);
+ }
+});
 test('every supported generation field appears in exactly one appropriate wizard stage',()=>{
  const all=schemaFields(schema,{groups:(k,g)=>g['x-applies']!=='run'}).map(f=>f.path);
  const env=schemaFields(schema,{groups:(k,g)=>inStage('town',0,k,g)}).map(f=>f.path);
@@ -26,15 +34,15 @@ test('advanced reset replaces only this stage and keeps the other stage intact',
 });
 test('old draft steps migrate without changing their configuration; new drafts get a working base town',()=>{
  const old={step:2,name:'Existing',preset:'village',townOverrides:{housing:{pool_rate:.1}}};const next=wizardDraft(old,{});
- assert.equal(next.step,2);assert.equal(next.wizardVersion,3);assert.deepEqual(next.goals,['everything']);assert.deepEqual(next.townOverrides,old.townOverrides);
- assert.equal(wizardDraft({...old,step:3},{}).step,3);assert.equal(wizardDraft({...next,step:2},{}).step,2);
+ assert.equal(next.step,3);assert.equal(next.wizardVersion,4);assert.deepEqual(next.goals,['everything']);assert.deepEqual(next.townOverrides,old.townOverrides);
+ assert.equal(wizardDraft({...old,step:3},{}).step,4);assert.equal(wizardDraft({...next,step:2},{}).step,2);
  const fresh=wizardDraft({step:0},{towns:[{preset:'small_town',townId:'town-1',homes:1900}]});assert.equal(fresh.preset,'small_town');assert.equal(fresh.homes,500);assert.equal(fresh.townOverrides.town.houses,500);
 });
 test('manual review strips derived identifiers and keeps the chosen scenario after validation',()=>{
  const draft={id:'one',status:'draft',name:'Utility',preset:'village',scenarioId:'baseline',scenarioTitle:'Normal operations',townOverrides:{town:{houses:200}},settings:{process:{analysts:4}},episodes:[]};
  const input=setupProposal(draft);assert.equal(input.id,undefined);assert.equal(input.scenarioId,undefined);
  const result=acceptSetup(draft,{...input,townRef:'custom-ref',townId:'town-two',townName:'Village',homes:200,changes:[],opsSettings:{fieldCrews:2}});
- assert.equal(result.scenarioId,'baseline');assert.equal(result.townRef,'custom-ref');assert.equal(result.settings.process.analysts,4);assert.equal(result.step,3);assert.equal(result.configDirty,false);
+ assert.equal(result.scenarioId,'baseline');assert.equal(result.townRef,'custom-ref');assert.equal(result.settings.process.analysts,4);assert.equal(result.step,4);assert.equal(result.configDirty,false);
 });
 test('merging an advanced nested input preserves sibling defaults and replaces arrays',()=>{
  assert.deepEqual(mergeValues({winter:{mean_c:0,sd_c:6},weights:[1,2]},{winter:{mean_c:-4},weights:[3]}),{winter:{mean_c:-4,sd_c:6},weights:[3]});
@@ -49,5 +57,15 @@ test('focused forms retain hidden edits and everything reveals every stage group
  assert.equal(draft.townOverrides.housing.pool_rate,.2);assert.equal(draft.townOverrides.weather.storm_days_per_year,40);
  assert.equal(focusGroup(data,{goals:['everything']},'town',0,'housing',{'x-applies':'town'}),true);
  assert.equal(focusGroup(data,{...draft,showAllSettings:{0:true}},'town',0,'housing',{'x-applies':'town'}),true);
- assert.equal(wizardDraft({preset:'village',wizardVersion:2,step:0},{}).step,1);
+ assert.equal(wizardDraft({preset:'village',wizardVersion:2,step:0},{}).step,2);
+});
+
+test('desktop operations focus exposes annual workflow inputs instead of the removed map day',()=>{
+ const data={goals:[{id:'operations',title:'Operations day',run:[],map:true},{id:'everything',map:true}]};
+ const goals=setupGoals(data,{offline:true});
+ assert.equal(goals[0].title,'Service disruptions');
+ assert.deepEqual(goals[0].run,['outages','field','contact','process']);
+ assert.ok(goals.every(g=>!g.map));
+ assert.equal(setupGoals(data,{offline:false})[0].title,'Operations day');
+ assert.deepEqual(data.goals[0].run,[]);
 });

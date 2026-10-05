@@ -37,9 +37,13 @@ def assets():
 
 
 def create_app(jobs: LocalJobs, local_token, on_ready=None):
-    from api import _agent
+    from api import _agent, _ops
     from api.app import app as engine
     from utilsim.worker import vault
+    from utilsim.worker.workspace import UtilityWorkspace
+
+    workspace = UtilityWorkspace(jobs)
+    _ops.SNAPSHOT_SOURCES.insert(0, workspace.snapshot)
 
     key_path = jobs.store / KEY_FILE
     _agent.KEY_SOURCES.append(lambda: vault.read(key_path))
@@ -55,6 +59,8 @@ def create_app(jobs: LocalJobs, local_token, on_ready=None):
             jobs.shutdown.set()
             if jobs.thread:
                 jobs.thread.join(timeout=20)
+            if workspace.snapshot in _ops.SNAPSHOT_SOURCES:
+                _ops.SNAPSHOT_SOURCES.remove(workspace.snapshot)
 
     app = FastAPI(lifespan=lifespan, title='Utility Studio', docs_url=None, redoc_url=None)
     app.add_middleware(GZipMiddleware, minimum_size=2048)
@@ -77,11 +83,55 @@ def create_app(jobs: LocalJobs, local_token, on_ready=None):
     # ---- this computer: the queue -------------------------------------------------------------------------------
     @app.get('/local/status')
     def status():
-        return jobs.snapshot()
+        return {**jobs.snapshot(), 'analysis': workspace.progress,
+                'launcherURL': os.environ.get('UTILITY_STUDIO_LAUNCHER_URL', '')}
+
+    @app.post('/local/jobs/{job_id}/query')
+    async def query_utility(job_id: str, request: Request):
+        from fastapi.concurrency import run_in_threadpool
+
+        from utilsim.worker.prepare import body
+
+        value = await body(request)
+        try:
+            return await run_in_threadpool(workspace.query, job_id, value.get('path', ''), value.get('params', {}))
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from exc
 
     @app.get('/local/jobs')
     def list_jobs(model: str):
         return {'jobs': jobs.revisions(model)}
+
+    @app.post('/local/jobs/{job_id}/link')
+    async def export_link(job_id: str, request: Request):
+        from fastapi.concurrency import run_in_threadpool
+
+        from utilsim.worker.prepare import body
+        try:
+            return await run_in_threadpool(workspace.link, job_id, await body(request))
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from exc
+
+    @app.get('/utility-export/{token}.{format}')
+    def export_table(token: str, format: str, request: Request, page: int = 1):
+        import csv
+        import io
+
+        from fastapi.responses import Response
+
+        data = workspace.export(token, format, page)
+        next_page = str(request.url.include_query_params(page=page + 1)) if page * data['pageSize'] < data['total'] else None
+        headers = {'X-Total-Rows': str(data['total'])}
+        if next_page:
+            headers['Link'] = '<' + next_page + '>; rel="next"'
+        keys = [c['key'] for c in data['columns']]
+        if format == 'json':
+            return JSONResponse({**data, 'rows': [dict(zip(keys, row, strict=True)) for row in data['rows']], 'next': next_page}, headers=headers)
+        stream = io.StringIO(newline='')
+        writer = csv.writer(stream)
+        writer.writerow(keys)
+        writer.writerows(data['rows'])
+        return Response(stream.getvalue(), media_type='text/csv', headers=headers)
 
     @app.post('/local/jobs')
     async def queue(request: Request):
@@ -91,7 +141,7 @@ def create_app(jobs: LocalJobs, local_token, on_ready=None):
         data = await body(request)
         try:
             return jobs.queue({'proposal': data['proposal'], 'modelId': str(data['modelId']),
-                               'chunkSize': int(data.get('chunkSize', 2000))})
+                               'chunkSize': int(data.get('chunkSize', 10000)), 'actions': data.get('actions', [])})
         except ValidationError as exc:
             raise HTTPException(422, '; '.join(e['msg'].removeprefix('Value error, ') for e in exc.errors())[:3000]) from exc
         except (ValueError, KeyError, TypeError) as exc:

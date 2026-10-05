@@ -1,61 +1,71 @@
 import {SimulationLibrary} from './simulation-library.js';
 import {proposalInput} from './setup-agent.js';
 import {installYearPage} from './year-page.js';
-import {LocalPlan,seedPatterns,runPlan} from './local-year.js';
+import {installWorkspace} from './workspace.js';
+import {installProcess,parseRoute as parseProcessRoute} from './process.js';
+import {installDataPage} from './data-page.js';
+import {scorecardMarkup} from './worklists.js';
+import {LocalPlan,seedPatterns} from './local-year.js';
+import {LocalUtility} from './local-workspace.js';
 import {isApp,localRequest} from './local-session.js';
-import {installShareFiles,handleLabel} from './share-file.js';
+import {installShareFiles} from './share-file.js';
+import {updateLocalMonitor} from './local-monitor.js';
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-// A simulation's revisions, newest first: the latest (any status), the completed one to view, the next number.
 export function revisionState(jobs,modelId){const rows=jobs.filter(j=>j.recipe.modelId===modelId).sort((a,b)=>b.revision-a.revision);return {latest:rows[0],viewing:rows.find(j=>j.status==='complete'),next:(rows[0]?.revision||0)+1,rows};}
-export function formatETA(seconds){return seconds==null?'Estimating after the first district…':seconds<60?'About a minute remaining':`About ${Math.ceil(seconds/60)} minutes remaining`;}
-// Where a finished district's full results open: the saved-results reader on the run bundle this process serves.
+export function formatETA(seconds){return seconds==null?'Learning this run’s pace…':seconds<60?'About a minute remaining':`About ${Math.ceil(seconds/60)} minutes remaining`;}
 export const districtURL=runKey=>'./runs.html?run='+encodeURIComponent('/runs/'+runKey+'/');
-export const STATUS_TEXT={queued:'Waiting in the queue',running:'Running on this computer',complete:'Complete',failed:'Needs attention'};
-const longDate=day=>{try{return new Intl.DateTimeFormat('en-GB',{day:'numeric',month:'short',year:'numeric',timeZone:'UTC'}).format(new Date(day+'T12:00:00Z'));}catch{return String(day||'');}};
-const messages=['Teaching the meters to count politely…','Finding the bill that fell behind the sofa…','Convincing the queues to form one orderly line…','Putting tiny hard hats on the maintenance plan…','Asking the spreadsheets to use their indoor voices…'];
-// The page, top to bottom: the configuration (#local-root), the year's scenarios on the Command Center's calendar
-// (#local-year, year-page.js in plan mode over local-year.js LocalPlan), then the run step, the revisions and the
-// year's results (#local-run). A change to the year or the inputs makes a new revision to run. Everything runs in
-// the app's own process (utilsim/worker/server.py): the queue is this computer's, and the results stay on it.
+export const STATUS_TEXT={queued:'Queued',running:'Running',complete:'Complete',failed:'Needs attention'};
+export function localProposal(model){const clean=proposalInput(model);return {...clean,episodes:seedPatterns(clean.episodes||[],model.id),execution:'local',totalHomes:model.totalHomes||model.homes,summary:model.summary||'Explore the whole utility on this computer.'};}
+export function savedDecisions(job){const qualify=(value,district,key='')=>Array.isArray(value)?value.map(v=>qualify(v,district,key)):value&&typeof value==='object'?Object.fromEntries(Object.entries(value).map(([k,v])=>[k,qualify(v,district,k)])):typeof value==='string'&&/^[A-Z][A-Z0-9_]*-/.test(value)&&/Ids?$/.test(key)?district+'::'+value:value;
+ return Object.entries(job.recipe.request.actionsByDistrict||{}).flatMap(([district,actions])=>actions.map(a=>qualify(a,district))).sort((a,b)=>a.day.localeCompare(b.day));}
 if(typeof document!=='undefined'){
- const root=document.getElementById('local-root'),runRoot=document.getElementById('local-run'),yearSection=document.getElementById('local-year'),yearNote=document.getElementById('local-year-note'),q=new URLSearchParams(location.search),api=(q.get('engine')||'').replace(/\/$/,'')+'/api';
- const library=new SimulationLibrary();let modelId=q.get('model'),model=library.get(modelId||''),jobs=[],status=null,error='',runError='',busy=false,viewRevision=null,plan=null,yearFor=null;
- const files=installShareFiles({api,library,onMessage:m=>{error=m;renderTop();},onImported:s=>{location.href=s.execution==='local'?'./local-runs.html?model='+encodeURIComponent(s.id):'./';}});
- function setModel(id){modelId=id;const existing=library.get(id);if(existing){model=existing;return;}const latest=revisionState(jobs,id).latest;if(latest){const p=latest.recipe.proposal;model=library.save({...library.create(),...p,id,status:'ready',execution:'local',homes:latest.recipe.homes,totalHomes:latest.recipe.homes,townRef:p.townRef||'',scenarioId:'custom',scenarioTitle:'Saved local setup'});}}
- async function refresh(renderPage=true){if(!isApp()){error='';if(renderPage)render();return;}
-  try{status=await localRequest('status');if(modelId){const data=await localRequest('jobs?model='+encodeURIComponent(modelId));jobs=data.jobs;if(!model)setModel(modelId);}error='';}catch(e){error=e.message;}
-  if(renderPage&&!busy&&!['INPUT','SELECT','TEXTAREA'].includes(document.activeElement?.tagName))render();updateMonitor();}
- function updateMonitor(){const el=document.getElementById('local-monitor'),active=status?.active;el.hidden=!active;if(!active)return;const p=active.progress||{};el.innerHTML=`<strong>${esc(active.name)} · revision ${active.revision}</strong><p>${esc(p.stage||'Preparing the engine')}</p><progress max="${p.total||1}" value="${p.completed||0}"></progress><p>${p.completed||0}/${p.total||'?'} districts${status.queued?` · ${status.queued} queued`:''}</p><p>${esc(formatETA(p.etaSeconds))}</p><small>${messages[Math.floor(Date.now()/9000)%messages.length]}</small>`;}
- // What the next job runs: the simulation's inputs, each sporadic episode with the simulation's pattern seed.
- function currentProposal(){const p=proposalInput(model);return {...p,...(p.episodes?{episodes:seedPatterns(p.episodes,model.id)}:{}),execution:'local',totalHomes:model.totalHomes||model.homes,summary:model.summary||'Run this environment and utility on this computer.'};}
- // Queues the next revision on this computer.
- async function queue(){if(busy)return;busy=true;runError='';render();try{await localRequest('jobs',{proposal:currentProposal(),modelId,chunkSize:2000});await refresh(false);}catch(e){runError=e.message;}finally{busy=false;render();}}
- function view(){const state=revisionState(jobs,modelId),selected=state.rows.find(j=>j.revision===Number(viewRevision)&&j.status==='complete');return {state,job:selected||state.viewing};}
- // The year's calendar, mounted once per simulation (a fresh root drops the previous one's listeners).
- function mountYear(){yearSection.hidden=!model;if(!model||yearFor===model.id)return;yearFor=model.id;yearNote.textContent='';
-  const fresh=document.createElement('div');fresh.id='year-root';fresh.className='year-root';document.getElementById('year-root').replaceWith(fresh);
-  const id=model.id;plan=new LocalPlan({library,id,api,onSave:()=>{if(model?.id!==id)return;model=library.get(id)||model;runError='';renderRun();}});
-  installYearPage({plan:true,root:fresh,getClient:()=>plan,getSimulation:()=>model,toast:msg=>{yearNote.textContent=msg;}}).open();}
- function render(){renderTop();mountYear();renderRun();}
- const $=id=>document.getElementById(id),action=fn=>async()=>{try{error='';await fn();}catch(e){error=e.message;}render();};
- function renderTop(){const models=[...new Map(jobs.map(j=>[j.recipe.modelId,j.recipe.name])).entries()];if(model&&!models.some(([id])=>id===model.id))models.push([model.id,model.name]);
- $('config-link').href='./?edit='+encodeURIComponent(modelId||'')+(q.get('engine')?'&engine='+encodeURIComponent(q.get('engine')):'');
- root.innerHTML=`<div class="eyebrow">YOUR COMPUTER · YOUR DATA</div><h1>${esc(model?.name||'Local simulations')}</h1><p>Configure here. Run here. Full results stay in your storage folder${status?.storage?` (<code>${esc(status.storage)}</code>)`:''}.</p><p id="local-error" role="alert">${esc(error)}</p>${isApp()?'':'<section><h2>Open this in Utility Studio</h2><p>Large simulations run in the app on your computer. Download Utility Studio, open it, and import this simulation’s code there.</p><a class="primary" href="https://github.com/gragedmonds/utiltiysim/releases/latest" target="_blank" rel="noopener">Download Utility Studio ↗</a></section>'}${model?`<section><h2>Configuration</h2><p><strong>${Number(model.totalHomes||model.homes).toLocaleString()} residential homes</strong> · districts of up to 2,000 · model year 2026</p><p class="local-note">This size runs as independent districts. Analysts and agents are per district; per-1,000 crew settings scale within each district. Districts do not share a utility-wide workforce or connected network. Commercial sites add accounts.</p><label><input id="staffing-confirm" type="checkbox" ${model.staffingAcknowledged?'checked':''}> I’m modelling independent district teams.</label><div class="local-tabs"><button class="text-button" id="export-file">Export simulation file</button><button class="text-button" id="import-file">Import a simulation file</button>${model.handle?`<span class="card-handle">${esc(handleLabel(model.handle))}</span>`:''}</div></section>`:'<p>Start a simulation in <a href="./">the setup wizard</a>, or <button class="text-button" id="import-file">import a simulation file</button>.</p>'}`;
- if($('staffing-confirm'))$('staffing-confirm').onchange=e=>{model=library.update(model.id,{staffingAcknowledged:e.target.checked});};
- if($('export-file'))$('export-file').onclick=async()=>{if(await files.exportSimulation(model))model=library.get(model.id)||model;};
- if($('import-file'))$('import-file').onclick=()=>files.importSimulation();}
- // The run step: what changed since the latest revision (a new revision to run), or that it is up to date.
- function runStep(){const rp=runPlan(jobs,modelId,currentProposal(),{sync:true}),n=(model.episodes||[]).length;
-  const what=`${Number(model.totalHomes||model.homes).toLocaleString()} homes in districts of up to 2,000 · ${n} episode${n===1?'':'s'} on the year · results through ${longDate(model.asOf||'2026-03-31')}`;
-  const act=rp.upToDate?`<p class="local-note">Revision ${rp.latest.revision} holds these inputs${rp.latest.status==='complete'?'; its results are below':` and is ${STATUS_TEXT[rp.latest.status]?.toLowerCase()||rp.latest.status}`}.</p>`:`<button id="queue-run" class="primary" ${busy||!isApp()?'disabled':''}>${busy?'Checking inputs…':`Run revision ${rp.next}`}</button>`;
-  return `<section id="run-step"><h2>Run</h2><p class="run-state ${rp.upToDate?'is-current':rp.latest?'is-changed':''}" role="status">${esc(rp.message.replace(' to queue the new job','').replace(' to queue its job file',''))}</p><p class="local-note">${esc(what)}</p>${act}<p id="run-error" role="alert">${esc(runError)}</p>${status?.paused?'<p>The queue is paused. <button class="text-button" id="resume-queue">Resume</button></p>':''}</section>`;}
- function renderRun(){const {state,job}=view(),rollup=job?.result?.rollup;
- runRoot.innerHTML=`${model?runStep():''}<section><h2>Your revisions</h2><p class="revision-line">${job?`Viewing revision ${job.revision}`:'No completed results yet'}${state.latest&&state.latest!==job?` · revision ${state.latest.revision} ${esc((STATUS_TEXT[state.latest.status]||state.latest.status).toLowerCase())}`:''}</p>${state.rows.map(j=>`<div class="local-tabs"><strong>Revision ${j.revision}</strong><span>${esc(STATUS_TEXT[j.status]||j.status)}${j.status==='running'&&j.progress?.total?` · ${j.progress.completed||0}/${j.progress.total} districts`:''}</span>${j.status==='complete'?`<button class="text-button" data-view="${j.revision}">View results</button>`:''}${j.status==='failed'?`<span>${esc(j.error)}</span><button data-retry="${j.jobId}" class="text-button">Retry</button>`:''}${j.status!=='running'?`<button class="text-button" data-remove="${j.jobId}">Remove</button>`:''}</div>`).join('')||'<p>Your first revision will appear here.</p>'}</section>${rollup?`<section><h2>Year · revision ${job.revision}</h2><p>${rollup.accounts.toLocaleString()} accounts · ${rollup.registers.toLocaleString()} registers · ${rollup.completedDistricts} districts · results through ${esc(rollup.asOf)}</p><div class="local-months">${rollup.months.map(m=>`<article class="month-card"><span>${['January','February','March','April','May','June','July','August','September','October','November','December'][Number(m.month)-1]||esc(m.month)}</span><strong>${Number(m.billing.invoiced||0).toLocaleString(undefined,{maximumFractionDigits:0})}</strong><small>Invoiced · ${Number(m.cases.backlog||0).toLocaleString()} open cases</small></article>`).join('')}</div><details><summary>Where the engine spent time</summary><table><tbody>${Object.entries(job.result.timings.stagesSeconds||{}).sort((a,b)=>b[1]-a[1]).map(([name,seconds])=>`<tr><td>${esc(name)}</td><td>${Number(seconds).toFixed(2)}s</td></tr>`).join('')}</tbody></table></details><p>These are additive district totals. Each district’s full tables, work queues and scorecard open in the saved-results reader.</p><div class="district-list">${job.result.districts.map(d=>`<a class="secondary" href="${districtURL(d.runKey)}" target="_blank" rel="noopener">${esc(d.id)} · ${Number(d.homes).toLocaleString()} homes →</a>`).join('')}</div></section>`:''}`;
- if($('queue-run'))$('queue-run').onclick=async()=>{if(!$('staffing-confirm')?.checked){runError='Confirm that staffing applies to independent districts before running.';renderRun();$('staffing-confirm')?.focus();return;}await queue();};
- if($('resume-queue'))$('resume-queue').onclick=action(async()=>{await localRequest('pause',{paused:false});await refresh(false);});
- runRoot.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>{viewRevision=Number(b.dataset.view);renderRun();});
- runRoot.querySelectorAll('[data-retry]').forEach(b=>b.onclick=action(async()=>{await localRequest('jobs/'+b.dataset.retry+'/retry',{});await refresh(false);}));
- runRoot.querySelectorAll('[data-remove]').forEach(b=>b.onclick=action(async()=>{await localRequest('jobs/'+b.dataset.remove,undefined,{method:'DELETE'});if(viewRevision)viewRevision=null;await refresh(false);}));
+ const $=id=>document.getElementById(id),q=new URLSearchParams(location.search),api=(q.get('engine')||'').replace(/\/$/,'')+'/api',library=new SimulationLibrary();
+ const processMarkup=$('local-process').innerHTML;
+ const modelId=q.get('model');let model=library.get(modelId||''),jobs=[],status=null,busy=false,refreshing=false,error='',connectionError='',renderKey='',process=null,client=null,year=null,workspace=null,data=null,mounted='',page='',routeTicket=0;
+ const toast=message=>{$('local-year-note').textContent=message;$('toast').textContent=message;$('toast').classList.add('visible');setTimeout(()=>$('toast').classList.remove('visible'),6000);};
+ const files=installShareFiles({api,library,onMessage:toast,onImported:s=>location.href='./local-runs.html?model='+encodeURIComponent(s.id)});
+ const proposal=()=>localProposal(model);
+ function save(){model=library.get(modelId)||model;renderControls();}
+ function reset(id){const old=$(id),next=old.cloneNode(false);old.replaceWith(next);return next;}
+ function mount(){if(!model)return;const done=revisionState(jobs,modelId).viewing,key=done?.jobId||'plan';if(key===mounted)return;mounted=key;
+  if(done){client=new LocalUtility({job:done,model,library,api,onSave:save});
+   year=installYearPage({root:reset('year-root'),getClient:()=>client,getSimulation:()=>model,toast});
+   workspace=installWorkspace({root:reset('workspace-root'),getClient:()=>client,toast,onProcess:c=>{location.hash='#/process/'+Number(String(c.readDate||c.createdAt).slice(5,7));}});
+   $('local-process').innerHTML=processMarkup;process=installProcess({getClient:()=>client,toast});$('process-back').onclick=()=>{location.hash='#/workspace';};
+   data=installDataPage({root:reset('data-root'),getClient:()=>client,toast});
+  }else{client=new LocalPlan({library,id:modelId,api,onSave:save});year=installYearPage({plan:true,root:reset('year-root'),getClient:()=>client,getSimulation:()=>model,toast});}
+  route(true);
  }
- await refresh();setInterval(()=>refresh(),3000);
+ function renderTop(){if(!model){$('local-root').innerHTML='<h1>Command Center</h1><p>Choose a simulation from <a href="./">your library</a>.</p>';return;}
+  $('config-link').href='./?edit='+encodeURIComponent(modelId)+(q.get('engine')?'&engine='+encodeURIComponent(q.get('engine')):'');
+  $('local-root').innerHTML=`<div class="offline-context"><div><span class="section-kicker">YOUR UTILITY · ON THIS COMPUTER</span><h1>${esc(model.name)}</h1><p>${Number(model.totalHomes||model.homes).toLocaleString()} homes · one workspace · model year 2026</p></div><div class="offline-context-actions"><button id="export-file" class="outline-btn">Export simulation</button><button id="import-file" class="small-link">Import</button></div></div>`;
+  $('export-file').onclick=()=>files.exportSimulation(model);$('import-file').onclick=()=>files.importSimulation();
+ }
+ function renderControls(){if(!model)return;const state=revisionState(jobs,modelId),live=!!state.viewing;
+  $('local-run').innerHTML=`<div class="offline-run-bar"><div><strong>${live?'Interactive utility workspace':'Ready for your first run'}</strong><p>${live?'Click a day in the Command Center to change the year. Work cases, inspect bills, and compare results across your entire utility.':'Run the utility once, then explore and change any part of the year here.'}</p>${state.latest?.status==='failed'?`<p role="alert">${esc(state.latest.error)}</p>`:''}</div><label class="run-through">${live?'Archive results through':'Run through'}<input id="run-asof" type="date" min="2026-01-01" max="2026-12-31" value="${esc(model.asOf||'2026-03-31')}"></label><button id="queue-run" class="primary-btn" ${busy||!isApp()||state.latest?.status==='running'||state.latest?.status==='queued'?'disabled':''}>${busy?'Checking…':state.latest?.status==='running'?'Engine running…':state.latest?.status==='queued'?'Queued…':live?'Save a new revision':'Run utility'}</button>${status?.paused?'<button id="resume-queue" class="outline-btn">Resume</button>':''}</div>${error||connectionError?`<p role="alert" class="year-error">${esc(error||connectionError)}</p>`:''}${!isApp()?'<p role="alert">Open this workspace from the Utility Studio launcher to use the local engine.</p>':''}`;
+  $('queue-run').onclick=queue;$('run-asof').onchange=e=>{client?.setAsOf(e.target.value);model=library.update(model.id,{asOf:e.target.value});route(true);};
+  if($('resume-queue'))$('resume-queue').onclick=async()=>{await localRequest('pause',{paused:false});refresh();};
+  const detail=$('revision-root').querySelector('details')?.open;
+  $('revision-root').innerHTML=`<details class="offline-history" ${detail?'open':''}><summary>Saved revisions${state.rows.length?' · '+state.rows.length:''}</summary><p>Each revision preserves its inputs and results. Current edits are saved with this simulation.</p>${state.rows.map(j=>`<div class="revision-row"><strong>Revision ${j.revision}</strong><span>${esc(STATUS_TEXT[j.status])}</span><span>${esc(j.recipe.request.asOf)}</span>${j.status==='complete'?`<details><summary>Checkpoint archives & timings</summary><p>Processing checkpoints keep memory bounded. The main workspace combines every checkpoint.</p><div class="checkpoint-links">${j.result.districts.map(d=>`<a href="${districtURL(d.runKey)}" target="_blank" rel="noopener">${esc(d.id)} · ${d.homes.toLocaleString()} homes ↗</a>`).join('')}</div></details>`:j.status==='failed'?`<button class="small-link" data-retry="${j.jobId}">Retry</button>`:''}</div>`).join('')}</details>`;
+  $('revision-root').querySelectorAll('[data-retry]').forEach(b=>b.onclick=async()=>{await localRequest('jobs/'+b.dataset.retry+'/retry',{});refresh();});
+ }
+ async function queue(){if(busy)return;busy=true;error='';renderControls();try{
+  // Preserve existing record identities when saving later revisions.
+  const prior=revisionState(jobs,modelId).viewing,chunkSize=prior?.recipe.chunkSize||10000;
+  await localRequest('jobs',{proposal:proposal(),modelId,chunkSize,actions:client?.actions||model.actions||[]});await refresh();
+ }catch(e){error=e.message;}finally{busy=false;renderControls();}}
+ async function route(force=false){const target=location.hash.match(/^#\/(year|workspace|data|scorecard|process)/)?.[1]||'year';if(!force&&page===target&&target==='year')return;page=target;const ticket=++routeTicket;
+  for(const [name,id] of Object.entries({year:'local-year',workspace:'local-workspace',data:'local-data',process:'local-process',scorecard:'local-scorecard'}))$(id).hidden=name!==page;
+  document.querySelectorAll('[data-page]').forEach(a=>{if(a.dataset.page===page)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');});
+  if(page==='year'){year?.open('#/year');return;}
+  if(!client?.localUtility){const root=page==='scorecard'||page==='process'?$('local-'+page):$(page+'-root');root.innerHTML='<div class="offline-empty"><h2>Your whole utility will be here</h2><p>Run the first revision from the Command Center to open interactive results.</p><a href="#/year">Go to Command Center →</a></div>';return;}
+  if(page==='process'){process.open(parseProcessRoute(location.hash));return;}if(page==='workspace'){workspace.open(location.hash);return;}if(page==='data'){data.open(location.hash);return;}
+  try{const score=await client.scorecard();if(ticket===routeTicket)$('local-scorecard').innerHTML='<h1>VEE scorecard</h1>'+scorecardMarkup(score);}catch(e){if(ticket===routeTicket)$('local-scorecard').textContent=e.message;}
+ }
+ async function refresh(){if(refreshing)return;refreshing=true;try{
+  if(isApp()){status=await localRequest('status');if(modelId)jobs=(await localRequest('jobs?model='+encodeURIComponent(modelId))).jobs;
+   if(!model){const j=revisionState(jobs,modelId).viewing||revisionState(jobs,modelId).latest;if(j)model=library.save({...library.create(),...j.recipe.proposal,id:modelId,status:'ready',execution:'local',homes:j.recipe.homes,totalHomes:j.recipe.homes,actions:savedDecisions(j)});}}
+  connectionError='';updateLocalMonitor($('local-monitor'),status);const next=JSON.stringify([model?.name,model?.asOf,error,status?.paused,jobs.map(j=>[j.jobId,j.status])]);if(next!==renderKey&&!['INPUT','SELECT','TEXTAREA'].includes(document.activeElement?.tagName)){renderKey=next;renderTop();renderControls();}mount();
+ }catch(e){connectionError=e.message;renderKey='';renderControls();}finally{refreshing=false;}}
+ window.addEventListener('hashchange',()=>route());await refresh();setInterval(refresh,2500);
 }

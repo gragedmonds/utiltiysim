@@ -1,4 +1,5 @@
 // Map chrome and settings navigation. Simulation commands remain with the app/engine.
+import {isApp} from './local-session.js';
 const paths={
  moon:'<path d="M20 15A9 9 0 0 1 9 4a8 8 0 1 0 11 11Z"/>',
  van:'<path d="M3 6h12v12H3Zm12 5h4l3 4v3h-7"/><circle cx="7" cy="19" r="2"/><circle cx="18" cy="19" r="2"/>',
@@ -24,9 +25,11 @@ PAGES.push({id:'workspace-page',re:/^#\/workspace(?:\/[\w.:%-]+)*$/}); // #/work
 PAGES.push({id:'data-page',re:/^#\/data(?:\/[\w-]+)?$/}); // #/data[/<table>]: tables of the town and its run
 PAGES.push({id:'year-page',re:/^#\/year$/}); // #/year: the calendar of the run, its episodes and trends
 // Utility Studio navigation: Map and Workspace are the primary destinations; Configuration is the cog.
-const NAV={'workspace-page':'nav-workspace','worklists-page':'nav-workspace','process-page':'nav-workspace','data-page':'nav-data','year-page':'nav-year','settings-page':'nav-config'};
+const NAV={'workspace-page':'nav-workspace','worklists-page':'nav-workspace','process-page':'nav-process','data-page':'nav-data','year-page':'nav-year','settings-page':'nav-config'};
+export function offlineRoute(hash,offline=isApp()){if(offline&&/^#\/(?:settings|config)\/scenarios$/.test(hash))return '#/config/m2c';return offline&&!PAGES.some(p=>p.re.test(hash))?'#/year':hash;}
 export function installFocusUI({getContext,onSettings,onScenario,onWorklists=()=>{},onSettingsTab=()=>{},onProcess=()=>{},onWorkspace=()=>{},onData=()=>{},onYear=()=>{}}){
  const $=id=>document.getElementById(id), pairs=[['layers-toggle','layers-drawer'],['scenario-toggle','scenario-popover'],['data-toggle','data-popover'],['search-toggle','search-popover']];
+ if(isApp())for(const id of ['settings-back','worklists-back'])$(id).textContent='Command Center';
  document.querySelectorAll('[data-icon]').forEach(el=>{el.insertAdjacentHTML('afterbegin',`<svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[el.dataset.icon]||''}</svg>`);});
  function closeTools(){for(const [button,panel] of pairs){$(panel).hidden=true;$(button).setAttribute('aria-expanded','false');}}
  for(const [button,panel] of pairs){$(button).setAttribute('aria-controls',panel);$(button).setAttribute('aria-expanded','false');$(button).onclick=()=>{const open=$(panel).hidden;closeTools();$('performance-panel').open=false;if(open){$(panel).hidden=false;$(button).setAttribute('aria-expanded','true');if(panel==='search-popover')$('search-input').focus();}};}
@@ -49,7 +52,7 @@ export function installFocusUI({getContext,onSettings,onScenario,onWorklists=()=
   $('frequency-note').textContent=supplied?'Supplied incident configuration is shown below. Editing needs the engine schema and update API.':'Frequency controls will be enabled when the engine provides its configuration schema and update endpoint.';
  }
  let current=null;
- function route(){const hash=window.location.hash,page=PAGES.find(p=>p.re.test(hash))?.id||null,open=!!page,was=current;current=page;
+ function route(){const hash=offlineRoute(window.location.hash);if(hash!==window.location.hash)history.replaceState(null,'',location.pathname+location.search+hash);const page=PAGES.find(p=>p.re.test(hash))?.id||null,open=!!page,was=current;current=page;
   for(const p of PAGES)$(p.id).hidden=p.id!==page;document.querySelector('.workspace').inert=open;onSettings(open);
   for(const a of document.querySelectorAll('.studio-tabs a'))a.removeAttribute('aria-current');
   $(page?NAV[page]||'':'nav-map')?.setAttribute('aria-current','page');
@@ -64,7 +67,7 @@ export function installFocusUI({getContext,onSettings,onScenario,onWorklists=()=
   if(page==='year-page'){closeTools();$('performance-panel').open=false;}onYear(page==='year-page',hash);
  }
  function settings(tab='town'){window.location.hash='/config/'+tab;route();}
- function map(){const from=current;window.location.hash='/town';route();$(from==='settings-page'?'settings-toggle':'nav-map').focus();}
+ function map(){const from=current;window.location.hash=isApp()?'/year':'/town';route();$(isApp()?'nav-year':from==='settings-page'?'settings-toggle':'nav-map').focus();}
  function worklists(){window.location.hash='/workspace';route();}
  $('settings-toggle').onclick=()=>current==='settings-page'?map():settings();$('nav-map').onclick=e=>{e.preventDefault();map();};$('settings-back').onclick=map;$('worklists-toggle').onclick=worklists;$('worklists-back').onclick=map;$('scenario-settings').onclick=()=>settings('scenarios');
  document.querySelectorAll('[data-settings-tab]').forEach(el=>el.onclick=()=>settings(el.dataset.settingsTab));

@@ -290,7 +290,7 @@ def _mean(values):
     return round(float(np.mean(values)), 2) if len(values) else None
 
 
-def measure(run: M2CRun, as_of: str | None = None, ids=None) -> dict:
+def measure(run: M2CRun, as_of: str | None = None, ids=None, *, statistics: dict | None = None) -> dict:
     """Every figure of ``run`` year to date at ``as_of`` (``None`` where there is nothing to count yet), with the
     thresholds in force. ``ids`` restricts the figures."""
     from utilsim.m2c import contact, fieldwork, views
@@ -306,7 +306,7 @@ def measure(run: M2CRun, as_of: str | None = None, ids=None) -> dict:
     per_year = cal.days / (day + 1)
     out: dict = {}
     w = window(run, None, cal.date_of(day).isoformat())
-    twin = twin_measure(run, w, k_cfg.timely_invoice_days)
+    twin = twin_measure(run, w, k_cfg.timely_invoice_days, statistics=statistics)
     out.update({k: v for k, v in twin.items() if k in KPI_BY_ID})
     # The summary blocks the Studio already shows.
     s = views.summary(run, as_of)
@@ -371,6 +371,43 @@ def measure(run: M2CRun, as_of: str | None = None, ids=None) -> dict:
         out["field_backlog_per_1000"] = round(fk.get("open", 0) / n_acc * 1000.0, 2)
         out["emergency_response_min"] = fk.get("responseMin")
     values = {k: out.get(k) for k in KPI_BY_ID if k in wanted}
+    if statistics is not None:
+        invoices = [inv for inv in bk.invoices if 0 <= inv['created'] <= T]
+        to_invoice = [inv['created'] - max(float(tw.read_day[bk.main[bk.docs[k]['inst']], bk.docs[k]['month']])
+                                          for k in inv['docs']) for inv in invoices]
+        statistics.update({
+            'auto_accept_share': [kp['autoAccepted'], kp['actual']],
+            'vee_precision': [kp['vee']['truePositives'], kp['vee']['truePositives'] + kp['vee']['falsePositives']],
+            'vee_recall': [kp['vee']['truePositives'], kp['vee']['truePositives'] + kp['vee']['falseNegatives']],
+            'truck_rolls_per_1000': [kp['truckRolls'] * 1000 * per_year, n_acc],
+            'days_to_invoice': [sum(to_invoice), len(to_invoice)],
+            'overdue_share': [bill.get('overdue', 0), bill.get('receivable', 0)],
+            'disconnections_per_1000': [disconnected * 1000 * per_year, n_acc],
+            'cost_per_account': [kp['costs']['total'], n_acc],
+            'carry_per_account': [kp.get('carry', 0) + bill.get('billingCarry', 0) + bill.get('receivableCarry', 0), n_acc],
+            'customer_minutes_lost': [minutes, n_acc],
+            'bills_on_time': [on_time if docs else 0, len(docs)],
+            'blocked_bill_share': [sum(d['case'] >= 0 for d in docs), len(docs)],
+            'reads_released_promptly': [int(prompt.sum()) if held.any() else 0, int(held.sum())],
+            'cases_resolved_in_time': [in_time if opened else 0, len(opened)],
+            'paid_on_time': [paid if due_passed else 0, len(due_passed)],
+        })
+        if 'ck' in locals():
+            statistics.update({'contact_service_level': [(ck.get('serviceLevelPct') or 0) * ck['answered'], ck['answered']],
+                               'abandoned_share': [ck['abandoned'], ck['answered'] + ck['abandoned']],
+                               'contacts_per_1000': [ck['contacts'] * 1000 * per_year, n_acc],
+                               'first_contact_resolution': [ck['resolvedFirst'], ck['contacts']]})
+        if 'fk' in locals():
+            from utilsim.m2c.fieldwork import EMERGENCY, IDX
+            from utilsim.m2c.fieldwork import fieldwork as get_fieldwork
+            fw = get_fieldwork(run)
+            cols = fw.cols
+            completed = ~cols['cancelled'] & (cols['end'] >= 0) & (cols['end'] <= T)
+            emergency = completed & np.isin(cols['type'], [IDX[x] for x in EMERGENCY])
+            responses = (cols['arrive'][emergency] - cols['created'][emergency]) * 1440
+            statistics.update({'field_on_time': [int((completed & (cols['met'] <= cols['due'] + 1e-9)).sum()), fk['completed']],
+                               'field_backlog_per_1000': [fk['open'] * 1000, n_acc],
+                               'emergency_response_min': [float(responses.sum()), len(responses)]})
     return {"schemaVersion": KPIS_VERSION, "asOf": cal.date_of(day).isoformat(), "accounts": n_acc, "values": values,
             "thresholds": {p: t["value"] for p, t in thresholds(run.cfg).items()}}
 

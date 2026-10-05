@@ -41,7 +41,7 @@ from utilsim.twin.kpis import KPI_BY_ID, KPIS, PER_1000, Kpi, kpi_json, measure,
 from utilsim.twin.levers import DEFAULTS, LEVERS, patches
 
 TWIN_VERSION = "twin-fit/1.0"
-DISTRICT_HOMES = 2000  # the Studio's district size for utilities above the live limit (utilsim/worker/prepare.py)
+DISTRICT_HOMES = 10000  # the local workspace's processing checkpoint (utilsim/worker/prepare.py)
 HOME_LIMIT = 10_000  # one live town (api/_towns.py MAX_HOUSES; the API passes its own)
 CALIBRATION_MAX_HOMES = 5000  # a generated calibration town (town overrides) stays quick to build and replay
 MAX_ROUNDS = 4
@@ -208,7 +208,7 @@ def sizing(customers: int, cal_homes: int, cal_accounts: int, home_limit: int = 
     districts = math.ceil(homes / DISTRICT_HOMES) if local else 1
     return {"customers": customers, "accountsPerHome": round(per_home, 4), "homes": homes,
             "execution": "local" if local else "hosted", "districts": districts,
-            "templateHomes": min(homes, DISTRICT_HOMES) if local else homes}
+            "templateHomes": math.ceil(homes / districts) if local else homes}
 
 
 def _people(count: int, share: float, hours_default: float, lo: float, hi: float) -> tuple[int, float]:

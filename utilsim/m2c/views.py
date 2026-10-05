@@ -1019,7 +1019,7 @@ ANOMALIES = ("stuck_meter", "slow_meter", "tamper", "exchange_registration_failu
              "leak", "vacant_consuming")
 
 
-def scorecard(run: M2CRun, *, as_of: str | None = None) -> dict:
+def scorecard(run: M2CRun, *, as_of: str | None = None, distributions: dict | None = None) -> dict:
     """How VEE did against simulation truth up to ``as_of``.
 
     Per injected anomaly: affected reads received, how many VEE flagged (recall) and, for lasting ones, the median
@@ -1055,6 +1055,8 @@ def scorecard(run: M2CRun, *, as_of: str | None = None) -> dict:
             first = np.where(hit[regs], t[regs], np.inf).min(1) if len(regs) else np.zeros(0)
             lag = first - onset[name][regs]
             row["medianDaysToFlag"] = round(float(np.median(lag)), 1) if len(lag) else None
+            if distributions is not None:
+                distributions[name] = lag.tolist()
         rows.append(row)
     by_type: dict[str, list[int]] = {}
     for case in run.cases:

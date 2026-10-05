@@ -70,8 +70,9 @@ describe real properties or people.
 ### Studio entry
 
 Open the site link to set up a simulation or choose one saved in this browser. No login is required. The wizard
-starts with **Environment** (homes, region, weather and housing), then **Utility & operations** (services, staffing
-and starter/scenario), followed by an editable review that opens **Year**. Each setup stage has basic controls and
+has five steps: **Starting point** (build a utility or match existing metrics), **Your focus** (goals and KPIs),
+**Environment** (homes, region, weather and housing), **Utility & operations** (services and staffing), and an
+editable **Review** that opens the **Command Center**. Each setup stage has basic controls and
 an **Advanced** panel with its live engine settings. Regional starters are editable modelling assumptions.
 **Config** is a header tab. Four scenario starters
 range from normal operations to organised chaos; inflicting a period runs analysis through its end. A floating
@@ -91,7 +92,7 @@ the guide's panel in the app (kept in the OS vault), or set `ANTHROPIC_API_KEY` 
 `ANTHROPIC_MODEL` optionally overrides the default `claude-sonnet-4-6`. Voice transcription depends on browser
 support; typing and manual starters remain available. See [setup agent configuration](docs/SETUP_AGENT.md).
 
-Large simulations run as districts from the run page: [the app](docs/LOCAL_RUNNER.md).
+Large simulations run in one offline Command Center with combined work queues and dated edits: [the app](docs/LOCAL_RUNNER.md).
 
 **KPIs.** The "What to test" step offers the figures that belong to the chosen goals (missed reads, bills on time,
 paid on time, service level, field on time, customer minutes lost and 27 more); the chosen ones show on the Command
@@ -99,7 +100,7 @@ Center and Run statistics with their values, and the setup guide offers the cata
 has a window the simulation sets (`kpi.on_time_bill_days`: 3 days by default) and a **Glossary** tab explaining what
 moves it. See [KPIs](docs/KPIS.md).
 
-**Start from the outcomes (engine, Studio entry next).** `uv run utilsim twin --customers 50000 --billers 8 --kpi invoice_timeliness=0.99:0.94 --kpi exceptions_worked=8000:10000,abs --changed-on 2026-04-01` fits the
+**Start from the outcomes.** Choose **Match existing metrics** in the five-step wizard for before, current and target KPIs, or use the CLI: `uv run utilsim twin --customers 50000 --billers 8 --kpi invoice_timeliness=0.99:0.94 --kpi exceptions_worked=8000:10000,abs --changed-on 2026-04-01` fits the
 engine's levers (missed reads, anomalies, VEE strictness, automation, pickup lag, field capacity) until the replayed year
 reproduces the observed figures, reports every KPI the twin shows and writes a setup proposal the Studio opens: see
 [the digital twin](docs/TWIN.md).

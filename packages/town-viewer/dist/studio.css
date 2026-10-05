@@ -908,3 +908,5 @@ details.schema-group>.schema-field:last-child{margin-bottom:10px}
 .kpi-tile strong{font-size:22px;font-variant-numeric:tabular-nums;line-height:1.15}
 .kpi-tile small{font-size:11px;color:#6b7f7b;line-height:1.3}
 .kpi-strip .small-note{margin:8px 0 0}
+/* Desktop simulations have no map destination, including previously saved towns. */
+.local-engine #nav-map,.local-engine [data-act="show-map"],.local-engine [data-act="watch"],.local-engine [data-act="fo-watch"],.local-engine #wl-show-premise,.local-engine [data-wl-watch],.local-engine #map-defaults-panel,.local-engine [data-col-map],.local-engine #wl-markers,.local-engine .focus-layout>.workspace,.local-engine #cfg-scenarios,.local-engine .cfg-nav-section:has([data-section="scenarios"]){display:none!important}

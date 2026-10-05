@@ -88,3 +88,68 @@ func TestOpeningTheExecutableAgainFindsTheRunningLauncher(t *testing.T) {
 		t.Fatal("accepted a launcher that is gone:", got)
 	}
 }
+
+func TestRememberedFolderRequiresValidExplicitPreference(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "storage.json")
+	if _, ok := savedFolder(file); ok {
+		t.Fatal("missing preference skipped setup")
+	}
+	for _, raw := range []string{`null`, `""`, `"relative/path"`, `{}`, `broken`} {
+		os.WriteFile(file, []byte(raw), 0600)
+		if _, ok := savedFolder(file); ok {
+			t.Fatal("invalid preference skipped setup:", raw)
+		}
+	}
+	folder := t.TempDir()
+	raw, _ := json.Marshal(folder)
+	os.WriteFile(file, raw, 0600)
+	if got, ok := savedFolder(file); !ok || got != folder {
+		t.Fatal(got, ok)
+	}
+}
+
+func TestReopeningRunningLauncherGoesStraightToStudio(t *testing.T) {
+	engine := "http://127.0.0.1:51234/#token=" + strings.Repeat("e", 64)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]string{"engineURL": engine})
+	}))
+	defer server.Close()
+	file := filepath.Join(t.TempDir(), "launcher.json")
+	pageURL := server.URL + "/#token=" + strings.Repeat("l", 64)
+	raw, _ := json.Marshal(map[string]string{"url": pageURL})
+	os.WriteFile(file, raw, 0600)
+	if got := runningLauncher(file); got != engine {
+		t.Fatal(got)
+	}
+	for _, address := range []string{"", "https://example.com/", "http://localhost:51234/#token=bad"} {
+		engine = address
+		if got := runningLauncher(file); got != pageURL {
+			t.Fatal("unsafe/not-ready URL did not fall back:", got)
+		}
+	}
+}
+
+func TestOlderEngineKeepsLauncherControlsReachableDuringUpgrade(t *testing.T) {
+	token := strings.Repeat("e", 64)
+	pageURL := "http://127.0.0.1:51234/#token=" + strings.Repeat("l", 64)
+	settings := ""
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/local/status" || r.Header.Get("Authorization") != "Bearer "+token {
+			w.WriteHeader(401)
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]string{"launcherURL": settings})
+	}))
+	defer server.Close()
+	address := server.URL + "/#token=" + token
+	if runnerHasLauncherSettings(address, pageURL) {
+		t.Fatal("older engine without a settings link would hide update controls")
+	}
+	settings = pageURL
+	if !runnerHasLauncherSettings(address, pageURL) {
+		t.Fatal("current engine should bypass the launcher page")
+	}
+	if runnerHasLauncherSettings(server.URL+"/#token="+strings.Repeat("x", 64), pageURL) {
+		t.Fatal("settings support was accepted without authentication")
+	}
+}

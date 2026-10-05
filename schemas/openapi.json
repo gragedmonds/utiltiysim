@@ -3710,6 +3710,19 @@
             "title": "Limitations",
             "type": "array"
           },
+          "metricHistory": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Observed KPI history, improvement targets and the calibration report.",
+            "title": "Metrichistory"
+          },
           "name": {
             "maxLength": 100,
             "minLength": 1,
@@ -5502,6 +5515,19 @@
             "title": "Limitations",
             "type": "array"
           },
+          "metricHistory": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Observed KPI history, improvement targets and the calibration report.",
+            "title": "Metrichistory"
+          },
           "name": {
             "maxLength": 100,
             "minLength": 1,
@@ -5797,6 +5823,23 @@
           }
         },
         "summary": "Get Config Schema"
+      }
+    },
+    "/api/dependencies": {
+      "get": {
+        "description": "The offline variable dependency map. No town generation or simulation is required.",
+        "operationId": "get_dependencies_api_dependencies_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Dependencies"
       }
     },
     "/api/health": {

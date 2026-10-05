@@ -1,8 +1,9 @@
-// The floating card on every Studio page while this computer runs a revision (the app's queue, /local/status).
 import {localToken} from './local-session.js';
-import {LOAD_MESSAGES} from './engine-monitor.js';
+import {updateLocalMonitor} from './local-monitor.js';
 const token=localToken();
-if(token&&typeof document!=='undefined'&&!location.pathname.endsWith('local-runs.html')){const style=document.createElement('link');style.rel='stylesheet';style.href='./local-runs.css';document.head.append(style);const host=document.createElement('aside');host.className='local-floating';host.hidden=true;host.setAttribute('role','status');document.body.append(host);
- async function refresh(){try{const r=await fetch('/local/status',{headers:{Authorization:'Bearer '+token},signal:AbortSignal.timeout(8000)});if(!r.ok)return;const data=await r.json(),active=data.active;host.hidden=!active;if(!active)return;const p=active.progress||{},url=new URL('./local-runs.html',location.href);url.searchParams.set('model',active.modelId);host.replaceChildren();const name=document.createElement('strong');name.textContent=active.name+' · revision '+active.revision;const stage=document.createElement('p');stage.textContent=p.stage||'Preparing the engine';const bar=document.createElement('progress');bar.max=p.total||1;bar.value=p.completed||0;const note=document.createElement('p');note.textContent=`${p.completed||0}/${p.total||'?'} districts${data.queued?` · ${data.queued} queued`:''}`;const small=document.createElement('small');small.textContent=LOAD_MESSAGES[Math.floor(Date.now()/9000)%LOAD_MESSAGES.length];const link=document.createElement('a');link.href=url.pathname+url.search;link.textContent='Open the run page →';host.append(name,stage,bar,note,small,link);}catch{}}
- refresh();setInterval(refresh,10000);
+if(token&&typeof document!=='undefined'&&!location.pathname.endsWith('local-runs.html')){
+ for(const href of ['./local-runs.css','./engine-monitor.css']){const style=document.createElement('link');style.rel='stylesheet';style.href=href;document.head.append(style);}
+ const host=document.createElement('aside');host.className='local-floating';host.hidden=true;host.setAttribute('aria-label','Local engine activity');document.body.append(host);
+ let pending=false;async function refresh(){if(pending)return;pending=true;try{const r=await fetch('/local/status',{headers:{Authorization:'Bearer '+token},signal:AbortSignal.timeout(8000)});if(r.ok)updateLocalMonitor(host,await r.json());}catch{}finally{pending=false;}}
+ refresh();setInterval(refresh,2500);
 }

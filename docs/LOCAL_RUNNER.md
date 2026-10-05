@@ -16,9 +16,13 @@ through** with Claude (an Anthropic API key you paste in).
    shape. The first start downloads the versioned engine (about 135 MB) into `runtime/<version>` under the folder,
    checks its size, SHA-256 and Ed25519 signature, and installs it; later starts reuse it. Errors stay on the page
    with the log location (`runner.log` in the folder).
-3. Utility Studio opens in your browser at `http://127.0.0.1:<port>/`, the setup wizard first. On Windows the
-   launcher has no console window: the page is its window, with **Quit Utility Studio** at the bottom, and opening
-   the executable again while it runs brings that page back instead of starting a second one. On macOS and Linux
+3. Utility Studio opens in your browser at `http://127.0.0.1:<port>/`, the setup wizard first. Once the folder is saved,
+   subsequent launches start the engine and open Studio directly, bypassing the folder screen. Opening the executable
+   again while it runs brings Studio back instead of starting a second engine. The **App settings and updates** gear
+   in Studio opens the launcher's status, restart and quit controls. A missing drive or startup failure brings the
+   setup screen back with the reason. When an older installed engine has no settings gear yet, the launcher
+   keeps its controls open for that upgrade; the updated engine then opens directly. Run the launcher with `--setup` while it is stopped to choose a different library.
+   On Windows the launcher has no console window. On macOS and Linux
    the terminal it started from shows the address; closing it stops Utility Studio.
 
 The launcher remembers the folder in the OS config directory (`UtilityStudio/storage.json`, beside `launcher.json`,
@@ -46,37 +50,64 @@ browser for that origin and sends it with every `/local` request. The server bin
 headers and sets no CORS headers, so only pages it serves can call it. The engine's generated-town cache lives under
 the storage folder too (`cache/`).
 
-Simulations up to the engine's live limit (10,000 homes) run as one live town: the Command Center, the map and the
-workspace call `/api` and replay the year on demand, as before. Larger sizes (25,000, 50,000, 500,000 homes) run as
-independent districts of up to 2,000 homes from the run page (`local-runs.html?model=<id>`), below.
+Every new desktop simulation opens one **Command Center** at `local-runs.html?model=<id>`, with utility-wide trends,
+work queues, Data, activity sequences, and a VEE scorecard. New jobs process up to 10,000 homes per internal checkpoint:
+50,000 homes use five checkpoints; 500,000 use fifty. This is one user-facing run, not one giant
+in-memory physical network. Staffing still describes independent processing areas; shared workforce
+and connected-network modes remain available in the batch CLI.
+Existing small-town simulations keep their original records, decisions and year history. Their navigation now
+includes **Activity sequences** and hides Map; old map links return to the Command Center. Engine-only development
+can still use the operations map. Desktop setup hides map-day controls.
 
-## The run page: revisions on this computer
+## Command Center and saved revisions
 
-The page runs top to bottom: the configuration, **the year**, then **Run revision N**. The year is the Command
-Center's calendar (`year-page.js` in plan mode over `local-year.js`): click a day to inflict a scenario from the
-engine's library, edit or remove an episode, clear all, or talk a tweak through. The episodes are saved with the
-simulation and go into the next revision's job, which every district applies; `POST /api/m2c/episodes/preview`
-checks them as a run does and marks a sporadic episode's struck days on the calendar.
+Before the first run, the calendar plans dated changes. **Run utility** submits the whole simulation
+once. When it finishes, the same calendar becomes interactive. Click a day to add, edit or remove
+scenarios and replay the resulting year; earlier dates remain unchanged by later episodes. Workspace
+and Data query the entire utility, with stable checkpoint-qualified record IDs so decisions on similarly
+numbered cases or accounts cannot cross checkpoints. **Save a new revision** archives the current inputs
+and decisions while preserving older revisions. Existing revisions retain their original checkpoint sizes
+to preserve record identity.
+The utility job format covers model year 2026; multi-year continuation remains available in the
+individual town Studio, and is not offered in the combined utility workspace.
 
-Districts are separate towns with their own run seeds, so a sporadic episode gets the simulation's own `pattern.seed`
-(`local:<simulationId>`) and every district strikes the same days.
+Studio pages, the wizard and dependency explanations ship in the signed runtime, so installed launchers receive
+them through the engine updater after a release is published. Skipping the launcher's folder screen requires the
+new launcher executable once: the engine updater does not replace the launcher itself.
 
-**Run revision N** posts the inputs to `POST /local/jobs`. The server prepares the recipe (`utilsim/worker/prepare.py`:
-the preset config deep-merged with the town overrides, the run settings, the episodes, the seed and the results
-date), checks it exactly as a run does, numbers it as the next revision of that simulation and queues it. Revisions
-run one at a time (`utilsim/worker/jobs.py`); the page and a floating card on every Studio page show the active
-revision's stage, districts done and ETA. Any change to the year or the other inputs since the latest revision is
-spelled out ("Changed since revision 2: Head end down added") and runs the next revision; with no change the latest
-revision stands. A completed revision shows the year's monthly totals and timings, and each district opens in the
-saved-results reader with its full tables, work queues and scorecard. Failed revisions can be retried; queued and
-finished ones removed from the list (their files stay). **Pause** holds the queue after the current district.
+`local-workspace.js` uses the same engine client and views as the live Studio. Authenticated queries to
+`POST /local/jobs/{jobId}/query` replay the original snapshots with dated edits and decisions. Counts
+are additive; rates and averages use pooled numerators and denominators, and percentiles use pooled
+samples. New bundles include `utility-views.json.gz` so the initial Command Center can open without
+replaying completed checkpoints. Unchanged saved tables and worklists are filtered and paged directly
+from their archives; new bundles also save resolved cases at the final run date. Older bundles remain
+readable and replay views on demand when their archive lacks them. CSV downloads
+and local CSV/JSON connection links include records across checkpoints.
 
-On disk under the storage folder: `engine-port.json` (the address the folder opens at: the browser keeps the simulation
-list, settings and analyst actions per address, so the same folder opens at the same address every start, and a port
-found taken is replaced and remembered), `runner.json` (the queue), `baselines/` (generated towns, reused across revisions
-that change only the year), `batches/` (checkpoints per district), `runs/<runKey>/` (one bundle per finished district)
-and `results/<jobId>.result.json` (the small summary). A revision interrupted by closing the app resumes from its
-finished districts on the next start. A missing drive pauses work instead of writing anywhere else.
+A larger animated activity window shows stages, completed checkpoints, and the engine's ETA. Jobs run
+one at a time and resume from completed checkpoints after an interruption. Saved revisions retain
+checkpoint archives under an expandable history section. Failed jobs can be retried.
+
+On disk: `engine-port.json` remembers the library’s browser address across launches (a taken port is replaced).
+`runner.json` stores the queue, `baselines/` stores reusable generated towns, `batches/` stores
+progress, `runs/<runKey>/` stores immutable results, and `results/<jobId>.result.json` stores the rollup.
+Local export links in `export-links/` pin the selected revision, inputs, filters and columns. Links work
+while this local server is running at the same address. Unsaved workspace edits stay in browser storage;
+archive a revision to persist decisions with the library. A missing drive pauses work.
+
+## Five-step setup
+
+1. Choose **Build from the ground up** or **Match existing metrics**.
+2. Select experiment areas, or supply customer accounts and KPI values before, after, and at the target.
+3. Review the environment and whole-utility size.
+4. Review services, staffing and the starting scenario.
+5. Review the proposed setup and open the Command Center.
+
+Metrics fitting uses the local engine without an API key. It fits history first, then proposes a separate
+dated target scenario. Review shows requested and achieved calibration values, including unmet targets.
+The full utility may differ from the calibration town: replay it to evaluate the proposed changes.
+Cloud conversation controls are hidden in the offline app; manual scenario tools and calibration remain
+available without a network connection.
 
 ## Simulation files
 
@@ -105,6 +136,39 @@ the simulation and its town) lists every figure of the catalogue, its definition
 simulation set it, the settings that move it up or down, the library scenarios that strike it and the related figures;
 the simulation's own figures are marked. Everything on it comes from the engine running in the app. See
 [KPIS.md](KPIS.md).
+
+## Variable dependencies
+
+The **i** button in the top corner of every Studio page opens the dependency explorer without leaving
+the current simulation. Search a setting, nested parameter, operations-day override, data record or KPI.
+The map follows its predecessors and dependents through **Environment → Operations → Data → Metrics**.
+Drag the canvas, scroll to zoom, or click the overview map to travel. Expand a settings group to see its
+individual variables; **Collapse groups** folds them back up. **Direct links** reduces the view to one
+step, while **All paths** includes the full declared ancestry and downstream paths. Conditional bridges
+and feedback have dashed links and can be switched off. Selecting a card shows its definition, formula,
+engine default and immediate connections. The explorer does not change simulation inputs.
+
+Connections use separate tracks in horizontal corridors between rows and vertical gutters between
+columns, with smoothly rounded 90-degree elbows. Each card has one centered entry and one centered
+exit: connections join or split just outside those common connectors, then follow separate corridor
+tracks. Dense sections grow their gutters while card sizes and connectors stay uniform. Hovering a
+connection highlights its complete path, including the shared connectors at each end, and opens an
+explanation of how that specific source feeds its target. The panel includes the rule or calculation,
+applicable conditions, and engine references; timing KPIs also include worked illustrations. Click the
+line or **Pin open** to keep the panel visible. Shared/group connectors offer a relationship selector
+so each underlying link remains inspectable. The sidebar's **How does this connect?** buttons provide
+the same information by keyboard or touch. Escape dismisses the explanation before the explorer.
+
+The graph combines the configuration impact catalogue, operations schema, KPI catalogue and explicit
+subsystem relationships in `utilsim/config/dependencies.py`. It explains how the model is connected;
+it is not a numerical sensitivity estimate or a trace of a particular run. Cost-only inputs and KPI
+counting windows connect to measures without implying changes to the underlying operational events.
+`GET /api/dependencies` serves the graph locally; saved-results readers fall back to the bundled
+`dependency-graph.json`. Regenerate that bundle with `python scripts/export_dependencies.py` after
+changing graph metadata. A conformance test checks that the bundled and API versions agree.
+Link explanations live in `utilsim/config/dependency_explanations.py`. They distinguish configuration
+inputs, engine rules, measurement definitions and indirect catalogue influences. Formula examples
+describe engine logic, not evaluated values from the current simulation.
 
 ## Talk it through
 

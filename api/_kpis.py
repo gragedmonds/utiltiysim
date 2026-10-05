@@ -13,6 +13,14 @@ from utilsim.m2c.kpis import KPI_IDS, catalogue, measure
 router = APIRouter()
 
 
+@router.get('/api/dependencies')
+def get_dependencies():
+    """The offline variable dependency map. No town generation or simulation is required."""
+    from utilsim.config.dependencies import dependency_graph
+
+    return J(dependency_graph())
+
+
 class KpiRequest(RunRequest):
     kpis: list[str] | None = Field(None, max_length=40, description="Figures to compute (default: every figure).")
 

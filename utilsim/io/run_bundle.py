@@ -209,6 +209,15 @@ def export_run(snapshot: dict, request: dict, store: str | Path, *, on_stage=lam
         on_stage("analysis.daily")
         write("daily.json.gz", daily.daily(run))
         write("scorecard.json", scorecard)
+        # The local workspace can pool rates and distributions without replaying every checkpoint on opening.
+        from copy import deepcopy
+
+        from utilsim.m2c import kpis, pooling
+        pooled = {path: pooling.attach(path, deepcopy(value), run, {'asOf': as_of}) for path, value in (
+            ('/m2c/trend', yearly), ('/m2c/summary', views.summary(run, as_of)), ('/vee/scorecard', scorecard))}
+        stats = {}
+        pooled['/m2c/kpis'] = {**kpis.measure(run, as_of, statistics=stats), '_statistics': stats}
+        write('utility-views.json.gz', pooled)
         on_stage("archive.snapshot")
         write("snapshot.json.gz", snapshot)
         write("tables/catalog.json", tables.catalog())
@@ -226,6 +235,10 @@ def export_run(snapshot: dict, request: dict, store: str | Path, *, on_stage=lam
         for date in dates:
             write(f"worklists/{date}.json.gz", _open_worklist(run, date))
             write(f"summaries/{date}.json", compact_summary(views.summary(run, date)))
+        _, until = views.as_of_t(run, as_of)
+        write(f"worklists/{as_of}.all.json.gz", {'schemaVersion': WORKLIST_VERSION,
+              'simulationId': run.simulation_id, 'asOf': as_of, 'status': 'all',
+              'rows': [views._row(run, case, until) for case in run.cases if case.created <= until]})
         manifest = {"schemaVersion": MANIFEST_VERSION, "runKey": key,
                     "engineVersion": GENERATOR_VERSION, "engineBuild": build, "inputs": inputs,
                     "simulationId": run.simulation_id, "asOf": as_of, "worklistDates": dates,
