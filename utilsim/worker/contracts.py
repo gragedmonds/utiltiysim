@@ -19,7 +19,7 @@ class Recipe(Strict):
     name: str = Field(min_length=1, max_length=100)
     modelId: str = Field(min_length=1, max_length=100, pattern=r'^[a-zA-Z0-9_-]+$')
     homes: int = Field(ge=20, le=500_000)
-    chunkSize: int = Field(default=2000, ge=20, le=5000)
+    chunkSize: int = Field(default=10000, ge=20, le=10000)
     staffing: Literal['independent-districts']
     config: dict[str, Any]
     request: dict[str, Any]
@@ -55,7 +55,7 @@ class DistrictReceipt(Strict):
     id: str = Field(pattern=r'^district-\d{4,5}$')
     runKey: str = Field(pattern=r'^[a-f0-9]{64}$')
     manifestSha256: str = Field(pattern=r'^[a-f0-9]{64}$')
-    homes: int = Field(ge=20, le=5000)
+    homes: int = Field(ge=20, le=10000)
 
 
 class ResultFile(Strict):
@@ -80,8 +80,16 @@ def check_job(value):
 
     cfg = SimConfig.model_validate(job['recipe']['config'])
     req = job['recipe']['request']
-    if set(req) - {'settings', 'episodes', 'seed', 'asOf'}:
+    if set(req) - {'settings', 'episodes', 'seed', 'asOf', 'actionsByDistrict'}:
         raise ValueError('Unsupported batch inputs.')
+    import re
+
+    from api._m2c import Action
+    for district, actions in req.get('actionsByDistrict', {}).items():
+        if not re.fullmatch(r'district-\d{4,5}', district):
+            raise ValueError('Invalid record checkpoint.')
+        for action in actions:
+            Action.model_validate(action)
     parsed = RunRequest.model_validate({'town': 'district', **req})
     resolved = resolve_settings(cfg, parsed.settings)
     resolve_episode_days(resolved, parse_episodes(resolved, [e.model_dump(by_alias=True) for e in parsed.episodes]))

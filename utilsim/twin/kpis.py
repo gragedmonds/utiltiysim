@@ -130,7 +130,8 @@ def _mean(values: list[float]) -> float | None:
     return round(float(np.mean(values)), 4) if values else None
 
 
-def measure(run: M2CRun, w: Window, timely_days: int = 5, accounts: int | None = None) -> dict[str, float | None]:
+def measure(run: M2CRun, w: Window, timely_days: int = 5, accounts: int | None = None,
+            statistics: dict | None = None) -> dict[str, float | None]:
     """Every KPI of ``run`` inside ``w`` (None when the window holds nothing to measure). ``accounts`` is the
     denominator of the rates: by default the town's accounts in the year."""
     tw, bk = run.town, run.books
@@ -159,6 +160,18 @@ def measure(run: M2CRun, w: Window, timely_days: int = 5, accounts: int | None =
     docs = [d for d in bk.docs if d["released"] is not None and w.d0 <= d["released"] <= w.T]
     billed = float(sum(d["total"] for d in docs))
     error = float(sum(abs(d["total"] - d["truthTotal"]) for d in docs))
+
+    if statistics is not None:
+        statistics.update({
+            'invoice_timeliness': [int((to_invoice <= timely_days).sum()), len(to_invoice)],
+            'missed_read_share': [missed, n_sched], 'estimated_read_share': [estimated, n_sched],
+            'exceptions_all': [len(opened) * 1000 * per_year, n_acc],
+            'exceptions_worked': [worked * 1000 * per_year, n_acc],
+            'exceptions_vee': [vee * 1000 * per_year, n_acc], 'case_backlog': [backlog * 1000, n_acc],
+            'days_to_release': [sum(release_days), len(release_days)],
+            'days_to_pay': [sum(to_pay), len(to_pay)], 'collected_share': [collected, invoiced],
+            'billing_error_share': [error, billed],
+        })
 
     def rate(count: int) -> float:
         return round(count / n_acc * 1000.0 * per_year, 2)

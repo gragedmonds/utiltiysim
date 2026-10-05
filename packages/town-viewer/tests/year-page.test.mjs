@@ -75,6 +75,7 @@ test('chart scales: clean ticks, a line that skips empty months, rounded columns
  assert.equal(fmtTick(812345.67,'money'),'$812K');assert.equal(fmtTick(1234567,'money'),'$1.2M');assert.equal(fmtTick(60,'money'),'$60');assert.equal(fmtTick(0,'money'),'$0');
  assert.equal(fmtTick(6363,'int'),'6.4K');assert.equal(fmtTick(45,'int'),'45');assert.equal(fmtTick(250000,'int'),'250K');assert.equal(fmtTick(0.028,'pct'),'2.8%');assert.equal(fmtTick(0.1,'pct'),'10%');assert.equal(fmtTick(0,'pct'),'0%');
  assert.equal(fmtValue(0.028,'pct'),'2.8%');assert.equal(fmtValue(1484.5,'money'),'$1,484.50');assert.equal(fmtValue(45149,'int'),'45,149');assert.equal(fmtValue(null,'int'),'—');
+ assert.equal(fmtValue('—','int'),'—');assert.equal(fmtValue('82%','int'),'82%');
 });
 
 test('chart models read the engine months, leave future months blank and describe themselves',()=>{

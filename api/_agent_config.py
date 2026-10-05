@@ -52,6 +52,7 @@ class AgentEpisode(StrictModel):
 class Proposal(StrictModel):
     execution: Literal["hosted", "local"] = "hosted"
     totalHomes: int | None = Field(default=None, ge=20, le=500_000)
+    metricHistory: dict[str, Any] | None = Field(default=None, description="Observed KPI history, improvement targets and the calibration report.")
     name: str = Field(min_length=1, max_length=100)
     goals: list[str] = Field(default_factory=lambda: ["everything"], min_length=1, max_length=8)
     purpose: str = Field(default="", max_length=500)

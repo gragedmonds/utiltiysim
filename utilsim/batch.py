@@ -33,8 +33,8 @@ NETWORKS = ("independent", "connected")
 
 
 def district_sizes(homes: int, chunk_size: int = 2000) -> list[int]:
-    if not 20 <= homes <= 500_000 or not 20 <= chunk_size <= 5000:
-        raise ValueError("Choose 20–500,000 total homes and 20–5,000 homes per district.")
+    if not 20 <= homes <= 500_000 or not 20 <= chunk_size <= 10_000:
+        raise ValueError("Choose 20–500,000 total homes and 20–10,000 homes per checkpoint.")
     count = math.ceil(homes / chunk_size)
     size, extra = divmod(homes, count)
     if size < 20:
@@ -48,7 +48,16 @@ def write_json(path: Path, value):
         f.write(orjson.dumps(value, option=orjson.OPT_SORT_KEYS | orjson.OPT_INDENT_2))
         f.flush()
         os.fsync(f.fileno())
-    os.replace(temporary, path)
+    # Windows readers briefly hold a sharing lock while polling progress. Keep the previous complete
+    # JSON visible, then retry the atomic replacement instead of failing the simulation.
+    for attempt in range(20):
+        try:
+            os.replace(temporary, path)
+            break
+        except PermissionError:
+            if attempt == 19:
+                raise
+            time.sleep(0.025)
 
 
 class StageRecorder:
@@ -220,7 +229,7 @@ def run_batch(cfg, homes: int, store: Path, request: dict | None = None, *,
     request = {} if request is None else request
     if not isinstance(request, dict):
         raise ValueError("Batch input must be a JSON object.")
-    if set(request) - {"settings", "episodes", "seed", "asOf"}:
+    if set(request) - {"settings", "episodes", "seed", "asOf", "actionsByDistrict"}:
         raise ValueError("Batch input accepts settings, episodes, seed and asOf only; town-specific actions cannot be copied across districts.")
     req = RunRequest.model_validate({**request, "town": "district", "asOf": request.get("asOf") or "2026-12-31"})
     cal = calendar()  # district batches replay the snapshot's year
@@ -229,7 +238,10 @@ def run_batch(cfg, homes: int, store: Path, request: dict | None = None, *,
     resolved = resolve_settings(cfg, req.settings)
     episodes = [e.model_dump(by_alias=True, exclude_none=True) for e in req.episodes]
     resolve_episode_days(resolved, parse_episodes(resolved, episodes))
+    district_actions = request.get('actionsByDistrict')
     request = {"settings": req.settings, "episodes": episodes, "seed": req.seed, "asOf": req.asOf}
+    if district_actions:
+        request['actionsByDistrict'] = district_actions
     inputs = {"config": cfg.model_dump(mode="json"), "homes": homes, "sizes": sizes, "request": request,
               "staffing": staffing, "mapData": map_data, "engineBuild": engine_build(), "schemaVersion": VERSION}
     if staffing == "shared":
@@ -402,6 +414,9 @@ def district_worker(path: Path, index: int, mode: str = "final"):
                 os.replace(temporary, snapshot_path)
                 write_json(marker, {"sha256": hashlib.sha256(data).hexdigest(), "key": baseline_key})
     request = dict(job["inputs"]["request"])
+    actions_by_district = request.pop('actionsByDistrict', {})
+    if district['id'] in actions_by_district:
+        request['actions'] = actions_by_district[district['id']]
     if request.get("seed"):
         request["seed"] = hashlib.sha256(f"{request['seed']}:{district['id']}".encode()).hexdigest()[:32]
     net = path.parent / "network.json"

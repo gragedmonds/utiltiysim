@@ -96,15 +96,15 @@ def test_sizing_and_staffing_scale_with_the_utility():
     small = sizing(1_000, cal_homes=1900, cal_accounts=2375, home_limit=10_000)
     assert small["execution"] == "hosted" and small["homes"] == 800 and small["templateHomes"] == 800
     big = sizing(50_000, cal_homes=1900, cal_accounts=2375, home_limit=10_000)
-    assert big["execution"] == "local" and big["homes"] == 40_000 and big["districts"] == 20
+    assert big["execution"] == "local" and big["homes"] == 40_000 and big["districts"] == 4
     assert big["templateHomes"] == DISTRICT_HOMES
     spec = TwinSpec(customers=50_000, billers=8, supervisors=2, agents=20, kpis=[{"id": "missed_read_share", "value": .05}])
     whole = staffing(spec, 1.0)
     assert whole["process"]["analysts"] == 8 and whole["process"]["analyst_hours_per_day"] == 6.0
     assert whole["process"]["supervisors"] == 2 and whole["contact"]["agents"] == 20
-    district = staffing(spec, DISTRICT_HOMES / big["homes"])  # 8 billers over 20 districts: 0.4 of one each
-    assert district["process"]["analysts"] == 1 and district["process"]["analyst_hours_per_day"] == pytest.approx(2.4)
-    assert district["contact"]["agents"] == 1
+    district = staffing(spec, DISTRICT_HOMES / big["homes"])  # 8 billers over four processing areas: two each
+    assert district["process"]["analysts"] == 2 and district["process"]["analyst_hours_per_day"] == pytest.approx(6)
+    assert district["contact"]["agents"] == 5
     assert staffing(TwinSpec(customers=500, billers=0, kpis=[{"id": "missed_read_share", "value": .05}]), 1.0) == {
         "process": {"analysts": 0, "analyst_hours_per_day": 6.0}}
     assert staffing(TwinSpec(customers=500, kpis=[{"id": "missed_read_share", "value": .05}]), 1.0) == {}
@@ -170,12 +170,14 @@ def test_before_and_after_make_a_dated_episode(town, defaults):
     assert result["twin"]["before"]["missed_read_share"] < result["twin"]["after"]["missed_read_share"]
     # Sizing: 50,000 accounts at the 120-home town's ratio is a utility of districts; billers share out by homes.
     u = result["utility"]
-    assert u["execution"] == "local" and u["districts"] > 1 and u["templateHomes"] == DISTRICT_HOMES
+    assert u["execution"] == "local" and u["districts"] > 1 and u["templateHomes"] <= DISTRICT_HOMES
+    assert u['templateHomes'] == (u['homes'] + u['districts'] - 1) // u['districts']
     assert u["calibrationStaffing"]["process"]["analysts"] == 1
     assert result["notes"] and "smallest capacity" in result["notes"][0]
     p = result["proposal"]
-    assert p["execution"] == "local" and p["totalHomes"] == u["homes"] and p["townOverrides"]["town"]["houses"] == DISTRICT_HOMES
-    assert p["settings"]["process"]["analysts"] == 1 and 0.5 <= p["settings"]["process"]["analyst_hours_per_day"] < 6
+    assert p["execution"] == "local" and p["totalHomes"] == u["homes"] and p["townOverrides"]["town"]["houses"] == u['templateHomes']
+    assert all(p['settings']['process'][key] == value
+               for key, value in staffing(spec, u['templateHomes'] / u['homes'])['process'].items())
     (episode,) = p["episodes"]
     assert episode["from"] == "2026-07-01" and episode["ramp"] == 14 and set(episode["settings"]) == {"reading"}
     assert p["settings"]["reading"]["ami_missed_read"] == 0.012  # the base keeps the 'before' fit

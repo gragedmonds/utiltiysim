@@ -21,7 +21,7 @@ export class SimulationLibrary{
   try{if(id.startsWith('legacy-'))this.storage.setItem(DELETED_PREFIX+id,new Date().toISOString());for(const k of keys)this.storage.removeItem(k);}
   catch{throw Error('This simulation could not be deleted. Browser storage may be blocked.');}
   return keys.length;}
- create(){return {schemaVersion:SIM_VERSION,id:crypto.randomUUID(),name:'',purpose:'',status:'draft',step:0,wizardVersion:3,goals:[],createdAt:new Date().toISOString(),preset:'',townRef:'',townId:'',townName:'',homes:0,scenarioId:'baseline',scenarioTitle:'Normal operations',episodes:[],asOf:'2026-03-31',seed:''};}
+ create(){return {schemaVersion:SIM_VERSION,id:crypto.randomUUID(),name:'',purpose:'',status:'draft',step:0,wizardVersion:4,goals:[],createdAt:new Date().toISOString(),preset:'',townRef:'',townId:'',townName:'',homes:0,scenarioId:'baseline',scenarioTitle:'Normal operations',episodes:[],asOf:'2026-03-31',seed:''};}
  // Adopt earlier town-keyed work without moving or deleting the original data.
  adoptPacks(packs){for(const t of packs?.towns||[]){const id='legacy-'+t.townId;if(this.get(id)||this.storage.getItem(DELETED_PREFIX+id)!==null)continue;const raw=this.storage.getItem('utility-town-m2c:'+t.townId);if(!raw)continue;let saved;try{saved=JSON.parse(raw);}catch{continue;}if(!saved||typeof saved!=='object')continue;
    const name=t.place?.name||t.preset,scope=simulationKey(id,t.townId);

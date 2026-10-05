@@ -53,11 +53,17 @@ def prepare_recipe(value):
     proposal = Proposal.model_validate(seeded_episodes(value['proposal'], value['modelId']))
     validated = validate_proposal(proposal)
     config = deep_merge(preset_config(proposal.preset).model_dump(mode='json'), proposal.townOverrides)
+    from utilsim.worker.workspace import actions_for, scopes
+    actions = value.get('actions', [])
+    if any(len(scopes(a)) != 1 for a in actions):
+        raise ValueError('Each decision must identify a record in this utility.')
+    grouped = {district: actions_for(actions, district) for district in sorted(scopes(actions))}
     return Recipe(name=proposal.name, modelId=value['modelId'], homes=proposal.totalHomes or validated['homes'],
-                  chunkSize=value.get('chunkSize', 2000), staffing=value.get('staffing', 'independent-districts'),
+                  chunkSize=value.get('chunkSize', 10000), staffing=value.get('staffing', 'independent-districts'),
                   config=config, proposal={**proposal.model_dump(by_alias=True), 'townRef': validated['townRef']},
                   request={'settings': proposal.settings, 'episodes': validated['episodes'],
-                           'seed': proposal.seed or None, 'asOf': proposal.asOf}).model_dump()
+                           'seed': proposal.seed or None, 'asOf': proposal.asOf,
+                           **({'actionsByDistrict': grouped} if grouped else {})}).model_dump()
 
 
 def prepare_job(value, revision):

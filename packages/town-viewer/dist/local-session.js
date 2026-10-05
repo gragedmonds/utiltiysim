@@ -11,6 +11,7 @@ export function captureToken(where=globalThis.location,storage=globalThis.localS
  catch{return '';}
 }
 let token=typeof location==='undefined'?'':captureToken();
+if(token&&typeof document!=='undefined')document.documentElement.classList.add('local-engine');
 export const localToken=()=>token;
 export const isApp=()=>!!token;
 // A /local request to the app's process; the Error's message is the server's reason.

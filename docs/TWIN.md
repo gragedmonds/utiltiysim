@@ -9,7 +9,7 @@ shows for every KPI, which levers it moved and how far each observed figure was 
 
 Engine module `utilsim/twin/`, command `utilsim twin`, API `GET /api/twin/dictionary` and `POST /api/twin/fit`
 (`twin-fit/1.0`). The eleven figures the twin reproduces are part of the Studio's KPI catalogue under the same ids
-(`utilsim/m2c/kpis.py`, [KPIS.md](KPIS.md)), marked `twin`. The Studio entry card ("Start from your numbers") is the next slice; see "Studio" below.
+(`utilsim/m2c/kpis.py`, [KPIS.md](KPIS.md)), marked `twin`. The Studio exposes this through **Match existing metrics**; see "Studio" below.
 
 ## What goes in
 
@@ -17,8 +17,8 @@ Engine module `utilsim/twin/`, command `utilsim twin`, API `GET /api/twin/dictio
 
 | Input | Becomes |
 |---|---|
-| `customers` (contract accounts in the year) | Homes, through the calibration town's accounts-per-home ratio (about 1.2 to 1.8 depending on the town). Above the live engine's limit (10,000 homes locally, 6,000 hosted) the utility runs as districts of 2,000 homes from the local run page, as the wizard's large sizes do. |
-| `billers`, `supervisors`, `agents` | `process.analysts`, `process.supervisors`, `contact.agents`. A town that holds part of the utility (the calibration town during the fit, a district in the proposal) gets its share of their hours: 8 billers over 20 districts is one analyst at 2.4 hours a day in each. The engine's smallest capacity is one analyst at half an hour a day; when the share falls below it the report says so and suggests a larger calibration town. |
+| `customers` (contract accounts in the year) | Homes, through the calibration town's accounts-per-home ratio (about 1.2 to 1.8 depending on the town). Above the live engine's limit (10,000 homes locally, 6,000 hosted) the utility runs as internal checkpoints of up to 10,000 homes from the local run page, as the wizard's large sizes do. |
+| `billers`, `supervisors`, `agents` | `process.analysts`, `process.supervisors`, `contact.agents`. A town that holds part of the utility (the calibration town during the fit, a district in the proposal) gets its share of their hours: 8 billers over four areas is two analysts at six hours a day in each. The engine's smallest capacity is one analyst at half an hour a day; when the share falls below it the report says so and suggests a larger calibration town. |
 | `services` | `customers_billing.services` (what the utility provides). |
 | `townOverrides` | Generation settings the utility knows (AMI route share, payer mix, housing); the calibration town is generated with them (a few seconds) instead of read from the packs. |
 | `changedOn`, `ramp` | The day the "after" figures begin and how many days the change took to build up. |
@@ -103,7 +103,7 @@ uv run utilsim twin --dictionary
 The proposal is `api/_agent_config.py`'s `Proposal`, the object the wizard and the conversational guide produce, and
 it has passed the same validation (`POST /api/setup-agent/validate`) when the API returns it. Base settings are the
 fitted levers plus the known people scaled to the town they run in; `townOverrides` carry the homes (a district
-template of 2,000 for a local utility) and any town settings the utility gave; what changed is one episode.
+template of 10,000 for a local utility) and any town settings the utility gave; what changed is one episode.
 
 ## What the first probe showed
 
@@ -133,10 +133,13 @@ estimated bill as late is describing `estimated_read_share`, which moves from 8 
   worked can be more automation or looser VEE); the dictionary's order decides which is tried first, and `fixed` or
   `exclude` steer it. A later slice offers two or three candidate explanations side by side.
 
-## Studio (next slice)
+## Studio
 
-A second card at the start, "Start from your numbers", beside "Build a utility": customers, billers, agents and
-services; a KPI list from the dictionary with a last-year value, a now value and when it changed; a calibration town
-and a budget. The browser drives the replays (as it drives runs today, with the engine monitor's estimates), shows
-target against achieved per KPI as the fit converges, then hands the proposal to the existing review page ("What
-your inputs change") and Config lock-in. On the local app the fit runs as a job.
+The five-step wizard starts with **Build from the ground up** and **Match existing metrics**.
+The metrics path asks for accounts, known billing staff, the change date, and before/current/target
+values from the engine dictionary. Percent fields convert to engine shares. Historical calibration
+and target calibration run separately, with the latter added as a future episode. The review displays
+requested and achieved values with fit status and model limits. Settings, episodes and calibration
+observations are kept with the simulation. Fitting runs entirely in the local Python engine; no cloud
+assistant or API key is required. It uses a small calibration town, so the full run is still needed to
+evaluate the result at utility scale.
