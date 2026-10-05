@@ -72,6 +72,29 @@ def crew(slow, missing):
 
 
 # ---- orders progress on their own --------------------------------------------------------------------------------
+@pytest.mark.parametrize("kind", ["HIGH_BILL", "ZERO_USAGE"])
+def test_review_can_request_a_visit_without_automatically_settling_the_case(kind):
+    settings = {**SLOW, "billing": {"billing_queue_worked_by": "you", "high_bill_ratio": 1.1, "high_bill_min": 0}}
+    base = run_for(RunRequest(town="small_town", settings=settings))
+    source = next(c for c in base.cases if c.type == kind and 30 < c.created < 250
+                  and c.resolved is None and not c.orders and c.work is None)
+    day = add_bdays(int(source.created) + 1, 0)
+    start = add_bdays(day, 2)
+    assert "order_save" in views.case_view(base, source.id, as_of=iso(day))["studioActions"]
+    assert not base.orders  # the concern itself did not create a manual order
+    oid, actions = order(source.id, day, start, activity="Meter investigation")
+    run = run_for(RunRequest(town="small_town", settings=settings, actions=actions))
+    assert not run.warnings
+    o = run.orders[oid]
+    assert o.source.id == source.id and o.case.resolved is not None
+    assert run.case_index[source.id].resolved is None  # billing/read decision stays with the reviewer
+    assert any(e[1] == "ORDER_COMPLETED" and e[2]["orderId"] == oid for e in run.case_index[source.id].events)
+    view = views.order_view(run, order_id=oid, as_of=iso(start + 1))["order"]
+    assert view["workType"]["id"] == "meter_visit"
+    assert view["fields"]["activityType"] == "Meter investigation"
+    assert view["source"]["caseId"] == source.id
+
+
 def test_a_dispatched_order_rolls_on_its_start_date_and_the_crew_records_an_outcome(crew, missing):
     run, oid, start = crew["run"], crew["oid"], crew["start"]
     assert not run.warnings

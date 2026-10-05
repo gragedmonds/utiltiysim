@@ -11,10 +11,10 @@ const catalogue={families:[],kpis:[],serviceOrders:{source:'Reference <photo>',s
 
 test('coverage distinguishes actual work, manual activities and gaps without fabricated totals',()=>{
  const html=serviceOrderCoverage(catalogue);
- assert.match(html,/2 of 2 reference types/);assert.match(html,/Reference &lt;photo&gt;/);assert.match(html,/Take &amp; confirm/);
- assert.match(html,/Related annual work<\/dt><dd>Meter investigation/);assert.match(html,/Related manual activity<\/dt><dd>Special meter read/);
- assert.match(html,/Not modelled/);assert.match(html,/Still missing:<\/b> Needs sewer assets/);
- assert.match(html,/not separate selectable order types or extra work counts/);
+ assert.match(html,/2 of 2 reference labels/);assert.match(html,/Reference &lt;photo&gt;/);assert.match(html,/Take &amp; confirm/);
+ assert.match(html,/Related annual work<\/dt><dd>Meter investigation/);assert.match(html,/Related manual purpose<\/dt><dd>Special meter read/);
+ assert.match(html,/Not modelled/);assert.match(html,/Coverage note:<\/b> Needs sewer assets/);
+ assert.match(html,/do not create extra work counts/);
  assert.equal((html.match(/class="service-order-group" /g)||[]).length,2);
  assert.doesNotMatch(html,/class="service-order-group" open/);
  assert.equal(serviceOrderCoverage({}), '', 'older saved catalogues stay compatible');
@@ -22,7 +22,7 @@ test('coverage distinguishes actual work, manual activities and gaps without fab
 
 test('search by code or engine activity opens only matching groups and shows no false empty state',()=>{
  const html=glossaryMarkup(catalogue,{filter:'216'});
- assert.match(html,/1 of 2 reference types/);assert.match(html,/class="service-order-group" open/);
+ assert.match(html,/1 of 2 reference labels/);assert.match(html,/class="service-order-group" open/);
  assert.match(html,/Meter Reread/);assert.doesNotMatch(html,/Sewer Odor Complaint|Nothing matches/);
  assert.match(serviceOrderCoverage(catalogue,'meter investigation'),/Meter Reread/);
  assert.match(serviceOrderCoverage(catalogue,'special meter read'),/Meter Reread/);
