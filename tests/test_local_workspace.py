@@ -127,6 +127,47 @@ def test_new_large_jobs_use_fifty_checkpoints_for_half_a_million_homes():
     assert len(district_sizes(500000, job['recipe']['chunkSize'])) == 50
 
 
+def test_new_billing_measures_upgrade_old_archives_and_pool_counts(workspace):
+    import gzip
+
+    import orjson
+
+    _, _, job, _, jobs = workspace
+    keys = ['active_services', 'estimated_bill_share', 'active_meterless_accounts']
+    originals, statistics = [], []
+    try:
+        for part in job['result']['districts']:
+            path = jobs.store / 'runs' / part['runKey'] / 'utility-views.json.gz'
+            original = path.read_bytes()
+            originals.append((path, original))
+            saved = orjson.loads(gzip.decompress(original))
+            statistics.append(saved['/m2c/kpis']['_statistics'])
+            # Simulate an installed archive from before this catalogue update.
+            saved['/m2c/kpis']['values'] = {k: v for k, v in saved['/m2c/kpis']['values'].items() if k not in keys}
+            path.write_bytes(gzip.compress(orjson.dumps(saved)))
+        values = query(workspace, '/m2c/kpis', kpis=keys)['values']
+        assert values['active_services'] == sum(s['active_services'][0] for s in statistics)
+        assert values['active_meterless_accounts'] == sum(s['active_meterless_accounts'][0] for s in statistics)
+        numerator = sum(s['estimated_bill_share'][0] for s in statistics)
+        denominator = sum(s['estimated_bill_share'][1] for s in statistics)
+        assert values['estimated_bill_share'] == pytest.approx(numerator / denominator)
+    finally:
+        for path, original in originals:
+            path.write_bytes(original)
+
+
+def test_monthly_billing_audit_filters_combined_amounts_and_projects_after_paging(workspace):
+    result = query(workspace, '/m2c/table', table='billingAudit', pageSize=12)
+    assert result['total'] == result['rowsInTable'] == 6
+    assert [row[0] for row in result['rows']] == list(range(1, 7))
+    index = next(i for i, c in enumerate(result['columns']) if c['key'] == 'invoicedAmount')
+    amount = result['rows'][1][index]
+    selected = query(workspace, '/m2c/table', table='billingAudit', columns=['invoicedAmount'],
+                     filters={'invoicedAmount': f'{amount - .01}..{amount + .01}'}, pageSize=12)
+    assert selected['rowsInTable'] == 6
+    assert selected['rows'] == [[r[index]] for r in result['rows'] if abs(r[index] - amount) <= .01]
+
+
 def test_record_namespace_and_ratios():
     row = qualify({'caseId': 'CASE-1', 'accountId': 'CA-1', 'id': 'EP-1'}, 'district-0001')
     assert row == {'caseId': 'district-0001::CASE-1', 'accountId': 'district-0001::CA-1', 'id': 'EP-1'}

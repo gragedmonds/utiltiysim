@@ -22,7 +22,7 @@ def get_dependencies():
 
 
 class KpiRequest(RunRequest):
-    kpis: list[str] | None = Field(None, max_length=40, description="Figures to compute (default: every figure).")
+    kpis: list[str] | None = Field(None, max_length=100, description="Figures to compute (default: every figure).")
 
 
 @router.get("/api/m2c/kpis")

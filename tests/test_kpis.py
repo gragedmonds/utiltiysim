@@ -37,7 +37,7 @@ def test_the_catalogue_is_consistent():
     assert len(ids) == len(set(ids)) and len(ids) >= 30
     run_paths, town_paths = _paths(settings_schema()), _paths(config_schema())
     for k in KPIS:
-        assert k.family in FAMILY_IDS and k.better in ("lower", "higher") and k.goals, k.id
+        assert k.family in FAMILY_IDS and k.better in ("lower", "higher", "context") and k.goals, k.id
         assert set(k.goals) <= GOAL_IDS - {"everything"}, k.id
         for path, direction in k.settings:
             assert path in run_paths | town_paths, (k.id, path)

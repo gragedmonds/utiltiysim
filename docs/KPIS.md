@@ -16,7 +16,7 @@ counts with, for that town's configuration) and `settingsGroup` (`kpi`). Each fi
 | Field | Meaning |
 |---|---|
 | `id`, `title`, `family`, `unit` | `share` (0 to 1), `days`, `minutes`, `seconds`, `per_1000_accounts_year`, `per_1000_accounts`, `currency_per_account`, `count` |
-| `better` | `lower` or `higher` |
+| `better` | `lower`, `higher`, or `context` (no universal good/bad direction) |
 | `goals` | the wizard goals the figure belongs to (`reading`, `vee`, `billing`, `collections`, `contact`, `fieldwork`, `cost`, …); "everything" takes them all |
 | `definition`, `formula` | what is counted, in words and as the engine computes it |
 | `thresholds` | the `kpi.*` and other settings the definition counts with (`kpi.on_time_bill_days`, `contact.service_target_s`) |
@@ -52,7 +52,7 @@ on-time share and raises nothing else; `test_a_runs_figures_and_how_the_windows_
 `seed`, `year`, `previous`, `staffing`, `actions`) plus `kpis` (ids; all when omitted) and returns
 `{schemaVersion, asOf, accounts, values, thresholds}`: `values` by id, year to date as of `asOf`, and `thresholds`
 as the run counted them. An unknown id is a 422. The Studio calls it for the simulation's chosen figures on the
-Command Center (`year-page.js`) and on Run statistics (`workspace.js`), both through `kpis.js`.
+Command Center (`year-page.js`) and on Run statistics (`workspace.js`), both through `kpis.js`. The Command Center requests the complete catalogue regardless of the wizard selections.
 
 ## The Studio
 
@@ -62,8 +62,10 @@ Command Center (`year-page.js`) and on Run statistics (`workspace.js`), both thr
 - **Talking it through.** Claude receives the catalogue (`kpiCatalogue` in its context) and sets the proposal's `kpis`
   when the person names an outcome; while typing or dictating, the catalogue's matches for the last few words show
   above the box, and a click writes the exact title in (`setup-agent.js` `paintAutofill`, `kpis.js` `matchKpis`).
-- **Watching.** The Command Center and Run statistics open with a "Your KPIs" strip (`kpis.js` `kpiStrip`): each figure,
-  its value for the run in view, whether lower or higher is better, and its window.
+- **Watching.** After a run the Command Center lists every KPI in nine business groups, alongside each group's monthly charts (`kpi-dashboard.js`). Each group can be collapsed or reached from the group navigation. Chosen
+  figures have a Watched badge; all other figures remain visible even when the wizard selected none. Definitions,
+  formulas and counting windows expand beside each value. Changing the date, episodes or an existing decision
+  reloads the complete set and discards superseded responses. Run statistics retains the chosen-KPI strip.
 - **The Glossary** (`glossary.html`, the Glossary tab, opened with the simulation and its town) lists every figure by
   family with its definition and formula, the window as this simulation set it (its locked `kpi` settings over the
   catalogue's defaults), the settings that raise or lower it with the Config page's titles, the library scenarios
@@ -175,3 +177,94 @@ What the year's process cost, per account.
 |---|---|---|---|---|---|
 | `cost_per_account` Process cost per account | currency_per_account | lower | The year's meter-to-cash process cost (people, systems, customer effects, reads) per account. | — | Analysts ↑; Rpa Coverage ↓; Ami Missed Read ↑; Amr Missed Read ↑; Manual No Access ↑ |
 | `carry_per_account` Carrying cost per account | currency_per_account | lower | Money held up in unreleased reads, unbilled periods and unpaid invoices, priced at the carry rate, per account. | — | Carry Rate Per Day ↑; Analysts ↓; Analyst Hours Per Day ↓; Rpa Coverage ↓; Analyst Queue Days Min ↑ … |
+
+## Billing assurance and report coverage
+
+The October 2026 billing inventory adds 28 measures, taking the catalogue to 61. The setup wizard,
+Command Center, Run statistics and Variable dependencies use the same catalogue. The Glossary includes a
+searchable crosswalk for all 31 supplied report titles, including report-code search. The Word specifications
+were not supplied: these are explicit engine definitions, not a claim to reproduce external report logic.
+
+Counts add across offline processing checkpoints; shares pool numerators and denominators. Empty populations
+are null, not a fabricated zero. Historical views exclude future documents, reversals and observations.
+Current-document figures exclude versions already reversed; cancel/rebill and the monthly audit retain version history.
+Early reads use the actual final-read timestamp when service ends before the scheduled read.
+
+### Added measures
+
+| Measure | Unit | Definition |
+|---|---|---|
+| `active_services` — Active services | count | Supply contracts active on the view date. A multi-service account contributes one contract per service. |
+| `service_setup_defects` — Active service setup defects | count | Active contracts with a missing account or installation, a premise mismatch, or overlapping active contracts for one installation. |
+| `move_ins` — Move-ins | count | Premises with a recorded move-in date this year through the view date. |
+| `move_outs` — Move-outs | count | Premises with a recorded move-out date this year through the view date. |
+| `net_terms_mismatch_share` — Invoice net-term mismatches | share | Created invoices whose original due date minus issue date differs from the configured payment term. Later payment arrangements do not count as defects. |
+| `delayed_bill_share` — Delayed bills | share | Current billing documents released after the bill window, or still unreleased after that window expires. Newly created bills still within the window are not late. |
+| `estimated_bill_share` — Estimated bills | share | Current billing documents built on at least one estimated register. Reversed versions are excluded at the view date. |
+| `move_boundary_estimate_share` — Move-boundary bills estimated | share | Estimated current bills whose read period spans a recorded move-in or move-out. This is a boundary check, not a separate first/final invoice workflow. |
+| `consecutive_estimated_bill_share` — Consecutive estimated bills | share | Current estimated bills whose immediately preceding monthly bill for the same installation and account was also estimated. Missing months break the sequence; the first month has no in-year predecessor. |
+| `consecutive_zero_bill_share` — Consecutive zero-use bills | share | Current bills with zero import and export consumption whose preceding monthly bill for the same installation and account also had zero consumption. Fixed charges may still apply. |
+| `bill_period_defect_share` — Bill period defects | share | Current bills with non-finite, non-positive or overlapping periods for the same installation and account. Legitimate longer periods after a service interruption are allowed. |
+| `due_date_defect_share` — Invoice due-date defects | share | Created invoices with missing/non-finite issue or due dates, or an original due date before issue. |
+| `rebill_share` — Cancel and rebill | share | Documents created this year that explicitly replace another billing document. All versions created this year form the denominator. |
+| `multiple_invoice_cycle_share` — Cycles with multiple invoices | share | Account/cycle-month combinations represented on more than one invoice. Staggered services and corrective invoices can legitimately produce this; it is an audit indicator. |
+| `zero_customer_charge_share` — Invoices without a customer charge | share | Created invoices with no non-zero fixed charge across their bill lines, as reconstructed by the engine tariff calculation. Zero-fixed-charge tariffs are included; this does not detect an external print omission. |
+| `move_prorated_charge_count` — Move-boundary prorated charges | count | Move-boundary bills carrying a fixed charge prorated by the actual read-period duration. The engine prorates by read days, not by a separate move-in/out settlement period. |
+| `invoices_pending_issue` — Invoices awaiting issue | count | Invoices already created whose planned issue day is after the view date. This is print-lag workload; the engine does not record actual print completion. |
+| `billing_exceptions` — Billing exceptions raised | count | Billing-check and billing-dispute cases raised this year through the view date, including subsequently resolved cases. This is the model equivalent of a billing exception workload, not SAP BPEM telemetry. |
+| `active_billing_blocks` — Active billing blocks | count | Current documents with a billing case that remain unreleased at the view date. Account-level invoice holds are counted separately. |
+| `active_invoice_holds` — Active invoice holds | count | Account-level invoice holds in force at the view date. |
+| `meterless_billed_accounts` — Billed accounts without a linked meter | count | Active accounts invoiced this year that have no meter linked through an active supply contract on the view date. This is a reference-integrity check, not a zero-consumption check. |
+| `active_reading_blocks` — Active read-release blocks | count | Scheduled active register periods whose read was attempted, has a case, and remains unreleased. These are VEE/review holds; administrative meter-reading blocks are not separately modelled. |
+| `outstanding_reads` — Open scheduled reads | count | Scheduled active register periods due by the view date without a released value, including missing and held reads. Future and service-off periods are excluded. |
+| `early_read_share` — Reads taken early | share | Actual observations taken on a calendar day before the scheduled read day. Estimates and missing observations are excluded. |
+| `late_read_share` — Reads taken late | share | Actual observations taken on a calendar day after the scheduled read day. Same-day time-of-day differences do not count as late. |
+| `active_implausibles` — Open implausible-read cases | count | Unresolved VEE anomaly cases at the view date. Missing-read, billing, field-order and invoice-hold cases are excluded. |
+| `active_meterless_accounts` — Active accounts without a linked meter | count | Active accounts without a meter linked through an active contract, installation and service point. An unmetered tariff may be intentional; review the account. |
+| `orphaned_meters` — Meters without an active account | count | Installed active meter records with no active supply contract linked to a known active account. Vacancies can be legitimate; retired meters are excluded. |
+
+### Report inventory
+
+| Report | Coverage | Measures / table | Limits |
+|---|---|---|---|
+| BR-ACC-01 — Active Services | available | active_services, contracts | — |
+| BR-ACC-03 — Active MultiService Setup Improperly | partial | service_setup_defects, contracts | Checks references, premise consistency and duplicate active contracts; organisation-specific multi-service rules are not supplied. |
+| BR-ACC-04 — Move In Reporting | available | move_ins, accounts | — |
+| BR-ACC-05 — Move Out Reporting | available | move_outs, accounts | — |
+| BR-ACC-06 — Net Term Mismatch | available | net_terms_mismatch_share, invoices | — |
+| BR-ACC-07 — eBill Adoption | needs data |  | Requires an account delivery preference or e-bill enrolment event. Payment method does not establish e-bill adoption. |
+| BR-BIL-01 — Schedule v Actual Invoicing | available | invoice_timeliness, days_to_invoice, bills_on_time, invoices | — |
+| BR-BIL-02 — Delayed Bills | available | delayed_bill_share, billingDocuments | — |
+| BR-BIL-03 — Cycle Schedule | available | early_read_share, late_read_share, readSchedules | — |
+| BR-BIL-04 — Monthly Audit File | available | billingAudit | Monthly document, invoice, estimate, reversal and amount totals; downloadable through Data. |
+| BR-BIL-05 — Estimated Bills | available | estimated_bill_share, billingDocuments | — |
+| BR-BIL-06 — First & Final Estimates | partial | move_boundary_estimate_share, billingDocuments | Uses bills spanning recorded move boundaries. A separate first/final customer settlement process is not modelled. |
+| BR-BIL-07 — Consecutively Estimated Bills | available | consecutive_estimated_bill_share, billingDocuments | — |
+| BR-BIL-08 — Consecutively Zero Consumption Bills | available | consecutive_zero_bill_share, billingDocuments | — |
+| BR-BIL-09 — Bill Period Defects | available | bill_period_defect_share, billingDocuments | — |
+| BR-BIL-10 — Due Date Defects | available | due_date_defect_share, invoices | — |
+| BR-BIL-11 — Cancel Rebill | available | rebill_share, billingDocuments | — |
+| BR-BIL-12 — Multi Invoice Issuance | available | multiple_invoice_cycle_share, invoices | Multiple invoices can be legitimate; this indicator identifies account/cycle combinations to review. |
+| BR-BIL-13 — Invoices Issued without Customer Charge | partial | zero_customer_charge_share, invoices | Audits the engine-computed fixed charge; external line-item or print omissions require the actual issued document. |
+| BR-BIL-14 — Prorated Customer Charge (on MIMO) | partial | move_prorated_charge_count, billingDocuments | Fixed charges use actual read-period days; move-specific settlement proration is not separately modelled. |
+| BR-BIL-15 — Invoices Issued without Print Date | needs data | invoices_pending_issue, invoices | Planned issue dates and print-lag workload are available. Actual print-completion timestamps are not recorded. |
+| BR-BIL-16 — Outsorts | available | blocked_bill_share, active_billing_blocks, billingDocuments | — |
+| BR-BIL-17 — Exceptions (BPEMs) | partial | billing_exceptions, cases | Uses the simulation billing-check/dispute cases, not external SAP BPEM records. |
+| BR-BIL-18 — Active Billing Blocks | available | active_billing_blocks, active_invoice_holds, billingDocuments | — |
+| BR-BIL-19 — Accounts Billed without Usage (Meterless) | available | meterless_billed_accounts, consecutive_zero_bill_share, accounts | Meterless account associations and zero recorded consumption are separate checks. |
+| BR-BIL-20 — Active Meter Reading Blocks | partial | active_reading_blocks, reads | Counts VEE/review holds on read release. Administrative meter-reading block flags need additional source data. |
+| BR-MTR-01 — Open & Outstanding Reads | available | outstanding_reads, reads | — |
+| BR-MTR-02 — Early & Late Reads | available | early_read_share, late_read_share, reads | — |
+| BR-MTR-03 — Active Implausibles | available | active_implausibles, cases | — |
+| BR-MTR-04 — Active Meterless Accounts | available | active_meterless_accounts, accounts | — |
+| BR-MTR-05 — Orphaned Meters without Accounts | available | orphaned_meters, meters | — |
+
+### Monthly billing audit
+
+Data → Monthly billing audit (`billingAudit`) has one row per elapsed month: documents, estimates, replacements,
+reversals, gross document amount, reversed amount, invoices and net invoice amount. Events belong to their creation
+or reversal month, including reversals of carried documents. Gross document amounts include all created versions;
+net invoice amounts include correction credits. They are deliberately separate totals, not double-counted revenue.
+Offline views add the monthly rows across the whole utility before filtering, sorting, projecting columns or
+paging. CSV and Connect exports use those same totals. Old archives without the new table or KPI values replay
+their preserved inputs; users do not need to recreate their simulation.

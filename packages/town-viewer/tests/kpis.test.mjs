@@ -28,3 +28,14 @@ test('a picked figure replaces the words that named it and keeps the rest of the
  assert.equal(withKpiTitle('',bills),'Bills on time ');
  assert.equal(withKpiTitle('keep an eye on staffing',bills),'keep an eye on staffing Bills on time ');
 });
+
+test('report-code search keeps the linked figures visible and context measures have no good/bad direction',()=>{
+ const cat={...catalogue,kpis:catalogue.kpis.map(k=>({...k,better:'context'})),billingReports:[
+  {code:'BR-BIL-01',title:'Schedule v Actual Invoicing',kpis:['bills_on_time'],table:'invoices',status:'available',note:''},
+  {code:'BR-ACC-07',title:'eBill Adoption',kpis:[],table:null,status:'needs_data',note:'Requires delivery preference.'}]};
+ const html=glossaryMarkup(cat,{filter:'BR-BIL-01'});
+ assert.match(html,/id="bills_on_time"/);assert.match(html,/href="#bills_on_time"/);assert.match(html,/context measure/);
+ assert.doesNotMatch(html,/context is better/);assert.doesNotMatch(html,/BR-ACC-07/);
+ const gap=glossaryMarkup(cat,{filter:'eBill'});
+ assert.match(gap,/Needs source data/);assert.match(gap,/Requires delivery preference/);
+});

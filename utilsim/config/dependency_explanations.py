@@ -6,6 +6,8 @@ record inputs, configuration inputs, and indirect catalogue influences.
 """
 from __future__ import annotations
 
+from utilsim.m2c.billing_quality import METRICS as BILLING_METRICS
+
 
 def rule(summary, formula='', *, steps=(), conditions=(), example='', references=(), basis='Engine rule'):
     return dict(summary=summary, formula=formula, steps=list(steps), conditions=list(conditions),
@@ -301,8 +303,12 @@ KPI_RULES = {
     'carry_per_account': ('(case carry + billing carry + receivable carry) ÷ accounts', 'Delay days are priced by the configured carry rates; see each carry input for its start and end dates.'),
 }
 
+
+KPI_RULES.update({m['id']: (m['formula'], m['definition']) for m in BILLING_METRICS})
+
 SOURCE_ROLES = {
-    'accounts': 'Supplies the account-count denominator; the engine guards it with max(1, account count).',
+    'accounts': 'Supplies account and supply-contract records, move dates, associations, and account-count denominators as defined by the measure.',
+    'meters': 'Supplies meter, installation and service-point associations used for service setup and meter/account integrity checks.',
     'schedule': 'Supplies the scheduled read day used as the time baseline; it does not supply the eventual release or invoice timestamp.',
     'reads': 'Supplies observed/missing readings and their underlying truth and attempt status.',
     'released': 'Supplies released values, estimated status and the timestamp at which billing could use the read.',
@@ -335,11 +341,19 @@ def explain(edge, nodes):
             refs.append('utilsim/twin/kpis.py · measure')
         if kid in ('days_to_invoice', 'days_to_pay', 'paid_on_time', 'collected_share', 'overdue_share'):
             refs.append('utilsim/m2c/views.py · billing_kpis')
+        if kid in {m['id'] for m in BILLING_METRICS}:
+            refs.append('utilsim/m2c/billing_quality.py · measure_quality')
         if kind == 'measure':
             role = SOURCE_ROLES[sid[7:]]
             if sid == 'engine:schedule':
                 role = ('Supplies each bill’s scheduled read day from its installation’s main register. The bill’s release date is compared with this baseline.'
-                        if kid == 'bills_on_time' else 'Supplies the latest scheduled read day across all documents included in the invoice. Invoice creation is measured from that baseline.')
+                        if kid in ('bills_on_time', 'delayed_bill_share') else
+                        'Supplies each register period’s scheduled day for identifying due reads and comparing actual observation dates.'
+                        if kid in ('early_read_share', 'late_read_share', 'outstanding_reads') else
+                        'Supplies the read periods used to check billing period boundaries.' if kid == 'bill_period_defect_share' else
+                        'Supplies the latest scheduled read day across all documents included in the invoice. Invoice creation is measured from that baseline.')
+            elif sid == 'engine:accounts' and kid not in {m['id'] for m in BILLING_METRICS}:
+                role = 'Supplies the account-count denominator for the measure.'
             elif sid == 'engine:invoices' and kid in ('days_to_invoice', 'invoice_timeliness'):
                 role = 'Supplies the invoice creation timestamp and its list of billing documents. The calculation compares creation with the latest scheduled read those documents cover, not with the issue date.'
             elif sid == 'engine:bills' and kid == 'bills_on_time':

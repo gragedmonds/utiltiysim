@@ -219,3 +219,23 @@ operating system may show an unidentified-publisher prompt.
 Costs follow CLAUDE.md: the build runs only on merges that change what the app ships, about 100 billed minutes a run
 if the repository goes private. The site is static (`scripts/build_site.mjs`: the landing page and brand files), so
 Vercel runs no functions.
+
+## Loading panel and estimates
+
+All routes share the same responsive 540-pixel loading panel and full-width animation. Its picture caption
+rotates every 6.5 seconds through 500 distinct utility-themed messages (24 favourites plus shuffled themed
+variations). Reduced-motion settings stop the animations; the panel remains collapsible.
+
+Before the first processing checkpoint completes, the estimate uses the closest completed fresh-build timing
+from `runner.json`, preferring a comparable utility size, checkpoint size and staffing mode. If no local sample
+exists, the bundled Windows reference is a measured 10,000-home, 12-month independent-team run from 2026-10-05:
+171.734 seconds total, of which 52.063 seconds are generation/preparation costs. The initial estimate scales
+homes and months separately, retaining that preparation cost for shorter years. It therefore starts near
+14–15 minutes for 50,000 homes over twelve months; this is a reference estimate, not a machine-speed promise.
+Shared staffing doubles the fallback estimate to allow for its probe pass.
+
+Completed live checkpoints supersede the reference. Interactive queries have a separate replay/analysis
+reference (62.031 seconds per 10,000 homes over twelve months, with 6.156 seconds of snapshot preparation) and
+learn their own successful timings in `analysis-timings.json`, kept on this computer and reused after restart.
+Failed runs and reused baselines do not teach fresh-build speed. The panel names the estimate source and
+reports an overrun honestly rather than indefinitely claiming one minute remains.

@@ -18,7 +18,7 @@ test('a collapsed connector exposes every real link with its own explanation',()
 test('shared card connectors retain different targets and kinds without merging their details',()=>{
  const p=projectGraph(graph,connections(graph,'engine:schedule'),'engine:schedule');
  const entries=relationshipEntries(p.edges.filter(e=>e.source==='engine:schedule'),graph);
- assert.equal(entries.length,4);
+ assert.equal(entries.length,graph.outgoing.get('engine:schedule').length);
  assert.equal(entries.find(e=>e.link.target==='engine:reading').link.explanation.basis,'Engine rule');
  assert.match(explanationMarkup(entries.find(e=>e.link.target==='kpi:bills_on_time').link),/floor\(released\)/);
  assert.match(explanationMarkup(entries.find(e=>e.link.target==='kpi:days_to_invoice').link),/3\.83 elapsed days/);

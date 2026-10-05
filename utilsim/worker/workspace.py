@@ -9,9 +9,11 @@ from __future__ import annotations
 import copy
 import gzip
 import hashlib
+import math
 import re
 import secrets
 import threading
+import time
 from collections import OrderedDict
 from typing import get_type_hints
 
@@ -142,6 +144,29 @@ class UtilityWorkspace:
         self.lock = threading.RLock()
         self.cache = OrderedDict()
         self.progress = None
+        self.analysis_timings = []
+        self.analysis_path = jobs.store / 'analysis-timings.json'
+        try:
+            saved = orjson.loads(self.analysis_path.read_bytes())
+            if isinstance(saved, list):
+                self.analysis_timings = [s for s in saved if isinstance(s, dict) and isinstance(s.get('key'), str) and
+                                        all(isinstance(s.get(k), (int, float)) and math.isfinite(s[k]) and s[k] > 0
+                                            for k in ('seconds', 'homes', 'months'))][-100:]
+        except (OSError, ValueError):
+            pass
+
+    def status(self):
+        from utilsim.worker.estimates import progress_estimate
+        current = self.progress
+        if current is None:
+            return None
+        elapsed = max(0, time.monotonic() - self.part_started)
+        progress = {**current, 'activeSeconds': round(elapsed)}
+        if self.seconds_per_home is not None:
+            remaining = self.seconds_per_home * (progress['totalHomes'] - progress['completedHomes']) - elapsed
+            progress.update(etaSeconds=round(remaining) if remaining > 0 else None,
+                            overrun=remaining <= 0, etaSource='live')
+        return progress_estimate(progress, self.analysis_initial)
 
     def link(self, job_id, params):
         from utilsim.batch import write_json
@@ -196,6 +221,8 @@ class UtilityWorkspace:
         return result
 
     def query(self, job_id, path, params):
+        if not isinstance(params, dict):
+            raise ValueError('Expected workspace query parameters.')
         with self.lock:
             job = self.jobs.find(job_id)
             if not job or job['status'] != 'complete':
@@ -205,7 +232,22 @@ class UtilityWorkspace:
                 self.cache.move_to_end(key)
                 return copy.deepcopy(self.cache[key])
             try:
+                started = time.monotonic()
+                profile = digest([path, job['recipeKey'], {k: v for k, v in params.items()
+                                 if k not in ('page', 'pageSize', 'asOf')}])
+                self.analysis_recipe = {**job['recipe'], 'request': {**job['recipe']['request'], **params}}
+                from utilsim.worker.estimates import analysis_estimate, months_in
+                self.analysis_initial = analysis_estimate(self.analysis_recipe, profile, self.analysis_timings)
                 result = pooling.strip(self._query(job, path, params))
+                self.analysis_timings.append({'key': profile, 'seconds': time.monotonic() - started,
+                                             'homes': self.analysis_recipe['homes'],
+                                             'months': months_in(self.analysis_recipe['request'])})
+                self.analysis_timings = self.analysis_timings[-100:]
+                try:
+                    from utilsim.batch import write_json
+                    write_json(self.analysis_path, self.analysis_timings)
+                except OSError:
+                    pass  # An optional timing cache must never lose a completed analysis.
                 self.cache[key] = result
                 while len(self.cache) > 12:
                     self.cache.popitem(last=False)
@@ -239,10 +281,20 @@ class UtilityWorkspace:
         list_paths = {'/process/queue', '/m2c/table', '/m2c/collections', '/m2c/outage-followup',
                       '/m2c/collector-groups', '/m2c/possible-entries'}
         paged = path in list_paths
+        audit = path == '/m2c/table' and params.get('table') == 'billingAudit'
+        total_homes = sum(p['homes'] for p in parts)
+        self.analysis_recipe['homes'] = total_homes
+        self.analysis_initial['estimatedTotalSeconds'] *= total_homes / self.analysis_initial['totalHomes']
+        self.analysis_initial['totalHomes'] = total_homes
+        began, done_homes = time.monotonic(), 0
         for index, part in enumerate(parts):
+            self.part_started = time.monotonic()
+            self.seconds_per_home = (self.part_started - began) / done_homes if done_homes else None
             self.progress = {'name': job['recipe']['name'], 'modelId': job['recipe']['modelId'],
                              'stage': 'Replaying your changes' if actions else 'Reading utility results',
-                             'completed': index, 'total': len(parts)}
+                             'completed': index, 'total': len(parts), 'totalHomes': total_homes,
+                             'completedHomes': done_homes}
+            done_homes += part['homes']
             folder = self.jobs.store / 'runs' / part['runKey']
             inputs = orjson.loads((folder / 'inputs.json').read_bytes())
             request = {k: v for k, v in inputs.items() if k not in ('snapshotSha256',)}
@@ -254,6 +306,9 @@ class UtilityWorkspace:
             if 'outages' in local:
                 local['outages'] = self.outages_for(local['outages'], part['id'])
             request.update(unqualify(local, part['id']))
+            if audit:
+                # Select whole-utility totals, never partition-local amounts, before filtering/projection.
+                request.update(columns=None, filters=None, search=None)
             if path == '/m2c/table' and request.get('columns') and request.get('sort') and request['sort'] not in request['columns']:
                 request['columns'] = [*request['columns'], request['sort']]
             request['town'] = 'local-run-' + part['runKey']
@@ -277,7 +332,7 @@ class UtilityWorkspace:
             archived = None
             if unchanged and path in ('/m2c/table', '/process/queue'):
                 selector = archive_views.table_page if path == '/m2c/table' else archive_views.worklist_page
-                archived = selector(folder, {**request, 'asOf': normalized['asOf']}, page * size)
+                archived = selector(folder, {**request, 'asOf': normalized['asOf']}, 12 if audit else page * size)
             saved = {'/m2c/trend': 'trend.json', '/vee/scorecard': 'scorecard.json',
                      '/m2c/summary': 'summaries/' + str(request.get('asOf')) + '.json'}.get(path)
             pooled_file = folder / 'utility-views.json.gz'
@@ -285,14 +340,19 @@ class UtilityWorkspace:
                 result = archived
             elif unchanged and path in ('/m2c/trend', '/m2c/summary', '/vee/scorecard', '/m2c/kpis') and pooled_file.is_file() and not params.get('since'):
                 result = orjson.loads(gzip.decompress(pooled_file.read_bytes()))[path]
-                if path == '/m2c/kpis' and params.get('kpis'):
-                    result['values'] = {k: v for k, v in result['values'].items() if k in params['kpis']}
+                if path == '/m2c/kpis':
+                    from utilsim.m2c.kpis import KPI_IDS
+                    wanted = set(params.get('kpis') or KPI_IDS)
+                    if not wanted <= result['values'].keys() or not wanted <= result.get('_statistics', {}).keys():
+                        result = self.call(path, request)  # Older archives predate newly added figures.
+                    else:
+                        result['values'] = {k: v for k, v in result['values'].items() if k in wanted}
             elif len(parts) == 1 and unchanged and saved and (folder / saved).is_file() and not params.get('since'):
                 result = orjson.loads((folder / saved).read_bytes())
             else:
                 if paged:
                     # Only the top page*size rows of each sorted partition can reach that page globally.
-                    request.update(page=1, pageSize=min(200, page * size))
+                    request.update(page=1, pageSize=12 if audit else min(200, page * size))
                 result = self.call(path, request)
                 if paged:
                     row_key = next((k for k in ('rows', 'groups', 'entries') if isinstance(result.get(k), list)), 'rows')
@@ -316,12 +376,15 @@ class UtilityWorkspace:
         if len(parts) == 1 and scope:
             return outputs[0]
         if path == '/m2c/kpis':
+            from utilsim.m2c.kpis import KPI_BY_ID
             result = {**outputs[0], 'accounts': sum(o['accounts'] for o in outputs)}
             result['values'] = {}
             for name in outputs[0]['values']:
                 vals = [o['_statistics'][name] for o in outputs]
                 denominator = sum(n for _, n in vals)
-                result['values'][name] = sum(v for v, _ in vals) / denominator if denominator else None
+                numerator = sum(v for v, _ in vals)
+                result['values'][name] = (numerator if KPI_BY_ID[name].unit == 'count' else
+                                          numerator / denominator if denominator else None)
             result.pop('_statistics', None)
             return result
         result = combine(outputs)
@@ -338,6 +401,24 @@ class UtilityWorkspace:
         result = copy.deepcopy(outputs[0])
         row_key = next((k for k in ('rows', 'groups', 'entries') if isinstance(result.get(k), list)), 'rows')
         rows = [r for o in outputs for r in o.get(row_key, [])]
+        audit = path == '/m2c/table' and params.get('table') == 'billingAudit'
+        if audit:
+            month_col = next(i for i, c in enumerate(result['columns']) if c['key'] == 'month')
+            months = {}
+            for row in rows:
+                key = row[month_col]
+                if key not in months:
+                    months[key] = list(row)
+                else:
+                    months[key] = [v if i == month_col else round(v + row[i], 2) for i, v in enumerate(months[key])]
+            rows = [months[m] for m in sorted(months)]
+            audit_rows = len(rows)
+            from utilsim.m2c.tables import BILLING_AUDIT, Table, select
+            data = [list(col) for col in zip(*rows, strict=True)] if rows else [[] for _ in BILLING_AUDIT]
+            table = Table(BILLING_AUDIT, data, {}, [''] * len(rows))
+            rows = [rows[i] for i in select(table, search=params.get('search'), filters=params.get('filters'))]
+            result.update(search=params.get('search') or '', filters=params.get('filters') or {})
+        audit_total = len(rows) if audit else None
         if path == '/m2c/table':
             col = next((i for i, c in enumerate(result['columns']) if c['key'] == params.get('sort')), None)
             if col is not None:
@@ -376,7 +457,9 @@ class UtilityWorkspace:
             rows.sort(key=lambda r: r.get('start') or '', reverse=True)
             result['groups'] = [g for o in outputs for g in o.get('groups', [])]
         result.update({row_key: rows[(page-1)*size:page*size], 'page': page, 'pageSize': size,
-                       'total': sum(o.get('total', len(o.get(row_key, []))) for o in outputs)})
+                       'total': audit_total if audit else sum(o.get('total', len(o.get(row_key, []))) for o in outputs)})
+        if audit:
+            result['rowsInTable'] = audit_rows
         if path == '/m2c/table' and params.get('columns'):
             columns = [next(i for i, c in enumerate(result['columns']) if c['key'] == k) for k in params['columns']]
             result['columns'] = [result['columns'][i] for i in columns]

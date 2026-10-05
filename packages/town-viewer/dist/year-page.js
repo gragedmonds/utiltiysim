@@ -10,7 +10,8 @@
 // bars and legend for a simulation run on the analyst's computer. Nothing runs: no trend charts, run date or years;
 // the client's preview() gives the days sporadic episodes strike, and the episodes go into the next revision's job.
 import {engineNotice} from './workspace.js';
-import {fetchKpiCatalogue,fetchKpiValues,kpiStrip} from './kpis.js';
+import {fetchKpiCatalogue,fetchKpiValues} from './kpis.js';
+import {kpiDashboard,commandKpiKey} from './kpi-dashboard.js';
 import {bindPopovers} from './config-page.js';
 import {episodeDates,FIRST_YEAR,LAST_YEAR,activeYear,dayYear,yearEnd} from './m2c.js';
 import {fmtCell} from './data-page.js';
@@ -234,15 +235,22 @@ export function yearsBar(m,{confirm=false,opening=null,loaded=false}={}){if(!m)r
 
 // `onYear(year)` hears a year switched to or opened (the Studio's other pages and the map follow the active year).
 export function installYearPage({getClient,getSimulation=()=>null,getEngineState=()=>({state:'idle',towns:[]}),toast=()=>{},onDate=null,onYear=null,root=document.getElementById('year-root'),plan=false}){
- const ui={library:null,trend:null,busy:false,recalc:false,opened:false,error:'',panel:null,confirmClear:false,confirmContinue:false,opening:null,models:[],agent:null,applying:false,kpi:{catalogue:null,values:null,key:'',error:''}};
- // The simulation's chosen figures (its record's `kpis`), measured year to date by the engine for the run in view.
+ const ui={library:null,trend:null,busy:false,recalc:false,opened:false,error:'',panel:null,confirmClear:false,confirmContinue:false,opening:null,models:[],agent:null,applying:false,kpi:{catalogue:null,values:null,key:'',error:'',loading:false,closed:new Set()}};
+ // Always request the complete catalogue; a simulation's selections only mark its watched figures.
  function kpiIds(){const s=getSimulation();return Array.isArray(s?.kpis)?s.kpis:[];}
- async function loadKpis(){const m=client(),ids=kpiIds();if(!m||!ids.length||plan)return;const key=JSON.stringify([ids,m.asOf,m.settings,m.seed,m.episodes,m.actions?.length]);if(ui.kpi.key===key)return;ui.kpi.key=key;ui.kpi.values=null;ui.kpi.error='';
-  try{ui.kpi.catalogue||=await fetchKpiCatalogue(m.api,{fetchImpl:m.fetchImpl});const data=await fetchKpiValues(m.api,m.body({asOf:m.asOf,kpis:ids}),{fetchImpl:m.fetchImpl});if(ui.kpi.key!==key)return;ui.kpi.values=data.values;ui.kpi.thresholds=data.thresholds;}catch(err){if(ui.kpi.key===key)ui.kpi.error=err.message;}
-  const strip=root?.querySelector('.kpi-strip');if(strip)strip.outerHTML=kpis();}
- function kpis(){const s=getSimulation(),ids=kpiIds();if(!ids.length||plan||!client())return '';const href='./glossary.html?simulation='+encodeURIComponent(s.id)+'&town='+encodeURIComponent(s.townRef||'');
-  if(ui.kpi.error)return `<section class="kpi-strip" aria-label="Your KPIs"><div class="kpi-strip-head"><h3>Your KPIs</h3><a href="${e(href)}">Glossary ↗</a></div><p class="small-note">${e(ui.kpi.error)}</p></section>`;
-  return kpiStrip(ui.kpi.catalogue,ids,ui.kpi.values,{thresholds:ui.kpi.thresholds||{},href});}
+ async function loadKpis(){const m=client();if(!m||plan||m.readOnly)return;const key=commandKpiKey(m);if(ui.kpi.key===key)return;ui.kpi.key=key;ui.kpi.values=null;ui.kpi.error='';ui.kpi.loading=true;
+  const current=()=>client()===m&&ui.kpi.key===key&&commandKpiKey(m)===key;
+  try{const catalogue=ui.kpi.catalogue||await fetchKpiCatalogue(m.api,{fetchImpl:m.fetchImpl});if(!current())return;ui.kpi.catalogue=catalogue;paintResults();
+   const data=await fetchKpiValues(m.api,{...JSON.parse(key),kpis:catalogue.kpis.map(k=>k.id)},{fetchImpl:m.fetchImpl});if(!current())return;ui.kpi.values=data.values;ui.kpi.thresholds=data.thresholds;
+  }catch(err){if(!current())return;ui.kpi.error=err.message;}ui.kpi.loading=false;paintResults();}
+ function results(){if(plan||!client())return '';const m=client(),s=getSimulation();
+  ui.models=ui.trend&&!ui.busy?CHARTS.map(c=>chartModel(c,ui.trend.months)):[];
+  // Portable result readers have saved trends, but no live request body or engine catalogue.
+  if(m.readOnly)return `<section class="year-results" aria-label="Saved monthly trends"><div class="year-trends">${ui.models.map(card).join('')}</div></section>`;
+  const current=ui.kpi.key===commandKpiKey(m),href='./glossary.html'+(s?'?simulation='+encodeURIComponent(s.id)+'&town='+encodeURIComponent(s.townRef||''):'');
+  return kpiDashboard(ui.kpi.catalogue,current?ui.kpi.values:null,{watched:kpiIds(),asOf:m.asOf,thresholds:current?ui.kpi.thresholds||{}:{},href,closed:ui.kpi.closed,loading:!current||ui.kpi.loading,error:current?ui.kpi.error:'',charts:ui.models.map((model,i)=>({id:model.id,html:card(model,i)}))});}
+ function bindResults(){root?.querySelectorAll('[data-kpi-family]').forEach(group=>group.addEventListener('toggle',()=>{if(group.open)ui.kpi.closed.delete(group.dataset.kpiFamily);else ui.kpi.closed.add(group.dataset.kpiFamily);}));}
+ function paintResults(){const host=root?.querySelector('.year-results');if(host){host.outerHTML=results();bindResults();}}
  let closePops=null,closeAgent=null,agentClient=null,strikes=new Map();
  const header=root?.ownerDocument?.querySelector('.studio-header');
  const positionGuide=()=>{if(header)root.style.setProperty('--year-guide-top',header.getBoundingClientRect().bottom+'px');};
@@ -328,8 +336,6 @@ export function installYearPage({getClient,getSimulation=()=>null,getEngineState
   const when=li<0?'':model.partial[li]?`${MONTHS[li]} to ${shortDay(model.months[li].end)}`:MONTHS[li],latest=li<0?'<strong>—</strong><span>no figures yet</span>':one?`<strong>${e(fmtValue(model.series[0].values[li],model.fmt))}</strong><span>${e(when)}</span>`:`<span>latest · ${e(when)}</span>`;
   const leg=one?'':`<ul class="yr-legend">${model.series.map(s=>`<li><i class="${model.kind==='line'?'is-line':''}" style="background:${s.color}"></i><span>${e(s.label)}</span>${li>=0&&s.values[li]!=null?`<strong>${e(fmtValue(s.values[li],model.fmt))}</strong>`:''}</li>`).join('')}</ul>`;
   return `<article class="yr-card" data-chart="${k}"><header><div><h3>${e(model.title)}</h3><p>${e(model.unit)}</p></div><div class="yr-latest">${latest}</div></header>${chartSvg(model,{asOf,episodes:eps,strikes,id:'yr-'+model.id,year:yearOf()})}<div class="yr-tip" hidden></div>${leg}<details class="yr-table"><summary>Table</summary>${chartTable(model)}</details></article>`;}
- function trends(){const t=ui.trend;if(plan)return '';if(!t)return `<section class="year-trends" aria-label="Trends"><div class="yr-empty">${ui.busy?'':'No trend yet.'}</div></section>`;
-  ui.models=CHARTS.map(c=>chartModel(c,t.months));return `<section class="year-trends${ui.busy?' is-stale':''}" aria-label="Trends">${ui.models.map(card).join('')}</section>`;}
  function library(p){const lib=ui.library;if(!lib)return `<p class="small-note">${ui.error?e(ui.error):'Loading the scenario library…'}</p>`;
   return (lib.groups||[]).map(g=>{const own=(lib.scenarios||[]).filter(s=>s.group===g.id),soon=(lib.coming||[]).filter(s=>s.group===g.id);if(!own.length&&!soon.length)return '';
    return `<h3>${e(g.title)}</h3>${own.map(s=>`<div class="year-sc"><button type="button" class="year-sc-pick" data-sc="${e(s.id)}"><strong>${e(s.title)}</strong><span>${e(s.description||'')}</span>${scenarioPatternLine(s)?`<span class="year-sc-pattern">${e(scenarioPatternLine(s))}</span>`:''}</button>${s.watch?`<details><summary>What to watch</summary><p>${e(s.watch)}</p></details>`:''}${s.tags?.length?`<span class="year-tags">${s.tags.map(t=>`<em>${e(t)}</em>`).join('')}</span>`:''}</div>`).join('')}${soon.map(s=>`<div class="year-sc is-coming" aria-disabled="true"><strong>${e(s.title)}<em class="year-soon">coming soon</em></strong><span>${e(s.description||'')}</span></div>`).join('')}`;}).join('')||'<p class="small-note">The library is empty.</p>';}
@@ -345,7 +351,7 @@ export function installYearPage({getClient,getSimulation=()=>null,getEngineState
   if(!keepAgent){closeAgent?.();closeAgent=null;agentClient=null;}
   if(!m){root.innerHTML=`<section class="fiori-shell"><div class="fiori-empty ws-empty">${engineNotice(getEngineState(),undefined,'#/year','The Year')}</div></section>`;root.querySelector('[data-ws="retry"]')?.addEventListener('click',()=>location.reload());return;}
   strikes=episodeStrikes(ui.trend,m.episodes||[]);
-  root.innerHTML=`<div class="year-layout${ui.panel?' has-panel':''}"><main class="year-main">${head()}${years()}${status()}${kpis()}${calendar()}${trends()}</main>${panel()}</div>`;loadKpis();
+  root.innerHTML=`<div class="year-layout${ui.panel?' has-panel':''}"><main class="year-main">${head()}${years()}${status()}${calendar()}${results()}</main>${panel()}</div>`;bindResults();loadKpis();
   if(keepAgent)root.querySelector('#year-agent-root')?.replaceWith(keepAgent);else if(ui.panel?.kind==='agent')mountAgent();
   if(m.readOnly){root.querySelector('#year-asof').disabled=true;for(const b of root.querySelectorAll('[data-day],[data-ep]')){b.disabled=true;b.removeAttribute('data-day');b.removeAttribute('data-ep');}const pop=root.querySelector('.schema-pop');if(pop)pop.innerHTML='<p>Saved engine results through '+e(m.asOf)+'. Episodes and trends are archived with this run. Open a live engine to change inputs or replay another date.</p>';const empty=root.querySelector('.year-legend-empty');if(empty)empty.textContent='No episodes in this saved run.';}
   else if(frozen(m)){for(const b of root.querySelectorAll('[data-day],[data-ep]')){b.disabled=true;b.removeAttribute('data-day');b.removeAttribute('data-ep');}const empty=root.querySelector('.year-legend-empty');if(empty)empty.textContent=`No episodes in ${m.year}.`;}
@@ -358,7 +364,11 @@ export function installYearPage({getClient,getSimulation=()=>null,getEngineState
   tip.replaceChildren(...rows);tip.hidden=false;tip.style.left=`${((Number(hit.getAttribute('x'))+Number(hit.getAttribute('width'))/2)/GEOM.w*100).toFixed(1)}%`;tip.classList.toggle('is-right',i>=8);tip.classList.toggle('is-left',i<3);}
  function hideTip(card){card?.querySelector('.yr-tip')?.setAttribute('hidden','');}
  // ---- events ---------------------------------------------------------------------------------------------------
- root?.addEventListener('click',ev=>{const b=ev.target.closest('button');if(!b||!root.contains(b)||ui.applying)return;const m=client();if(m?.readOnly)return;
+ root?.addEventListener('click',ev=>{const b=ev.target.closest('button');if(!b||!root.contains(b))return;
+  if(b.hasAttribute('data-kpi-jump')){const group=[...root.querySelectorAll('[data-kpi-family]')].find(g=>g.dataset.kpiFamily===b.dataset.kpiJump);if(group){group.open=true;group.scrollIntoView({block:'start',behavior:globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});group.querySelector('summary')?.focus({preventScroll:true});}return;}
+  if(b.hasAttribute('data-kpi-retry')){ui.kpi.key='';loadKpis();return;}
+  if(b.hasAttribute('data-kpi-dependencies')){document.dispatchEvent(new CustomEvent('utility:dependencies',{detail:{id:'kpi:'+b.dataset.kpiDependencies}}));return;}
+  if(ui.applying)return;const m=client();if(m?.readOnly)return;
   if(b.dataset.year){switchYear(Number(b.dataset.year));return;}
   if(b.dataset.act==='continue'){ui.confirmContinue=true;render();root.querySelector('[data-act="continue-yes"]')?.focus();return;}
   if(b.dataset.act==='continue-no'){ui.confirmContinue=false;render();root.querySelector('[data-act="continue"]')?.focus();return;}

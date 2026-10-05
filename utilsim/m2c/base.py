@@ -86,6 +86,7 @@ class M2CTown:
     inst_meta: list[dict] = field(default_factory=list)  # per installation row: premise, division, MRU, status...
     inst_contracts: list[list[dict]] = field(default_factory=list)  # per installation row: its contracts
     accounts: dict[str, dict] = field(default_factory=dict)
+    audit_master: dict[str, list[dict]] = field(default_factory=dict)
     partners: dict[str, dict] = field(default_factory=dict)
     account_insts: dict[str, list[int]] = field(default_factory=dict)  # account -> installation rows
     # AMI network: the collector each AMI meter reports through (None for AMR and walked meters), and the collectors.
@@ -237,6 +238,7 @@ class M2CTown:
             inst_ids=inst_ids, inst_of=inst_of, inst_rows=[np.flatnonzero(inst_of == k) for k in range(len(inst_ids))],
             inst_rate=[rate_of.get(x, "") for x in inst_ids], tariffs=tariffs,
             account_method={a["id"]: a.get("paymentMethod") or "online" for a in snap.get("accounts", [])},
+            audit_master={k: list(snap.get(k) or []) for k in ('accounts', 'contracts', 'installations', 'servicePoints', 'meters')},
             account_profile={a["id"]: profile.get(a.get("businessPartnerId"), "on_time") for a in snap.get("accounts", [])},
             temps=daily_temps(cfg, through=cal.year)[(date(cal.year - 1, 12, 1) - WEATHER_START).days:],
             name=town_name(snap), inst_index=inst_index, cal=cal,

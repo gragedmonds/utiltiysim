@@ -16,3 +16,14 @@ test('failed calls release the queue and cancellation removes queued work before
  const failed=assert.rejects(first,/offline/);gates[0].reject(Error('offline'));await failed;await tick();assert.match(q.snapshot().lastError,/could not finish/);assert.equal(q.snapshot().active.length,0);
  const httpError=q.request('error',{},'/api/m2c/trend');gates[1].resolve(new Response('invalid',{status:422}));assert.equal((await httpError).status,422);await tick();assert.match(q.snapshot().lastError,/422/);
 });
+
+
+import {LOAD_MESSAGES,loadingMessage} from '../dist/load-messages.js';
+import {monitorMarkup} from '../dist/local-monitor.js';
+test('five hundred distinct loading messages rotate under the illustration',()=>{
+ assert.equal(LOAD_MESSAGES.length,500);assert.equal(new Set(LOAD_MESSAGES).size,500);
+ assert.notEqual(loadingMessage(0),loadingMessage(6500));
+ const html=monitorMarkup({active:{name:'Test utility',progress:{totalHomes:50000,etaSeconds:859,etaBasis:'Reference test'}}});
+ assert.match(html,/engine-scene-caption/);assert.ok(!html.includes('monitor-message'));
+ assert.match(html,/15 min remaining/);assert.match(html,/Reference test/);
+});

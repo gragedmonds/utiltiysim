@@ -11,6 +11,7 @@ from functools import lru_cache
 from utilsim.config.dependency_explanations import explain
 from utilsim.config.impact import IMPACT, REACHES
 from utilsim.config.model import RUN_GROUPS, SimConfig, config_schema
+from utilsim.m2c.billing_quality import METRICS as BILLING_METRICS
 from utilsim.m2c.kpis import KPIS
 from utilsim.ops.settings_schema import settings_schema
 
@@ -102,6 +103,9 @@ KPI_DATA = {
     'field_on_time': ['orders'], 'field_backlog_per_1000': ['orders'], 'emergency_response_min': ['orders'],
     'customer_minutes_lost': ['interruptions'], 'cost_per_account': ['costs'], 'carry_per_account': ['carry'],
 }
+
+
+KPI_DATA.update({m['id']: m['sources'] for m in BILLING_METRICS})
 
 
 def consumers(path, reach):

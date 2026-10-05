@@ -20,6 +20,7 @@ from dataclasses import asdict, dataclass
 import numpy as np
 
 from utilsim.m2c import catalog as cat
+from utilsim.m2c.billing_quality import METRICS as BILLING_METRICS
 from utilsim.m2c.run import OFF, M2CRun
 
 KPIS_VERSION = "m2c-kpis/1.0"
@@ -50,7 +51,7 @@ class Kpi:
     title: str
     family: str
     unit: str
-    better: str  # "lower" or "higher"
+    better: str  # "lower", "higher", or "context" (no universally desirable direction)
     goals: tuple[str, ...]
     definition: str
     formula: str
@@ -223,6 +224,8 @@ KPIS: tuple[Kpi, ...] = (
         settings=(("process.carry_rate_per_day", 1),) + TEAM, related=("cost_per_account", "days_to_pay"),
         where=(COMMAND_CENTER, STATISTICS, WORKLISTS)),
 )
+
+KPIS += tuple(Kpi(**{k: v for k, v in m.items() if k != 'sources'}) for m in BILLING_METRICS)
 KPI_BY_ID: dict[str, Kpi] = {k.id: k for k in KPIS}
 KPI_IDS = frozenset(KPI_BY_ID)
 
@@ -275,10 +278,12 @@ def thresholds(cfg) -> dict:
 
 def catalogue(cfg=None) -> dict:
     from utilsim.config.model import SimConfig
+    from utilsim.m2c.billing_reports import REPORTS
 
     cfg = cfg or SimConfig()
     return {"schemaVersion": KPIS_VERSION, "families": [{"id": i, "title": t, "text": x} for i, t, x in FAMILIES],
-            "kpis": [kpi_json(k) for k in KPIS], "thresholds": thresholds(cfg), "settingsGroup": "kpi"}
+            "kpis": [kpi_json(k) for k in KPIS], "thresholds": thresholds(cfg), "settingsGroup": "kpi",
+            "billingReports": list(REPORTS)}
 
 
 # ---- measuring ------------------------------------------------------------------------------------------------------
@@ -370,6 +375,12 @@ def measure(run: M2CRun, as_of: str | None = None, ids=None, *, statistics: dict
         out["field_on_time"] = fk.get("onTimePct")  # a share, despite the name
         out["field_backlog_per_1000"] = round(fk.get("open", 0) / n_acc * 1000.0, 2)
         out["emergency_response_min"] = fk.get("responseMin")
+    if wanted & {m['id'] for m in BILLING_METRICS}:
+        from utilsim.m2c.billing_quality import measure_quality
+        quality, quality_stats = measure_quality(run, day, T)
+        out.update(quality)
+        if statistics is not None:
+            statistics.update(quality_stats)
     values = {k: out.get(k) for k in KPI_BY_ID if k in wanted}
     if statistics is not None:
         invoices = [inv for inv in bk.invoices if 0 <= inv['created'] <= T]

@@ -12,3 +12,5 @@
 .kpi-card .kpi-window{margin-top:10px;font-size:14px;color:#355739}.kpi-card .kpi-window b{font-weight:650}
 .glossary-empty{color:#5f7168}
 @media(max-width:700px){.glossary{padding:18px 20px 60px}}
+
+.billing-report-scroll{overflow-x:auto}.billing-report-coverage table{border-collapse:collapse;width:100%;font-size:14px}.billing-report-coverage th,.billing-report-coverage td{padding:13px;text-align:left;vertical-align:top;border-bottom:1px solid #dce3d7}.billing-report-coverage td p{margin:7px 0 0;font-size:12px;color:#60705d}.billing-report-coverage th code,.report-table{font-size:12px;color:#67765f}.report-status{display:inline-block;white-space:nowrap;padding:3px 8px;border-radius:5px;background:#e9f1e1;color:#446339;font-size:12px}.report-status.is-partial{background:#fff2d9;color:#7c6127}.report-status.is-needs_data{background:#eee8f8;color:#655077}

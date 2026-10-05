@@ -95,13 +95,13 @@ const assertForward=p=>{
  }
  return layout;
 };
-test('invoice inputs sit left, downstream operations sit right and all six KPIs share one column',()=>{
+test('invoice inputs sit left, downstream operations sit right and all invoice KPIs share one column',()=>{
  const id='engine:invoices',p=projectGraph(graph,connections(graph,id),id),layout=assertForward(p),focus=layout.positions.get(id);
  assert.ok(layout.positions.get('engine:bills').x<focus.x);
  for(const id of ['engine:collections','engine:contact','engine:carry'])assert.ok(layout.positions.get(id).x>focus.x);
- const metrics=p.nodes.filter(n=>n.kind==='metric');assert.equal(metrics.length,6);
+ const metrics=p.nodes.filter(n=>n.kind==='metric');assert.ok(metrics.length>=6);
  assert.equal(new Set(metrics.map(n=>layout.positions.get(n.id).x)).size,1);
- assert.equal(new Set(metrics.map(n=>layout.positions.get(n.id).y)).size,6);
+ assert.equal(new Set(metrics.map(n=>layout.positions.get(n.id).y)).size,metrics.length);
 });
 test('feedback has finite repeated appearances with canonical identities and every real relationship',()=>{
  const g=indexGraph({nodes:['a','b','c','d','e','f','k'].map(id=>({id,title:id,kind:id==='k'?'metric':'data',lane:id==='k'?'metrics':'data'})),edges:[['a','b'],['b','c'],['c','a'],['c','d'],['d','e'],['e','d'],['f','b'],['f','k'],['a','k']].map(([source,target])=>({source,target,kind:'flow'}))});
