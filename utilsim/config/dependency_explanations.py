@@ -7,6 +7,7 @@ record inputs, configuration inputs, and indirect catalogue influences.
 from __future__ import annotations
 
 from utilsim.m2c.billing_quality import METRICS as BILLING_METRICS
+from utilsim.m2c.kpis import KPI_BY_ID
 
 
 def rule(summary, formula='', *, steps=(), conditions=(), example='', references=(), basis='Engine rule'):
@@ -281,11 +282,6 @@ KPI_RULES = {
     'days_to_release': ('mean(case resolved timestamp − scheduled read day)', 'Uses read-holding cases resolved in the reporting window; work-order cases are excluded. Elapsed time can include fractions of a day.'),
     'cases_resolved_in_time': ('cases resolved within the business-day window ÷ cases opened', 'Counts cases opened year to date, including unresolved cases in the denominator. The window is kpi.case_resolution_days.'),
     'truck_rolls_per_1000': ('recorded truck rolls ÷ accounts × 1,000 × year_days / elapsed_days', 'Uses the casework truck-roll count; related cases at a premise can share a visit.'),
-    'bills_on_time': ('count(released by view date AND floor(released) − scheduled day ≤ kpi.on_time_bill_days) ÷ bills created', 'Counts documents created this year through the view date. Unreleased documents remain in the denominator. This uses whole calendar days.'),
-    'invoice_timeliness': ('count(invoice created − last scheduled read day ≤ kpi.timely_invoice_days) ÷ invoices created', 'Counts invoices created this year through the view date. Uses elapsed calendar days, including the time of day; estimated billing can still be timely.'),
-    'blocked_bill_share': ('documents with a billing case ÷ documents created', 'Counts whether a check ever raised a billing case, even if that document was subsequently released.'),
-    'billing_error_share': ('Σ|released bill total − true bill total| ÷ Σ released bill total', 'True totals apply the billing calculation to underlying consumption; only bills released in the reporting window are used.'),
-    'days_to_invoice': ('mean(invoice created − max(scheduled read day of each included document))', 'Counts invoices created this year through the view date. Uses elapsed calendar days, including time of day; rounds the reported mean to two decimals.'),
     'days_to_pay': ('mean(paid timestamp − issue date)', 'Uses invoices created in the reporting window and paid in full by the view date. Issue date can differ from creation because of print lag.'),
     'paid_on_time': ('invoices paid in full by deadline ÷ invoices whose deadline has passed\ndeadline = due day + kpi.payment_grace_days + 1', 'The extra day is the end-of-day boundary. Invoices not yet past that boundary are excluded from the denominator.'),
     'collected_share': ('payments received in reporting window ÷ amount invoiced in reporting window', 'Compares cash receipts with invoice amounts, not the count of paid invoices.'),
@@ -303,6 +299,9 @@ KPI_RULES = {
     'carry_per_account': ('(case carry + billing carry + receivable carry) ÷ accounts', 'Delay days are priced by the configured carry rates; see each carry input for its start and end dates.'),
 }
 
+
+for _id in ('bills_on_time', 'invoice_timeliness', 'blocked_bill_share', 'billing_error_share', 'days_to_invoice'):
+    KPI_RULES[_id] = (KPI_BY_ID[_id].formula, KPI_BY_ID[_id].definition)
 
 KPI_RULES.update({m['id']: (m['formula'], m['definition']) for m in BILLING_METRICS})
 
@@ -346,24 +345,21 @@ def explain(edge, nodes):
         if kind == 'measure':
             role = SOURCE_ROLES[sid[7:]]
             if sid == 'engine:schedule':
-                role = ('Supplies each bill’s scheduled read day from its installation’s main register. The bill’s release date is compared with this baseline.'
-                        if kid in ('bills_on_time', 'delayed_bill_share') else
-                        'Supplies each register period’s scheduled day for identifying due reads and comparing actual observation dates.'
+                role = ('Supplies each service scheduled read day. Account-month cycles include unissued obligations; each service keeps its own deadline.'
+                        if kid in ('bills_on_time', 'invoice_timeliness', 'delayed_bill_share', 'blocked_bill_share') else
+                        'Supplies each register period scheduled day for identifying due reads and comparing observation dates.'
                         if kid in ('early_read_share', 'late_read_share', 'outstanding_reads') else
-                        'Supplies the read periods used to check billing period boundaries.' if kid == 'bill_period_defect_share' else
-                        'Supplies the latest scheduled read day across all documents included in the invoice. Invoice creation is measured from that baseline.')
+                        'Supplies service periods checked on issued invoices.' if kid == 'bill_period_defect_share' else
+                        'Supplies the latest scheduled read across the invoice service documents as the elapsed-time baseline.')
             elif sid == 'engine:accounts' and kid not in {m['id'] for m in BILLING_METRICS}:
                 role = 'Supplies the account-count denominator for the measure.'
-            elif sid == 'engine:invoices' and kid in ('days_to_invoice', 'invoice_timeliness'):
-                role = 'Supplies the invoice creation timestamp and its list of billing documents. The calculation compares creation with the latest scheduled read those documents cover, not with the issue date.'
-            elif sid == 'engine:bills' and kid == 'bills_on_time':
-                role = 'Supplies the release timestamp for each bill and the created-bill population. Bills still unreleased at the view date count as not on time.'
+            elif sid == 'engine:invoices' and kid in ('days_to_invoice', 'invoice_timeliness', 'bills_on_time', 'delayed_bill_share'):
+                role = 'Supplies issue dates including print lag and the service documents covered. Prepared invoices do not count as issued before their planned issue day.'
             example = ''
-            if kid == 'bills_on_time':
-                example = 'Illustration: scheduled 10 January, released 13 January at 20:00, window 3 days → on time (13 − 10 = 3 whole days).'
-            elif kid in ('days_to_invoice', 'invoice_timeliness'):
-                example = 'Illustration: last scheduled read 10 January, invoice created 13 January at 20:00 → 3 + 20/24 = 3.83 elapsed days.'
-                example += ' A 3-day target is missed.' if kid == 'invoice_timeliness' else ' If this is the only invoice, the reported mean is 3.83 days.'
+            if kid in ('bills_on_time', 'invoice_timeliness', 'delayed_bill_share'):
+                example = 'Illustration: read scheduled 10 January, document released 11 January, invoice issued 16 January. A 5-day target is missed; releasing the document alone does not make the invoice timely.'
+            elif kid == 'days_to_invoice':
+                example = 'Illustration: last scheduled read 10 January, invoice created 11 January, issued 16 January: 6 days to issue.'
             return rule(role, formula, steps=(population,), example=example, references=refs,
                         conditions=('Measured through the selected view date. An empty share/average population is reported as no value, not zero.',)
                         if ('÷' in formula and 'accounts' not in formula) or formula.startswith('mean') else (), basis='KPI calculation')
@@ -374,7 +370,7 @@ def explain(edge, nodes):
         # The catalogue declares these as influences, not executable source-to-KPI equations.
         steps = [source.get('description', ''), source.get('impact', ''), population]
         if sid == 'billing.print_lag_days' and kid == 'days_to_invoice':
-            steps = ['Print lag changes invoice issue and due dates. This KPI uses invoice creation, so print lag is not directly added to its elapsed days.', population]
+            steps = ['Print lag shifts the invoice issue date in business days. The KPI includes that shift in its elapsed calendar days.', population]
         return rule(f'{source["title"]} is listed as an indirect influence on {target["title"]}.', formula,
                     steps=tuple(dict.fromkeys(s for s in steps if s)),
                     conditions=('This is a catalogue relationship, not a one-to-one arithmetic effect or a guaranteed direction of change.',),

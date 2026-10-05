@@ -949,17 +949,19 @@ class FieldConfig(BaseModel):
 
 
 class KpiConfig(BaseModel):
-    """How the KPIs count. These windows define the figures the Studio reports (a bill on time, a read released
+    """How the KPIs count. These windows define the figures the Studio reports (an invoice on time, a read released
     promptly, a case resolved in time, an invoice paid on time); they never change what the run does."""
-    model_config = group("KPI definitions", 26, "The windows the KPIs count with: what makes a bill on time, a read "
+    model_config = group("KPI definitions", 26, "The windows the KPIs count with: what makes an invoice on time, a read "
                          "prompt, a case resolved in time, an invoice paid on time. They change the figures reported, "
                          "never the run itself.", applies="run")
-    on_time_bill_days: int = F(3, "A bill is on time when it is released to invoicing within this many calendar days "
-                                  "of the scheduled read it bills.", unit="days", ge=0, le=60,
-                               effects=["bills on time"])
-    timely_invoice_days: int = F(5, "An invoice is timely when it is created within this many calendar days of the "
-                                    "last scheduled read it bills (the twin's invoice timeliness).", unit="days",
-                                 ge=1, le=60, effects=["invoice timeliness"])
+    on_time_bill_days: int = F(3, "Operational invoice issue target: each due service must reach an issued invoice "
+                                  "within this many whole calendar days of its scheduled read. Includes print lag; "
+                                  "the saved setting key is retained for compatibility.", unit="days", ge=0, le=60,
+                               title="Invoice issue target", effects=["invoices on time"])
+    timely_invoice_days: int = F(5, "Invoice timeliness target used by the twin and Delayed invoices. Each due service "
+                                    "must reach an issued invoice within this many whole calendar days of its scheduled "
+                                    "read. Includes upstream holds and print lag.", unit="days",
+                                 ge=1, le=60, effects=["invoice timeliness", "delayed invoices"])
     read_release_days: int = F(3, "A held read is released promptly when its case releases it to billing within "
                                   "this many calendar days of the scheduled read.", unit="days", ge=0, le=90,
                                effects=["reads released promptly"])

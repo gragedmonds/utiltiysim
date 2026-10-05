@@ -3266,7 +3266,7 @@
     },
     "KpiConfig": {
       "additionalProperties": false,
-      "description": "The windows the KPIs count with: what makes a bill on time, a read prompt, a case resolved in time, an invoice paid on time. They change the figures reported, never the run itself.",
+      "description": "The windows the KPIs count with: what makes an invoice on time, a read prompt, a case resolved in time, an invoice paid on time. They change the figures reported, never the run itself.",
       "properties": {
         "case_resolution_days": {
           "default": 5,
@@ -3284,15 +3284,15 @@
         },
         "on_time_bill_days": {
           "default": 3,
-          "description": "A bill is on time when it is released to invoicing within this many calendar days of the scheduled read it bills.",
+          "description": "Operational invoice issue target: each due service must reach an issued invoice within this many whole calendar days of its scheduled read. Includes print lag; the saved setting key is retained for compatibility.",
           "maximum": 60,
           "minimum": 0,
-          "title": "On Time Bill Days",
+          "title": "Invoice issue target",
           "type": "integer",
           "x-effects": [
-            "bills on time"
+            "invoices on time"
           ],
-          "x-impact": "The window that makes a bill on time: days from the scheduled read to the bill's release. Changes the Bills on time figure only.",
+          "x-impact": "Operational invoice issue window: calendar days from each service's scheduled read to customer invoice issue, including print lag. Changes Invoices on time.",
           "x-reach": "year",
           "x-unit": "days"
         },
@@ -3326,15 +3326,16 @@
         },
         "timely_invoice_days": {
           "default": 5,
-          "description": "An invoice is timely when it is created within this many calendar days of the last scheduled read it bills (the twin's invoice timeliness).",
+          "description": "Invoice timeliness target used by the twin and Delayed invoices. Each due service must reach an issued invoice within this many whole calendar days of its scheduled read. Includes upstream holds and print lag.",
           "maximum": 60,
           "minimum": 1,
           "title": "Timely Invoice Days",
           "type": "integer",
           "x-effects": [
-            "invoice timeliness"
+            "invoice timeliness",
+            "delayed invoices"
           ],
-          "x-impact": "The window that makes an invoice timely: days from the last scheduled read to the invoice. Changes the Invoice timeliness figure only.",
+          "x-impact": "Invoice issue target for Invoice timeliness and Delayed invoices. Includes print lag and overdue obligations still waiting for an invoice.",
           "x-reach": "year",
           "x-unit": "days"
         }

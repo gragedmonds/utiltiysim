@@ -28,6 +28,7 @@ from datetime import date
 import numpy as np
 import orjson
 
+from utilsim.cancellation import check_cancelled
 from utilsim.config.impact import REACHES
 from utilsim.config.model import SimConfig, annotate_group
 from utilsim.core.ids import str_key
@@ -552,8 +553,11 @@ class M2CRun:
             inputs = _hash([inputs, upstream])
         chain = f"-{_hash(opening.simulation_id)}" if opening is not None else ""
         self.simulation_id = f"m2c-{town.id}-{year}{self.settings_hash}-{inputs}{chain}"
+        check_cancelled()
         self._setup()
+        check_cancelled()
         self._setup_outages()
+        check_cancelled()
         self._simulate()
 
     # ---- the day's configuration -----------------------------------------------------------------------------------
@@ -1171,6 +1175,7 @@ class M2CRun:
             yearclose.open_contact(self, opening)
         self.contact.start()
         for day in range(self.cal.days):
+            check_cancelled()
             acts = by_day.get(day, [])
             self._roll_orders(day)  # crews for your dispatched orders that start today (07:00-09:00)
             if day not in self.cal.bset:  # your decisions and field visits count on any day

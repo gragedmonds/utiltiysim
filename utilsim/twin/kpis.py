@@ -43,15 +43,13 @@ class Kpi:
 
 KPIS: tuple[Kpi, ...] = (
     Kpi("invoice_timeliness", "Invoice timeliness", SHARE,
-        "Share of invoices created within N days of the last scheduled read they bill (N is the spec's timelyDays, "
-        "5 by default). The engine bills on an estimate rather than holding a bill, so this measure has a floor "
-        "near 96 percent under heavy stress; a utility that counts an estimated bill as late wants "
-        "estimated_read_share instead.", "higher", 0.005,
+        "Share of scheduled account-month cycles fully issued within N calendar days of each service's scheduled "
+        "read (timelyDays, 5 by default). Includes upstream holds and print lag; pending cycles are not timely.",
+        "higher", 0.005,
         (("automation", 1), ("vee_strictness", -1), ("pickup_lag", -1), ("analyst_hours", 1), ("missed_reads", -1),
          ("field_capacity", 1)),
-        "The engine bills on an estimate rather than holding the bill, so read-to-invoice timeliness stays near or "
-        "above 96 percent however stressed the year; a figure that counts an estimated bill as late is "
-        "estimated_read_share (1 minus the share of bills on actual reads)."),
+        "Timeliness measures invoice issue, not whether the charges were estimated. Issue delay includes print "
+        "lag, which is a billing setting outside the twin's fitted levers."),
     Kpi("missed_read_share", "Missed reads", SHARE,
         "Share of scheduled billing reads with no read taken (AMI dropouts, drive-by misses, no access).", "lower",
         0.005, (("missed_reads", 1),)),
@@ -84,9 +82,9 @@ KPIS: tuple[Kpi, ...] = (
     Kpi("collected_share", "Cash collected", SHARE,
         "Payments received in the window as a share of the amount invoiced in it. Not fitted yet (payer behaviour "
         "is a town setting).", "higher", 0.01, ()),
-    Kpi("billing_error_share", "Billing error", SHARE,
-        "Absolute difference between released bills and the simulation's true bills, as a share of the amount "
-        "billed in the window.", "lower", 0.002, (("vee_strictness", -1), ("anomalies", 1))),
+    Kpi("billing_error_share", "Invoice amount error", SHARE,
+        "Absolute net invoice error against simulated truth, divided by absolute net amounts issued in the window. "
+        "Corrective invoices include credits in both the actual and truth totals.", "lower", 0.002, (("vee_strictness", -1), ("anomalies", 1))),
 )
 KPI_BY_ID: dict[str, Kpi] = {k.id: k for k in KPIS}
 
@@ -131,7 +129,7 @@ def _mean(values: list[float]) -> float | None:
 
 
 def measure(run: M2CRun, w: Window, timely_days: int = 5, accounts: int | None = None,
-            statistics: dict | None = None) -> dict[str, float | None]:
+            statistics: dict | None = None, *, cycles=None) -> dict[str, float | None]:
     """Every KPI of ``run`` inside ``w`` (None when the window holds nothing to measure). ``accounts`` is the
     denominator of the rates: by default the town's accounts in the year."""
     tw, bk = run.town, run.books
@@ -145,8 +143,9 @@ def measure(run: M2CRun, w: Window, timely_days: int = 5, accounts: int | None =
     missed = int((sched & np.isnan(obs)).sum())
     estimated = int((sched & (status == 2) & (release <= w.T)).sum())
     invoices = [inv for inv in bk.invoices if w.d0 <= inv["created"] <= w.T]
-    to_invoice = np.array([inv["created"] - max(float(tw.read_day[bk.main[bk.docs[k]["inst"]], bk.docs[k]["month"]])
-                                                for k in inv["docs"]) for inv in invoices], dtype=float)
+    from utilsim.m2c.invoice_metrics import expected_cycles, invoice_error, issued_invoices, timing_counts
+    cycles = expected_cycles(run, w.T, w.d0) if cycles is None else cycles
+    timely, _, n_cycles = timing_counts(cycles, w.T, timely_days)
     to_pay = [inv["paid"] - inv["issued"] for inv in invoices if inv.get("paid") is not None and inv["paid"] <= w.T]
     invoiced = float(sum(inv["total"] for inv in invoices))
     collected = float(sum(p["amount"] for inv in bk.invoices if inv["created"] <= w.T for p in inv["payments"]
@@ -157,13 +156,11 @@ def measure(run: M2CRun, w: Window, timely_days: int = 5, accounts: int | None =
     backlog = sum(1 for c in run.cases if c.created <= w.T and (c.resolved is None or c.resolved > w.T))
     release_days = [c.resolved - float(tw.read_day[c.r, c.month]) for c in run.cases
                     if c.work is None and c.resolved is not None and w.d0 <= c.resolved <= w.T]
-    docs = [d for d in bk.docs if d["released"] is not None and w.d0 <= d["released"] <= w.T]
-    billed = float(sum(d["total"] for d in docs))
-    error = float(sum(abs(d["total"] - d["truthTotal"]) for d in docs))
+    error, billed = invoice_error(run, issued_invoices(run, w.T, w.d0))
 
     if statistics is not None:
         statistics.update({
-            'invoice_timeliness': [int((to_invoice <= timely_days).sum()), len(to_invoice)],
+            'invoice_timeliness': [timely, n_cycles],
             'missed_read_share': [missed, n_sched], 'estimated_read_share': [estimated, n_sched],
             'exceptions_all': [len(opened) * 1000 * per_year, n_acc],
             'exceptions_worked': [worked * 1000 * per_year, n_acc],
@@ -180,7 +177,7 @@ def measure(run: M2CRun, w: Window, timely_days: int = 5, accounts: int | None =
         return round(count / total, digits) if total else None
 
     return {
-        "invoice_timeliness": share(float((to_invoice <= timely_days).sum()), len(to_invoice)),
+        "invoice_timeliness": share(timely, n_cycles),
         "missed_read_share": share(missed, n_sched),
         "estimated_read_share": share(estimated, n_sched),
         "exceptions_all": rate(len(opened)),

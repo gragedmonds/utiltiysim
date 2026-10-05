@@ -23,7 +23,7 @@ from utilsim.m2c import catalog as cat
 from utilsim.m2c.billing_quality import METRICS as BILLING_METRICS
 from utilsim.m2c.run import OFF, M2CRun
 
-KPIS_VERSION = "m2c-kpis/1.0"
+KPIS_VERSION = "m2c-kpis/2.0"
 SHARE, DAYS, PER_1000_YEAR, PER_1000, MINUTES, SECONDS, MONEY_PER_ACCOUNT, COUNT = (
     "share", "days", "per_1000_accounts_year", "per_1000_accounts", "minutes", "seconds", "currency_per_account",
     "count")
@@ -32,7 +32,7 @@ FAMILIES: tuple[tuple[str, str, str], ...] = (
     ("reading", "Meter reading", "Whether the scheduled billing reads arrive, and what happens to the ones that do not."),
     ("vee", "Validation and estimation", "How the VEE rules and the review team sort real anomalies from noise."),
     ("work", "Exceptions and backlog", "The clarification cases, who works them, how long they wait."),
-    ("billing", "Billing", "Bills released on time, held, wrong; invoices out the door."),
+    ("billing", "Billing", "Invoices issued on time, estimated, corrected or delayed; upstream billing workload."),
     ("cash", "Cash and collections", "Money in: paid on time, days to pay, what is overdue, who is cut off."),
     ("contact", "Contact centre", "Calls answered in time, hung up, resolved first time."),
     ("field", "Field work", "Orders done on time, the backlog, how fast the emergency crews arrive."),
@@ -130,30 +130,34 @@ KPIS: tuple[Kpi, ...] = (
         "truck rolls ÷ accounts × 1,000, annualised", settings=MISSED + ANOMALIES + FIELD_CAP,
         related=("estimated_read_share", "cost_per_account"), where=(STATISTICS,)),
     # ---- billing --------------------------------------------------------------------------------------------------
-    Kpi("bills_on_time", "Bills on time", "billing", SHARE, "higher", ("billing",),
-        "Share of bills created year to date that were released to invoicing within the window, counted from the "
-        "scheduled read day they bill; a bill still blocked counts as late.",
-        "bills released within kpi.on_time_bill_days of the scheduled read ÷ bills created",
-        thresholds=("kpi.on_time_bill_days",), settings=TEAM + MISSED + VEE_STRICT + FIELD_CAP,
+    Kpi("bills_on_time", "Invoices on time", "billing", SHARE, "higher", ("billing",),
+        "Scheduled account-month cycles with every due service issued within the operational invoice window. "
+        "Includes print lag; pending cycles are not on time. Each service uses its own scheduled read day.",
+        "account-cycles fully issued within kpi.on_time_bill_days ÷ scheduled account-cycles",
+        thresholds=("kpi.on_time_bill_days",), settings=TEAM + MISSED + VEE_STRICT + FIELD_CAP + (("billing.print_lag_days", -1),),
         related=("invoice_timeliness", "blocked_bill_share"), where=(STATISTICS,)),
     Kpi("invoice_timeliness", "Invoice timeliness", "billing", SHARE, "higher", ("billing",),
-        "Share of invoices created within the window of the last scheduled read they bill. The engine bills on an "
-        "estimate rather than holding a bill, so this stays high under stress; a utility that counts an estimated "
-        "bill as late wants Estimated reads too.", "invoices created within kpi.timely_invoice_days ÷ invoices",
-        thresholds=("kpi.timely_invoice_days",), settings=TEAM + MISSED + VEE_STRICT + FIELD_CAP,
-        related=("bills_on_time", "estimated_read_share"), where=(STATISTICS,), twin=True),
-    Kpi("blocked_bill_share", "Bills blocked", "billing", SHARE, "lower", ("billing",),
-        "Share of bills created year to date that a billing check held for a person (true-up, rate class, high "
-        "bill, bill credit), whether or not they were released later.", "bills with a billing case ÷ bills created",
+        "Scheduled account-month cycles with every due service issued within the invoice timeliness target. "
+        "Includes cycles held before an invoice exists and print lag. Pending cycles are not yet timely; "
+        "Delayed invoices counts them late only after the deadline expires.",
+        "account-cycles fully issued within kpi.timely_invoice_days ÷ scheduled account-cycles",
+        thresholds=("kpi.timely_invoice_days",), settings=TEAM + MISSED + VEE_STRICT + FIELD_CAP + (("billing.print_lag_days", -1),),
+        related=("bills_on_time", "delayed_bill_share"), where=(STATISTICS,), twin=True),
+    Kpi("blocked_bill_share", "Invoice cycles affected by billing checks", "billing", SHARE, "lower", ("billing",),
+        "Scheduled account-month cycles with at least one billing-document check raised, even if later released. "
+        "Multiple service documents count once; this tracks upstream causes of invoice holds.",
+        "account-cycles with a billing check ÷ scheduled account-cycles",
         settings=(("billing.high_bill_ratio", -1), ("billing.trueup_max_ratio", -1)) + ANOMALIES,
         related=("bills_on_time", "billing_error_share"), where=(COMMAND_CENTER, STATISTICS, WORKLISTS)),
-    Kpi("billing_error_share", "Billing error", "billing", SHARE, "lower", ("billing", "vee"),
-        "Absolute difference between released bills and the simulation's true bills, as a share of the amount "
-        "billed.", "Σ|billed − true| ÷ Σ billed", settings=VEE_STRICT + ANOMALIES,
+    Kpi("billing_error_share", "Invoice amount error", "billing", SHARE, "lower", ("billing", "vee"),
+        "Absolute net invoice error against simulated truth for invoices issued in the reporting window. "
+        "Corrective invoice truth includes the credit for the previously invoiced version.",
+        "Σ|net invoice total − net truth total| ÷ Σ|net invoice total|", settings=VEE_STRICT + ANOMALIES,
         related=("vee_recall", "blocked_bill_share"), where=(STATISTICS, WORKLISTS), twin=True),
-    Kpi("days_to_invoice", "Days to invoice", "billing", DAYS, "lower", ("billing",),
-        "Average calendar days from the last scheduled read an invoice bills to the invoice.",
-        "mean(invoice created − last scheduled read day)", settings=TEAM + (("billing.print_lag_days", 1),),
+    Kpi("days_to_invoice", "Days to invoice issue", "billing", DAYS, "lower", ("billing",),
+        "Average elapsed calendar days from the last scheduled read an invoice covers to its issue, including "
+        "print lag. Only invoices issued by the view date count; issue cannot precede creation.",
+        "mean(max(created, planned issue) − last scheduled read day)", settings=TEAM + (("billing.print_lag_days", 1),),
         related=("invoice_timeliness", "days_to_pay"), where=(WORKLISTS, STATISTICS)),
     # ---- cash -----------------------------------------------------------------------------------------------------
     Kpi("days_to_pay", "Days to pay", "cash", DAYS, "lower", ("collections",),
@@ -312,7 +316,9 @@ def measure(run: M2CRun, as_of: str | None = None, ids=None, *, statistics: dict
     per_year = cal.days / (day + 1)
     out: dict = {}
     w = window(run, None, cal.date_of(day).isoformat())
-    twin = twin_measure(run, w, k_cfg.timely_invoice_days, statistics=statistics)
+    from utilsim.m2c.invoice_metrics import expected_cycles, issue_delays, issued_invoices, timing_counts
+    cycles = expected_cycles(run, T)
+    twin = twin_measure(run, w, k_cfg.timely_invoice_days, statistics=statistics, cycles=cycles)
     out.update({k: v for k, v in twin.items() if k in KPI_BY_ID})
     # The summary blocks the Studio already shows.
     s = views.summary(run, as_of)
@@ -330,15 +336,12 @@ def measure(run: M2CRun, as_of: str | None = None, ids=None, *, statistics: dict
     out["carry_per_account"] = round((kp.get("carry", 0.0) + bill.get("billingCarry", 0.0) + bill.get("receivableCarry", 0.0)) / n_acc, 2)
     minutes = sum(float(u.get("customerMinutes", 0.0)) for u in rel.values() if isinstance(u, dict))
     out["customer_minutes_lost"] = round(minutes / n_acc, 2)
-    # Documents: on time against the scheduled read, blocked.
-    docs = [d for d in bk.docs if 0 <= d["created"] <= T]
-    if docs:
-        on_time = sum(1 for d in docs if d["released"] is not None and d["released"] <= T
-                      and int(np.floor(d["released"])) - int(tw.read_day[bk.main[d["inst"]], d["month"]]) <= k_cfg.on_time_bill_days)
-        out["bills_on_time"] = _share(on_time, len(docs))
-        out["blocked_bill_share"] = _share(sum(1 for d in docs if d["case"] >= 0), len(docs))
-    else:
-        out["bills_on_time"] = None
+    on_time, _, cycle_count = timing_counts(cycles, T, k_cfg.on_time_bill_days)
+    blocked = sum(any(s['blocked'] for s in cycle.values()) for cycle in cycles)
+    out['bills_on_time'] = _share(on_time, cycle_count)
+    out['blocked_bill_share'] = _share(blocked, cycle_count)
+    to_invoice = issue_delays(run, issued_invoices(run, T))
+    out['days_to_invoice'] = _mean(to_invoice)
     # Held reads released promptly.
     months = slice(1, 13)
     read_day, read_t = tw.read_day[:, months], run.read_t[:, months]
@@ -378,15 +381,12 @@ def measure(run: M2CRun, as_of: str | None = None, ids=None, *, statistics: dict
         out["emergency_response_min"] = fk.get("responseMin")
     if wanted & {m['id'] for m in BILLING_METRICS}:
         from utilsim.m2c.billing_quality import measure_quality
-        quality, quality_stats = measure_quality(run, day, T)
+        quality, quality_stats = measure_quality(run, day, T, cycles=cycles)
         out.update(quality)
         if statistics is not None:
             statistics.update(quality_stats)
     values = {k: out.get(k) for k in KPI_BY_ID if k in wanted}
     if statistics is not None:
-        invoices = [inv for inv in bk.invoices if 0 <= inv['created'] <= T]
-        to_invoice = [inv['created'] - max(float(tw.read_day[bk.main[bk.docs[k]['inst']], bk.docs[k]['month']])
-                                          for k in inv['docs']) for inv in invoices]
         statistics.update({
             'auto_accept_share': [kp['autoAccepted'], kp['actual']],
             'vee_precision': [kp['vee']['truePositives'], kp['vee']['truePositives'] + kp['vee']['falsePositives']],
@@ -398,8 +398,8 @@ def measure(run: M2CRun, as_of: str | None = None, ids=None, *, statistics: dict
             'cost_per_account': [kp['costs']['total'], n_acc],
             'carry_per_account': [kp.get('carry', 0) + bill.get('billingCarry', 0) + bill.get('receivableCarry', 0), n_acc],
             'customer_minutes_lost': [minutes, n_acc],
-            'bills_on_time': [on_time if docs else 0, len(docs)],
-            'blocked_bill_share': [sum(d['case'] >= 0 for d in docs), len(docs)],
+            'bills_on_time': [on_time, cycle_count],
+            'blocked_bill_share': [blocked, cycle_count],
             'reads_released_promptly': [int(prompt.sum()) if held.any() else 0, int(held.sum())],
             'cases_resolved_in_time': [in_time if opened else 0, len(opened)],
             'paid_on_time': [paid if due_passed else 0, len(due_passed)],

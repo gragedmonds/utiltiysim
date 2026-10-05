@@ -1237,6 +1237,10 @@ def billing_kpis(run: M2CRun, T: float) -> tuple[dict, dict[str, float]]:
             costs[k] += v * n
 
     # The year's invoices; one carried from last year (unpaid) still collects, duns and carries this year.
+    from utilsim.m2c.invoice_metrics import invoice_error, issue_delays, issued_invoices
+    customer_invoices = issued_invoices(run, T)
+    issue_days = issue_delays(run, customer_invoices)
+    invoice_err, _ = invoice_error(run, customer_invoices)
     every = [inv for inv in bk.invoices if inv["created"] <= T]
     issued = [inv for inv in every if inv["created"] >= 0]
     days_to_invoice, days_to_pay, carry, recv_carry, collected, overdue = [], [], 0.0, 0.0, 0.0, 0.0
@@ -1276,7 +1280,9 @@ def billing_kpis(run: M2CRun, T: float) -> tuple[dict, dict[str, float]]:
             "billingError": round(sum(abs(d["total"] - d["truthTotal"]) for d in released), 2),
             "invoices": len(issued), "invoiced": round(sum(inv["total"] for inv in issued), 2),
             "collected": round(collected, 2), "receivable": round(receivable, 2), "overdue": round(overdue, 2),
-            "avgDaysToInvoice": round(float(np.mean(days_to_invoice)), 2) if days_to_invoice else None,
+            "issuedInvoices": len(customer_invoices), "issuedAmount": round(sum(i['total'] for i in customer_invoices), 2),
+            "invoiceError": round(invoice_err, 2),
+            "avgDaysToInvoice": round(float(np.mean(issue_days)), 2) if issue_days else None,
             "avgDaysToPay": round(float(np.mean(days_to_pay)), 2) if days_to_pay else None,
             "billingCarry": round(carry, 2), "receivableCarry": round(recv_carry, 2), "dunning": dunning,
             "collections": collections,

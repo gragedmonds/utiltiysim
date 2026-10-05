@@ -144,6 +144,9 @@ class UtilityWorkspace:
         self.lock = threading.RLock()
         self.cache = OrderedDict()
         self.progress = None
+        self.control_lock = threading.Lock()
+        self.requests = {}
+        self.active_request = None
         self.analysis_timings = []
         self.analysis_path = jobs.store / 'analysis-timings.json'
         try:
@@ -161,7 +164,10 @@ class UtilityWorkspace:
         if current is None:
             return None
         elapsed = max(0, time.monotonic() - self.part_started)
-        progress = {**current, 'activeSeconds': round(elapsed)}
+        active = self.active_request
+        progress = {**current, 'activeSeconds': round(elapsed),
+                    'analysisId': active[0] if active else None,
+                    'stopping': active[2].is_set() if active else False}
         if self.seconds_per_home is not None:
             remaining = self.seconds_per_home * (progress['totalHomes'] - progress['completedHomes']) - elapsed
             progress.update(etaSeconds=round(remaining) if remaining > 0 else None,
@@ -220,7 +226,39 @@ class UtilityWorkspace:
             result = pooling.attach(path, result, _m2c.run_for(req), data)
         return result
 
+    def stop(self, analysis_id):
+        """Cancel the visible analysis and requests already waiting for the same utility.
+
+        The control lock is separate from the engine lock so Stop never waits for a run.
+        A stale button cannot cancel a later analysis.
+        """
+        with self.control_lock:
+            active = self.active_request
+            if not active or active[0] != analysis_id:
+                return False
+            for job_id, signal in self.requests.values():
+                if job_id == active[1]:
+                    signal.set()
+            return True
+
     def query(self, job_id, path, params):
+        from utilsim.cancellation import cancellable, check_cancelled
+        request_id, signal = secrets.token_hex(16), threading.Event()
+        with self.control_lock:
+            self.requests[request_id] = (job_id, signal)
+        try:
+            with self.lock, cancellable(signal):
+                with self.control_lock:
+                    self.active_request = (request_id, job_id, signal)
+                check_cancelled()
+                return self._query_request(job_id, path, params)
+        finally:
+            with self.control_lock:
+                self.requests.pop(request_id, None)
+                if self.active_request and self.active_request[0] == request_id:
+                    self.active_request = None
+
+    def _query_request(self, job_id, path, params):
         if not isinstance(params, dict):
             raise ValueError('Expected workspace query parameters.')
         with self.lock:
@@ -239,6 +277,8 @@ class UtilityWorkspace:
                 from utilsim.worker.estimates import analysis_estimate, months_in
                 self.analysis_initial = analysis_estimate(self.analysis_recipe, profile, self.analysis_timings)
                 result = pooling.strip(self._query(job, path, params))
+                from utilsim.cancellation import check_cancelled
+                check_cancelled()  # Never cache a partial/cancelled response or learn its duration.
                 self.analysis_timings.append({'key': profile, 'seconds': time.monotonic() - started,
                                              'homes': self.analysis_recipe['homes'],
                                              'months': months_in(self.analysis_recipe['request'])})
@@ -288,6 +328,8 @@ class UtilityWorkspace:
         self.analysis_initial['totalHomes'] = total_homes
         began, done_homes = time.monotonic(), 0
         for index, part in enumerate(parts):
+            from utilsim.cancellation import check_cancelled
+            check_cancelled()
             self.part_started = time.monotonic()
             self.seconds_per_home = (self.part_started - began) / done_homes if done_homes else None
             self.progress = {'name': job['recipe']['name'], 'modelId': job['recipe']['modelId'],
@@ -340,10 +382,13 @@ class UtilityWorkspace:
                 result = archived
             elif unchanged and path in ('/m2c/trend', '/m2c/summary', '/vee/scorecard', '/m2c/kpis') and pooled_file.is_file() and not params.get('since'):
                 result = orjson.loads(gzip.decompress(pooled_file.read_bytes()))[path]
+                if path == '/m2c/summary' and 'invoiceError' not in result.get('billing', {}):
+                    result = self.call(path, request)
                 if path == '/m2c/kpis':
-                    from utilsim.m2c.kpis import KPI_IDS
+                    from utilsim.m2c.kpis import KPI_IDS, KPIS_VERSION
                     wanted = set(params.get('kpis') or KPI_IDS)
-                    if not wanted <= result['values'].keys() or not wanted <= result.get('_statistics', {}).keys():
+                    if (result.get('schemaVersion') != KPIS_VERSION or not wanted <= result['values'].keys()
+                            or not wanted <= result.get('_statistics', {}).keys()):
                         result = self.call(path, request)  # Older archives predate newly added figures.
                     else:
                         result['values'] = {k: v for k, v in result['values'].items() if k in wanted}

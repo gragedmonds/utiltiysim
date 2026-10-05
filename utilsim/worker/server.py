@@ -23,6 +23,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from utilsim.cancellation import SimulationStopped
 from utilsim.worker.jobs import LocalJobs
 
 KEY_FILE = '.claude-key'
@@ -65,6 +66,10 @@ def create_app(jobs: LocalJobs, local_token, on_ready=None):
     app = FastAPI(lifespan=lifespan, title='Utility Studio', docs_url=None, redoc_url=None)
     app.add_middleware(GZipMiddleware, minimum_size=2048)
 
+    @app.exception_handler(SimulationStopped)
+    async def stopped_response(request, exc):
+        return JSONResponse({'detail': str(exc)}, status_code=409)
+
     @app.middleware('http')
     async def guard(request, call_next):
         if request.url.hostname not in ('127.0.0.1', 'localhost'):
@@ -85,6 +90,12 @@ def create_app(jobs: LocalJobs, local_token, on_ready=None):
     def status():
         return {**jobs.snapshot(), 'analysis': workspace.status(),
                 'launcherURL': os.environ.get('UTILITY_STUDIO_LAUNCHER_URL', '')}
+
+    @app.post('/local/analysis/stop')
+    async def stop_analysis(request: Request):
+        data = await request.json()
+        stopped = workspace.stop(data.get('analysisId'))
+        return {'stopped': stopped}
 
     @app.post('/local/jobs/{job_id}/query')
     async def query_utility(job_id: str, request: Request):
@@ -151,6 +162,14 @@ def create_app(jobs: LocalJobs, local_token, on_ready=None):
     def retry(job_id: str):
         try:
             jobs.retry(job_id)
+        except KeyError as exc:
+            raise HTTPException(404) from exc
+        return jobs.snapshot()
+
+    @app.post('/local/jobs/{job_id}/stop')
+    def stop_job(job_id: str):
+        try:
+            jobs.stop(job_id)
         except KeyError as exc:
             raise HTTPException(404) from exc
         return jobs.snapshot()

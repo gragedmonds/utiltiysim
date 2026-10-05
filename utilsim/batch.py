@@ -213,6 +213,7 @@ def run_batch(cfg, homes: int, store: Path, request: dict | None = None, *,
               chunk_size: int = 2000, staffing: str, map_data: bool = False, max_batches: int | None = None,
               network: str = "independent", float_share: float = 0.3, on_progress=lambda _: None, should_pause=lambda: False):
     from api._m2c import RunRequest
+    from utilsim.cancellation import check_cancelled
     from utilsim.io.run_bundle import engine_build, read_manifest
     from utilsim.m2c.calendar import calendar
     from utilsim.m2c.run import parse_episodes, resolve_episode_days, resolve_settings
@@ -279,6 +280,7 @@ def run_batch(cfg, homes: int, store: Path, request: dict | None = None, *,
                     write_json(directory / "staffing.json", _coordinate(job, directory, float_share))
                 done_key = "probe" if mode == "probe" else "result"
                 for index, district in enumerate(job["districts"]):
+                    check_cancelled()
                     if district.get(done_key):
                         if mode == "final":
                             read_manifest(store / "runs" / district["result"]["runKey"])
@@ -298,11 +300,13 @@ def run_batch(cfg, homes: int, store: Path, request: dict | None = None, *,
                     child = subprocess.Popen([*command, str(path), str(index), mode])
                     try:
                         while child.poll() is None:
-                            time.sleep(1)
+                            check_cancelled()
+                            time.sleep(.25)
                             stage = orjson.loads(stage_path.read_bytes()) if stage_path.exists() else None
                             on_progress(progress(job, time.monotonic() - started, stage))
                         if child.returncode:
                             raise RuntimeError(f"{district['id']} failed. Completed districts are saved; rerun to resume.")
+                        check_cancelled()
                     except BaseException:
                         child.terminate()
                         try:

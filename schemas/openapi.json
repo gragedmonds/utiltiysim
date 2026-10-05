@@ -6355,7 +6355,7 @@
     },
     "/api/m2c/kpis": {
       "get": {
-        "description": "``m2c-kpis/1.0``: every figure with its family, unit, definition, the settings and scenarios that move it,\nwhere it shows, and the threshold settings it counts with (their values from ``town``'s config, else the\ndefaults).",
+        "description": "``m2c-kpis/2.0``: every figure with its family, unit, definition, the settings and scenarios that move it,\nwhere it shows, and the threshold settings it counts with (their values from ``town``'s config, else the\ndefaults).",
         "operationId": "get_kpis_api_m2c_kpis_get",
         "parameters": [
           {

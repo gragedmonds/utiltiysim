@@ -85,8 +85,8 @@ def attach(path, result, run, params):
         mean(result['kpis'], 'avgDaysToRelease', [c.resolved - float(tw.read_day[c.r, c.month])
              for c in run.cases if c.work is None and c.resolved is not None and c.resolved <= end])
         issued = [inv for inv in bk.invoices if 0 <= inv['created'] <= end]
-        mean(result['billing'], 'avgDaysToInvoice', [inv['created'] - max(float(tw.read_day[bk.main[bk.docs[k]['inst']], bk.docs[k]['month']])
-             for k in inv['docs']) for inv in issued])
+        from utilsim.m2c.invoice_metrics import issue_delays, issued_invoices
+        mean(result['billing'], 'avgDaysToInvoice', issue_delays(run, issued_invoices(run, end)))
         mean(result['billing'], 'avgDaysToPay', [inv['paid'] - inv['issued'] for inv in issued
              if inv.get('paid') is not None and inv['paid'] <= end])
         for utility, row in result.get('reliability', {}).items():

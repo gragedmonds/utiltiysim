@@ -8,6 +8,7 @@ from pathlib import Path
 
 import orjson
 
+from utilsim.cancellation import SimulationStopped, cancellable
 from utilsim.worker.estimates import initial_estimate, progress_estimate
 from utilsim.worker.execute import execute
 
@@ -25,12 +26,15 @@ class LocalJobs:
             saved = orjson.loads(self.state_path.read_bytes())
             self.state.update({k: saved[k] for k in ('paused', 'jobs') if k in saved})
         for job in self.state['jobs']:
+            if job['status'] == 'stopping':
+                job['status'] = 'cancelled'
             if job['status'] == 'running':  # the process stopped mid-run; its districts are checkpointed
                 job['status'] = 'queued'
         self.thread = None
         self.shutdown = threading.Event()
         self.progress = {}
         self.error = None
+        self.stop_signals = {}
 
     # ---- persistence -----------------------------------------------------------------------------------------
     def save(self):
@@ -66,7 +70,7 @@ class LocalJobs:
             job = self.find(job_id)
             if not job:
                 raise KeyError(job_id)
-            if job['status'] == 'failed':
+            if job['status'] in ('failed', 'cancelled'):
                 job.update(status='queued', error=None)
                 self.save()
         self.start()
@@ -76,8 +80,8 @@ class LocalJobs:
             job = self.find(job_id)
             if not job:
                 raise KeyError(job_id)
-            if job['status'] == 'running':
-                raise ValueError('This revision is running. Pause the queue, then remove it once it stops.')
+            if job['status'] in ('running', 'stopping'):
+                raise ValueError('Stop this revision and wait for it to stop before removing it.')
             self.state['jobs'].remove(job)
             self.save()
 
@@ -86,6 +90,18 @@ class LocalJobs:
             self.state['paused'] = bool(paused)
             self.save()
         self.start()
+
+    def stop(self, job_id):
+        with self.lock:
+            job = self.find(job_id)
+            if not job:
+                raise KeyError(job_id)
+            if job['status'] == 'queued':
+                job.update(status='cancelled', error=None)
+            elif job['status'] in ('running', 'stopping'):
+                job['status'] = 'stopping'
+                self.stop_signals[job_id].set()
+            self.save()
 
     # ---- running ---------------------------------------------------------------------------------------------
     def next_job(self):
@@ -105,17 +121,25 @@ class LocalJobs:
                 if not job:
                     return
                 job['status'] = 'running'
+                signal = self.stop_signals[job['jobId']] = threading.Event()
                 self.progress, self.error = {}, None
                 self.save()
             try:
-                result = execute({k: job[k] for k in ('schemaVersion', 'jobId', 'revision', 'recipeKey', 'recipe')},
-                                 self.store, lambda p, j=job: self.on_progress(j, p),
-                                 lambda: self.state['paused'] or self.shutdown.is_set())
+                with cancellable(signal):
+                    result = execute({k: job[k] for k in ('schemaVersion', 'jobId', 'revision', 'recipeKey', 'recipe')},
+                                     self.store, lambda p, j=job: self.on_progress(j, p),
+                                     lambda: self.state['paused'] or self.shutdown.is_set())
                 with self.lock:
-                    if result:
+                    if signal.is_set():
+                        job.update(status='cancelled', result=None, error=None)
+                    elif result:
                         job.update(status='complete', result=result, progress=self.progress, error=None)
                     else:
                         job['status'] = 'queued'  # paused or shutting down: its finished districts are kept
+                    self.save()
+            except SimulationStopped:
+                with self.lock:
+                    job.update(status='cancelled', result=None, error=None)
                     self.save()
             except Exception as exc:
                 with self.lock:
@@ -124,6 +148,9 @@ class LocalJobs:
                         self.save()
                     except OSError:
                         pass
+            finally:
+                with self.lock:
+                    self.stop_signals.pop(job['jobId'], None)
 
     def on_progress(self, job, progress):
         self.progress = progress_estimate(progress, initial_estimate(job['recipe'], self.state['jobs']))
@@ -135,11 +162,11 @@ class LocalJobs:
 
     def snapshot(self):
         with self.lock:
-            active = next((j for j in self.state['jobs'] if j['status'] == 'running'), None)
+            active = next((j for j in self.state['jobs'] if j['status'] in ('running', 'stopping')), None)
             return {'schemaVersion': STATUS_SCHEMA, 'storage': str(self.store), 'paused': bool(self.state['paused']),
                     'storageAvailable': self.store.is_dir(),
                     'active': {'jobId': active['jobId'], 'modelId': active['recipe']['modelId'], 'name': active['recipe']['name'],
-                               'revision': active['revision'], 'progress': active.get('progress') or
+                               'revision': active['revision'], 'stopping': active['status'] == 'stopping', 'progress': active.get('progress') or
                                progress_estimate({}, initial_estimate(active['recipe'], self.state['jobs']))} if active else None,
                     'queued': sum(j['status'] == 'queued' for j in self.state['jobs']),
                     'jobs': [{k: j[k] for k in ('jobId', 'revision', 'status', 'createdAt')} | {'modelId': j['recipe']['modelId'], 'name': j['recipe']['name']}
