@@ -27,6 +27,7 @@ from typing import Any
 
 from utilsim.m2c.base import M2CTown
 from utilsim.m2c.calendar import RunCalendar
+from utilsim.m2c.service_orders import manual_work_types, work_profile  # noqa: F401
 
 STAGES = ("Draft", "Ready for dispatch", "Dispatched", "En route", "On site", "Completed")
 SYSTEM_STATUS = {"Draft": "CRTD", "Ready for dispatch": "REL", "Dispatched": "REL DISP", "En route": "REL DISP ENRT",
@@ -124,7 +125,8 @@ def vocabulary(plants: list[str]) -> dict:
                                                                    "plant": plants},
             "components": {"keys": list(COMPONENT_KEYS), "units": list(UNITS), "max": MAX_COMPONENTS,
                            "rule": "each component needs a description, a positive quantity and a valid unit"},
-            "activities": ACTIVITY, "stages": list(STAGES), "systemStatus": SYSTEM_STATUS,
+            "activities": ACTIVITY, "workTypes": manual_work_types(),
+            "stages": list(STAGES), "systemStatus": SYSTEM_STATUS,
             "workCenterByCommodity": WORK_CENTER,
             "outcomes": [{"kind": k, "label": label, "fields": list(f)} for k, (label, f) in OUTCOMES.items()],
             "outcomeRules": {"value": "register value, 0 or more", "date": "YYYY-MM-DD, from the basic start to the "

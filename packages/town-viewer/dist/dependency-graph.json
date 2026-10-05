@@ -9981,6 +9981,370 @@
         "kpi:days_to_pay"
       ],
       "reference": "utilsim/m2c/kpis.py · carry_per_account"
+    },
+    {
+      "id": "kpi:active_services",
+      "title": "Active services",
+      "lane": "metrics",
+      "topic": "billing",
+      "kind": "metric",
+      "description": "Supply contracts active on the view date. A multi-service account contributes one contract per service.",
+      "formula": "count(active supply contracts)",
+      "unit": "count",
+      "better": "context",
+      "related": [],
+      "reference": "utilsim/m2c/kpis.py · active_services"
+    },
+    {
+      "id": "kpi:service_setup_defects",
+      "title": "Active service setup defects",
+      "lane": "metrics",
+      "topic": "billing",
+      "kind": "metric",
+      "description": "Active contracts with a missing account or installation, a premise mismatch, or overlapping active contracts for one installation.",
+      "formula": "count(active contracts failing reference or uniqueness checks)",
+      "unit": "count",
+      "better": "lower",
+      "related": [],
+      "reference": "utilsim/m2c/kpis.py · service_setup_defects"
+    },
+    {
+      "id": "kpi:move_ins",
+      "title": "Move-ins",
+      "lane": "metrics",
+      "topic": "billing",
+      "kind": "metric",
+      "description": "Premises with a recorded move-in date this year through the view date.",
+      "formula": "count(0 ≤ move-in day ≤ view day)",
+      "unit": "count",
+      "better": "context",
+      "related": [],
+      "reference": "utilsim/m2c/kpis.py · move_ins"
+    },
+    {
+      "id": "kpi:move_outs",
+      "title": "Move-outs",
+      "lane": "metrics",
+      "topic": "billing",
+      "kind": "metric",
+      "description": "Premises with a recorded move-out date this year through the view date.",
+      "formula": "count(0 ≤ move-out day ≤ view day)",
+      "unit": "count",
+      "better": "context",
+      "related": [],
+      "reference": "utilsim/m2c/kpis.py · move_outs"
+    },
+    {
+      "id": "kpi:net_terms_mismatch_share",
+      "title": "Invoice net-term mismatches",
+      "lane": "metrics",
+      "topic": "billing",
+      "kind": "metric",
+      "description": "Created invoices whose original due date minus issue date differs from the configured payment term. Later payment arrangements do not count as defects.",
+      "formula": "invoices with original due − issued ≠ configured due days ÷ created invoices",
+      "unit": "share",
+      "better": "lower",
+      "related": [],
+      "reference": "utilsim/m2c/kpis.py · net_terms_mismatch_share"
+    },
+    {
+      "id": "kpi:delayed_bill_share",
+      "title": "Delayed bills",
+      "lane": "metrics",
+      "topic": "billing",
+      "kind": "metric",
+      "description": "Current billing documents released after the bill window, or still unreleased after that window expires. Newly created bills still within the window are not late.",
+      "formula": "late or overdue unreleased current documents ÷ current documents",
+      "unit": "share",
+      "better": "lower",
+      "related": [],
+      "reference": "utilsim/m2c/kpis.py · delayed_bill_share"
+    },
+    {
+      "id": "kpi:estimated_bill_share",
+      "title": "Estimated bills",
+      "lane": "metrics",
+      "topic": "billing",
+      "kind": "metric",
+      "description": "Current billing documents built on at least one estimated register. Reversed versions are excluded at the view date.",
+      "formula": "estimated current documents ÷ current documents",
+      "unit": "share",
+      "better": "lower",
+      "related": [],
+      "reference": "utilsim/m2c/kpis.py · estimated_bill_share"
+    },
+    {
+      "id": "kpi:move_boundary_estimate_share",
+      "title": "Move-boundary bills estimated",
+      "lane": "metrics",
+      "topic": "billing",
+      "kind": "metric",
+      "description": "Estimated current bills whose read period spans a recorded move-in or move-out. This is a boundary check, not a separate first/final invoice workflow.",
+      "formula": "estimated move-boundary documents ÷ move-boundary documents",
+      "unit": "share",
+      "better": "lower",
+      "related": [],
+      "reference": "utilsim/m2c/kpis.py · move_boundary_estimate_share"
+    },
+    {
+      "id": "kpi:consecutive_estimated_bill_share",
+      "title": "Consecutive estimated bills",
+      "lane": "metrics",
+      "topic": "billing",
+      "kind": "metric",
+      "description": "Current estimated bills whose immediately preceding monthly bill for the same installation and account was also estimated. Missing months break the sequence; the first month has no in-year predecessor.",
+      "formula": "current documents continuing a 2+ month estimate sequence ÷ current documents",
+      "unit": "share",
+      "better": "lower",
+      "related": [],
+      "reference": "utilsim/m2c/kpis.py · consecutive_estimated_bill_share"
+    },
+    {
+      "id": "kpi:consecutive_zero_bill_share",
+      "title": "Consecutive zero-use bills",
+      "lane": "metrics",
+      "topic": "billing",
+      "kind": "metric",
+      "description": "Current bills with zero import and export consumption whose preceding monthly bill for the same installation and account also had zero consumption. Fixed charges may still apply.",
+      "formula": "current documents continuing a 2+ month zero-use sequence ÷ current documents",
+      "unit": "share",
+      "better": "lower",
+      "related": [],
+      "reference": "utilsim/m2c/kpis.py · consecutive_zero_bill_share"
+    },
+    {
+      "id": "kpi:bill_period_defect_share",
+      "title": "Bill period defects",
+      "lane": "metrics",
+      "topic": "billing",
+      "kind": "metric",
+      "description": "Current bills with non-finite, non-positive or overlapping periods for the same installation and account. Legitimate longer periods after a service interruption are allowed.",
+      "formula": "current documents failing period checks ÷ current documents",
+      "unit": "share",
+      "better": "lower",
+      "related": [],
+      "reference": "utilsim/m2c/kpis.py · bill_period_defect_share"
+    },
+    {
+      "id": "kpi:due_date_defect_share",
+      "title": "Invoice due-date defects",
+      "lane": "metrics",
+      "topic": "billing",
+      "kind": "metric",
+      "description": "Created invoices with missing/non-finite issue or due dates, or an original due date before issue.",
+      "formula": "invoices with invalid original due or issue dates ÷ created invoices",
+      "unit": "share",
+      "better": "lower",
+      "related": [],
+      "reference": "utilsim/m2c/kpis.py · due_date_defect_share"
+    },
+    {
+      "id": "kpi:rebill_share",
+      "title": "Cancel and rebill",
+      "lane": "metrics",
+      "topic": "billing",
+      "kind": "metric",
+      "description": "Documents created this year that explicitly replace another billing document. All versions created this year form the denominator.",
+      "formula": "replacement documents ÷ all documents created year to date",
+      "unit": "share",
+      "better": "lower",
+      "related": [],
+      "reference": "utilsim/m2c/kpis.py · rebill_share"
+    },
+    {
+      "id": "kpi:multiple_invoice_cycle_share",
+      "title": "Cycles with multiple invoices",
+      "lane": "metrics",
+      "topic": "billing",
+      "kind": "metric",
+      "description": "Account/cycle-month combinations represented on more than one invoice. Staggered services and corrective invoices can legitimately produce this; it is an audit indicator.",
+      "formula": "account/cycle combinations with 2+ invoices ÷ invoiced account/cycle combinations",
+      "unit": "share",
+      "better": "context",
+      "related": [],
+      "reference": "utilsim/m2c/kpis.py · multiple_invoice_cycle_share"
+    },
+    {
+      "id": "kpi:zero_customer_charge_share",
+      "title": "Invoices without a customer charge",
+      "lane": "metrics",
+      "topic": "billing",
+      "kind": "metric",
+      "description": "Created invoices with no non-zero fixed charge across their bill lines, as reconstructed by the engine tariff calculation. Zero-fixed-charge tariffs are included; this does not detect an external print omission.",
+      "formula": "invoices with no non-zero computed fixed charge ÷ created invoices",
+      "unit": "share",
+      "better": "lower",
+      "related": [],
+      "reference": "utilsim/m2c/kpis.py · zero_customer_charge_share"
+    },
+    {
+      "id": "kpi:move_prorated_charge_count",
+      "title": "Move-boundary prorated charges",
+      "lane": "metrics",
+      "topic": "billing",
+      "kind": "metric",
+      "description": "Move-boundary bills carrying a fixed charge prorated by the actual read-period duration. The engine prorates by read days, not by a separate move-in/out settlement period.",
+      "formula": "move-boundary documents with a non-zero duration-prorated fixed charge",
+      "unit": "count",
+      "better": "context",
+      "related": [],
+      "reference": "utilsim/m2c/kpis.py · move_prorated_charge_count"
+    },
+    {
+      "id": "kpi:invoices_pending_issue",
+      "title": "Invoices awaiting issue",
+      "lane": "metrics",
+      "topic": "billing",
+      "kind": "metric",
+      "description": "Invoices already created whose planned issue day is after the view date. This is print-lag workload; the engine does not record actual print completion.",
+      "formula": "count(created invoices with planned issue after view time)",
+      "unit": "count",
+      "better": "context",
+      "related": [],
+      "reference": "utilsim/m2c/kpis.py · invoices_pending_issue"
+    },
+    {
+      "id": "kpi:billing_exceptions",
+      "title": "Billing exceptions raised",
+      "lane": "metrics",
+      "topic": "billing",
+      "kind": "metric",
+      "description": "Billing-check and billing-dispute cases raised this year through the view date, including subsequently resolved cases. This is the model equivalent of a billing exception workload, not SAP BPEM telemetry.",
+      "formula": "count(year-to-date billing check and dispute cases)",
+      "unit": "count",
+      "better": "lower",
+      "related": [],
+      "reference": "utilsim/m2c/kpis.py · billing_exceptions"
+    },
+    {
+      "id": "kpi:active_billing_blocks",
+      "title": "Active billing blocks",
+      "lane": "metrics",
+      "topic": "billing",
+      "kind": "metric",
+      "description": "Current documents with a billing case that remain unreleased at the view date. Account-level invoice holds are counted separately.",
+      "formula": "count(current case-blocked documents not released by view time)",
+      "unit": "count",
+      "better": "lower",
+      "related": [],
+      "reference": "utilsim/m2c/kpis.py · active_billing_blocks"
+    },
+    {
+      "id": "kpi:active_invoice_holds",
+      "title": "Active invoice holds",
+      "lane": "metrics",
+      "topic": "billing",
+      "kind": "metric",
+      "description": "Account-level invoice holds in force at the view date.",
+      "formula": "count(hold start ≤ view time < hold end)",
+      "unit": "count",
+      "better": "lower",
+      "related": [],
+      "reference": "utilsim/m2c/kpis.py · active_invoice_holds"
+    },
+    {
+      "id": "kpi:meterless_billed_accounts",
+      "title": "Billed accounts without a linked meter",
+      "lane": "metrics",
+      "topic": "billing",
+      "kind": "metric",
+      "description": "Active accounts invoiced this year that have no meter linked through an active supply contract on the view date. This is a reference-integrity check, not a zero-consumption check.",
+      "formula": "count(active invoiced accounts without a current linked meter)",
+      "unit": "count",
+      "better": "lower",
+      "related": [],
+      "reference": "utilsim/m2c/kpis.py · meterless_billed_accounts"
+    },
+    {
+      "id": "kpi:active_reading_blocks",
+      "title": "Active read-release blocks",
+      "lane": "metrics",
+      "topic": "reading",
+      "kind": "metric",
+      "description": "Scheduled active register periods whose read was attempted, has a case, and remains unreleased. These are VEE/review holds; administrative meter-reading blocks are not separately modelled.",
+      "formula": "count(attempted register periods with a case and release after view time)",
+      "unit": "count",
+      "better": "lower",
+      "related": [],
+      "reference": "utilsim/m2c/kpis.py · active_reading_blocks"
+    },
+    {
+      "id": "kpi:outstanding_reads",
+      "title": "Open scheduled reads",
+      "lane": "metrics",
+      "topic": "reading",
+      "kind": "metric",
+      "description": "Scheduled active register periods due by the view date without a released value, including missing and held reads. Future and service-off periods are excluded.",
+      "formula": "count(due active register periods with release after view time)",
+      "unit": "count",
+      "better": "lower",
+      "related": [],
+      "reference": "utilsim/m2c/kpis.py · outstanding_reads"
+    },
+    {
+      "id": "kpi:early_read_share",
+      "title": "Reads taken early",
+      "lane": "metrics",
+      "topic": "reading",
+      "kind": "metric",
+      "description": "Actual observations taken on a calendar day before the scheduled read day. Estimates and missing observations are excluded.",
+      "formula": "early actual observations ÷ actual observations taken by view time",
+      "unit": "share",
+      "better": "context",
+      "related": [],
+      "reference": "utilsim/m2c/kpis.py · early_read_share"
+    },
+    {
+      "id": "kpi:late_read_share",
+      "title": "Reads taken late",
+      "lane": "metrics",
+      "topic": "reading",
+      "kind": "metric",
+      "description": "Actual observations taken on a calendar day after the scheduled read day. Same-day time-of-day differences do not count as late.",
+      "formula": "late actual observations ÷ actual observations taken by view time",
+      "unit": "share",
+      "better": "lower",
+      "related": [],
+      "reference": "utilsim/m2c/kpis.py · late_read_share"
+    },
+    {
+      "id": "kpi:active_implausibles",
+      "title": "Open implausible-read cases",
+      "lane": "metrics",
+      "topic": "reading",
+      "kind": "metric",
+      "description": "Unresolved VEE anomaly cases at the view date. Missing-read, billing, field-order and invoice-hold cases are excluded.",
+      "formula": "count(open VEE anomaly cases)",
+      "unit": "count",
+      "better": "lower",
+      "related": [],
+      "reference": "utilsim/m2c/kpis.py · active_implausibles"
+    },
+    {
+      "id": "kpi:active_meterless_accounts",
+      "title": "Active accounts without a linked meter",
+      "lane": "metrics",
+      "topic": "reading",
+      "kind": "metric",
+      "description": "Active accounts without a meter linked through an active contract, installation and service point. An unmetered tariff may be intentional; review the account.",
+      "formula": "count(active accounts with no current meter association)",
+      "unit": "count",
+      "better": "lower",
+      "related": [],
+      "reference": "utilsim/m2c/kpis.py · active_meterless_accounts"
+    },
+    {
+      "id": "kpi:orphaned_meters",
+      "title": "Meters without an active account",
+      "lane": "metrics",
+      "topic": "reading",
+      "kind": "metric",
+      "description": "Installed active meter records with no active supply contract linked to a known active account. Vacancies can be legitimate; retired meters are excluded.",
+      "formula": "count(active installed meters with no active account association)",
+      "unit": "count",
+      "better": "context",
+      "related": [],
+      "reference": "utilsim/m2c/kpis.py · orphaned_meters"
     }
   ],
   "edges": [
@@ -28559,7 +28923,7 @@
       "note": "Accounts supply the denominator.",
       "reference": "utilsim/m2c/kpis.py · measure",
       "explanation": {
-        "summary": "Supplies the account-count denominator; the engine guards it with max(1, account count).",
+        "summary": "Supplies the account-count denominator for the measure.",
         "formula": "VEE cases opened ÷ accounts × 1,000 × year_days / elapsed_days",
         "steps": [
           "Counts VEE cases opened year to date; the rate is annualised."
@@ -29207,7 +29571,7 @@
       "note": "Accounts supply the denominator.",
       "reference": "utilsim/m2c/kpis.py · measure",
       "explanation": {
-        "summary": "Supplies the account-count denominator; the engine guards it with max(1, account count).",
+        "summary": "Supplies the account-count denominator for the measure.",
         "formula": "cases opened ÷ accounts × 1,000 × year_days / elapsed_days",
         "steps": [
           "Counts cases opened year to date and annualises the rate."
@@ -29637,7 +30001,7 @@
       "note": "Accounts supply the denominator.",
       "reference": "utilsim/m2c/kpis.py · measure",
       "explanation": {
-        "summary": "Supplies the account-count denominator; the engine guards it with max(1, account count).",
+        "summary": "Supplies the account-count denominator for the measure.",
         "formula": "cases a person touched ÷ accounts × 1,000 × year_days / elapsed_days",
         "steps": [
           "Counts cases opened in the reporting window with a person-work event by the view date. Automation-only resolutions are excluded; the rate is annualised."
@@ -29963,7 +30327,7 @@
       "note": "Accounts supply the denominator.",
       "reference": "utilsim/m2c/kpis.py · measure",
       "explanation": {
-        "summary": "Supplies the account-count denominator; the engine guards it with max(1, account count).",
+        "summary": "Supplies the account-count denominator for the measure.",
         "formula": "cases open at view date ÷ accounts × 1,000",
         "steps": [
           "An open-case snapshot, not an annualised flow. Cases resolved later still count as open at this view date."
@@ -30688,7 +31052,7 @@
       "note": "Accounts supply the denominator.",
       "reference": "utilsim/m2c/kpis.py · measure",
       "explanation": {
-        "summary": "Supplies the account-count denominator; the engine guards it with max(1, account count).",
+        "summary": "Supplies the account-count denominator for the measure.",
         "formula": "recorded truck rolls ÷ accounts × 1,000 × year_days / elapsed_days",
         "steps": [
           "Uses the casework truck-roll count; related cases at a premise can share a visit."
@@ -32683,7 +33047,7 @@
       "note": "Accounts supply the denominator.",
       "reference": "utilsim/m2c/kpis.py · measure",
       "explanation": {
-        "summary": "Supplies the account-count denominator; the engine guards it with max(1, account count).",
+        "summary": "Supplies the account-count denominator for the measure.",
         "formula": "completed disconnections ÷ accounts × 1,000 × year_days / elapsed_days",
         "steps": [
           "Counts non-payment disconnections through the view date; notices alone are not disconnections."
@@ -33022,7 +33386,7 @@
       "note": "Accounts supply the denominator.",
       "reference": "utilsim/m2c/kpis.py · measure",
       "explanation": {
-        "summary": "Supplies the account-count denominator; the engine guards it with max(1, account count).",
+        "summary": "Supplies the account-count denominator for the measure.",
         "formula": "contacts ÷ accounts × 1,000 × year_days / elapsed_days",
         "steps": [
           "Includes all recorded contact kinds, including self-service, callbacks and abandonment; the rate is annualised."
@@ -33210,7 +33574,7 @@
       "note": "Accounts supply the denominator.",
       "reference": "utilsim/m2c/kpis.py · measure",
       "explanation": {
-        "summary": "Supplies the account-count denominator; the engine guards it with max(1, account count).",
+        "summary": "Supplies the account-count denominator for the measure.",
         "formula": "released orders not completed at view date ÷ accounts × 1,000",
         "steps": [
           "A backlog snapshot, not an annualised rate."
@@ -33428,7 +33792,7 @@
       "note": "Accounts supply the denominator.",
       "reference": "utilsim/m2c/kpis.py · measure",
       "explanation": {
-        "summary": "Supplies the account-count denominator; the engine guards it with max(1, account count).",
+        "summary": "Supplies the account-count denominator for the measure.",
         "formula": "Σ interrupted customer-minutes across utilities ÷ accounts",
         "steps": [
           "Adds the run’s utility interruption totals and divides by its account count. This is not a separate per-utility average."
@@ -33598,7 +33962,7 @@
       "note": "Accounts supply the denominator.",
       "reference": "utilsim/m2c/kpis.py · measure",
       "explanation": {
-        "summary": "Supplies the account-count denominator; the engine guards it with max(1, account count).",
+        "summary": "Supplies the account-count denominator for the measure.",
         "formula": "meter-to-cash process cost ÷ accounts",
         "steps": [
           "Includes case/billing/payment activities and reads. Contact-centre and field labour/materials are separate reported costs."
@@ -33794,7 +34158,7 @@
       "note": "Accounts supply the denominator.",
       "reference": "utilsim/m2c/kpis.py · measure",
       "explanation": {
-        "summary": "Supplies the account-count denominator; the engine guards it with max(1, account count).",
+        "summary": "Supplies the account-count denominator for the measure.",
         "formula": "(case carry + billing carry + receivable carry) ÷ accounts",
         "steps": [
           "Delay days are priced by the configured carry rates; see each carry input for its start and end dates."
@@ -33803,6 +34167,1078 @@
         "example": "",
         "references": [
           "utilsim/m2c/kpis.py · measure"
+        ],
+        "basis": "KPI calculation"
+      }
+    },
+    {
+      "source": "engine:accounts",
+      "target": "kpi:active_services",
+      "kind": "measure",
+      "note": "count(active supply contracts)",
+      "reference": "utilsim/m2c/kpis.py · measure",
+      "explanation": {
+        "summary": "Supplies account and supply-contract records, move dates, associations, and account-count denominators as defined by the measure.",
+        "formula": "count(active supply contracts)",
+        "steps": [
+          "Supply contracts active on the view date. A multi-service account contributes one contract per service."
+        ],
+        "conditions": [],
+        "example": "",
+        "references": [
+          "utilsim/m2c/kpis.py · measure",
+          "utilsim/m2c/billing_quality.py · measure_quality"
+        ],
+        "basis": "KPI calculation"
+      }
+    },
+    {
+      "source": "engine:accounts",
+      "target": "kpi:service_setup_defects",
+      "kind": "measure",
+      "note": "count(active contracts failing reference or uniqueness checks)",
+      "reference": "utilsim/m2c/kpis.py · measure",
+      "explanation": {
+        "summary": "Supplies account and supply-contract records, move dates, associations, and account-count denominators as defined by the measure.",
+        "formula": "count(active contracts failing reference or uniqueness checks)",
+        "steps": [
+          "Active contracts with a missing account or installation, a premise mismatch, or overlapping active contracts for one installation."
+        ],
+        "conditions": [],
+        "example": "",
+        "references": [
+          "utilsim/m2c/kpis.py · measure",
+          "utilsim/m2c/billing_quality.py · measure_quality"
+        ],
+        "basis": "KPI calculation"
+      }
+    },
+    {
+      "source": "engine:meters",
+      "target": "kpi:service_setup_defects",
+      "kind": "measure",
+      "note": "count(active contracts failing reference or uniqueness checks)",
+      "reference": "utilsim/m2c/kpis.py · measure",
+      "explanation": {
+        "summary": "Supplies meter, installation and service-point associations used for service setup and meter/account integrity checks.",
+        "formula": "count(active contracts failing reference or uniqueness checks)",
+        "steps": [
+          "Active contracts with a missing account or installation, a premise mismatch, or overlapping active contracts for one installation."
+        ],
+        "conditions": [],
+        "example": "",
+        "references": [
+          "utilsim/m2c/kpis.py · measure",
+          "utilsim/m2c/billing_quality.py · measure_quality"
+        ],
+        "basis": "KPI calculation"
+      }
+    },
+    {
+      "source": "engine:accounts",
+      "target": "kpi:move_ins",
+      "kind": "measure",
+      "note": "count(0 ≤ move-in day ≤ view day)",
+      "reference": "utilsim/m2c/kpis.py · measure",
+      "explanation": {
+        "summary": "Supplies account and supply-contract records, move dates, associations, and account-count denominators as defined by the measure.",
+        "formula": "count(0 ≤ move-in day ≤ view day)",
+        "steps": [
+          "Premises with a recorded move-in date this year through the view date."
+        ],
+        "conditions": [],
+        "example": "",
+        "references": [
+          "utilsim/m2c/kpis.py · measure",
+          "utilsim/m2c/billing_quality.py · measure_quality"
+        ],
+        "basis": "KPI calculation"
+      }
+    },
+    {
+      "source": "engine:accounts",
+      "target": "kpi:move_outs",
+      "kind": "measure",
+      "note": "count(0 ≤ move-out day ≤ view day)",
+      "reference": "utilsim/m2c/kpis.py · measure",
+      "explanation": {
+        "summary": "Supplies account and supply-contract records, move dates, associations, and account-count denominators as defined by the measure.",
+        "formula": "count(0 ≤ move-out day ≤ view day)",
+        "steps": [
+          "Premises with a recorded move-out date this year through the view date."
+        ],
+        "conditions": [],
+        "example": "",
+        "references": [
+          "utilsim/m2c/kpis.py · measure",
+          "utilsim/m2c/billing_quality.py · measure_quality"
+        ],
+        "basis": "KPI calculation"
+      }
+    },
+    {
+      "source": "engine:invoices",
+      "target": "kpi:net_terms_mismatch_share",
+      "kind": "measure",
+      "note": "invoices with original due − issued ≠ configured due days ÷ created invoices",
+      "reference": "utilsim/m2c/kpis.py · measure",
+      "explanation": {
+        "summary": "Supplies invoice amounts, included documents, creation/issue dates and due dates.",
+        "formula": "invoices with original due − issued ≠ configured due days ÷ created invoices",
+        "steps": [
+          "Created invoices whose original due date minus issue date differs from the configured payment term. Later payment arrangements do not count as defects."
+        ],
+        "conditions": [
+          "Measured through the selected view date. An empty share/average population is reported as no value, not zero."
+        ],
+        "example": "",
+        "references": [
+          "utilsim/m2c/kpis.py · measure",
+          "utilsim/m2c/billing_quality.py · measure_quality"
+        ],
+        "basis": "KPI calculation"
+      }
+    },
+    {
+      "source": "kpi.on_time_bill_days",
+      "target": "kpi:delayed_bill_share",
+      "kind": "definition",
+      "note": "Defines this KPI’s counting window; does not change the underlying events.",
+      "reference": "utilsim/m2c/kpis.py · delayed_bill_share",
+      "explanation": {
+        "summary": "kpi.on_time_bill_days supplies the comparison window or target for Delayed bills.",
+        "formula": "late or overdue unreleased current documents ÷ current documents",
+        "steps": [
+          "Current billing documents released after the bill window, or still unreleased after that window expires. Newly created bills still within the window are not late.",
+          "Changing this target changes how the recorded events are counted; it does not reschedule those events."
+        ],
+        "conditions": [],
+        "example": "",
+        "references": [
+          "utilsim/m2c/kpis.py · measure",
+          "utilsim/m2c/billing_quality.py · measure_quality"
+        ],
+        "basis": "Measurement definition"
+      }
+    },
+    {
+      "source": "engine:bills",
+      "target": "kpi:delayed_bill_share",
+      "kind": "measure",
+      "note": "late or overdue unreleased current documents ÷ current documents",
+      "reference": "utilsim/m2c/kpis.py · measure",
+      "explanation": {
+        "summary": "Supplies billing-document totals, creation/release timestamps and billing-case links.",
+        "formula": "late or overdue unreleased current documents ÷ current documents",
+        "steps": [
+          "Current billing documents released after the bill window, or still unreleased after that window expires. Newly created bills still within the window are not late."
+        ],
+        "conditions": [
+          "Measured through the selected view date. An empty share/average population is reported as no value, not zero."
+        ],
+        "example": "",
+        "references": [
+          "utilsim/m2c/kpis.py · measure",
+          "utilsim/m2c/billing_quality.py · measure_quality"
+        ],
+        "basis": "KPI calculation"
+      }
+    },
+    {
+      "source": "engine:schedule",
+      "target": "kpi:delayed_bill_share",
+      "kind": "measure",
+      "note": "late or overdue unreleased current documents ÷ current documents",
+      "reference": "utilsim/m2c/kpis.py · measure",
+      "explanation": {
+        "summary": "Supplies each bill’s scheduled read day from its installation’s main register. The bill’s release date is compared with this baseline.",
+        "formula": "late or overdue unreleased current documents ÷ current documents",
+        "steps": [
+          "Current billing documents released after the bill window, or still unreleased after that window expires. Newly created bills still within the window are not late."
+        ],
+        "conditions": [
+          "Measured through the selected view date. An empty share/average population is reported as no value, not zero."
+        ],
+        "example": "",
+        "references": [
+          "utilsim/m2c/kpis.py · measure",
+          "utilsim/m2c/billing_quality.py · measure_quality"
+        ],
+        "basis": "KPI calculation"
+      }
+    },
+    {
+      "source": "engine:bills",
+      "target": "kpi:estimated_bill_share",
+      "kind": "measure",
+      "note": "estimated current documents ÷ current documents",
+      "reference": "utilsim/m2c/kpis.py · measure",
+      "explanation": {
+        "summary": "Supplies billing-document totals, creation/release timestamps and billing-case links.",
+        "formula": "estimated current documents ÷ current documents",
+        "steps": [
+          "Current billing documents built on at least one estimated register. Reversed versions are excluded at the view date."
+        ],
+        "conditions": [
+          "Measured through the selected view date. An empty share/average population is reported as no value, not zero."
+        ],
+        "example": "",
+        "references": [
+          "utilsim/m2c/kpis.py · measure",
+          "utilsim/m2c/billing_quality.py · measure_quality"
+        ],
+        "basis": "KPI calculation"
+      }
+    },
+    {
+      "source": "engine:released",
+      "target": "kpi:estimated_bill_share",
+      "kind": "measure",
+      "note": "estimated current documents ÷ current documents",
+      "reference": "utilsim/m2c/kpis.py · measure",
+      "explanation": {
+        "summary": "Supplies released values, estimated status and the timestamp at which billing could use the read.",
+        "formula": "estimated current documents ÷ current documents",
+        "steps": [
+          "Current billing documents built on at least one estimated register. Reversed versions are excluded at the view date."
+        ],
+        "conditions": [
+          "Measured through the selected view date. An empty share/average population is reported as no value, not zero."
+        ],
+        "example": "",
+        "references": [
+          "utilsim/m2c/kpis.py · measure",
+          "utilsim/m2c/billing_quality.py · measure_quality"
+        ],
+        "basis": "KPI calculation"
+      }
+    },
+    {
+      "source": "engine:bills",
+      "target": "kpi:move_boundary_estimate_share",
+      "kind": "measure",
+      "note": "estimated move-boundary documents ÷ move-boundary documents",
+      "reference": "utilsim/m2c/kpis.py · measure",
+      "explanation": {
+        "summary": "Supplies billing-document totals, creation/release timestamps and billing-case links.",
+        "formula": "estimated move-boundary documents ÷ move-boundary documents",
+        "steps": [
+          "Estimated current bills whose read period spans a recorded move-in or move-out. This is a boundary check, not a separate first/final invoice workflow."
+        ],
+        "conditions": [
+          "Measured through the selected view date. An empty share/average population is reported as no value, not zero."
+        ],
+        "example": "",
+        "references": [
+          "utilsim/m2c/kpis.py · measure",
+          "utilsim/m2c/billing_quality.py · measure_quality"
+        ],
+        "basis": "KPI calculation"
+      }
+    },
+    {
+      "source": "engine:accounts",
+      "target": "kpi:move_boundary_estimate_share",
+      "kind": "measure",
+      "note": "estimated move-boundary documents ÷ move-boundary documents",
+      "reference": "utilsim/m2c/kpis.py · measure",
+      "explanation": {
+        "summary": "Supplies account and supply-contract records, move dates, associations, and account-count denominators as defined by the measure.",
+        "formula": "estimated move-boundary documents ÷ move-boundary documents",
+        "steps": [
+          "Estimated current bills whose read period spans a recorded move-in or move-out. This is a boundary check, not a separate first/final invoice workflow."
+        ],
+        "conditions": [
+          "Measured through the selected view date. An empty share/average population is reported as no value, not zero."
+        ],
+        "example": "",
+        "references": [
+          "utilsim/m2c/kpis.py · measure",
+          "utilsim/m2c/billing_quality.py · measure_quality"
+        ],
+        "basis": "KPI calculation"
+      }
+    },
+    {
+      "source": "engine:bills",
+      "target": "kpi:consecutive_estimated_bill_share",
+      "kind": "measure",
+      "note": "current documents continuing a 2+ month estimate sequence ÷ current documents",
+      "reference": "utilsim/m2c/kpis.py · measure",
+      "explanation": {
+        "summary": "Supplies billing-document totals, creation/release timestamps and billing-case links.",
+        "formula": "current documents continuing a 2+ month estimate sequence ÷ current documents",
+        "steps": [
+          "Current estimated bills whose immediately preceding monthly bill for the same installation and account was also estimated. Missing months break the sequence; the first month has no in-year predecessor."
+        ],
+        "conditions": [
+          "Measured through the selected view date. An empty share/average population is reported as no value, not zero."
+        ],
+        "example": "",
+        "references": [
+          "utilsim/m2c/kpis.py · measure",
+          "utilsim/m2c/billing_quality.py · measure_quality"
+        ],
+        "basis": "KPI calculation"
+      }
+    },
+    {
+      "source": "engine:bills",
+      "target": "kpi:consecutive_zero_bill_share",
+      "kind": "measure",
+      "note": "current documents continuing a 2+ month zero-use sequence ÷ current documents",
+      "reference": "utilsim/m2c/kpis.py · measure",
+      "explanation": {
+        "summary": "Supplies billing-document totals, creation/release timestamps and billing-case links.",
+        "formula": "current documents continuing a 2+ month zero-use sequence ÷ current documents",
+        "steps": [
+          "Current bills with zero import and export consumption whose preceding monthly bill for the same installation and account also had zero consumption. Fixed charges may still apply."
+        ],
+        "conditions": [
+          "Measured through the selected view date. An empty share/average population is reported as no value, not zero."
+        ],
+        "example": "",
+        "references": [
+          "utilsim/m2c/kpis.py · measure",
+          "utilsim/m2c/billing_quality.py · measure_quality"
+        ],
+        "basis": "KPI calculation"
+      }
+    },
+    {
+      "source": "engine:bills",
+      "target": "kpi:bill_period_defect_share",
+      "kind": "measure",
+      "note": "current documents failing period checks ÷ current documents",
+      "reference": "utilsim/m2c/kpis.py · measure",
+      "explanation": {
+        "summary": "Supplies billing-document totals, creation/release timestamps and billing-case links.",
+        "formula": "current documents failing period checks ÷ current documents",
+        "steps": [
+          "Current bills with non-finite, non-positive or overlapping periods for the same installation and account. Legitimate longer periods after a service interruption are allowed."
+        ],
+        "conditions": [
+          "Measured through the selected view date. An empty share/average population is reported as no value, not zero."
+        ],
+        "example": "",
+        "references": [
+          "utilsim/m2c/kpis.py · measure",
+          "utilsim/m2c/billing_quality.py · measure_quality"
+        ],
+        "basis": "KPI calculation"
+      }
+    },
+    {
+      "source": "engine:schedule",
+      "target": "kpi:bill_period_defect_share",
+      "kind": "measure",
+      "note": "current documents failing period checks ÷ current documents",
+      "reference": "utilsim/m2c/kpis.py · measure",
+      "explanation": {
+        "summary": "Supplies the read periods used to check billing period boundaries.",
+        "formula": "current documents failing period checks ÷ current documents",
+        "steps": [
+          "Current bills with non-finite, non-positive or overlapping periods for the same installation and account. Legitimate longer periods after a service interruption are allowed."
+        ],
+        "conditions": [
+          "Measured through the selected view date. An empty share/average population is reported as no value, not zero."
+        ],
+        "example": "",
+        "references": [
+          "utilsim/m2c/kpis.py · measure",
+          "utilsim/m2c/billing_quality.py · measure_quality"
+        ],
+        "basis": "KPI calculation"
+      }
+    },
+    {
+      "source": "engine:invoices",
+      "target": "kpi:due_date_defect_share",
+      "kind": "measure",
+      "note": "invoices with invalid original due or issue dates ÷ created invoices",
+      "reference": "utilsim/m2c/kpis.py · measure",
+      "explanation": {
+        "summary": "Supplies invoice amounts, included documents, creation/issue dates and due dates.",
+        "formula": "invoices with invalid original due or issue dates ÷ created invoices",
+        "steps": [
+          "Created invoices with missing/non-finite issue or due dates, or an original due date before issue."
+        ],
+        "conditions": [
+          "Measured through the selected view date. An empty share/average population is reported as no value, not zero."
+        ],
+        "example": "",
+        "references": [
+          "utilsim/m2c/kpis.py · measure",
+          "utilsim/m2c/billing_quality.py · measure_quality"
+        ],
+        "basis": "KPI calculation"
+      }
+    },
+    {
+      "source": "engine:bills",
+      "target": "kpi:rebill_share",
+      "kind": "measure",
+      "note": "replacement documents ÷ all documents created year to date",
+      "reference": "utilsim/m2c/kpis.py · measure",
+      "explanation": {
+        "summary": "Supplies billing-document totals, creation/release timestamps and billing-case links.",
+        "formula": "replacement documents ÷ all documents created year to date",
+        "steps": [
+          "Documents created this year that explicitly replace another billing document. All versions created this year form the denominator."
+        ],
+        "conditions": [
+          "Measured through the selected view date. An empty share/average population is reported as no value, not zero."
+        ],
+        "example": "",
+        "references": [
+          "utilsim/m2c/kpis.py · measure",
+          "utilsim/m2c/billing_quality.py · measure_quality"
+        ],
+        "basis": "KPI calculation"
+      }
+    },
+    {
+      "source": "engine:invoices",
+      "target": "kpi:multiple_invoice_cycle_share",
+      "kind": "measure",
+      "note": "account/cycle combinations with 2+ invoices ÷ invoiced account/cycle combinations",
+      "reference": "utilsim/m2c/kpis.py · measure",
+      "explanation": {
+        "summary": "Supplies invoice amounts, included documents, creation/issue dates and due dates.",
+        "formula": "account/cycle combinations with 2+ invoices ÷ invoiced account/cycle combinations",
+        "steps": [
+          "Account/cycle-month combinations represented on more than one invoice. Staggered services and corrective invoices can legitimately produce this; it is an audit indicator."
+        ],
+        "conditions": [
+          "Measured through the selected view date. An empty share/average population is reported as no value, not zero."
+        ],
+        "example": "",
+        "references": [
+          "utilsim/m2c/kpis.py · measure",
+          "utilsim/m2c/billing_quality.py · measure_quality"
+        ],
+        "basis": "KPI calculation"
+      }
+    },
+    {
+      "source": "engine:bills",
+      "target": "kpi:multiple_invoice_cycle_share",
+      "kind": "measure",
+      "note": "account/cycle combinations with 2+ invoices ÷ invoiced account/cycle combinations",
+      "reference": "utilsim/m2c/kpis.py · measure",
+      "explanation": {
+        "summary": "Supplies billing-document totals, creation/release timestamps and billing-case links.",
+        "formula": "account/cycle combinations with 2+ invoices ÷ invoiced account/cycle combinations",
+        "steps": [
+          "Account/cycle-month combinations represented on more than one invoice. Staggered services and corrective invoices can legitimately produce this; it is an audit indicator."
+        ],
+        "conditions": [
+          "Measured through the selected view date. An empty share/average population is reported as no value, not zero."
+        ],
+        "example": "",
+        "references": [
+          "utilsim/m2c/kpis.py · measure",
+          "utilsim/m2c/billing_quality.py · measure_quality"
+        ],
+        "basis": "KPI calculation"
+      }
+    },
+    {
+      "source": "engine:invoices",
+      "target": "kpi:zero_customer_charge_share",
+      "kind": "measure",
+      "note": "invoices with no non-zero computed fixed charge ÷ created invoices",
+      "reference": "utilsim/m2c/kpis.py · measure",
+      "explanation": {
+        "summary": "Supplies invoice amounts, included documents, creation/issue dates and due dates.",
+        "formula": "invoices with no non-zero computed fixed charge ÷ created invoices",
+        "steps": [
+          "Created invoices with no non-zero fixed charge across their bill lines, as reconstructed by the engine tariff calculation. Zero-fixed-charge tariffs are included; this does not detect an external print omission."
+        ],
+        "conditions": [
+          "Measured through the selected view date. An empty share/average population is reported as no value, not zero."
+        ],
+        "example": "",
+        "references": [
+          "utilsim/m2c/kpis.py · measure",
+          "utilsim/m2c/billing_quality.py · measure_quality"
+        ],
+        "basis": "KPI calculation"
+      }
+    },
+    {
+      "source": "engine:bills",
+      "target": "kpi:zero_customer_charge_share",
+      "kind": "measure",
+      "note": "invoices with no non-zero computed fixed charge ÷ created invoices",
+      "reference": "utilsim/m2c/kpis.py · measure",
+      "explanation": {
+        "summary": "Supplies billing-document totals, creation/release timestamps and billing-case links.",
+        "formula": "invoices with no non-zero computed fixed charge ÷ created invoices",
+        "steps": [
+          "Created invoices with no non-zero fixed charge across their bill lines, as reconstructed by the engine tariff calculation. Zero-fixed-charge tariffs are included; this does not detect an external print omission."
+        ],
+        "conditions": [
+          "Measured through the selected view date. An empty share/average population is reported as no value, not zero."
+        ],
+        "example": "",
+        "references": [
+          "utilsim/m2c/kpis.py · measure",
+          "utilsim/m2c/billing_quality.py · measure_quality"
+        ],
+        "basis": "KPI calculation"
+      }
+    },
+    {
+      "source": "engine:bills",
+      "target": "kpi:move_prorated_charge_count",
+      "kind": "measure",
+      "note": "move-boundary documents with a non-zero duration-prorated fixed charge",
+      "reference": "utilsim/m2c/kpis.py · measure",
+      "explanation": {
+        "summary": "Supplies billing-document totals, creation/release timestamps and billing-case links.",
+        "formula": "move-boundary documents with a non-zero duration-prorated fixed charge",
+        "steps": [
+          "Move-boundary bills carrying a fixed charge prorated by the actual read-period duration. The engine prorates by read days, not by a separate move-in/out settlement period."
+        ],
+        "conditions": [],
+        "example": "",
+        "references": [
+          "utilsim/m2c/kpis.py · measure",
+          "utilsim/m2c/billing_quality.py · measure_quality"
+        ],
+        "basis": "KPI calculation"
+      }
+    },
+    {
+      "source": "engine:accounts",
+      "target": "kpi:move_prorated_charge_count",
+      "kind": "measure",
+      "note": "move-boundary documents with a non-zero duration-prorated fixed charge",
+      "reference": "utilsim/m2c/kpis.py · measure",
+      "explanation": {
+        "summary": "Supplies account and supply-contract records, move dates, associations, and account-count denominators as defined by the measure.",
+        "formula": "move-boundary documents with a non-zero duration-prorated fixed charge",
+        "steps": [
+          "Move-boundary bills carrying a fixed charge prorated by the actual read-period duration. The engine prorates by read days, not by a separate move-in/out settlement period."
+        ],
+        "conditions": [],
+        "example": "",
+        "references": [
+          "utilsim/m2c/kpis.py · measure",
+          "utilsim/m2c/billing_quality.py · measure_quality"
+        ],
+        "basis": "KPI calculation"
+      }
+    },
+    {
+      "source": "engine:invoices",
+      "target": "kpi:invoices_pending_issue",
+      "kind": "measure",
+      "note": "count(created invoices with planned issue after view time)",
+      "reference": "utilsim/m2c/kpis.py · measure",
+      "explanation": {
+        "summary": "Supplies invoice amounts, included documents, creation/issue dates and due dates.",
+        "formula": "count(created invoices with planned issue after view time)",
+        "steps": [
+          "Invoices already created whose planned issue day is after the view date. This is print-lag workload; the engine does not record actual print completion."
+        ],
+        "conditions": [],
+        "example": "",
+        "references": [
+          "utilsim/m2c/kpis.py · measure",
+          "utilsim/m2c/billing_quality.py · measure_quality"
+        ],
+        "basis": "KPI calculation"
+      }
+    },
+    {
+      "source": "engine:cases",
+      "target": "kpi:billing_exceptions",
+      "kind": "measure",
+      "note": "count(year-to-date billing check and dispute cases)",
+      "reference": "utilsim/m2c/kpis.py · measure",
+      "explanation": {
+        "summary": "Supplies case type, creation, work, resolution and open/closed status at the view date.",
+        "formula": "count(year-to-date billing check and dispute cases)",
+        "steps": [
+          "Billing-check and billing-dispute cases raised this year through the view date, including subsequently resolved cases. This is the model equivalent of a billing exception workload, not SAP BPEM telemetry."
+        ],
+        "conditions": [],
+        "example": "",
+        "references": [
+          "utilsim/m2c/kpis.py · measure",
+          "utilsim/m2c/billing_quality.py · measure_quality"
+        ],
+        "basis": "KPI calculation"
+      }
+    },
+    {
+      "source": "engine:bills",
+      "target": "kpi:active_billing_blocks",
+      "kind": "measure",
+      "note": "count(current case-blocked documents not released by view time)",
+      "reference": "utilsim/m2c/kpis.py · measure",
+      "explanation": {
+        "summary": "Supplies billing-document totals, creation/release timestamps and billing-case links.",
+        "formula": "count(current case-blocked documents not released by view time)",
+        "steps": [
+          "Current documents with a billing case that remain unreleased at the view date. Account-level invoice holds are counted separately."
+        ],
+        "conditions": [],
+        "example": "",
+        "references": [
+          "utilsim/m2c/kpis.py · measure",
+          "utilsim/m2c/billing_quality.py · measure_quality"
+        ],
+        "basis": "KPI calculation"
+      }
+    },
+    {
+      "source": "engine:cases",
+      "target": "kpi:active_billing_blocks",
+      "kind": "measure",
+      "note": "count(current case-blocked documents not released by view time)",
+      "reference": "utilsim/m2c/kpis.py · measure",
+      "explanation": {
+        "summary": "Supplies case type, creation, work, resolution and open/closed status at the view date.",
+        "formula": "count(current case-blocked documents not released by view time)",
+        "steps": [
+          "Current documents with a billing case that remain unreleased at the view date. Account-level invoice holds are counted separately."
+        ],
+        "conditions": [],
+        "example": "",
+        "references": [
+          "utilsim/m2c/kpis.py · measure",
+          "utilsim/m2c/billing_quality.py · measure_quality"
+        ],
+        "basis": "KPI calculation"
+      }
+    },
+    {
+      "source": "engine:cases",
+      "target": "kpi:active_invoice_holds",
+      "kind": "measure",
+      "note": "count(hold start ≤ view time < hold end)",
+      "reference": "utilsim/m2c/kpis.py · measure",
+      "explanation": {
+        "summary": "Supplies case type, creation, work, resolution and open/closed status at the view date.",
+        "formula": "count(hold start ≤ view time < hold end)",
+        "steps": [
+          "Account-level invoice holds in force at the view date."
+        ],
+        "conditions": [],
+        "example": "",
+        "references": [
+          "utilsim/m2c/kpis.py · measure",
+          "utilsim/m2c/billing_quality.py · measure_quality"
+        ],
+        "basis": "KPI calculation"
+      }
+    },
+    {
+      "source": "engine:invoices",
+      "target": "kpi:active_invoice_holds",
+      "kind": "measure",
+      "note": "count(hold start ≤ view time < hold end)",
+      "reference": "utilsim/m2c/kpis.py · measure",
+      "explanation": {
+        "summary": "Supplies invoice amounts, included documents, creation/issue dates and due dates.",
+        "formula": "count(hold start ≤ view time < hold end)",
+        "steps": [
+          "Account-level invoice holds in force at the view date."
+        ],
+        "conditions": [],
+        "example": "",
+        "references": [
+          "utilsim/m2c/kpis.py · measure",
+          "utilsim/m2c/billing_quality.py · measure_quality"
+        ],
+        "basis": "KPI calculation"
+      }
+    },
+    {
+      "source": "engine:accounts",
+      "target": "kpi:meterless_billed_accounts",
+      "kind": "measure",
+      "note": "Accounts supply the denominator.",
+      "reference": "utilsim/m2c/kpis.py · measure",
+      "explanation": {
+        "summary": "Supplies account and supply-contract records, move dates, associations, and account-count denominators as defined by the measure.",
+        "formula": "count(active invoiced accounts without a current linked meter)",
+        "steps": [
+          "Active accounts invoiced this year that have no meter linked through an active supply contract on the view date. This is a reference-integrity check, not a zero-consumption check."
+        ],
+        "conditions": [],
+        "example": "",
+        "references": [
+          "utilsim/m2c/kpis.py · measure",
+          "utilsim/m2c/billing_quality.py · measure_quality"
+        ],
+        "basis": "KPI calculation"
+      }
+    },
+    {
+      "source": "engine:meters",
+      "target": "kpi:meterless_billed_accounts",
+      "kind": "measure",
+      "note": "count(active invoiced accounts without a current linked meter)",
+      "reference": "utilsim/m2c/kpis.py · measure",
+      "explanation": {
+        "summary": "Supplies meter, installation and service-point associations used for service setup and meter/account integrity checks.",
+        "formula": "count(active invoiced accounts without a current linked meter)",
+        "steps": [
+          "Active accounts invoiced this year that have no meter linked through an active supply contract on the view date. This is a reference-integrity check, not a zero-consumption check."
+        ],
+        "conditions": [],
+        "example": "",
+        "references": [
+          "utilsim/m2c/kpis.py · measure",
+          "utilsim/m2c/billing_quality.py · measure_quality"
+        ],
+        "basis": "KPI calculation"
+      }
+    },
+    {
+      "source": "engine:invoices",
+      "target": "kpi:meterless_billed_accounts",
+      "kind": "measure",
+      "note": "count(active invoiced accounts without a current linked meter)",
+      "reference": "utilsim/m2c/kpis.py · measure",
+      "explanation": {
+        "summary": "Supplies invoice amounts, included documents, creation/issue dates and due dates.",
+        "formula": "count(active invoiced accounts without a current linked meter)",
+        "steps": [
+          "Active accounts invoiced this year that have no meter linked through an active supply contract on the view date. This is a reference-integrity check, not a zero-consumption check."
+        ],
+        "conditions": [],
+        "example": "",
+        "references": [
+          "utilsim/m2c/kpis.py · measure",
+          "utilsim/m2c/billing_quality.py · measure_quality"
+        ],
+        "basis": "KPI calculation"
+      }
+    },
+    {
+      "source": "engine:reads",
+      "target": "kpi:active_reading_blocks",
+      "kind": "measure",
+      "note": "count(attempted register periods with a case and release after view time)",
+      "reference": "utilsim/m2c/kpis.py · measure",
+      "explanation": {
+        "summary": "Supplies observed/missing readings and their underlying truth and attempt status.",
+        "formula": "count(attempted register periods with a case and release after view time)",
+        "steps": [
+          "Scheduled active register periods whose read was attempted, has a case, and remains unreleased. These are VEE/review holds; administrative meter-reading blocks are not separately modelled."
+        ],
+        "conditions": [],
+        "example": "",
+        "references": [
+          "utilsim/m2c/kpis.py · measure",
+          "utilsim/m2c/billing_quality.py · measure_quality"
+        ],
+        "basis": "KPI calculation"
+      }
+    },
+    {
+      "source": "engine:released",
+      "target": "kpi:active_reading_blocks",
+      "kind": "measure",
+      "note": "count(attempted register periods with a case and release after view time)",
+      "reference": "utilsim/m2c/kpis.py · measure",
+      "explanation": {
+        "summary": "Supplies released values, estimated status and the timestamp at which billing could use the read.",
+        "formula": "count(attempted register periods with a case and release after view time)",
+        "steps": [
+          "Scheduled active register periods whose read was attempted, has a case, and remains unreleased. These are VEE/review holds; administrative meter-reading blocks are not separately modelled."
+        ],
+        "conditions": [],
+        "example": "",
+        "references": [
+          "utilsim/m2c/kpis.py · measure",
+          "utilsim/m2c/billing_quality.py · measure_quality"
+        ],
+        "basis": "KPI calculation"
+      }
+    },
+    {
+      "source": "engine:cases",
+      "target": "kpi:active_reading_blocks",
+      "kind": "measure",
+      "note": "count(attempted register periods with a case and release after view time)",
+      "reference": "utilsim/m2c/kpis.py · measure",
+      "explanation": {
+        "summary": "Supplies case type, creation, work, resolution and open/closed status at the view date.",
+        "formula": "count(attempted register periods with a case and release after view time)",
+        "steps": [
+          "Scheduled active register periods whose read was attempted, has a case, and remains unreleased. These are VEE/review holds; administrative meter-reading blocks are not separately modelled."
+        ],
+        "conditions": [],
+        "example": "",
+        "references": [
+          "utilsim/m2c/kpis.py · measure",
+          "utilsim/m2c/billing_quality.py · measure_quality"
+        ],
+        "basis": "KPI calculation"
+      }
+    },
+    {
+      "source": "engine:schedule",
+      "target": "kpi:outstanding_reads",
+      "kind": "measure",
+      "note": "count(due active register periods with release after view time)",
+      "reference": "utilsim/m2c/kpis.py · measure",
+      "explanation": {
+        "summary": "Supplies each register period’s scheduled day for identifying due reads and comparing actual observation dates.",
+        "formula": "count(due active register periods with release after view time)",
+        "steps": [
+          "Scheduled active register periods due by the view date without a released value, including missing and held reads. Future and service-off periods are excluded."
+        ],
+        "conditions": [],
+        "example": "",
+        "references": [
+          "utilsim/m2c/kpis.py · measure",
+          "utilsim/m2c/billing_quality.py · measure_quality"
+        ],
+        "basis": "KPI calculation"
+      }
+    },
+    {
+      "source": "engine:released",
+      "target": "kpi:outstanding_reads",
+      "kind": "measure",
+      "note": "count(due active register periods with release after view time)",
+      "reference": "utilsim/m2c/kpis.py · measure",
+      "explanation": {
+        "summary": "Supplies released values, estimated status and the timestamp at which billing could use the read.",
+        "formula": "count(due active register periods with release after view time)",
+        "steps": [
+          "Scheduled active register periods due by the view date without a released value, including missing and held reads. Future and service-off periods are excluded."
+        ],
+        "conditions": [],
+        "example": "",
+        "references": [
+          "utilsim/m2c/kpis.py · measure",
+          "utilsim/m2c/billing_quality.py · measure_quality"
+        ],
+        "basis": "KPI calculation"
+      }
+    },
+    {
+      "source": "engine:schedule",
+      "target": "kpi:early_read_share",
+      "kind": "measure",
+      "note": "early actual observations ÷ actual observations taken by view time",
+      "reference": "utilsim/m2c/kpis.py · measure",
+      "explanation": {
+        "summary": "Supplies each register period’s scheduled day for identifying due reads and comparing actual observation dates.",
+        "formula": "early actual observations ÷ actual observations taken by view time",
+        "steps": [
+          "Actual observations taken on a calendar day before the scheduled read day. Estimates and missing observations are excluded."
+        ],
+        "conditions": [
+          "Measured through the selected view date. An empty share/average population is reported as no value, not zero."
+        ],
+        "example": "",
+        "references": [
+          "utilsim/m2c/kpis.py · measure",
+          "utilsim/m2c/billing_quality.py · measure_quality"
+        ],
+        "basis": "KPI calculation"
+      }
+    },
+    {
+      "source": "engine:reads",
+      "target": "kpi:early_read_share",
+      "kind": "measure",
+      "note": "early actual observations ÷ actual observations taken by view time",
+      "reference": "utilsim/m2c/kpis.py · measure",
+      "explanation": {
+        "summary": "Supplies observed/missing readings and their underlying truth and attempt status.",
+        "formula": "early actual observations ÷ actual observations taken by view time",
+        "steps": [
+          "Actual observations taken on a calendar day before the scheduled read day. Estimates and missing observations are excluded."
+        ],
+        "conditions": [
+          "Measured through the selected view date. An empty share/average population is reported as no value, not zero."
+        ],
+        "example": "",
+        "references": [
+          "utilsim/m2c/kpis.py · measure",
+          "utilsim/m2c/billing_quality.py · measure_quality"
+        ],
+        "basis": "KPI calculation"
+      }
+    },
+    {
+      "source": "engine:schedule",
+      "target": "kpi:late_read_share",
+      "kind": "measure",
+      "note": "late actual observations ÷ actual observations taken by view time",
+      "reference": "utilsim/m2c/kpis.py · measure",
+      "explanation": {
+        "summary": "Supplies each register period’s scheduled day for identifying due reads and comparing actual observation dates.",
+        "formula": "late actual observations ÷ actual observations taken by view time",
+        "steps": [
+          "Actual observations taken on a calendar day after the scheduled read day. Same-day time-of-day differences do not count as late."
+        ],
+        "conditions": [
+          "Measured through the selected view date. An empty share/average population is reported as no value, not zero."
+        ],
+        "example": "",
+        "references": [
+          "utilsim/m2c/kpis.py · measure",
+          "utilsim/m2c/billing_quality.py · measure_quality"
+        ],
+        "basis": "KPI calculation"
+      }
+    },
+    {
+      "source": "engine:reads",
+      "target": "kpi:late_read_share",
+      "kind": "measure",
+      "note": "late actual observations ÷ actual observations taken by view time",
+      "reference": "utilsim/m2c/kpis.py · measure",
+      "explanation": {
+        "summary": "Supplies observed/missing readings and their underlying truth and attempt status.",
+        "formula": "late actual observations ÷ actual observations taken by view time",
+        "steps": [
+          "Actual observations taken on a calendar day after the scheduled read day. Same-day time-of-day differences do not count as late."
+        ],
+        "conditions": [
+          "Measured through the selected view date. An empty share/average population is reported as no value, not zero."
+        ],
+        "example": "",
+        "references": [
+          "utilsim/m2c/kpis.py · measure",
+          "utilsim/m2c/billing_quality.py · measure_quality"
+        ],
+        "basis": "KPI calculation"
+      }
+    },
+    {
+      "source": "engine:cases",
+      "target": "kpi:active_implausibles",
+      "kind": "measure",
+      "note": "count(open VEE anomaly cases)",
+      "reference": "utilsim/m2c/kpis.py · measure",
+      "explanation": {
+        "summary": "Supplies case type, creation, work, resolution and open/closed status at the view date.",
+        "formula": "count(open VEE anomaly cases)",
+        "steps": [
+          "Unresolved VEE anomaly cases at the view date. Missing-read, billing, field-order and invoice-hold cases are excluded."
+        ],
+        "conditions": [],
+        "example": "",
+        "references": [
+          "utilsim/m2c/kpis.py · measure",
+          "utilsim/m2c/billing_quality.py · measure_quality"
+        ],
+        "basis": "KPI calculation"
+      }
+    },
+    {
+      "source": "engine:decisions",
+      "target": "kpi:active_implausibles",
+      "kind": "measure",
+      "note": "count(open VEE anomaly cases)",
+      "reference": "utilsim/m2c/kpis.py · measure",
+      "explanation": {
+        "summary": "Supplies validation acceptance/flagging and its classification against injected truth.",
+        "formula": "count(open VEE anomaly cases)",
+        "steps": [
+          "Unresolved VEE anomaly cases at the view date. Missing-read, billing, field-order and invoice-hold cases are excluded."
+        ],
+        "conditions": [],
+        "example": "",
+        "references": [
+          "utilsim/m2c/kpis.py · measure",
+          "utilsim/m2c/billing_quality.py · measure_quality"
+        ],
+        "basis": "KPI calculation"
+      }
+    },
+    {
+      "source": "engine:accounts",
+      "target": "kpi:active_meterless_accounts",
+      "kind": "measure",
+      "note": "Accounts supply the denominator.",
+      "reference": "utilsim/m2c/kpis.py · measure",
+      "explanation": {
+        "summary": "Supplies account and supply-contract records, move dates, associations, and account-count denominators as defined by the measure.",
+        "formula": "count(active accounts with no current meter association)",
+        "steps": [
+          "Active accounts without a meter linked through an active contract, installation and service point. An unmetered tariff may be intentional; review the account."
+        ],
+        "conditions": [],
+        "example": "",
+        "references": [
+          "utilsim/m2c/kpis.py · measure",
+          "utilsim/m2c/billing_quality.py · measure_quality"
+        ],
+        "basis": "KPI calculation"
+      }
+    },
+    {
+      "source": "engine:meters",
+      "target": "kpi:active_meterless_accounts",
+      "kind": "measure",
+      "note": "count(active accounts with no current meter association)",
+      "reference": "utilsim/m2c/kpis.py · measure",
+      "explanation": {
+        "summary": "Supplies meter, installation and service-point associations used for service setup and meter/account integrity checks.",
+        "formula": "count(active accounts with no current meter association)",
+        "steps": [
+          "Active accounts without a meter linked through an active contract, installation and service point. An unmetered tariff may be intentional; review the account."
+        ],
+        "conditions": [],
+        "example": "",
+        "references": [
+          "utilsim/m2c/kpis.py · measure",
+          "utilsim/m2c/billing_quality.py · measure_quality"
+        ],
+        "basis": "KPI calculation"
+      }
+    },
+    {
+      "source": "engine:meters",
+      "target": "kpi:orphaned_meters",
+      "kind": "measure",
+      "note": "count(active installed meters with no active account association)",
+      "reference": "utilsim/m2c/kpis.py · measure",
+      "explanation": {
+        "summary": "Supplies meter, installation and service-point associations used for service setup and meter/account integrity checks.",
+        "formula": "count(active installed meters with no active account association)",
+        "steps": [
+          "Installed active meter records with no active supply contract linked to a known active account. Vacancies can be legitimate; retired meters are excluded."
+        ],
+        "conditions": [],
+        "example": "",
+        "references": [
+          "utilsim/m2c/kpis.py · measure",
+          "utilsim/m2c/billing_quality.py · measure_quality"
+        ],
+        "basis": "KPI calculation"
+      }
+    },
+    {
+      "source": "engine:accounts",
+      "target": "kpi:orphaned_meters",
+      "kind": "measure",
+      "note": "count(active installed meters with no active account association)",
+      "reference": "utilsim/m2c/kpis.py · measure",
+      "explanation": {
+        "summary": "Supplies account and supply-contract records, move dates, associations, and account-count denominators as defined by the measure.",
+        "formula": "count(active installed meters with no active account association)",
+        "steps": [
+          "Installed active meter records with no active supply contract linked to a known active account. Vacancies can be legitimate; retired meters are excluded."
+        ],
+        "conditions": [],
+        "example": "",
+        "references": [
+          "utilsim/m2c/kpis.py · measure",
+          "utilsim/m2c/billing_quality.py · measure_quality"
         ],
         "basis": "KPI calculation"
       }

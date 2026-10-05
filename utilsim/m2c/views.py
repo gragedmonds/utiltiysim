@@ -860,6 +860,7 @@ def order_json(run: M2CRun, o: ords.Order, T: float) -> dict:
     out = {"schemaVersion": "field-order/1.0", "orderId": o.id, "stage": stage,
            "systemStatus": ords.SYSTEM_STATUS[stage], "editable": stage == "Draft",
            "fields": {k: fields.get(k) for k in ords.FIELDS if k in fields}, "components": comps,
+           "workType": ords.work_profile(fields.get("activityType")),
            "source": {"caseId": o.source_case or (o.source.id if o.source is not None else None),
                       "readId": o.source_read or (run.read_id(r, m) if r >= 0 else None),
                       "kind": "case" if o.source_case else "read"},

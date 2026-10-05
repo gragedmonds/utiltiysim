@@ -141,17 +141,18 @@ the simulation's own figures are marked. Everything on it comes from the engine 
 
 The **i** button in the top corner of every Studio page opens the dependency explorer without leaving
 the current simulation. Search a setting, nested parameter, operations-day override, data record or KPI.
-The map follows its predecessors and dependents through **Environment → Operations → Data → Metrics**.
+The focused variable sets the order: **Inputs → Focus → Effects → KPIs**. Categories keep their colours,
+but predecessors sit left and dependents right. All KPIs share one vertical column. Feedback can repeat
+a variable on either side, marked **↺**; each appearance opens the same underlying variable.
 Drag the canvas, scroll to zoom, or click the overview map to travel. Expand a settings group to see its
 individual variables; **Collapse groups** folds them back up. **Direct links** reduces the view to one
 step, while **All paths** includes the full declared ancestry and downstream paths. Conditional bridges
 and feedback have dashed links and can be switched off. Selecting a card shows its definition, formula,
 engine default and immediate connections. The explorer does not change simulation inputs.
 
-Connections use separate tracks in horizontal corridors between rows and vertical gutters between
-columns, with smoothly rounded 90-degree elbows. Each card has one centered entry and one centered
-exit: connections join or split just outside those common connectors, then follow separate corridor
-tracks. Dense sections grow their gutters while card sizes and connectors stay uniform. Hovering a
+Connections share trunks in horizontal corridors between rows and vertical gutters between columns,
+with smoothly rounded 90-degree elbows. Each card has one centered entry and one centered exit.
+Common stretches are drawn once; dense sections share their highways instead of adding parallel lines. Hovering a
 connection highlights its complete path, including the shared connectors at each end, and opens an
 explanation of how that specific source feeds its target. The panel includes the rule or calculation,
 applicable conditions, and engine references; timing KPIs also include worked illustrations. Click the
@@ -218,3 +219,23 @@ operating system may show an unidentified-publisher prompt.
 Costs follow CLAUDE.md: the build runs only on merges that change what the app ships, about 100 billed minutes a run
 if the repository goes private. The site is static (`scripts/build_site.mjs`: the landing page and brand files), so
 Vercel runs no functions.
+
+## Loading panel and estimates
+
+All routes share the same responsive 540-pixel loading panel and full-width animation. Its picture caption
+rotates every 6.5 seconds through 500 distinct utility-themed messages (24 favourites plus shuffled themed
+variations). Reduced-motion settings stop the animations; the panel remains collapsible.
+
+Before the first processing checkpoint completes, the estimate uses the closest completed fresh-build timing
+from `runner.json`, preferring a comparable utility size, checkpoint size and staffing mode. If no local sample
+exists, the bundled Windows reference is a measured 10,000-home, 12-month independent-team run from 2026-10-05:
+171.734 seconds total, of which 52.063 seconds are generation/preparation costs. The initial estimate scales
+homes and months separately, retaining that preparation cost for shorter years. It therefore starts near
+14–15 minutes for 50,000 homes over twelve months; this is a reference estimate, not a machine-speed promise.
+Shared staffing doubles the fallback estimate to allow for its probe pass.
+
+Completed live checkpoints supersede the reference. Interactive queries have a separate replay/analysis
+reference (62.031 seconds per 10,000 homes over twelve months, with 6.156 seconds of snapshot preparation) and
+learn their own successful timings in `analysis-timings.json`, kept on this computer and reused after restart.
+Failed runs and reused baselines do not teach fresh-build speed. The panel names the estimate source and
+reports an overrun honestly rather than indefinitely claiming one minute remains.

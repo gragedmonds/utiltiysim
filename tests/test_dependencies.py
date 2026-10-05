@@ -56,7 +56,7 @@ def test_kpi_influences_and_definition_windows_are_preserved_not_invented_from_r
         assert {(e['source'], e['direction']) for e in incoming if e['kind'] == 'influence'} == set(kpi.settings)
         assert {e['source'] for e in incoming if e['kind'] == 'definition'} == set(kpi.thresholds)
     assert not any(e['source'].startswith('kpi:') for e in graph['edges'])
-    assert reachable(graph, 'kpi.on_time_bill_days') == {'kpi:bills_on_time'}
+    assert reachable(graph, 'kpi.on_time_bill_days') == {'kpi:bills_on_time', 'kpi:delayed_bill_share'}
 
 
 def test_display_and_conditional_operations_do_not_acquire_false_annual_dependencies():

@@ -85,7 +85,7 @@ def test_no_engine_code_is_left_on_a_fixed_year():
     for path in files:
         if path.name in ("calendar.py", "guide.py"):
             continue
-        tree = ast.parse(path.read_text())
+        tree = ast.parse(path.read_text(encoding='utf-8'))
         docs = _docstrings(tree)
         for node in ast.walk(tree):
             where = f"{path.relative_to(ROOT)}:{getattr(node, 'lineno', '?')}"

@@ -8,6 +8,7 @@ from pathlib import Path
 
 import orjson
 
+from utilsim.worker.estimates import initial_estimate, progress_estimate
 from utilsim.worker.execute import execute
 
 STATUS_SCHEMA = 'local-status/2.0'
@@ -125,8 +126,8 @@ class LocalJobs:
                         pass
 
     def on_progress(self, job, progress):
-        self.progress = progress
-        job['progress'] = progress
+        self.progress = progress_estimate(progress, initial_estimate(job['recipe'], self.state['jobs']))
+        job['progress'] = self.progress
 
     # ---- what the Studio sees ---------------------------------------------------------------------------------
     def public(self, job):
@@ -138,7 +139,8 @@ class LocalJobs:
             return {'schemaVersion': STATUS_SCHEMA, 'storage': str(self.store), 'paused': bool(self.state['paused']),
                     'storageAvailable': self.store.is_dir(),
                     'active': {'jobId': active['jobId'], 'modelId': active['recipe']['modelId'], 'name': active['recipe']['name'],
-                               'revision': active['revision'], 'progress': active.get('progress') or {}} if active else None,
+                               'revision': active['revision'], 'progress': active.get('progress') or
+                               progress_estimate({}, initial_estimate(active['recipe'], self.state['jobs']))} if active else None,
                     'queued': sum(j['status'] == 'queued' for j in self.state['jobs']),
                     'jobs': [{k: j[k] for k in ('jobId', 'revision', 'status', 'createdAt')} | {'modelId': j['recipe']['modelId'], 'name': j['recipe']['name']}
                              for j in self.state['jobs']]}

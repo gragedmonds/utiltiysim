@@ -1267,7 +1267,41 @@ def b_plan(c) -> list[list]:
 
 
 # ---- catalog ------------------------------------------------------------------------------------------------------
+BILLING_AUDIT = (Col('month', 'Month', 'int'), Col('documents', 'Documents created', 'int'),
+                 Col('estimated', 'Estimated documents', 'int'), Col('replacements', 'Replacement documents', 'int'),
+                 Col('reversals', 'Documents reversed', 'int'), Col('documentAmount', 'Gross document amount', 'money'),
+                 Col('reversedAmount', 'Reversed amount', 'money'), Col('invoices', 'Invoices created', 'int'),
+                 Col('invoicedAmount', 'Net invoice amount', 'money'))
+
+
+def b_billing_audit(c):
+    rows = [[m, 0, 0, 0, 0, 0.0, 0.0, 0, 0.0] for m in range(1, c.cal.month_of(c.day) + 1)]
+    for doc in c.bk.docs:
+        if 0 <= doc['created'] <= c.T:
+            row = rows[c.cal.month_of(doc['created']) - 1]
+            row[1] += 1
+            row[2] += bool(doc.get('estimated'))
+            row[3] += doc.get('replaces', -1) >= 0
+            row[5] += doc['total']
+        if doc['reversed'] is not None and 0 <= doc['reversed'] <= c.T:
+            row = rows[c.cal.month_of(doc['reversed']) - 1]
+            row[4] += 1
+            row[6] += doc['total']
+    for invoice in c.bk.invoices:
+        if 0 <= invoice['created'] <= c.T:
+            row = rows[c.cal.month_of(invoice['created']) - 1]
+            row[7] += 1
+            row[8] += invoice['total']
+    for row in rows:
+        for i in (5, 6, 8):
+            row[i] = round(row[i], 2)
+    return _rows_to_cols(BILLING_AUDIT, rows)
+
+
 SPECS: tuple[Spec, ...] = (
+    Spec('billingAudit', 'Monthly billing audit', 'billing', 'run',
+         'Year-to-date monthly activity, grouped by creation or reversal date. Gross document amounts include versions; '
+         'net invoices include correction credits. Reversed amounts are reported in the month of reversal.', BILLING_AUDIT, b_billing_audit),
     Spec("premises", "Premises", "customers", "town", "Every premise of the town with its building, household and "
          "baseline daily use, and the account billed for it.", PREMISES, b_premises),
     Spec("businessPartners", "Business partners", "customers", "town", "The customers (people and organisations) "

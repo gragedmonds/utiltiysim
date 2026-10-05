@@ -11,7 +11,7 @@ export function connections(graph,id,{all=false,conditional=true,direction='both
  const walk=(map,next)=>{const visited=new Set([id]),found=new Set(),queue=[id];for(let i=0;i<queue.length;i++)for(const e of map.get(queue[i])||[]){if(!conditional&&e.kind==='conditional')continue;const n=e[next];if(visited.has(n))continue;visited.add(n);found.add(n);if(all)queue.push(n);}return found;};
  const before=walk(graph.incoming,'source'),after=walk(graph.outgoing,'target'),visible=new Set([id]);
  if(direction!=='after')for(const n of before)visible.add(n);if(direction!=='before')for(const n of after)visible.add(n);
- return {before,after,visible,edges:graph.edges.filter(e=>visible.has(e.source)&&visible.has(e.target)&&(conditional||e.kind!=='conditional'))};
+ return {before,after,visible,direction,edges:graph.edges.filter(e=>visible.has(e.source)&&visible.has(e.target)&&(conditional||e.kind!=='conditional'))};
 }
 export function searchNodes(graph,text){const q=text.trim().toLowerCase(),words=q.split(/\s+/);if(!q)return [];
  return graph.nodes.map(n=>{const label=(n.title+' '+n.id+' '+n.topic).toLowerCase(),body=(label+' '+(n.description||'')+' '+(n.impact||'')).toLowerCase();
@@ -28,86 +28,118 @@ export function projectGraph(graph,selection,id,expanded=new Set()){
   {...rows[0],relation:key===id?'selected':selection.before.has(key)&&selection.after.has(key)?'both':selection.before.has(key)?'before':'after'});
  const edges=new Map();for(const e of selection.edges){const a=members.get(e.source),b=members.get(e.target);if(a===b)continue;const k=a+'|'+b+'|'+(e.kind==='conditional');
   if(!edges.has(k))edges.set(k,{source:a,target:b,conditional:e.kind==='conditional',links:[]});edges.get(k).links.push(e);}
- return {nodes,edges:[...edges.values()]};
+ return unfoldFeedback(nodes,[...edges.values()],id,selection.direction);
 }
-// Interval colouring gives overlapping connections different tracks. Disjoint segments can reuse a
-// track. Only the short entry/exit connectors at a card are shared; the corridors keep separate lines.
-function freeTrack(tracks,lo,hi){const i=tracks.findIndex(t=>t.every(s=>hi<s.lo||lo>s.hi));return i<0?tracks.length:i;}
-function reserve(tracks,lo,hi){const i=freeTrack(tracks,lo,hi);(tracks[i]??=[]).push({lo,hi});return i;}
+// The category colours describe what a variable is; its position describes causality. Unroll
+// feedback into finite visual occurrences, all pointing to the same underlying variable.
+function unfoldFeedback(nodes,edges,focus,direction='both'){
+ const byId=new Map(nodes.map(n=>[n.id,n])),views=new Map(),result=[],represented=new Set();
+ const walk=before=>{
+  const adjacency=new Map();for(const e of edges){const key=before?e.target:e.source;if(!adjacency.has(key))adjacency.set(key,[]);adjacency.get(key).push(e);}
+  const state=new Map(),order=[],forward=[],feedback=new Set();
+  function visit(id){state.set(id,1);for(const e of adjacency.get(id)||[]){const next=before?e.source:e.target;
+   if(state.get(next)===1){feedback.add(e);continue;}forward.push(e);if(!state.has(next))visit(next);
+  }state.set(id,2);order.push(id);}
+  visit(focus);const depth=new Map([[focus,0]]);
+  for(const id of order.reverse())for(const e of adjacency.get(id)||[]){if(feedback.has(e))continue;const next=before?e.source:e.target;depth.set(next,Math.max(depth.get(next)||0,depth.get(id)+1));}
+  return {before,depth,forward,feedback};
+ };
+ const empty=before=>({before,depth:new Map([[focus,0]]),forward:[],feedback:[]});
+ const left=direction==='after'?empty(true):walk(true),right=direction==='before'?empty(false):walk(false);
+ const add=(key,original,rank,relation)=>{if(!views.has(key)){const n=byId.get(original);views.set(key,{...n,id:key,nodeId:original,groupKey:n.kind==='group'?original.slice(6):null,rank,relation});}return key;};
+ add(focus,focus,0,'selected');
+ const occurrence=(side,id)=>id===focus?focus:side.before||!left.depth.has(id)?id:'after:'+id;
+ for(const side of [left,right]){
+  const sign=side.before?-1:1,relation=side.before?'before':'after';
+  for(const [id,depth] of side.depth)if(id!==focus)add(occurrence(side,id),id,sign*depth,relation);
+  for(const e of side.forward){result.push({...e,source:occurrence(side,e.source),target:occurrence(side,e.target)});represented.add(e);}
+  const end=Math.max(...side.depth.values())+1;
+  for(const e of side.feedback){
+   const original=side.before?e.source:e.target,key=(side.before?'repeat-before:':'repeat-after:')+original;
+   add(key,original,sign*end,relation);
+   result.push({...e,source:side.before?key:occurrence(side,e.source),target:side.before?occurrence(side,e.target):key});represented.add(e);
+  }
+ }
+ // Shortcuts between an upstream branch and a downstream branch still belong in the picture.
+ for(const e of edges)if(!represented.has(e))result.push({...e,source:occurrence(left,e.source),target:occurrence(right,e.target)});
+ const counts=new Map();for(const n of views.values())counts.set(n.nodeId,(counts.get(n.nodeId)||0)+1);
+ for(const n of views.values())n.repeated=counts.get(n.nodeId)>1;
+ return {nodes:[...views.values()],edges:result};
+}
 export function layoutGraph(projected){
- const maxRows=4,cardWidth=244,pitch=8,stem=28,cells=new Map(),columns=[],groups=[],incoming=new Map(),outgoing=new Map();
- for(const e of projected.edges){if(!incoming.has(e.target))incoming.set(e.target,[]);incoming.get(e.target).push(e);if(!outgoing.has(e.source))outgoing.set(e.source,[]);outgoing.get(e.source).push(e);}
- for(const lane of LANES){
-  const nodes=projected.nodes.filter(n=>n.lane===lane).sort((a,b)=>(a.kind==='group')-(b.kind==='group')||a.title.localeCompare(b.title)),first=columns.length;
-  for(let c=0;c<Math.max(1,Math.ceil(nodes.length/maxRows));c++){
-   const rows=nodes.slice(c*maxRows,(c+1)*maxRows),col=columns.length;columns.push({width:rows.length?cardWidth:184});
-   rows.forEach((n,row)=>cells.set(n.id,{col,row,h:88,bandHeight:88}));
+ const cardWidth=244,cardHeight=88,stem=28,gap=176,rowGap=116,columns=[],groups=[];
+ const sort=(a,b)=>(a.kind==='group')-(b.kind==='group')||a.title.localeCompare(b.title);
+ const append=(id,title,theme,nodes)=>{
+  if(!nodes.length)return;const first=columns.length;
+  if(id==='metrics')columns.push([...nodes].sort(sort));
+  else for(const rank of [...new Set(nodes.map(n=>n.rank))].sort((a,b)=>a-b)){
+   const peers=nodes.filter(n=>n.rank===rank).sort(sort);
+   for(let i=0;i<peers.length;i+=4)columns.push(peers.slice(i,i+4));
   }
-  groups.push({id:lane,first,last:columns.length-1,count:nodes.length});
- }
- const rowCount=Math.max(1,...[...cells.values()].map(c=>c.row+1)),horizontal=Array.from({length:rowCount+1},()=>[]),vertical=Array.from({length:columns.length+1},()=>[]),plans=new Map();
- const edges=[...projected.edges].sort((a,b)=>Math.abs(cells.get(b.source).col-cells.get(b.target).col)-Math.abs(cells.get(a.source).col-cells.get(a.target).col)||a.source.localeCompare(b.source)||a.target.localeCompare(b.target));
- for(const e of edges){
-  const s=cells.get(e.source),t=cells.get(e.target),exit=s.col+1,entry=t.col,plan={exit,entry};
-  if(exit===entry){plan.direct=true;plan.sTrack=reserve(vertical[exit],Math.min(s.row,t.row),Math.max(s.row,t.row)+1);}
-  else{
-   const low=Math.min(s.row,t.row),high=Math.max(s.row,t.row),gaps=low===high?[low,low+1]:Array.from({length:high-low},(_,i)=>low+i+1),lo=Math.min(exit,entry),hi=Math.max(exit,entry);
-   gaps.sort((a,b)=>(freeTrack(horizontal[a],lo,hi)-freeTrack(horizontal[b],lo,hi))*10+Math.abs(a-s.row-1)-Math.abs(b-s.row-1));
-   plan.gap=gaps[0];plan.hTrack=reserve(horizontal[plan.gap],lo,hi);
-   plan.sTrack=reserve(vertical[exit],Math.min(s.row,plan.gap),Math.max(s.row+1,plan.gap));
-   plan.tTrack=reserve(vertical[entry],Math.min(t.row,plan.gap),Math.max(t.row+1,plan.gap));
-  }
-  plans.set(e,plan);
- }
- // Split the common card connectors into independently spaced leads, reserving a small fan area
- // on each side of the alley. Leads on opposite sides must not accidentally merge in the corridor.
- const portGroups=new Map();
- const portGroup=(alley,row)=>{const key=alley+':'+row;if(!portGroups.has(key))portGroups.set(key,{row,edges:new Set(),cells:new Set()});return portGroups.get(key);};
- for(const e of projected.edges){const p=plans.get(e),s=cells.get(e.source),t=cells.get(e.target);for(const [alley,c] of [[p.exit,s],[p.entry,t]]){const g=portGroup(alley,c.row);g.edges.add(e);g.cells.add(c);}}
- for(const g of portGroups.values()){
-  g.edges=[...g.edges].sort((a,b)=>(plans.get(a).gap??g.row+.5)-(plans.get(b).gap??g.row+.5)||cells.get(a.source).col-cells.get(b.source).col||cells.get(a.target).col-cells.get(b.target).col);
-  g.height=Math.max(88,g.edges.length*pitch+32);for(const c of g.cells)c.bandHeight=Math.max(c.bandHeight,g.height);
- }
- const alleys=[];let x=24;
- for(let i=0;i<=columns.length;i++){
-  const count=(col,map)=>Math.max(0,...[...cells].filter(([,c])=>c.col===col).map(([id])=>map.get(id)?.length||0));
-  const outFan=stem+count(i-1,outgoing)*pitch+24,inFan=stem+count(i,incoming)*pitch+24,channelWidth=Math.max(64,vertical[i].length*pitch+32),width=outFan+channelWidth+inFan;
-  alleys.push({x,width,outFan,inFan,channelWidth});x+=width;if(columns[i]){columns[i].x=x;x+=columns[i].width;}
- }
- const rowHeights=Array.from({length:rowCount},(_,r)=>Math.max(88,...[...cells.values()].filter(c=>c.row===r).map(c=>c.bandHeight))),rowY=[],corridors=[];let y=84;
- for(let r=0;r<=rowCount;r++){const height=Math.max(r===0?58:r===rowCount?74:116,horizontal[r].length*pitch+40);corridors.push({y,height,tracks:horizontal[r].length});y+=height;if(r<rowCount){rowY.push(y);y+=rowHeights[r];}}
- const positions=new Map([...cells].map(([id,c])=>[id,{x:columns[c.col].x,y:rowY[c.row]+(rowHeights[c.row]-c.h)/2,w:cardWidth,h:c.h,col:c.col,row:c.row}]));
- const lanes=groups.map(g=>({id:g.id,count:g.count,x:alleys[g.first].x+alleys[g.first].width/2,width:alleys[g.last+1].x+alleys[g.last+1].width/2-(alleys[g.first].x+alleys[g.first].width/2)}));
- const trackX=(alley,track)=>alleys[alley].x+alleys[alley].outFan+alleys[alley].channelWidth/2+(track-(vertical[alley].length-1)/2)*pitch;
- const trackY=p=>corridors[p.gap].y+corridors[p.gap].height/2+(p.hTrack-(horizontal[p.gap].length-1)/2)*pitch;
- const portY=(alley,p,e)=>{const g=portGroup(alley,p.row);return p.y+p.h/2+(g.edges.indexOf(e)-(g.edges.length-1)/2)*pitch;};
- const ports=[],portZones=new Map();
- for(const [id,p] of positions){
-  const cy=p.y+p.h/2,bandTop=rowY[p.row],bandHeight=rowHeights[p.row];
-  for(const [side,list] of [['in',incoming.get(id)],['out',outgoing.get(id)]])if(list?.length){
-   const a=alleys[side==='in'?p.col:p.col+1],points=side==='in'?[[p.x-stem,cy],[p.x,cy]]:[[p.x+p.w,cy],[p.x+p.w+stem,cy]];
-   ports.push({id,side,points,conditional:list.every(e=>e.conditional),count:list.length});
-   portZones.set(id+':'+side,{x:side==='in'?p.x-a.inFan:p.x+p.w,y:bandTop,w:side==='in'?a.inFan:a.outFan,h:bandHeight});
-  }
- }
- const routes=new Map(),branches=new Map();
- for(const e of projected.edges){const p=plans.get(e),s=positions.get(e.source),t=positions.get(e.target),sy=portY(p.exit,s,e),ty=portY(p.entry,t,e),sx=trackX(p.exit,p.sTrack);
-  const scy=s.y+s.h/2,tcy=t.y+t.h/2,sFan=s.x+s.w+stem+16+outgoing.get(e.source).indexOf(e)*pitch,tFan=t.x-stem-16-incoming.get(e.target).indexOf(e)*pitch;
-  const middle=p.direct?[[sx,sy],[sx,ty]]:[[sx,sy],[sx,trackY(p)],[trackX(p.entry,p.tTrack),trackY(p)],[trackX(p.entry,p.tTrack),ty]];
-  const points=[[s.x+s.w,scy],[s.x+s.w+stem,scy],[sFan,scy],[sFan,sy],...middle,[tFan,ty],[tFan,tcy],[t.x-stem,tcy],[t.x,tcy]];
+  groups.push({id,title,theme,first,last:columns.length-1,count:nodes.length});
+ };
+ const ordinary=projected.nodes.filter(n=>n.kind!=='metric');
+ append('before','Feeds into','environment',ordinary.filter(n=>n.rank<0));
+ append('focus','In focus','data',ordinary.filter(n=>n.rank===0));
+ append('after','Feeds onward','operations',ordinary.filter(n=>n.rank>0));
+ append('metrics','KPIs','metrics',projected.nodes.filter(n=>n.kind==='metric'));
+ const rowCount=Math.max(1,...columns.map(c=>c.length)),positions=new Map();
+ columns.forEach((nodes,col)=>{const first=Math.floor((rowCount-nodes.length)/2);nodes.forEach((n,i)=>positions.set(n.id,{x:64+col*(cardWidth+gap),y:142+(first+i)*(cardHeight+rowGap),w:cardWidth,h:cardHeight,col,row:first+i}));});
+ const width=128+columns.length*cardWidth+Math.max(0,columns.length-1)*gap,height=142+rowCount*(cardHeight+rowGap),routes=new Map(),branches=new Map(),ports=[],corridors=Array.from({length:rowCount},(_,r)=>({y:142+r*(cardHeight+rowGap)+cardHeight,height:rowGap,tracks:0}));
+ const incoming=new Map(),outgoing=new Map();
+ for(const e of projected.edges){
+  if(!incoming.has(e.target))incoming.set(e.target,[]);incoming.get(e.target).push(e);
+  if(!outgoing.has(e.source))outgoing.set(e.source,[]);outgoing.get(e.source).push(e);
+  const s=positions.get(e.source),t=positions.get(e.target),sy=s.y+s.h/2,ty=t.y+t.h/2;
+  // Common source exits and destination entries form shared trunks. Each row has only two
+  // highway tracks (ordinary / conditional), independent of the number of relationships.
+  const offset=e.conditional?12:0,sx=s.x+s.w+56+offset,tx=t.x-56-offset;
+  let middle;
+  if(s.col+1===t.col)middle=[[sx,sy],[sx,ty]];
+  else{const corridor=corridors[s.row],y=corridor.y+rowGap/2+offset;corridor.tracks=Math.max(corridor.tracks,e.conditional?2:1);middle=[[sx,sy],[sx,y],[tx,y],[tx,ty]];}
   const distinct=ps=>ps.filter((v,i)=>!i||v[0]!==ps[i-1][0]||v[1]!==ps[i-1][1]);
-  routes.set(e,distinct(points));branches.set(e,distinct(points.slice(1,-1)));
+  const points=distinct([[s.x+s.w,sy],[s.x+s.w+stem,sy],...middle,[t.x-stem,ty],[t.x,ty]]);
+  routes.set(e,points);branches.set(e,points.slice(1,-1));
  }
- return {positions,lanes,corridors,routes,branches,ports,portZones,trackPitch:pitch,width:x+24,height:y+24};
+ for(const [id,p] of positions)for(const [side,map] of [['in',incoming],['out',outgoing]]){
+  const list=map.get(id);if(!list?.length)continue;const y=p.y+p.h/2;
+  ports.push({id,side,count:list.length,conditional:list.every(e=>e.conditional),points:side==='in'?[[p.x-stem,y],[p.x,y]]:[[p.x+p.w,y],[p.x+p.w+stem,y]]});
+ }
+ const lanes=groups.map(g=>({...g,x:Math.max(12,64+g.first*(cardWidth+gap)-gap/2),width:(g.last-g.first+1)*(cardWidth+gap)-(g.first===0?36:0)}));
+ return {positions,lanes,corridors,routes,branches,ports,bundles:bundleRoutes(branches),trackPitch:12,width,height};
+}
+// Draw each shared stretch once, and retain every relationship travelling along it. Splitting
+// at collinear endpoints also makes hovering a partially shared trunk offer the correct links.
+export function bundleRoutes(routes){
+ const lines=new Map(),curves=new Map();
+ for(const [edge,points] of routes)for(const part of pathParts(points)){
+  if(part.arc){const key=part.d+'|'+edge.conditional;if(!curves.has(key))curves.set(key,{d:part.d,conditional:edge.conditional,edges:[]});curves.get(key).edges.push(edge);continue;}
+  const [a,b]=part.points,horizontal=a[1]===b[1],fixed=a[horizontal?1:0],lo=Math.min(a[horizontal?0:1],b[horizontal?0:1]),hi=Math.max(a[horizontal?0:1],b[horizontal?0:1]);
+  if(lo===hi)continue;const key=[horizontal,fixed,edge.conditional].join('|');
+  if(!lines.has(key))lines.set(key,{horizontal,fixed,conditional:edge.conditional,segments:[]});lines.get(key).segments.push({lo,hi,edge});
+ }
+ const bundles=[...curves.values()];
+ for(const {horizontal,fixed,conditional,segments} of lines.values()){
+  const stops=[...new Set(segments.flatMap(s=>[s.lo,s.hi]))].sort((a,b)=>a-b);
+  for(let i=1;i<stops.length;i++){
+   const lo=stops[i-1],hi=stops[i],edges=[...new Set(segments.filter(s=>s.lo<=lo&&s.hi>=hi).map(s=>s.edge))];if(!edges.length)continue;
+   const points=horizontal?[[lo,fixed],[hi,fixed]]:[[fixed,lo],[fixed,hi]];
+   bundles.push({d:`M${points[0]} L${points[1]}`,points,conditional,edges});
+  }
+ }
+ return bundles;
+}
+function pathParts(points){
+ if(!points?.length)return [];const parts=[];let cursor=points[0];
+ const line=end=>{if(cursor[0]!==end[0]||cursor[1]!==end[1])parts.push({points:[cursor,end],d:`M${cursor} L${end}`});cursor=end;};
+ for(let i=1;i<points.length-1;i++){
+  const a=points[i-1],b=points[i],c=points[i+1],before=Math.hypot(b[0]-a[0],b[1]-a[1]),after=Math.hypot(c[0]-b[0],c[1]-b[1]),cross=(b[0]-a[0])*(c[1]-b[1])-(b[1]-a[1])*(c[0]-b[0]);
+  if(!cross){line(b);continue;}const r=Math.min(16,before/2,after/2),start=[b[0]+(a[0]-b[0])*r/before,b[1]+(a[1]-b[1])*r/before],end=[b[0]+(c[0]-b[0])*r/after,b[1]+(c[1]-b[1])*r/after];
+  line(start);parts.push({arc:true,d:`M${start} A${r},${r} 0 0 ${cross>0?1:0} ${end}`});cursor=end;
+ }
+ line(points.at(-1));return parts;
 }
 export function edgePath(points){
  if(!points?.length)return '';
- let path=`M${points[0][0]},${points[0][1]}`;
- for(let i=1;i<points.length-1;i++){
-  const a=points[i-1],b=points[i],c=points[i+1],before=Math.hypot(b[0]-a[0],b[1]-a[1]),after=Math.hypot(c[0]-b[0],c[1]-b[1]),cross=(b[0]-a[0])*(c[1]-b[1])-(b[1]-a[1])*(c[0]-b[0]);
-  if(!cross){path+=` L${b[0]},${b[1]}`;continue;}
-  const r=Math.min(16,before/2,after/2);
-  path+=` L${b[0]+(a[0]-b[0])*r/before},${b[1]+(a[1]-b[1])*r/before} A${r},${r} 0 0 ${cross>0?1:0} ${b[0]+(c[0]-b[0])*r/after},${b[1]+(c[1]-b[1])*r/after}`;
- }
- const end=points.at(-1);return path+` L${end[0]},${end[1]}`;
+ return `M${points[0]}`+pathParts(points).map(part=>part.d.slice(part.d.indexOf(' '))).join('');
 }
