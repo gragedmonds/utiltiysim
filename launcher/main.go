@@ -29,7 +29,7 @@ var runtimeURL, runtimeSHA, runtimeSignature, runtimePublicKey, runtimeBytes, re
 var mu sync.Mutex
 var message = "Ready to open Utility Studio."
 var busy, picking bool
-var engineURL, logPath, engineVersion string
+var engineURL, logPath, engineVersion, launcherPageURL string
 var engineCmd *exec.Cmd
 var quitting, restartRequested bool
 
@@ -272,11 +272,47 @@ func runningLauncher(path string) string {
 	if err != nil {
 		return ""
 	}
-	response.Body.Close()
+	defer response.Body.Close()
 	if response.StatusCode != 200 {
 		return ""
 	}
+	var status struct {
+		EngineURL string `json:"engineURL"`
+	}
+	if json.NewDecoder(io.LimitReader(response.Body, 65536)).Decode(&status) == nil && validStudioURL(status.EngineURL) {
+		return status.EngineURL
+	}
 	return saved.URL
+}
+
+// Only an explicitly saved, absolute folder skips first-time setup. Bad preferences
+// return to setup rather than silently choosing a different library.
+func savedFolder(pref string) (string, bool) {
+	data, err := os.ReadFile(pref)
+	var folder string
+	if err != nil || json.Unmarshal(data, &folder) != nil || !filepath.IsAbs(folder) {
+		return "", false
+	}
+	return filepath.Clean(folder), true
+}
+
+func startRemembered(root, pref, pageURL string) {
+	// Never recreate a missing removable/network drive on an unattended launch.
+	if stat, err := os.Stat(root); err != nil || !stat.IsDir() {
+		setMessage("Your saved storage folder is unavailable. Reconnect the drive or choose a folder.")
+		mu.Lock()
+		busy = false
+		mu.Unlock()
+		openBrowser(pageURL)
+		return
+	}
+	startStudio(root, pref)
+	mu.Lock()
+	closed := quitting
+	mu.Unlock()
+	if !closed {
+		openBrowser(pageURL)
+	} // failures/stops remain recoverable
 }
 
 // startStudio runs the whole start in the background: storage checks, the runtime (a staged update, the installed
@@ -349,8 +385,14 @@ func main() {
 	}
 	home, _ := os.UserHomeDir()
 	chosen := filepath.Join(home, "UtilitySim")
-	if data, err := os.ReadFile(pref); err == nil {
-		_ = json.Unmarshal(data, &chosen)
+	saved, remembered := savedFolder(pref)
+	if remembered {
+		chosen = saved
+	}
+	for _, arg := range os.Args[1:] {
+		if arg == "--setup" {
+			remembered = false
+		}
 	}
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -364,6 +406,7 @@ func main() {
 	}
 	token := hex.EncodeToString(random)
 	pageURL := origin + "/#token=" + token
+	launcherPageURL = pageURL
 	os.MkdirAll(filepath.Dir(running), 0700)
 	if data, err := json.Marshal(map[string]string{"url": pageURL}); err == nil {
 		_ = os.WriteFile(running, data, 0600)
@@ -487,7 +530,14 @@ func main() {
 		fmt.Fprint(w, `{"ok":true}`)
 		go startStudio(root, pref)
 	})
-	openBrowser(pageURL)
+	if remembered {
+		busy = true
+		logPath = filepath.Join(chosen, "runner.log")
+		message = "Opening your saved library…"
+		go startRemembered(chosen, pref, pageURL)
+	} else {
+		openBrowser(pageURL)
+	}
 	banner(pageURL)
 	_ = http.Serve(listener, mux)
 }

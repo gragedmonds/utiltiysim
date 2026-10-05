@@ -2,9 +2,17 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {schemaFields} from '../dist/schema-form.js';
-import {inStage,mergeValues,applyRegion,wizardDraft,replaceStageOverrides,setupProposal,acceptSetup,focusGroup} from '../dist/setup-config.js';
+import {inStage,mergeValues,applyRegion,wizardDraft,replaceStageOverrides,setupProposal,acceptSetup,focusGroup,setupGoals} from '../dist/setup-config.js';
 
 const schema=JSON.parse(readFileSync(new URL('../../../schemas/config.schema.json',import.meta.url)));
+test('desktop drafts of every size use one offline Command Center',()=>{
+ for(const homes of [500,10000,50000,500000]){
+  const input={preset:'village',homes,wizardVersion:4,settings:{process:{analysts:3}},episodes:[{id:'keep'}]};
+  const draft=wizardDraft(input,{}, {offline:true});
+  assert.equal(draft.execution,'local');assert.equal(draft.totalHomes,homes);
+  assert.deepEqual(draft.settings,input.settings);assert.deepEqual(draft.episodes,input.episodes);
+ }
+});
 test('every supported generation field appears in exactly one appropriate wizard stage',()=>{
  const all=schemaFields(schema,{groups:(k,g)=>g['x-applies']!=='run'}).map(f=>f.path);
  const env=schemaFields(schema,{groups:(k,g)=>inStage('town',0,k,g)}).map(f=>f.path);
@@ -50,4 +58,14 @@ test('focused forms retain hidden edits and everything reveals every stage group
  assert.equal(focusGroup(data,{goals:['everything']},'town',0,'housing',{'x-applies':'town'}),true);
  assert.equal(focusGroup(data,{...draft,showAllSettings:{0:true}},'town',0,'housing',{'x-applies':'town'}),true);
  assert.equal(wizardDraft({preset:'village',wizardVersion:2,step:0},{}).step,2);
+});
+
+test('desktop operations focus exposes annual workflow inputs instead of the removed map day',()=>{
+ const data={goals:[{id:'operations',title:'Operations day',run:[],map:true},{id:'everything',map:true}]};
+ const goals=setupGoals(data,{offline:true});
+ assert.equal(goals[0].title,'Service disruptions');
+ assert.deepEqual(goals[0].run,['outages','field','contact','process']);
+ assert.ok(goals.every(g=>!g.map));
+ assert.equal(setupGoals(data,{offline:false})[0].title,'Operations day');
+ assert.deepEqual(data.goals[0].run,[]);
 });

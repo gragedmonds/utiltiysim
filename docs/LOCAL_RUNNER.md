@@ -16,9 +16,12 @@ through** with Claude (an Anthropic API key you paste in).
    shape. The first start downloads the versioned engine (about 135 MB) into `runtime/<version>` under the folder,
    checks its size, SHA-256 and Ed25519 signature, and installs it; later starts reuse it. Errors stay on the page
    with the log location (`runner.log` in the folder).
-3. Utility Studio opens in your browser at `http://127.0.0.1:<port>/`, the setup wizard first. On Windows the
-   launcher has no console window: the page is its window, with **Quit Utility Studio** at the bottom, and opening
-   the executable again while it runs brings that page back instead of starting a second one. On macOS and Linux
+3. Utility Studio opens in your browser at `http://127.0.0.1:<port>/`, the setup wizard first. Once the folder is saved,
+   subsequent launches start the engine and open Studio directly, bypassing the folder screen. Opening the executable
+   again while it runs brings Studio back instead of starting a second engine. The **App settings and updates** gear
+   in Studio opens the launcher's status, restart and quit controls. A missing drive or startup failure brings the
+   setup screen back with the reason. Run the launcher with `--setup` while it is stopped to choose a different library.
+   On Windows the launcher has no console window. On macOS and Linux
    the terminal it started from shows the address; closing it stops Utility Studio.
 
 The launcher remembers the folder in the OS config directory (`UtilityStudio/storage.json`, beside `launcher.json`,
@@ -46,12 +49,14 @@ browser for that origin and sends it with every `/local` request. The server bin
 headers and sets no CORS headers, so only pages it serves can call it. The engine's generated-town cache lives under
 the storage folder too (`cache/`).
 
-Simulations up to the live limit (10,000 homes) retain the interactive town and operations map.
-Larger utilities open one **Command Center** at `local-runs.html?model=<id>`, with utility-wide trends,
+Every new desktop simulation opens one **Command Center** at `local-runs.html?model=<id>`, with utility-wide trends,
 work queues, Data, activity sequences, and a VEE scorecard. New jobs process up to 10,000 homes per internal checkpoint:
 50,000 homes use five checkpoints; 500,000 use fifty. This is one user-facing run, not one giant
 in-memory physical network. Staffing still describes independent processing areas; shared workforce
 and connected-network modes remain available in the batch CLI.
+Existing small-town simulations keep their original records, decisions and year history. Their navigation now
+includes **Activity sequences** and hides Map; old map links return to the Command Center. Engine-only development
+can still use the operations map. Desktop setup hides map-day controls.
 
 ## Command Center and saved revisions
 
@@ -64,6 +69,10 @@ and decisions while preserving older revisions. Existing revisions retain their 
 to preserve record identity.
 The utility job format covers model year 2026; multi-year continuation remains available in the
 individual town Studio, and is not offered in the combined utility workspace.
+
+Studio pages, the wizard and dependency explanations ship in the signed runtime, so installed launchers receive
+them through the engine updater after a release is published. Skipping the launcher's folder screen requires the
+new launcher executable once: the engine updater does not replace the launcher itself.
 
 `local-workspace.js` uses the same engine client and views as the live Studio. Authenticated queries to
 `POST /local/jobs/{jobId}/query` replay the original snapshots with dated edits and decisions. Counts

@@ -83,7 +83,8 @@ def create_app(jobs: LocalJobs, local_token, on_ready=None):
     # ---- this computer: the queue -------------------------------------------------------------------------------
     @app.get('/local/status')
     def status():
-        return {**jobs.snapshot(), 'analysis': workspace.progress}
+        return {**jobs.snapshot(), 'analysis': workspace.progress,
+                'launcherURL': os.environ.get('UTILITY_STUDIO_LAUNCHER_URL', '')}
 
     @app.post('/local/jobs/{job_id}/query')
     async def query_utility(job_id: str, request: Request):

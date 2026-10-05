@@ -43,6 +43,12 @@ def smoke_startup(executable, library):
                             assert response.json()['schemaVersion'] == 'local-status/2.0'
                             assert client.get(origin + '/').status_code == 200
                             assert client.get(origin + '/setup.js').status_code == 200
+                            assert 'Starting point' in client.get(origin + '/setup.js').text
+                            desktop = client.get(origin + '/local-runs.html').text
+                            assert 'Activity sequences</a>' in desktop and '>Map</a>' not in desktop
+                            graph = client.get(origin + '/api/dependencies').json()
+                            assert graph == client.get(origin + '/dependency-graph.json').json()
+                            assert all(e.get('explanation') for e in graph['edges'])
                             assert client.get(origin + '/packs/index.json').status_code == 200
                             assert client.get(origin + '/api/health').status_code == 200
                             assert client.get(origin + '/local/status').status_code == 401

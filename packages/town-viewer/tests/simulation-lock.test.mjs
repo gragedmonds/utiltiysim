@@ -43,10 +43,10 @@ test('locked client stores refuse setting and seed edits; episodes, dates and ac
  await assert.rejects(ops.setSettings({crews:9}),/locked/);assert.deepEqual(ops.settings,{crews:2});
  assert.equal(storage.getItem('utility-town-ops-settings:simulation:sim:town-1'),null);
 });
-test('the Studio bar: Simulations, Config, Command Center, Map, Workspace, Data; no Runs tab',()=>{
+test('the Studio bar includes Activity sequences alongside Workspace and Data; no Runs tab',()=>{
  const html=readFileSync(new URL('../dist/studio.html',import.meta.url),'utf8'),nav=html.match(/<nav class="studio-tabs"[^>]*>(.*?)<\/nav>/)[1];
  const tabs=[...nav.matchAll(/<a href="([^"]*)" id="([^"]+)">([^<]+)<\/a>/g)].map(m=>[m[2],m[3],m[1]]);
- assert.deepEqual(tabs,[['nav-simulations','Simulations','./'],['nav-config','Config','#/config'],['nav-year','Command Center','#/year'],['nav-map','Map','#/town'],['nav-workspace','Workspace','#/workspace'],['nav-data','Data','#/data'],['nav-glossary','Glossary','./glossary.html']]);
+ assert.deepEqual(tabs,[['nav-simulations','Simulations','./'],['nav-config','Config','#/config'],['nav-year','Command Center','#/year'],['nav-map','Map','#/town'],['nav-workspace','Workspace','#/workspace'],['nav-data','Data','#/data'],['nav-process','Activity sequences','#/process'],['nav-glossary','Glossary','./glossary.html']]);
  assert.ok(!html.includes('id="nav-runs"'));assert.ok(html.includes('aria-label="Command Center"'));
  assert.ok(html.includes('id="cfg-lock-btn"')&&html.includes('Lock in settings and start simulation'));
 });

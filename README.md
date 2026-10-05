@@ -70,8 +70,9 @@ describe real properties or people.
 ### Studio entry
 
 Open the site link to set up a simulation or choose one saved in this browser. No login is required. The wizard
-starts with **Environment** (homes, region, weather and housing), then **Utility & operations** (services, staffing
-and starter/scenario), followed by an editable review that opens **Year**. Each setup stage has basic controls and
+has five steps: **Starting point** (build a utility or match existing metrics), **Your focus** (goals and KPIs),
+**Environment** (homes, region, weather and housing), **Utility & operations** (services and staffing), and an
+editable **Review** that opens the **Command Center**. Each setup stage has basic controls and
 an **Advanced** panel with its live engine settings. Regional starters are editable modelling assumptions.
 **Config** is a header tab. Four scenario starters
 range from normal operations to organised chaos; inflicting a period runs analysis through its end. A floating

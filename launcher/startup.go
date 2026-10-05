@@ -16,6 +16,15 @@ import (
 
 var errRunnerExited = errors.New("the local engine stopped before it was ready")
 
+func validStudioURL(address string) bool {
+	u, err := url.Parse(address)
+	if err != nil || u.Scheme != "http" || u.Hostname() != "127.0.0.1" || u.Port() == "" || u.User != nil || u.Path != "/" || u.RawQuery != "" {
+		return false
+	}
+	fragment, err := url.ParseQuery(u.Fragment)
+	return err == nil && len(fragment.Get("token")) >= 32
+}
+
 // A readiness file supplies the per-launch URL. Confirm its authenticated API is
 // reachable before presenting success; a port in use must never count as our engine.
 func waitForRunner(path string, done <-chan struct{}, timeout time.Duration) (string, error) {
@@ -104,6 +113,7 @@ func runEngine(exe, root string) {
 	fmt.Fprintln(log, "\n--- Starting local engine", time.Now().Format(time.RFC3339), "---")
 	cmd := exec.Command(exe, "--store", root, "--port", "0", "--ready-file", readyPath)
 	cmd.Dir, cmd.Stdout, cmd.Stderr = root, log, log
+	cmd.Env = append(os.Environ(), "UTILITY_STUDIO_LAUNCHER_URL="+launcherPageURL)
 	if err = cmd.Start(); err != nil {
 		setMessage("Could not start the engine: " + err.Error() + ". Log: " + logName)
 		return
@@ -127,7 +137,7 @@ func runEngine(exe, root string) {
 	os.Remove(readyPath)
 	mu.Lock()
 	engineURL = address
-	message = "Utility Studio is open in your browser. Keep this window open while you use it."
+	message = "Utility Studio is running. You can close this settings tab while you use it."
 	mu.Unlock()
 	openBrowser(address)
 	<-done
