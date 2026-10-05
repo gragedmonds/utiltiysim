@@ -78,7 +78,8 @@ A larger animated activity window shows stages, completed checkpoints, and the e
 one at a time and resume from completed checkpoints after an interruption. Saved revisions retain
 checkpoint archives under an expandable history section. Failed jobs can be retried.
 
-On disk: `runner.json` stores the queue, `baselines/` stores reusable generated towns, `batches/` stores
+On disk: `engine-port.json` remembers the library’s browser address across launches (a taken port is replaced).
+`runner.json` stores the queue, `baselines/` stores reusable generated towns, `batches/` stores
 progress, `runs/<runKey>/` stores immutable results, and `results/<jobId>.result.json` stores the rollup.
 Local export links in `export-links/` pin the selected revision, inputs, filters and columns. Links work
 while this local server is running at the same address. Unsaved workspace edits stay in browser storage;
