@@ -239,3 +239,14 @@ reference (62.031 seconds per 10,000 homes over twelve months, with 6.156 second
 learn their own successful timings in `analysis-timings.json`, kept on this computer and reused after restart.
 Failed runs and reused baselines do not teach fresh-build speed. The panel names the estimate source and
 reports an overrun honestly rather than indefinitely claiming one minute remains.
+
+## Stopping work
+
+Use **Stop simulation** in the bottom-corner progress panel to stop a revision or interactive recalculation.
+Revision workers are terminated; completed checkpoints and earlier completed revisions are retained. The revision
+is marked **Stopped**, not Complete or Failed, and **Retry** can reuse its completed checkpoints. A stop request
+survives a launcher restart. Pause remains a separate queue control that waits at checkpoint boundaries.
+
+Interactive recalculations stop at engine checkpoints (including each simulated day); requests already queued for
+the same utility are cancelled together. New requests and other utilities remain usable. Cancelled responses are
+not cached as completed results and do not train runtime estimates. Inputs and saved decisions stay on disk.

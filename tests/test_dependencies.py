@@ -56,7 +56,7 @@ def test_kpi_influences_and_definition_windows_are_preserved_not_invented_from_r
         assert {(e['source'], e['direction']) for e in incoming if e['kind'] == 'influence'} == set(kpi.settings)
         assert {e['source'] for e in incoming if e['kind'] == 'definition'} == set(kpi.thresholds)
     assert not any(e['source'].startswith('kpi:') for e in graph['edges'])
-    assert reachable(graph, 'kpi.on_time_bill_days') == {'kpi:bills_on_time', 'kpi:delayed_bill_share'}
+    assert reachable(graph, 'kpi.on_time_bill_days') == {'kpi:bills_on_time'}
 
 
 def test_display_and_conditional_operations_do_not_acquire_false_annual_dependencies():
@@ -126,11 +126,11 @@ def test_schedule_explanations_distinguish_attempt_release_and_invoice_creation(
     bills = edges['engine:schedule', 'kpi:bills_on_time']
     invoice = edges['engine:schedule', 'kpi:days_to_invoice']
     assert 'read hour / 24' in reading['formula']
-    assert 'floor(released)' in bills['formula'] and 'whole days' in bills['example']
-    assert 'max(scheduled read day' in invoice['formula'] and '3.83 elapsed days' in invoice['example']
+    assert 'fully issued' in bills['formula'] and 'released 11 January' in bills['example']
+    assert 'planned issue' in invoice['formula'] and '6 days to issue' in invoice['example']
     assert 'floor' not in invoice['formula']
-    assert any('Unreleased' in s for s in bills['steps'])
+    assert any('pending cycles' in s.lower() for s in bills['steps'])
     assert edges['engine:accounts', 'kpi:customer_minutes_lost']['summary'].startswith('Supplies the account-count')
-    # The catalogue lists print lag as an influence, but it is not added to the creation-date KPI.
+    # Print lag now changes the customer-facing invoice issue measure.
     lag = edges['billing.print_lag_days', 'kpi:days_to_invoice']
-    assert any('not directly added' in s for s in lag['steps'])
+    assert any('includes that shift' in s for s in lag['steps'])

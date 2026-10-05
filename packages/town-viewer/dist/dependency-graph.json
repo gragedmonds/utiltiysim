@@ -8380,12 +8380,12 @@
     },
     {
       "id": "kpi.on_time_bill_days",
-      "title": "On Time Bill Days",
+      "title": "Invoice issue target",
       "lane": "metrics",
       "topic": "KPI definitions",
       "kind": "setting",
-      "description": "A bill is on time when it is released to invoicing within this many calendar days of the scheduled read it bills.",
-      "impact": "The window that makes a bill on time: days from the scheduled read to the bill's release. Changes the Bills on time figure only.",
+      "description": "Operational invoice issue target: each due service must reach an issued invoice within this many whole calendar days of its scheduled read. Includes print lag; the saved setting key is retained for compatibility.",
+      "impact": "Operational invoice issue window: calendar days from each service's scheduled read to customer invoice issue, including print lag. Changes Invoices on time.",
       "reach": "year",
       "unit": "days",
       "default": 3,
@@ -8397,8 +8397,8 @@
       "lane": "metrics",
       "topic": "KPI definitions",
       "kind": "setting",
-      "description": "An invoice is timely when it is created within this many calendar days of the last scheduled read it bills (the twin's invoice timeliness).",
-      "impact": "The window that makes an invoice timely: days from the last scheduled read to the invoice. Changes the Invoice timeliness figure only.",
+      "description": "Invoice timeliness target used by the twin and Delayed invoices. Each due service must reach an issued invoice within this many whole calendar days of its scheduled read. Includes upstream holds and print lag.",
+      "impact": "Invoice issue target for Invoice timeliness and Delayed invoices. Includes print lag and overdue obligations still waiting for an invoice.",
       "reach": "year",
       "unit": "days",
       "default": 5,
@@ -9670,12 +9670,12 @@
     },
     {
       "id": "kpi:bills_on_time",
-      "title": "Bills on time",
+      "title": "Invoices on time",
       "lane": "metrics",
       "topic": "billing",
       "kind": "metric",
-      "description": "Share of bills created year to date that were released to invoicing within the window, counted from the scheduled read day they bill; a bill still blocked counts as late.",
-      "formula": "bills released within kpi.on_time_bill_days of the scheduled read ÷ bills created",
+      "description": "Scheduled account-month cycles with every due service issued within the operational invoice window. Includes print lag; pending cycles are not on time. Each service uses its own scheduled read day.",
+      "formula": "account-cycles fully issued within kpi.on_time_bill_days ÷ scheduled account-cycles",
       "unit": "share",
       "better": "higher",
       "related": [
@@ -9690,24 +9690,24 @@
       "lane": "metrics",
       "topic": "billing",
       "kind": "metric",
-      "description": "Share of invoices created within the window of the last scheduled read they bill. The engine bills on an estimate rather than holding a bill, so this stays high under stress; a utility that counts an estimated bill as late wants Estimated reads too.",
-      "formula": "invoices created within kpi.timely_invoice_days ÷ invoices",
+      "description": "Scheduled account-month cycles with every due service issued within the invoice timeliness target. Includes cycles held before an invoice exists and print lag. Pending cycles are not yet timely; Delayed invoices counts them late only after the deadline expires.",
+      "formula": "account-cycles fully issued within kpi.timely_invoice_days ÷ scheduled account-cycles",
       "unit": "share",
       "better": "higher",
       "related": [
         "kpi:bills_on_time",
-        "kpi:estimated_read_share"
+        "kpi:delayed_bill_share"
       ],
       "reference": "utilsim/m2c/kpis.py · invoice_timeliness"
     },
     {
       "id": "kpi:blocked_bill_share",
-      "title": "Bills blocked",
+      "title": "Invoice cycles affected by billing checks",
       "lane": "metrics",
       "topic": "billing",
       "kind": "metric",
-      "description": "Share of bills created year to date that a billing check held for a person (true-up, rate class, high bill, bill credit), whether or not they were released later.",
-      "formula": "bills with a billing case ÷ bills created",
+      "description": "Scheduled account-month cycles with at least one billing-document check raised, even if later released. Multiple service documents count once; this tracks upstream causes of invoice holds.",
+      "formula": "account-cycles with a billing check ÷ scheduled account-cycles",
       "unit": "share",
       "better": "lower",
       "related": [
@@ -9718,12 +9718,12 @@
     },
     {
       "id": "kpi:billing_error_share",
-      "title": "Billing error",
+      "title": "Invoice amount error",
       "lane": "metrics",
       "topic": "billing",
       "kind": "metric",
-      "description": "Absolute difference between released bills and the simulation's true bills, as a share of the amount billed.",
-      "formula": "Σ|billed − true| ÷ Σ billed",
+      "description": "Absolute net invoice error against simulated truth for invoices issued in the reporting window. Corrective invoice truth includes the credit for the previously invoiced version.",
+      "formula": "Σ|net invoice total − net truth total| ÷ Σ|net invoice total|",
       "unit": "share",
       "better": "lower",
       "related": [
@@ -9734,12 +9734,12 @@
     },
     {
       "id": "kpi:days_to_invoice",
-      "title": "Days to invoice",
+      "title": "Days to invoice issue",
       "lane": "metrics",
       "topic": "billing",
       "kind": "metric",
-      "description": "Average calendar days from the last scheduled read an invoice bills to the invoice.",
-      "formula": "mean(invoice created − last scheduled read day)",
+      "description": "Average elapsed calendar days from the last scheduled read an invoice covers to its issue, including print lag. Only invoices issued by the view date count; issue cannot precede creation.",
+      "formula": "mean(max(created, planned issue) − last scheduled read day)",
       "unit": "days",
       "better": "lower",
       "related": [
@@ -10049,12 +10049,12 @@
     },
     {
       "id": "kpi:delayed_bill_share",
-      "title": "Delayed bills",
+      "title": "Delayed invoices",
       "lane": "metrics",
       "topic": "billing",
       "kind": "metric",
-      "description": "Current billing documents released after the bill window, or still unreleased after that window expires. Newly created bills still within the window are not late.",
-      "formula": "late or overdue unreleased current documents ÷ current documents",
+      "description": "Scheduled account-month cycles with any service invoiced after its deadline, or still awaiting issue after that deadline. Includes reads and billing documents held upstream, and invoice print lag. Each service uses its own scheduled read day; an account-cycle is counted once.",
+      "formula": "late or overdue unissued account-cycles ÷ scheduled account-cycles",
       "unit": "share",
       "better": "lower",
       "related": [],
@@ -10062,12 +10062,12 @@
     },
     {
       "id": "kpi:estimated_bill_share",
-      "title": "Estimated bills",
+      "title": "Estimated invoices",
       "lane": "metrics",
       "topic": "billing",
       "kind": "metric",
-      "description": "Current billing documents built on at least one estimated register. Reversed versions are excluded at the view date.",
-      "formula": "estimated current documents ÷ current documents",
+      "description": "Issued invoices containing at least one estimated service charge. A multi-service invoice counts once. Subsequent reversals do not rewrite what was originally issued.",
+      "formula": "issued invoices containing an estimated charge ÷ issued invoices",
       "unit": "share",
       "better": "lower",
       "related": [],
@@ -10075,12 +10075,12 @@
     },
     {
       "id": "kpi:move_boundary_estimate_share",
-      "title": "Move-boundary bills estimated",
+      "title": "Move-boundary invoices estimated",
       "lane": "metrics",
       "topic": "billing",
       "kind": "metric",
-      "description": "Estimated current bills whose read period spans a recorded move-in or move-out. This is a boundary check, not a separate first/final invoice workflow.",
-      "formula": "estimated move-boundary documents ÷ move-boundary documents",
+      "description": "Issued invoices containing an estimated service period spanning a recorded move-in or move-out, among invoices with such a boundary. This is not a separate first/final settlement workflow.",
+      "formula": "issued invoices with an estimated move-boundary charge ÷ issued move-boundary invoices",
       "unit": "share",
       "better": "lower",
       "related": [],
@@ -10088,12 +10088,12 @@
     },
     {
       "id": "kpi:consecutive_estimated_bill_share",
-      "title": "Consecutive estimated bills",
+      "title": "Consecutive estimated invoices",
       "lane": "metrics",
       "topic": "billing",
       "kind": "metric",
-      "description": "Current estimated bills whose immediately preceding monthly bill for the same installation and account was also estimated. Missing months break the sequence; the first month has no in-year predecessor.",
-      "formula": "current documents continuing a 2+ month estimate sequence ÷ current documents",
+      "description": "Issued invoices containing an estimated charge for a month whose immediately preceding account-month was also estimated on a previously issued invoice. Missing months break the sequence; multiple services, corrective versions and two months on one invoice do not add consecutive cycles. Previously issued corrections update the preceding cycle for later invoices.",
+      "formula": "issued invoices continuing a 2+ month estimate sequence ÷ issued invoices",
       "unit": "share",
       "better": "lower",
       "related": [],
@@ -10101,12 +10101,12 @@
     },
     {
       "id": "kpi:consecutive_zero_bill_share",
-      "title": "Consecutive zero-use bills",
+      "title": "Consecutive zero-use invoices",
       "lane": "metrics",
       "topic": "billing",
       "kind": "metric",
-      "description": "Current bills with zero import and export consumption whose preceding monthly bill for the same installation and account also had zero consumption. Fixed charges may still apply.",
-      "formula": "current documents continuing a 2+ month zero-use sequence ÷ current documents",
+      "description": "Issued invoices with all-zero import and export charges whose preceding account-month on a previously issued invoice was also all zero. Missing months break the sequence. Fixed charges may still apply.",
+      "formula": "issued invoices continuing a 2+ month zero-use sequence ÷ issued invoices",
       "unit": "share",
       "better": "lower",
       "related": [],
@@ -10114,12 +10114,12 @@
     },
     {
       "id": "kpi:bill_period_defect_share",
-      "title": "Bill period defects",
+      "title": "Invoice period defects",
       "lane": "metrics",
       "topic": "billing",
       "kind": "metric",
-      "description": "Current bills with non-finite, non-positive or overlapping periods for the same installation and account. Legitimate longer periods after a service interruption are allowed.",
-      "formula": "current documents failing period checks ÷ current documents",
+      "description": "Issued invoices containing a non-finite, non-positive or overlapping service period for the same installation and account. Corrective versions of the same period and different services are not overlaps.",
+      "formula": "issued invoices with a defective service period ÷ issued invoices",
       "unit": "share",
       "better": "lower",
       "related": [],
@@ -10140,12 +10140,12 @@
     },
     {
       "id": "kpi:rebill_share",
-      "title": "Cancel and rebill",
+      "title": "Corrective invoices",
       "lane": "metrics",
       "topic": "billing",
       "kind": "metric",
-      "description": "Documents created this year that explicitly replace another billing document. All versions created this year form the denominator.",
-      "formula": "replacement documents ÷ all documents created year to date",
+      "description": "Issued invoices correcting a charge on a previously issued invoice. Document corrections made before first issue are excluded; their reversals remain visible in billing documents.",
+      "formula": "issued invoices replacing a previously invoiced charge ÷ issued invoices",
       "unit": "share",
       "better": "lower",
       "related": [],
@@ -10157,7 +10157,7 @@
       "lane": "metrics",
       "topic": "billing",
       "kind": "metric",
-      "description": "Account/cycle-month combinations represented on more than one invoice. Staggered services and corrective invoices can legitimately produce this; it is an audit indicator.",
+      "description": "Account/cycle-month combinations represented on more than one issued invoice. Staggered services and corrective invoices can legitimately produce this; it is an audit indicator.",
       "formula": "account/cycle combinations with 2+ invoices ÷ invoiced account/cycle combinations",
       "unit": "share",
       "better": "context",
@@ -10170,8 +10170,8 @@
       "lane": "metrics",
       "topic": "billing",
       "kind": "metric",
-      "description": "Created invoices with no non-zero fixed charge across their bill lines, as reconstructed by the engine tariff calculation. Zero-fixed-charge tariffs are included; this does not detect an external print omission.",
-      "formula": "invoices with no non-zero computed fixed charge ÷ created invoices",
+      "description": "Issued invoices with no non-zero fixed charge across their service lines, reconstructed from the tariff calculation. Zero-fixed-charge tariffs are included; this does not detect an external print omission.",
+      "formula": "issued invoices with no non-zero computed fixed charge ÷ issued invoices",
       "unit": "share",
       "better": "lower",
       "related": [],
@@ -10179,12 +10179,12 @@
     },
     {
       "id": "kpi:move_prorated_charge_count",
-      "title": "Move-boundary prorated charges",
+      "title": "Invoices with move-boundary prorated charges",
       "lane": "metrics",
       "topic": "billing",
       "kind": "metric",
-      "description": "Move-boundary bills carrying a fixed charge prorated by the actual read-period duration. The engine prorates by read days, not by a separate move-in/out settlement period.",
-      "formula": "move-boundary documents with a non-zero duration-prorated fixed charge",
+      "description": "Issued invoices with at least one move-boundary charge prorated by read-period duration. Each invoice counts once. Proration uses read days, not a separate move settlement period.",
+      "formula": "count(issued invoices with a non-zero move-boundary fixed charge)",
       "unit": "count",
       "better": "context",
       "related": [],
@@ -10218,7 +10218,7 @@
     },
     {
       "id": "kpi:active_billing_blocks",
-      "title": "Active billing blocks",
+      "title": "Active billing-document blocks",
       "lane": "metrics",
       "topic": "billing",
       "kind": "metric",
@@ -10244,11 +10244,11 @@
     },
     {
       "id": "kpi:meterless_billed_accounts",
-      "title": "Billed accounts without a linked meter",
+      "title": "Invoiced accounts without a linked meter",
       "lane": "metrics",
       "topic": "billing",
       "kind": "metric",
-      "description": "Active accounts invoiced this year that have no meter linked through an active supply contract on the view date. This is a reference-integrity check, not a zero-consumption check.",
+      "description": "Active accounts with invoices issued this year that have no meter linked through an active supply contract on the view date. This is a reference-integrity check, not a zero-consumption check.",
       "formula": "count(active invoiced accounts without a current linked meter)",
       "unit": "count",
       "better": "lower",
@@ -31073,12 +31073,12 @@
       "reference": "utilsim/m2c/kpis.py · bills_on_time",
       "direction": -1,
       "explanation": {
-        "summary": "Analysts is listed as an indirect influence on Bills on time.",
-        "formula": "count(released by view date AND floor(released) − scheduled day ≤ kpi.on_time_bill_days) ÷ bills created",
+        "summary": "Analysts is listed as an indirect influence on Invoices on time.",
+        "formula": "account-cycles fully issued within kpi.on_time_bill_days ÷ scheduled account-cycles",
         "steps": [
           "Billing analysts working the exception queues.",
           "People working the queues. Fewer: backlog grows, cases age, estimates and blocked bills wait longer and carry builds; more: queues clear faster.",
-          "Counts documents created this year through the view date. Unreleased documents remain in the denominator. This uses whole calendar days."
+          "Scheduled account-month cycles with every due service issued within the operational invoice window. Includes print lag; pending cycles are not on time. Each service uses its own scheduled read day."
         ],
         "conditions": [
           "This is a catalogue relationship, not a one-to-one arithmetic effect or a guaranteed direction of change."
@@ -31099,12 +31099,12 @@
       "reference": "utilsim/m2c/kpis.py · bills_on_time",
       "direction": -1,
       "explanation": {
-        "summary": "Analyst Hours Per Day is listed as an indirect influence on Bills on time.",
-        "formula": "count(released by view date AND floor(released) − scheduled day ≤ kpi.on_time_bill_days) ÷ bills created",
+        "summary": "Analyst Hours Per Day is listed as an indirect influence on Invoices on time.",
+        "formula": "account-cycles fully issued within kpi.on_time_bill_days ÷ scheduled account-cycles",
         "steps": [
           "Productive queue hours per analyst per business day.",
           "Queue hours per analyst per day: capacity, like the number of analysts.",
-          "Counts documents created this year through the view date. Unreleased documents remain in the denominator. This uses whole calendar days."
+          "Scheduled account-month cycles with every due service issued within the operational invoice window. Includes print lag; pending cycles are not on time. Each service uses its own scheduled read day."
         ],
         "conditions": [
           "This is a catalogue relationship, not a one-to-one arithmetic effect or a guaranteed direction of change."
@@ -31125,12 +31125,12 @@
       "reference": "utilsim/m2c/kpis.py · bills_on_time",
       "direction": -1,
       "explanation": {
-        "summary": "Rpa Coverage is listed as an indirect influence on Bills on time.",
-        "formula": "count(released by view date AND floor(released) − scheduled day ≤ kpi.on_time_bill_days) ÷ bills created",
+        "summary": "Rpa Coverage is listed as an indirect influence on Invoices on time.",
+        "formula": "account-cycles fully issued within kpi.on_time_bill_days ÷ scheduled account-cycles",
         "steps": [
           "Share of exception types with an RPA/auto-resolve rule.",
           "Share of exception types automation resolves. More coverage: fewer cases for analysts, cheaper and faster resolution, less carry; uncovered types still queue for people.",
-          "Counts documents created this year through the view date. Unreleased documents remain in the denominator. This uses whole calendar days."
+          "Scheduled account-month cycles with every due service issued within the operational invoice window. Includes print lag; pending cycles are not on time. Each service uses its own scheduled read day."
         ],
         "conditions": [
           "This is a catalogue relationship, not a one-to-one arithmetic effect or a guaranteed direction of change."
@@ -31151,12 +31151,12 @@
       "reference": "utilsim/m2c/kpis.py · bills_on_time",
       "direction": 1,
       "explanation": {
-        "summary": "Analyst Queue Days Min is listed as an indirect influence on Bills on time.",
-        "formula": "count(released by view date AND floor(released) − scheduled day ≤ kpi.on_time_bill_days) ÷ bills created",
+        "summary": "Analyst Queue Days Min is listed as an indirect influence on Invoices on time.",
+        "formula": "account-cycles fully issued within kpi.on_time_bill_days ÷ scheduled account-cycles",
         "steps": [
           "Minimum queue wait before an analyst picks up an exception.",
           "Shortest wait before an analyst first looks at a case: every human case takes at least this long, so carry and days to release rise.",
-          "Counts documents created this year through the view date. Unreleased documents remain in the denominator. This uses whole calendar days."
+          "Scheduled account-month cycles with every due service issued within the operational invoice window. Includes print lag; pending cycles are not on time. Each service uses its own scheduled read day."
         ],
         "conditions": [
           "This is a catalogue relationship, not a one-to-one arithmetic effect or a guaranteed direction of change."
@@ -31177,12 +31177,12 @@
       "reference": "utilsim/m2c/kpis.py · bills_on_time",
       "direction": 1,
       "explanation": {
-        "summary": "Analyst Queue Days Max is listed as an indirect influence on Bills on time.",
-        "formula": "count(released by view date AND floor(released) − scheduled day ≤ kpi.on_time_bill_days) ÷ bills created",
+        "summary": "Analyst Queue Days Max is listed as an indirect influence on Invoices on time.",
+        "formula": "account-cycles fully issued within kpi.on_time_bill_days ÷ scheduled account-cycles",
         "steps": [
           "Maximum queue wait.",
           "Longest first-look wait: the tail of slow cases, open-case counts and carry.",
-          "Counts documents created this year through the view date. Unreleased documents remain in the denominator. This uses whole calendar days."
+          "Scheduled account-month cycles with every due service issued within the operational invoice window. Includes print lag; pending cycles are not on time. Each service uses its own scheduled read day."
         ],
         "conditions": [
           "This is a catalogue relationship, not a one-to-one arithmetic effect or a guaranteed direction of change."
@@ -31203,12 +31203,12 @@
       "reference": "utilsim/m2c/kpis.py · bills_on_time",
       "direction": 1,
       "explanation": {
-        "summary": "Ami Missed Read is listed as an indirect influence on Bills on time.",
-        "formula": "count(released by view date AND floor(released) − scheduled day ≤ kpi.on_time_bill_days) ÷ bills created",
+        "summary": "Ami Missed Read is listed as an indirect influence on Invoices on time.",
+        "formula": "account-cycles fully issued within kpi.on_time_bill_days ÷ scheduled account-cycles",
         "steps": [
           "AMI billing reads still missing after the head-end retry window (1: a day the head end is down).",
           "AMI reads still missing after retries: estimates, missing-read cases and estimate streaks.",
-          "Counts documents created this year through the view date. Unreleased documents remain in the denominator. This uses whole calendar days."
+          "Scheduled account-month cycles with every due service issued within the operational invoice window. Includes print lag; pending cycles are not on time. Each service uses its own scheduled read day."
         ],
         "conditions": [
           "This is a catalogue relationship, not a one-to-one arithmetic effect or a guaranteed direction of change."
@@ -31229,12 +31229,12 @@
       "reference": "utilsim/m2c/kpis.py · bills_on_time",
       "direction": 1,
       "explanation": {
-        "summary": "Amr Missed Read is listed as an indirect influence on Bills on time.",
-        "formula": "count(released by view date AND floor(released) − scheduled day ≤ kpi.on_time_bill_days) ÷ bills created",
+        "summary": "Amr Missed Read is listed as an indirect influence on Invoices on time.",
+        "formula": "account-cycles fully issued within kpi.on_time_bill_days ÷ scheduled account-cycles",
         "steps": [
           "Drive-by reads missed (no signal, street skipped; 1: the van does not go out).",
           "Drive-by reads missed: estimates and missing-read cases on AMR routes.",
-          "Counts documents created this year through the view date. Unreleased documents remain in the denominator. This uses whole calendar days."
+          "Scheduled account-month cycles with every due service issued within the operational invoice window. Includes print lag; pending cycles are not on time. Each service uses its own scheduled read day."
         ],
         "conditions": [
           "This is a catalogue relationship, not a one-to-one arithmetic effect or a guaranteed direction of change."
@@ -31255,12 +31255,12 @@
       "reference": "utilsim/m2c/kpis.py · bills_on_time",
       "direction": 1,
       "explanation": {
-        "summary": "Manual No Access is listed as an indirect influence on Bills on time.",
-        "formula": "count(released by view date AND floor(released) − scheduled day ≤ kpi.on_time_bill_days) ÷ bills created",
+        "summary": "Manual No Access is listed as an indirect influence on Invoices on time.",
+        "formula": "account-cycles fully issued within kpi.on_time_bill_days ÷ scheduled account-cycles",
         "steps": [
           "Manual reads with no access (locked gate, dog, meter inside; 1: nobody walks the route).",
           "Walked reads with no access: estimates, streaks and field reads.",
-          "Counts documents created this year through the view date. Unreleased documents remain in the denominator. This uses whole calendar days."
+          "Scheduled account-month cycles with every due service issued within the operational invoice window. Includes print lag; pending cycles are not on time. Each service uses its own scheduled read day."
         ],
         "conditions": [
           "This is a catalogue relationship, not a one-to-one arithmetic effect or a guaranteed direction of change."
@@ -31281,12 +31281,12 @@
       "reference": "utilsim/m2c/kpis.py · bills_on_time",
       "direction": -1,
       "explanation": {
-        "summary": "High Ratio is listed as an indirect influence on Bills on time.",
-        "formula": "count(released by view date AND floor(released) − scheduled day ≤ kpi.on_time_bill_days) ÷ bills created",
+        "summary": "High Ratio is listed as an indirect influence on Invoices on time.",
+        "formula": "account-cycles fully issued within kpi.on_time_bill_days ÷ scheduled account-cycles",
         "steps": [
           "Flag consumption above this multiple of expected (tolerance high).",
           "Flag use above this multiple of expected. Lower: more high reads flagged (more cases, more real spikes caught, more false alarms).",
-          "Counts documents created this year through the view date. Unreleased documents remain in the denominator. This uses whole calendar days."
+          "Scheduled account-month cycles with every due service issued within the operational invoice window. Includes print lag; pending cycles are not on time. Each service uses its own scheduled read day."
         ],
         "conditions": [
           "This is a catalogue relationship, not a one-to-one arithmetic effect or a guaranteed direction of change."
@@ -31307,12 +31307,12 @@
       "reference": "utilsim/m2c/kpis.py · bills_on_time",
       "direction": 1,
       "explanation": {
-        "summary": "Low Ratio is listed as an indirect influence on Bills on time.",
-        "formula": "count(released by view date AND floor(released) − scheduled day ≤ kpi.on_time_bill_days) ÷ bills created",
+        "summary": "Low Ratio is listed as an indirect influence on Invoices on time.",
+        "formula": "account-cycles fully issued within kpi.on_time_bill_days ÷ scheduled account-cycles",
         "steps": [
           "Flag consumption below this share of expected (tolerance low).",
           "Flag use below this share of expected. Higher: more low reads flagged, catching slow and stuck meters sooner at the cost of more cases.",
-          "Counts documents created this year through the view date. Unreleased documents remain in the denominator. This uses whole calendar days."
+          "Scheduled account-month cycles with every due service issued within the operational invoice window. Includes print lag; pending cycles are not on time. Each service uses its own scheduled read day."
         ],
         "conditions": [
           "This is a catalogue relationship, not a one-to-one arithmetic effect or a guaranteed direction of change."
@@ -31333,12 +31333,12 @@
       "reference": "utilsim/m2c/kpis.py · bills_on_time",
       "direction": 1,
       "explanation": {
-        "summary": "Accept Confidence is listed as an indirect influence on Bills on time.",
-        "formula": "count(released by view date AND floor(released) − scheduled day ≤ kpi.on_time_bill_days) ÷ bills created",
+        "summary": "Accept Confidence is listed as an indirect influence on Invoices on time.",
+        "formula": "account-cycles fully issued within kpi.on_time_bill_days ÷ scheduled account-cycles",
         "steps": [
           "Auto-accept at or above this confidence.",
           "Auto-accept at or above this confidence. Higher: fewer reads auto-accepted, more for review.",
-          "Counts documents created this year through the view date. Unreleased documents remain in the denominator. This uses whole calendar days."
+          "Scheduled account-month cycles with every due service issued within the operational invoice window. Includes print lag; pending cycles are not on time. Each service uses its own scheduled read day."
         ],
         "conditions": [
           "This is a catalogue relationship, not a one-to-one arithmetic effect or a guaranteed direction of change."
@@ -31359,12 +31359,12 @@
       "reference": "utilsim/m2c/kpis.py · bills_on_time",
       "direction": -1,
       "explanation": {
-        "summary": "Field Orders Per Day is listed as an indirect influence on Bills on time.",
-        "formula": "count(released by view date AND floor(released) − scheduled day ≤ kpi.on_time_bill_days) ÷ bills created",
+        "summary": "Field Orders Per Day is listed as an indirect influence on Invoices on time.",
+        "formula": "account-cycles fully issued within kpi.on_time_bill_days ÷ scheduled account-cycles",
         "steps": [
           "Meter investigations, re-reads and exchanges completed per business day.",
           "Field orders worked per day (re-reads, checks, exchanges). Fewer: field backlog, longer estimate streaks, stuck and slow meters fixed later.",
-          "Counts documents created this year through the view date. Unreleased documents remain in the denominator. This uses whole calendar days."
+          "Scheduled account-month cycles with every due service issued within the operational invoice window. Includes print lag; pending cycles are not on time. Each service uses its own scheduled read day."
         ],
         "conditions": [
           "This is a catalogue relationship, not a one-to-one arithmetic effect or a guaranteed direction of change."
@@ -31378,16 +31378,42 @@
       }
     },
     {
+      "source": "billing.print_lag_days",
+      "target": "kpi:bills_on_time",
+      "kind": "influence",
+      "note": "A setting listed as influencing this KPI in the engine catalogue. The connection is not a numerical prediction of impact.",
+      "reference": "utilsim/m2c/kpis.py · bills_on_time",
+      "direction": -1,
+      "explanation": {
+        "summary": "Print Lag Days is listed as an indirect influence on Invoices on time.",
+        "formula": "account-cycles fully issued within kpi.on_time_bill_days ÷ scheduled account-cycles",
+        "steps": [
+          "Days from invoice creation to issue.",
+          "Days from invoice to issue: due dates and receivable carry move with it.",
+          "Scheduled account-month cycles with every due service issued within the operational invoice window. Includes print lag; pending cycles are not on time. Each service uses its own scheduled read day."
+        ],
+        "conditions": [
+          "This is a catalogue relationship, not a one-to-one arithmetic effect or a guaranteed direction of change."
+        ],
+        "example": "",
+        "references": [
+          "utilsim/config/impact.py · billing.print_lag_days",
+          "utilsim/m2c/kpis.py · measure"
+        ],
+        "basis": "Indirect influence · downstream KPI formula"
+      }
+    },
+    {
       "source": "kpi.on_time_bill_days",
       "target": "kpi:bills_on_time",
       "kind": "definition",
       "note": "Defines this KPI’s counting window; does not change the underlying events.",
       "reference": "utilsim/m2c/kpis.py · bills_on_time",
       "explanation": {
-        "summary": "kpi.on_time_bill_days supplies the comparison window or target for Bills on time.",
-        "formula": "count(released by view date AND floor(released) − scheduled day ≤ kpi.on_time_bill_days) ÷ bills created",
+        "summary": "kpi.on_time_bill_days supplies the comparison window or target for Invoices on time.",
+        "formula": "account-cycles fully issued within kpi.on_time_bill_days ÷ scheduled account-cycles",
         "steps": [
-          "Counts documents created this year through the view date. Unreleased documents remain in the denominator. This uses whole calendar days.",
+          "Scheduled account-month cycles with every due service issued within the operational invoice window. Includes print lag; pending cycles are not on time. Each service uses its own scheduled read day.",
           "Changing this target changes how the recorded events are counted; it does not reschedule those events."
         ],
         "conditions": [],
@@ -31399,21 +31425,43 @@
       }
     },
     {
-      "source": "engine:bills",
+      "source": "engine:invoices",
       "target": "kpi:bills_on_time",
       "kind": "measure",
-      "note": "bills released within kpi.on_time_bill_days of the scheduled read ÷ bills created",
+      "note": "account-cycles fully issued within kpi.on_time_bill_days ÷ scheduled account-cycles",
       "reference": "utilsim/m2c/kpis.py · measure",
       "explanation": {
-        "summary": "Supplies the release timestamp for each bill and the created-bill population. Bills still unreleased at the view date count as not on time.",
-        "formula": "count(released by view date AND floor(released) − scheduled day ≤ kpi.on_time_bill_days) ÷ bills created",
+        "summary": "Supplies issue dates including print lag and the service documents covered. Prepared invoices do not count as issued before their planned issue day.",
+        "formula": "account-cycles fully issued within kpi.on_time_bill_days ÷ scheduled account-cycles",
         "steps": [
-          "Counts documents created this year through the view date. Unreleased documents remain in the denominator. This uses whole calendar days."
+          "Scheduled account-month cycles with every due service issued within the operational invoice window. Includes print lag; pending cycles are not on time. Each service uses its own scheduled read day."
         ],
         "conditions": [
           "Measured through the selected view date. An empty share/average population is reported as no value, not zero."
         ],
-        "example": "Illustration: scheduled 10 January, released 13 January at 20:00, window 3 days → on time (13 − 10 = 3 whole days).",
+        "example": "Illustration: read scheduled 10 January, document released 11 January, invoice issued 16 January. A 5-day target is missed; releasing the document alone does not make the invoice timely.",
+        "references": [
+          "utilsim/m2c/kpis.py · measure"
+        ],
+        "basis": "KPI calculation"
+      }
+    },
+    {
+      "source": "engine:bills",
+      "target": "kpi:bills_on_time",
+      "kind": "measure",
+      "note": "account-cycles fully issued within kpi.on_time_bill_days ÷ scheduled account-cycles",
+      "reference": "utilsim/m2c/kpis.py · measure",
+      "explanation": {
+        "summary": "Supplies billing-document totals, creation/release timestamps and billing-case links.",
+        "formula": "account-cycles fully issued within kpi.on_time_bill_days ÷ scheduled account-cycles",
+        "steps": [
+          "Scheduled account-month cycles with every due service issued within the operational invoice window. Includes print lag; pending cycles are not on time. Each service uses its own scheduled read day."
+        ],
+        "conditions": [
+          "Measured through the selected view date. An empty share/average population is reported as no value, not zero."
+        ],
+        "example": "Illustration: read scheduled 10 January, document released 11 January, invoice issued 16 January. A 5-day target is missed; releasing the document alone does not make the invoice timely.",
         "references": [
           "utilsim/m2c/kpis.py · measure"
         ],
@@ -31424,18 +31472,18 @@
       "source": "engine:schedule",
       "target": "kpi:bills_on_time",
       "kind": "measure",
-      "note": "bills released within kpi.on_time_bill_days of the scheduled read ÷ bills created",
+      "note": "account-cycles fully issued within kpi.on_time_bill_days ÷ scheduled account-cycles",
       "reference": "utilsim/m2c/kpis.py · measure",
       "explanation": {
-        "summary": "Supplies each bill’s scheduled read day from its installation’s main register. The bill’s release date is compared with this baseline.",
-        "formula": "count(released by view date AND floor(released) − scheduled day ≤ kpi.on_time_bill_days) ÷ bills created",
+        "summary": "Supplies each service scheduled read day. Account-month cycles include unissued obligations; each service keeps its own deadline.",
+        "formula": "account-cycles fully issued within kpi.on_time_bill_days ÷ scheduled account-cycles",
         "steps": [
-          "Counts documents created this year through the view date. Unreleased documents remain in the denominator. This uses whole calendar days."
+          "Scheduled account-month cycles with every due service issued within the operational invoice window. Includes print lag; pending cycles are not on time. Each service uses its own scheduled read day."
         ],
         "conditions": [
           "Measured through the selected view date. An empty share/average population is reported as no value, not zero."
         ],
-        "example": "Illustration: scheduled 10 January, released 13 January at 20:00, window 3 days → on time (13 − 10 = 3 whole days).",
+        "example": "Illustration: read scheduled 10 January, document released 11 January, invoice issued 16 January. A 5-day target is missed; releasing the document alone does not make the invoice timely.",
         "references": [
           "utilsim/m2c/kpis.py · measure"
         ],
@@ -31451,11 +31499,11 @@
       "direction": -1,
       "explanation": {
         "summary": "Analysts is listed as an indirect influence on Invoice timeliness.",
-        "formula": "count(invoice created − last scheduled read day ≤ kpi.timely_invoice_days) ÷ invoices created",
+        "formula": "account-cycles fully issued within kpi.timely_invoice_days ÷ scheduled account-cycles",
         "steps": [
           "Billing analysts working the exception queues.",
           "People working the queues. Fewer: backlog grows, cases age, estimates and blocked bills wait longer and carry builds; more: queues clear faster.",
-          "Counts invoices created this year through the view date. Uses elapsed calendar days, including the time of day; estimated billing can still be timely."
+          "Scheduled account-month cycles with every due service issued within the invoice timeliness target. Includes cycles held before an invoice exists and print lag. Pending cycles are not yet timely; Delayed invoices counts them late only after the deadline expires."
         ],
         "conditions": [
           "This is a catalogue relationship, not a one-to-one arithmetic effect or a guaranteed direction of change."
@@ -31478,11 +31526,11 @@
       "direction": -1,
       "explanation": {
         "summary": "Analyst Hours Per Day is listed as an indirect influence on Invoice timeliness.",
-        "formula": "count(invoice created − last scheduled read day ≤ kpi.timely_invoice_days) ÷ invoices created",
+        "formula": "account-cycles fully issued within kpi.timely_invoice_days ÷ scheduled account-cycles",
         "steps": [
           "Productive queue hours per analyst per business day.",
           "Queue hours per analyst per day: capacity, like the number of analysts.",
-          "Counts invoices created this year through the view date. Uses elapsed calendar days, including the time of day; estimated billing can still be timely."
+          "Scheduled account-month cycles with every due service issued within the invoice timeliness target. Includes cycles held before an invoice exists and print lag. Pending cycles are not yet timely; Delayed invoices counts them late only after the deadline expires."
         ],
         "conditions": [
           "This is a catalogue relationship, not a one-to-one arithmetic effect or a guaranteed direction of change."
@@ -31505,11 +31553,11 @@
       "direction": -1,
       "explanation": {
         "summary": "Rpa Coverage is listed as an indirect influence on Invoice timeliness.",
-        "formula": "count(invoice created − last scheduled read day ≤ kpi.timely_invoice_days) ÷ invoices created",
+        "formula": "account-cycles fully issued within kpi.timely_invoice_days ÷ scheduled account-cycles",
         "steps": [
           "Share of exception types with an RPA/auto-resolve rule.",
           "Share of exception types automation resolves. More coverage: fewer cases for analysts, cheaper and faster resolution, less carry; uncovered types still queue for people.",
-          "Counts invoices created this year through the view date. Uses elapsed calendar days, including the time of day; estimated billing can still be timely."
+          "Scheduled account-month cycles with every due service issued within the invoice timeliness target. Includes cycles held before an invoice exists and print lag. Pending cycles are not yet timely; Delayed invoices counts them late only after the deadline expires."
         ],
         "conditions": [
           "This is a catalogue relationship, not a one-to-one arithmetic effect or a guaranteed direction of change."
@@ -31532,11 +31580,11 @@
       "direction": 1,
       "explanation": {
         "summary": "Analyst Queue Days Min is listed as an indirect influence on Invoice timeliness.",
-        "formula": "count(invoice created − last scheduled read day ≤ kpi.timely_invoice_days) ÷ invoices created",
+        "formula": "account-cycles fully issued within kpi.timely_invoice_days ÷ scheduled account-cycles",
         "steps": [
           "Minimum queue wait before an analyst picks up an exception.",
           "Shortest wait before an analyst first looks at a case: every human case takes at least this long, so carry and days to release rise.",
-          "Counts invoices created this year through the view date. Uses elapsed calendar days, including the time of day; estimated billing can still be timely."
+          "Scheduled account-month cycles with every due service issued within the invoice timeliness target. Includes cycles held before an invoice exists and print lag. Pending cycles are not yet timely; Delayed invoices counts them late only after the deadline expires."
         ],
         "conditions": [
           "This is a catalogue relationship, not a one-to-one arithmetic effect or a guaranteed direction of change."
@@ -31559,11 +31607,11 @@
       "direction": 1,
       "explanation": {
         "summary": "Analyst Queue Days Max is listed as an indirect influence on Invoice timeliness.",
-        "formula": "count(invoice created − last scheduled read day ≤ kpi.timely_invoice_days) ÷ invoices created",
+        "formula": "account-cycles fully issued within kpi.timely_invoice_days ÷ scheduled account-cycles",
         "steps": [
           "Maximum queue wait.",
           "Longest first-look wait: the tail of slow cases, open-case counts and carry.",
-          "Counts invoices created this year through the view date. Uses elapsed calendar days, including the time of day; estimated billing can still be timely."
+          "Scheduled account-month cycles with every due service issued within the invoice timeliness target. Includes cycles held before an invoice exists and print lag. Pending cycles are not yet timely; Delayed invoices counts them late only after the deadline expires."
         ],
         "conditions": [
           "This is a catalogue relationship, not a one-to-one arithmetic effect or a guaranteed direction of change."
@@ -31586,11 +31634,11 @@
       "direction": 1,
       "explanation": {
         "summary": "Ami Missed Read is listed as an indirect influence on Invoice timeliness.",
-        "formula": "count(invoice created − last scheduled read day ≤ kpi.timely_invoice_days) ÷ invoices created",
+        "formula": "account-cycles fully issued within kpi.timely_invoice_days ÷ scheduled account-cycles",
         "steps": [
           "AMI billing reads still missing after the head-end retry window (1: a day the head end is down).",
           "AMI reads still missing after retries: estimates, missing-read cases and estimate streaks.",
-          "Counts invoices created this year through the view date. Uses elapsed calendar days, including the time of day; estimated billing can still be timely."
+          "Scheduled account-month cycles with every due service issued within the invoice timeliness target. Includes cycles held before an invoice exists and print lag. Pending cycles are not yet timely; Delayed invoices counts them late only after the deadline expires."
         ],
         "conditions": [
           "This is a catalogue relationship, not a one-to-one arithmetic effect or a guaranteed direction of change."
@@ -31613,11 +31661,11 @@
       "direction": 1,
       "explanation": {
         "summary": "Amr Missed Read is listed as an indirect influence on Invoice timeliness.",
-        "formula": "count(invoice created − last scheduled read day ≤ kpi.timely_invoice_days) ÷ invoices created",
+        "formula": "account-cycles fully issued within kpi.timely_invoice_days ÷ scheduled account-cycles",
         "steps": [
           "Drive-by reads missed (no signal, street skipped; 1: the van does not go out).",
           "Drive-by reads missed: estimates and missing-read cases on AMR routes.",
-          "Counts invoices created this year through the view date. Uses elapsed calendar days, including the time of day; estimated billing can still be timely."
+          "Scheduled account-month cycles with every due service issued within the invoice timeliness target. Includes cycles held before an invoice exists and print lag. Pending cycles are not yet timely; Delayed invoices counts them late only after the deadline expires."
         ],
         "conditions": [
           "This is a catalogue relationship, not a one-to-one arithmetic effect or a guaranteed direction of change."
@@ -31640,11 +31688,11 @@
       "direction": 1,
       "explanation": {
         "summary": "Manual No Access is listed as an indirect influence on Invoice timeliness.",
-        "formula": "count(invoice created − last scheduled read day ≤ kpi.timely_invoice_days) ÷ invoices created",
+        "formula": "account-cycles fully issued within kpi.timely_invoice_days ÷ scheduled account-cycles",
         "steps": [
           "Manual reads with no access (locked gate, dog, meter inside; 1: nobody walks the route).",
           "Walked reads with no access: estimates, streaks and field reads.",
-          "Counts invoices created this year through the view date. Uses elapsed calendar days, including the time of day; estimated billing can still be timely."
+          "Scheduled account-month cycles with every due service issued within the invoice timeliness target. Includes cycles held before an invoice exists and print lag. Pending cycles are not yet timely; Delayed invoices counts them late only after the deadline expires."
         ],
         "conditions": [
           "This is a catalogue relationship, not a one-to-one arithmetic effect or a guaranteed direction of change."
@@ -31667,11 +31715,11 @@
       "direction": -1,
       "explanation": {
         "summary": "High Ratio is listed as an indirect influence on Invoice timeliness.",
-        "formula": "count(invoice created − last scheduled read day ≤ kpi.timely_invoice_days) ÷ invoices created",
+        "formula": "account-cycles fully issued within kpi.timely_invoice_days ÷ scheduled account-cycles",
         "steps": [
           "Flag consumption above this multiple of expected (tolerance high).",
           "Flag use above this multiple of expected. Lower: more high reads flagged (more cases, more real spikes caught, more false alarms).",
-          "Counts invoices created this year through the view date. Uses elapsed calendar days, including the time of day; estimated billing can still be timely."
+          "Scheduled account-month cycles with every due service issued within the invoice timeliness target. Includes cycles held before an invoice exists and print lag. Pending cycles are not yet timely; Delayed invoices counts them late only after the deadline expires."
         ],
         "conditions": [
           "This is a catalogue relationship, not a one-to-one arithmetic effect or a guaranteed direction of change."
@@ -31694,11 +31742,11 @@
       "direction": 1,
       "explanation": {
         "summary": "Low Ratio is listed as an indirect influence on Invoice timeliness.",
-        "formula": "count(invoice created − last scheduled read day ≤ kpi.timely_invoice_days) ÷ invoices created",
+        "formula": "account-cycles fully issued within kpi.timely_invoice_days ÷ scheduled account-cycles",
         "steps": [
           "Flag consumption below this share of expected (tolerance low).",
           "Flag use below this share of expected. Higher: more low reads flagged, catching slow and stuck meters sooner at the cost of more cases.",
-          "Counts invoices created this year through the view date. Uses elapsed calendar days, including the time of day; estimated billing can still be timely."
+          "Scheduled account-month cycles with every due service issued within the invoice timeliness target. Includes cycles held before an invoice exists and print lag. Pending cycles are not yet timely; Delayed invoices counts them late only after the deadline expires."
         ],
         "conditions": [
           "This is a catalogue relationship, not a one-to-one arithmetic effect or a guaranteed direction of change."
@@ -31721,11 +31769,11 @@
       "direction": 1,
       "explanation": {
         "summary": "Accept Confidence is listed as an indirect influence on Invoice timeliness.",
-        "formula": "count(invoice created − last scheduled read day ≤ kpi.timely_invoice_days) ÷ invoices created",
+        "formula": "account-cycles fully issued within kpi.timely_invoice_days ÷ scheduled account-cycles",
         "steps": [
           "Auto-accept at or above this confidence.",
           "Auto-accept at or above this confidence. Higher: fewer reads auto-accepted, more for review.",
-          "Counts invoices created this year through the view date. Uses elapsed calendar days, including the time of day; estimated billing can still be timely."
+          "Scheduled account-month cycles with every due service issued within the invoice timeliness target. Includes cycles held before an invoice exists and print lag. Pending cycles are not yet timely; Delayed invoices counts them late only after the deadline expires."
         ],
         "conditions": [
           "This is a catalogue relationship, not a one-to-one arithmetic effect or a guaranteed direction of change."
@@ -31748,11 +31796,11 @@
       "direction": -1,
       "explanation": {
         "summary": "Field Orders Per Day is listed as an indirect influence on Invoice timeliness.",
-        "formula": "count(invoice created − last scheduled read day ≤ kpi.timely_invoice_days) ÷ invoices created",
+        "formula": "account-cycles fully issued within kpi.timely_invoice_days ÷ scheduled account-cycles",
         "steps": [
           "Meter investigations, re-reads and exchanges completed per business day.",
           "Field orders worked per day (re-reads, checks, exchanges). Fewer: field backlog, longer estimate streaks, stuck and slow meters fixed later.",
-          "Counts invoices created this year through the view date. Uses elapsed calendar days, including the time of day; estimated billing can still be timely."
+          "Scheduled account-month cycles with every due service issued within the invoice timeliness target. Includes cycles held before an invoice exists and print lag. Pending cycles are not yet timely; Delayed invoices counts them late only after the deadline expires."
         ],
         "conditions": [
           "This is a catalogue relationship, not a one-to-one arithmetic effect or a guaranteed direction of change."
@@ -31767,6 +31815,33 @@
       }
     },
     {
+      "source": "billing.print_lag_days",
+      "target": "kpi:invoice_timeliness",
+      "kind": "influence",
+      "note": "A setting listed as influencing this KPI in the engine catalogue. The connection is not a numerical prediction of impact.",
+      "reference": "utilsim/m2c/kpis.py · invoice_timeliness",
+      "direction": -1,
+      "explanation": {
+        "summary": "Print Lag Days is listed as an indirect influence on Invoice timeliness.",
+        "formula": "account-cycles fully issued within kpi.timely_invoice_days ÷ scheduled account-cycles",
+        "steps": [
+          "Days from invoice creation to issue.",
+          "Days from invoice to issue: due dates and receivable carry move with it.",
+          "Scheduled account-month cycles with every due service issued within the invoice timeliness target. Includes cycles held before an invoice exists and print lag. Pending cycles are not yet timely; Delayed invoices counts them late only after the deadline expires."
+        ],
+        "conditions": [
+          "This is a catalogue relationship, not a one-to-one arithmetic effect or a guaranteed direction of change."
+        ],
+        "example": "",
+        "references": [
+          "utilsim/config/impact.py · billing.print_lag_days",
+          "utilsim/m2c/kpis.py · measure",
+          "utilsim/twin/kpis.py · measure"
+        ],
+        "basis": "Indirect influence · downstream KPI formula"
+      }
+    },
+    {
       "source": "kpi.timely_invoice_days",
       "target": "kpi:invoice_timeliness",
       "kind": "definition",
@@ -31774,9 +31849,9 @@
       "reference": "utilsim/m2c/kpis.py · invoice_timeliness",
       "explanation": {
         "summary": "kpi.timely_invoice_days supplies the comparison window or target for Invoice timeliness.",
-        "formula": "count(invoice created − last scheduled read day ≤ kpi.timely_invoice_days) ÷ invoices created",
+        "formula": "account-cycles fully issued within kpi.timely_invoice_days ÷ scheduled account-cycles",
         "steps": [
-          "Counts invoices created this year through the view date. Uses elapsed calendar days, including the time of day; estimated billing can still be timely.",
+          "Scheduled account-month cycles with every due service issued within the invoice timeliness target. Includes cycles held before an invoice exists and print lag. Pending cycles are not yet timely; Delayed invoices counts them late only after the deadline expires.",
           "Changing this target changes how the recorded events are counted; it does not reschedule those events."
         ],
         "conditions": [],
@@ -31792,18 +31867,18 @@
       "source": "engine:invoices",
       "target": "kpi:invoice_timeliness",
       "kind": "measure",
-      "note": "invoices created within kpi.timely_invoice_days ÷ invoices",
+      "note": "account-cycles fully issued within kpi.timely_invoice_days ÷ scheduled account-cycles",
       "reference": "utilsim/m2c/kpis.py · measure",
       "explanation": {
-        "summary": "Supplies the invoice creation timestamp and its list of billing documents. The calculation compares creation with the latest scheduled read those documents cover, not with the issue date.",
-        "formula": "count(invoice created − last scheduled read day ≤ kpi.timely_invoice_days) ÷ invoices created",
+        "summary": "Supplies issue dates including print lag and the service documents covered. Prepared invoices do not count as issued before their planned issue day.",
+        "formula": "account-cycles fully issued within kpi.timely_invoice_days ÷ scheduled account-cycles",
         "steps": [
-          "Counts invoices created this year through the view date. Uses elapsed calendar days, including the time of day; estimated billing can still be timely."
+          "Scheduled account-month cycles with every due service issued within the invoice timeliness target. Includes cycles held before an invoice exists and print lag. Pending cycles are not yet timely; Delayed invoices counts them late only after the deadline expires."
         ],
         "conditions": [
           "Measured through the selected view date. An empty share/average population is reported as no value, not zero."
         ],
-        "example": "Illustration: last scheduled read 10 January, invoice created 13 January at 20:00 → 3 + 20/24 = 3.83 elapsed days. A 3-day target is missed.",
+        "example": "Illustration: read scheduled 10 January, document released 11 January, invoice issued 16 January. A 5-day target is missed; releasing the document alone does not make the invoice timely.",
         "references": [
           "utilsim/m2c/kpis.py · measure",
           "utilsim/twin/kpis.py · measure"
@@ -31815,18 +31890,18 @@
       "source": "engine:schedule",
       "target": "kpi:invoice_timeliness",
       "kind": "measure",
-      "note": "invoices created within kpi.timely_invoice_days ÷ invoices",
+      "note": "account-cycles fully issued within kpi.timely_invoice_days ÷ scheduled account-cycles",
       "reference": "utilsim/m2c/kpis.py · measure",
       "explanation": {
-        "summary": "Supplies the latest scheduled read day across all documents included in the invoice. Invoice creation is measured from that baseline.",
-        "formula": "count(invoice created − last scheduled read day ≤ kpi.timely_invoice_days) ÷ invoices created",
+        "summary": "Supplies each service scheduled read day. Account-month cycles include unissued obligations; each service keeps its own deadline.",
+        "formula": "account-cycles fully issued within kpi.timely_invoice_days ÷ scheduled account-cycles",
         "steps": [
-          "Counts invoices created this year through the view date. Uses elapsed calendar days, including the time of day; estimated billing can still be timely."
+          "Scheduled account-month cycles with every due service issued within the invoice timeliness target. Includes cycles held before an invoice exists and print lag. Pending cycles are not yet timely; Delayed invoices counts them late only after the deadline expires."
         ],
         "conditions": [
           "Measured through the selected view date. An empty share/average population is reported as no value, not zero."
         ],
-        "example": "Illustration: last scheduled read 10 January, invoice created 13 January at 20:00 → 3 + 20/24 = 3.83 elapsed days. A 3-day target is missed.",
+        "example": "Illustration: read scheduled 10 January, document released 11 January, invoice issued 16 January. A 5-day target is missed; releasing the document alone does not make the invoice timely.",
         "references": [
           "utilsim/m2c/kpis.py · measure",
           "utilsim/twin/kpis.py · measure"
@@ -31842,12 +31917,12 @@
       "reference": "utilsim/m2c/kpis.py · blocked_bill_share",
       "direction": -1,
       "explanation": {
-        "summary": "High Bill Ratio is listed as an indirect influence on Bills blocked.",
-        "formula": "documents with a billing case ÷ documents created",
+        "summary": "High Bill Ratio is listed as an indirect influence on Invoice cycles affected by billing checks.",
+        "formula": "account-cycles with a billing check ÷ scheduled account-cycles",
         "steps": [
           "Block a bill above this multiple of its expected amount (prior-year use at current prices).",
           "Block bills above this multiple of expected: lower means more billing outsorts for analysts or RPA.",
-          "Counts whether a check ever raised a billing case, even if that document was subsequently released."
+          "Scheduled account-month cycles with at least one billing-document check raised, even if later released. Multiple service documents count once; this tracks upstream causes of invoice holds."
         ],
         "conditions": [
           "This is a catalogue relationship, not a one-to-one arithmetic effect or a guaranteed direction of change."
@@ -31868,12 +31943,12 @@
       "reference": "utilsim/m2c/kpis.py · blocked_bill_share",
       "direction": -1,
       "explanation": {
-        "summary": "Trueup Max Ratio is listed as an indirect influence on Bills blocked.",
-        "formula": "documents with a billing case ÷ documents created",
+        "summary": "Trueup Max Ratio is listed as an indirect influence on Invoice cycles affected by billing checks.",
+        "formula": "account-cycles with a billing check ÷ scheduled account-cycles",
         "steps": [
           "Block a bill whose estimate true-up (a negative period quantity) is larger than this multiple of the period's expected use; an analyst decides it.",
           "Block estimate true-ups (a negative period after an over-estimate) larger than this multiple of expected use. Rare unless estimates run high.",
-          "Counts whether a check ever raised a billing case, even if that document was subsequently released."
+          "Scheduled account-month cycles with at least one billing-document check raised, even if later released. Multiple service documents count once; this tracks upstream causes of invoice holds."
         ],
         "conditions": [
           "This is a catalogue relationship, not a one-to-one arithmetic effect or a guaranteed direction of change."
@@ -31894,12 +31969,12 @@
       "reference": "utilsim/m2c/kpis.py · blocked_bill_share",
       "direction": 1,
       "explanation": {
-        "summary": "Leak is listed as an indirect influence on Bills blocked.",
-        "formula": "documents with a billing case ÷ documents created",
+        "summary": "Leak is listed as an indirect influence on Invoice cycles affected by billing checks.",
+        "formula": "account-cycles with a billing check ÷ scheduled account-cycles",
         "steps": [
           "Continuous post-meter water leaks.",
           "Water leaks after the meter: high water reads, high-bill blocks and complaints.",
-          "Counts whether a check ever raised a billing case, even if that document was subsequently released."
+          "Scheduled account-month cycles with at least one billing-document check raised, even if later released. Multiple service documents count once; this tracks upstream causes of invoice holds."
         ],
         "conditions": [
           "This is a catalogue relationship, not a one-to-one arithmetic effect or a guaranteed direction of change."
@@ -31920,12 +31995,12 @@
       "reference": "utilsim/m2c/kpis.py · blocked_bill_share",
       "direction": 1,
       "explanation": {
-        "summary": "Stuck Meter is listed as an indirect influence on Bills blocked.",
-        "formula": "documents with a billing case ÷ documents created",
+        "summary": "Stuck Meter is listed as an indirect influence on Invoice cycles affected by billing checks.",
+        "formula": "account-cycles with a billing check ÷ scheduled account-cycles",
         "steps": [
           "Registers that stop advancing.",
           "Registers that stop: zero-use reads at occupied homes, field orders and exchanges, under-billing until fixed.",
-          "Counts whether a check ever raised a billing case, even if that document was subsequently released."
+          "Scheduled account-month cycles with at least one billing-document check raised, even if later released. Multiple service documents count once; this tracks upstream causes of invoice holds."
         ],
         "conditions": [
           "This is a catalogue relationship, not a one-to-one arithmetic effect or a guaranteed direction of change."
@@ -31946,12 +32021,12 @@
       "reference": "utilsim/m2c/kpis.py · blocked_bill_share",
       "direction": 1,
       "explanation": {
-        "summary": "Slow Meter is listed as an indirect influence on Bills blocked.",
-        "formula": "documents with a billing case ÷ documents created",
+        "summary": "Slow Meter is listed as an indirect influence on Invoice cycles affected by billing checks.",
+        "formula": "account-cycles with a billing check ÷ scheduled account-cycles",
         "steps": [
           "Meters under-registering 10–40%.",
           "Meters under-registering 10 to 40 percent: lost revenue VEE catches only through the trend test.",
-          "Counts whether a check ever raised a billing case, even if that document was subsequently released."
+          "Scheduled account-month cycles with at least one billing-document check raised, even if later released. Multiple service documents count once; this tracks upstream causes of invoice holds."
         ],
         "conditions": [
           "This is a catalogue relationship, not a one-to-one arithmetic effect or a guaranteed direction of change."
@@ -31972,12 +32047,12 @@
       "reference": "utilsim/m2c/kpis.py · blocked_bill_share",
       "direction": 1,
       "explanation": {
-        "summary": "Transposed Digits is listed as an indirect influence on Bills blocked.",
-        "formula": "documents with a billing case ÷ documents created",
+        "summary": "Transposed Digits is listed as an indirect influence on Invoice cycles affected by billing checks.",
+        "formula": "account-cycles with a billing check ÷ scheduled account-cycles",
         "steps": [
           "Reads with two digits swapped.",
           "Two digits swapped in a read: wild spikes or drops VEE should reject.",
-          "Counts whether a check ever raised a billing case, even if that document was subsequently released."
+          "Scheduled account-month cycles with at least one billing-document check raised, even if later released. Multiple service documents count once; this tracks upstream causes of invoice holds."
         ],
         "conditions": [
           "This is a catalogue relationship, not a one-to-one arithmetic effect or a guaranteed direction of change."
@@ -31998,12 +32073,12 @@
       "reference": "utilsim/m2c/kpis.py · blocked_bill_share",
       "direction": 1,
       "explanation": {
-        "summary": "Misread is listed as an indirect influence on Bills blocked.",
-        "formula": "documents with a billing case ÷ documents created",
+        "summary": "Misread is listed as an indirect influence on Invoice cycles affected by billing checks.",
+        "formula": "account-cycles with a billing check ÷ scheduled account-cycles",
         "steps": [
           "Reads off by one in a high digit.",
           "A high digit off by one: large spikes or negative use.",
-          "Counts whether a check ever raised a billing case, even if that document was subsequently released."
+          "Scheduled account-month cycles with at least one billing-document check raised, even if later released. Multiple service documents count once; this tracks upstream causes of invoice holds."
         ],
         "conditions": [
           "This is a catalogue relationship, not a one-to-one arithmetic effect or a guaranteed direction of change."
@@ -32024,12 +32099,12 @@
       "reference": "utilsim/m2c/kpis.py · blocked_bill_share",
       "direction": 1,
       "explanation": {
-        "summary": "Consecutive Estimates is listed as an indirect influence on Bills blocked.",
-        "formula": "documents with a billing case ÷ documents created",
+        "summary": "Consecutive Estimates is listed as an indirect influence on Invoice cycles affected by billing checks.",
+        "formula": "account-cycles with a billing check ÷ scheduled account-cycles",
         "steps": [
           "Runs of 2–4 estimated periods (higher on manual routes).",
           "Runs of estimated periods (more on walked routes): estimate streaks that trigger field reads and true-ups.",
-          "Counts whether a check ever raised a billing case, even if that document was subsequently released."
+          "Scheduled account-month cycles with at least one billing-document check raised, even if later released. Multiple service documents count once; this tracks upstream causes of invoice holds."
         ],
         "conditions": [
           "This is a catalogue relationship, not a one-to-one arithmetic effect or a guaranteed direction of change."
@@ -32050,12 +32125,12 @@
       "reference": "utilsim/m2c/kpis.py · blocked_bill_share",
       "direction": 1,
       "explanation": {
-        "summary": "Vacant Consuming is listed as an indirect influence on Bills blocked.",
-        "formula": "documents with a billing case ÷ documents created",
+        "summary": "Vacant Consuming is listed as an indirect influence on Invoice cycles affected by billing checks.",
+        "formula": "account-cycles with a billing check ÷ scheduled account-cycles",
         "steps": [
           "Vacant premises that still consume.",
           "Vacant homes that still use energy: unbilled consumption cases.",
-          "Counts whether a check ever raised a billing case, even if that document was subsequently released."
+          "Scheduled account-month cycles with at least one billing-document check raised, even if later released. Multiple service documents count once; this tracks upstream causes of invoice holds."
         ],
         "conditions": [
           "This is a catalogue relationship, not a one-to-one arithmetic effect or a guaranteed direction of change."
@@ -32076,12 +32151,12 @@
       "reference": "utilsim/m2c/kpis.py · blocked_bill_share",
       "direction": 1,
       "explanation": {
-        "summary": "Tamper is listed as an indirect influence on Bills blocked.",
-        "formula": "documents with a billing case ÷ documents created",
+        "summary": "Tamper is listed as an indirect influence on Invoice cycles affected by billing checks.",
+        "formula": "account-cycles with a billing check ÷ scheduled account-cycles",
         "steps": [
           "Bypass/tamper (50–90% under-registration).",
           "Bypasses that under-register 50 to 90 percent: lost revenue and investigations.",
-          "Counts whether a check ever raised a billing case, even if that document was subsequently released."
+          "Scheduled account-month cycles with at least one billing-document check raised, even if later released. Multiple service documents count once; this tracks upstream causes of invoice holds."
         ],
         "conditions": [
           "This is a catalogue relationship, not a one-to-one arithmetic effect or a guaranteed direction of change."
@@ -32095,16 +32170,60 @@
       }
     },
     {
+      "source": "engine:invoices",
+      "target": "kpi:blocked_bill_share",
+      "kind": "measure",
+      "note": "account-cycles with a billing check ÷ scheduled account-cycles",
+      "reference": "utilsim/m2c/kpis.py · measure",
+      "explanation": {
+        "summary": "Supplies invoice amounts, included documents, creation/issue dates and due dates.",
+        "formula": "account-cycles with a billing check ÷ scheduled account-cycles",
+        "steps": [
+          "Scheduled account-month cycles with at least one billing-document check raised, even if later released. Multiple service documents count once; this tracks upstream causes of invoice holds."
+        ],
+        "conditions": [
+          "Measured through the selected view date. An empty share/average population is reported as no value, not zero."
+        ],
+        "example": "",
+        "references": [
+          "utilsim/m2c/kpis.py · measure"
+        ],
+        "basis": "KPI calculation"
+      }
+    },
+    {
       "source": "engine:bills",
       "target": "kpi:blocked_bill_share",
       "kind": "measure",
-      "note": "bills with a billing case ÷ bills created",
+      "note": "account-cycles with a billing check ÷ scheduled account-cycles",
       "reference": "utilsim/m2c/kpis.py · measure",
       "explanation": {
         "summary": "Supplies billing-document totals, creation/release timestamps and billing-case links.",
-        "formula": "documents with a billing case ÷ documents created",
+        "formula": "account-cycles with a billing check ÷ scheduled account-cycles",
         "steps": [
-          "Counts whether a check ever raised a billing case, even if that document was subsequently released."
+          "Scheduled account-month cycles with at least one billing-document check raised, even if later released. Multiple service documents count once; this tracks upstream causes of invoice holds."
+        ],
+        "conditions": [
+          "Measured through the selected view date. An empty share/average population is reported as no value, not zero."
+        ],
+        "example": "",
+        "references": [
+          "utilsim/m2c/kpis.py · measure"
+        ],
+        "basis": "KPI calculation"
+      }
+    },
+    {
+      "source": "engine:schedule",
+      "target": "kpi:blocked_bill_share",
+      "kind": "measure",
+      "note": "account-cycles with a billing check ÷ scheduled account-cycles",
+      "reference": "utilsim/m2c/kpis.py · measure",
+      "explanation": {
+        "summary": "Supplies each service scheduled read day. Account-month cycles include unissued obligations; each service keeps its own deadline.",
+        "formula": "account-cycles with a billing check ÷ scheduled account-cycles",
+        "steps": [
+          "Scheduled account-month cycles with at least one billing-document check raised, even if later released. Multiple service documents count once; this tracks upstream causes of invoice holds."
         ],
         "conditions": [
           "Measured through the selected view date. An empty share/average population is reported as no value, not zero."
@@ -32124,12 +32243,12 @@
       "reference": "utilsim/m2c/kpis.py · billing_error_share",
       "direction": -1,
       "explanation": {
-        "summary": "High Ratio is listed as an indirect influence on Billing error.",
-        "formula": "Σ|released bill total − true bill total| ÷ Σ released bill total",
+        "summary": "High Ratio is listed as an indirect influence on Invoice amount error.",
+        "formula": "Σ|net invoice total − net truth total| ÷ Σ|net invoice total|",
         "steps": [
           "Flag consumption above this multiple of expected (tolerance high).",
           "Flag use above this multiple of expected. Lower: more high reads flagged (more cases, more real spikes caught, more false alarms).",
-          "True totals apply the billing calculation to underlying consumption; only bills released in the reporting window are used."
+          "Absolute net invoice error against simulated truth for invoices issued in the reporting window. Corrective invoice truth includes the credit for the previously invoiced version."
         ],
         "conditions": [
           "This is a catalogue relationship, not a one-to-one arithmetic effect or a guaranteed direction of change."
@@ -32150,12 +32269,12 @@
       "reference": "utilsim/m2c/kpis.py · billing_error_share",
       "direction": 1,
       "explanation": {
-        "summary": "Low Ratio is listed as an indirect influence on Billing error.",
-        "formula": "Σ|released bill total − true bill total| ÷ Σ released bill total",
+        "summary": "Low Ratio is listed as an indirect influence on Invoice amount error.",
+        "formula": "Σ|net invoice total − net truth total| ÷ Σ|net invoice total|",
         "steps": [
           "Flag consumption below this share of expected (tolerance low).",
           "Flag use below this share of expected. Higher: more low reads flagged, catching slow and stuck meters sooner at the cost of more cases.",
-          "True totals apply the billing calculation to underlying consumption; only bills released in the reporting window are used."
+          "Absolute net invoice error against simulated truth for invoices issued in the reporting window. Corrective invoice truth includes the credit for the previously invoiced version."
         ],
         "conditions": [
           "This is a catalogue relationship, not a one-to-one arithmetic effect or a guaranteed direction of change."
@@ -32176,12 +32295,12 @@
       "reference": "utilsim/m2c/kpis.py · billing_error_share",
       "direction": 1,
       "explanation": {
-        "summary": "Accept Confidence is listed as an indirect influence on Billing error.",
-        "formula": "Σ|released bill total − true bill total| ÷ Σ released bill total",
+        "summary": "Accept Confidence is listed as an indirect influence on Invoice amount error.",
+        "formula": "Σ|net invoice total − net truth total| ÷ Σ|net invoice total|",
         "steps": [
           "Auto-accept at or above this confidence.",
           "Auto-accept at or above this confidence. Higher: fewer reads auto-accepted, more for review.",
-          "True totals apply the billing calculation to underlying consumption; only bills released in the reporting window are used."
+          "Absolute net invoice error against simulated truth for invoices issued in the reporting window. Corrective invoice truth includes the credit for the previously invoiced version."
         ],
         "conditions": [
           "This is a catalogue relationship, not a one-to-one arithmetic effect or a guaranteed direction of change."
@@ -32202,12 +32321,12 @@
       "reference": "utilsim/m2c/kpis.py · billing_error_share",
       "direction": 1,
       "explanation": {
-        "summary": "Leak is listed as an indirect influence on Billing error.",
-        "formula": "Σ|released bill total − true bill total| ÷ Σ released bill total",
+        "summary": "Leak is listed as an indirect influence on Invoice amount error.",
+        "formula": "Σ|net invoice total − net truth total| ÷ Σ|net invoice total|",
         "steps": [
           "Continuous post-meter water leaks.",
           "Water leaks after the meter: high water reads, high-bill blocks and complaints.",
-          "True totals apply the billing calculation to underlying consumption; only bills released in the reporting window are used."
+          "Absolute net invoice error against simulated truth for invoices issued in the reporting window. Corrective invoice truth includes the credit for the previously invoiced version."
         ],
         "conditions": [
           "This is a catalogue relationship, not a one-to-one arithmetic effect or a guaranteed direction of change."
@@ -32228,12 +32347,12 @@
       "reference": "utilsim/m2c/kpis.py · billing_error_share",
       "direction": 1,
       "explanation": {
-        "summary": "Stuck Meter is listed as an indirect influence on Billing error.",
-        "formula": "Σ|released bill total − true bill total| ÷ Σ released bill total",
+        "summary": "Stuck Meter is listed as an indirect influence on Invoice amount error.",
+        "formula": "Σ|net invoice total − net truth total| ÷ Σ|net invoice total|",
         "steps": [
           "Registers that stop advancing.",
           "Registers that stop: zero-use reads at occupied homes, field orders and exchanges, under-billing until fixed.",
-          "True totals apply the billing calculation to underlying consumption; only bills released in the reporting window are used."
+          "Absolute net invoice error against simulated truth for invoices issued in the reporting window. Corrective invoice truth includes the credit for the previously invoiced version."
         ],
         "conditions": [
           "This is a catalogue relationship, not a one-to-one arithmetic effect or a guaranteed direction of change."
@@ -32254,12 +32373,12 @@
       "reference": "utilsim/m2c/kpis.py · billing_error_share",
       "direction": 1,
       "explanation": {
-        "summary": "Slow Meter is listed as an indirect influence on Billing error.",
-        "formula": "Σ|released bill total − true bill total| ÷ Σ released bill total",
+        "summary": "Slow Meter is listed as an indirect influence on Invoice amount error.",
+        "formula": "Σ|net invoice total − net truth total| ÷ Σ|net invoice total|",
         "steps": [
           "Meters under-registering 10–40%.",
           "Meters under-registering 10 to 40 percent: lost revenue VEE catches only through the trend test.",
-          "True totals apply the billing calculation to underlying consumption; only bills released in the reporting window are used."
+          "Absolute net invoice error against simulated truth for invoices issued in the reporting window. Corrective invoice truth includes the credit for the previously invoiced version."
         ],
         "conditions": [
           "This is a catalogue relationship, not a one-to-one arithmetic effect or a guaranteed direction of change."
@@ -32280,12 +32399,12 @@
       "reference": "utilsim/m2c/kpis.py · billing_error_share",
       "direction": 1,
       "explanation": {
-        "summary": "Transposed Digits is listed as an indirect influence on Billing error.",
-        "formula": "Σ|released bill total − true bill total| ÷ Σ released bill total",
+        "summary": "Transposed Digits is listed as an indirect influence on Invoice amount error.",
+        "formula": "Σ|net invoice total − net truth total| ÷ Σ|net invoice total|",
         "steps": [
           "Reads with two digits swapped.",
           "Two digits swapped in a read: wild spikes or drops VEE should reject.",
-          "True totals apply the billing calculation to underlying consumption; only bills released in the reporting window are used."
+          "Absolute net invoice error against simulated truth for invoices issued in the reporting window. Corrective invoice truth includes the credit for the previously invoiced version."
         ],
         "conditions": [
           "This is a catalogue relationship, not a one-to-one arithmetic effect or a guaranteed direction of change."
@@ -32306,12 +32425,12 @@
       "reference": "utilsim/m2c/kpis.py · billing_error_share",
       "direction": 1,
       "explanation": {
-        "summary": "Misread is listed as an indirect influence on Billing error.",
-        "formula": "Σ|released bill total − true bill total| ÷ Σ released bill total",
+        "summary": "Misread is listed as an indirect influence on Invoice amount error.",
+        "formula": "Σ|net invoice total − net truth total| ÷ Σ|net invoice total|",
         "steps": [
           "Reads off by one in a high digit.",
           "A high digit off by one: large spikes or negative use.",
-          "True totals apply the billing calculation to underlying consumption; only bills released in the reporting window are used."
+          "Absolute net invoice error against simulated truth for invoices issued in the reporting window. Corrective invoice truth includes the credit for the previously invoiced version."
         ],
         "conditions": [
           "This is a catalogue relationship, not a one-to-one arithmetic effect or a guaranteed direction of change."
@@ -32332,12 +32451,12 @@
       "reference": "utilsim/m2c/kpis.py · billing_error_share",
       "direction": 1,
       "explanation": {
-        "summary": "Consecutive Estimates is listed as an indirect influence on Billing error.",
-        "formula": "Σ|released bill total − true bill total| ÷ Σ released bill total",
+        "summary": "Consecutive Estimates is listed as an indirect influence on Invoice amount error.",
+        "formula": "Σ|net invoice total − net truth total| ÷ Σ|net invoice total|",
         "steps": [
           "Runs of 2–4 estimated periods (higher on manual routes).",
           "Runs of estimated periods (more on walked routes): estimate streaks that trigger field reads and true-ups.",
-          "True totals apply the billing calculation to underlying consumption; only bills released in the reporting window are used."
+          "Absolute net invoice error against simulated truth for invoices issued in the reporting window. Corrective invoice truth includes the credit for the previously invoiced version."
         ],
         "conditions": [
           "This is a catalogue relationship, not a one-to-one arithmetic effect or a guaranteed direction of change."
@@ -32358,12 +32477,12 @@
       "reference": "utilsim/m2c/kpis.py · billing_error_share",
       "direction": 1,
       "explanation": {
-        "summary": "Vacant Consuming is listed as an indirect influence on Billing error.",
-        "formula": "Σ|released bill total − true bill total| ÷ Σ released bill total",
+        "summary": "Vacant Consuming is listed as an indirect influence on Invoice amount error.",
+        "formula": "Σ|net invoice total − net truth total| ÷ Σ|net invoice total|",
         "steps": [
           "Vacant premises that still consume.",
           "Vacant homes that still use energy: unbilled consumption cases.",
-          "True totals apply the billing calculation to underlying consumption; only bills released in the reporting window are used."
+          "Absolute net invoice error against simulated truth for invoices issued in the reporting window. Corrective invoice truth includes the credit for the previously invoiced version."
         ],
         "conditions": [
           "This is a catalogue relationship, not a one-to-one arithmetic effect or a guaranteed direction of change."
@@ -32384,12 +32503,12 @@
       "reference": "utilsim/m2c/kpis.py · billing_error_share",
       "direction": 1,
       "explanation": {
-        "summary": "Tamper is listed as an indirect influence on Billing error.",
-        "formula": "Σ|released bill total − true bill total| ÷ Σ released bill total",
+        "summary": "Tamper is listed as an indirect influence on Invoice amount error.",
+        "formula": "Σ|net invoice total − net truth total| ÷ Σ|net invoice total|",
         "steps": [
           "Bypass/tamper (50–90% under-registration).",
           "Bypasses that under-register 50 to 90 percent: lost revenue and investigations.",
-          "True totals apply the billing calculation to underlying consumption; only bills released in the reporting window are used."
+          "Absolute net invoice error against simulated truth for invoices issued in the reporting window. Corrective invoice truth includes the credit for the previously invoiced version."
         ],
         "conditions": [
           "This is a catalogue relationship, not a one-to-one arithmetic effect or a guaranteed direction of change."
@@ -32403,16 +32522,38 @@
       }
     },
     {
+      "source": "engine:invoices",
+      "target": "kpi:billing_error_share",
+      "kind": "measure",
+      "note": "Σ|net invoice total − net truth total| ÷ Σ|net invoice total|",
+      "reference": "utilsim/m2c/kpis.py · measure",
+      "explanation": {
+        "summary": "Supplies invoice amounts, included documents, creation/issue dates and due dates.",
+        "formula": "Σ|net invoice total − net truth total| ÷ Σ|net invoice total|",
+        "steps": [
+          "Absolute net invoice error against simulated truth for invoices issued in the reporting window. Corrective invoice truth includes the credit for the previously invoiced version."
+        ],
+        "conditions": [
+          "Measured through the selected view date. An empty share/average population is reported as no value, not zero."
+        ],
+        "example": "",
+        "references": [
+          "utilsim/m2c/kpis.py · measure"
+        ],
+        "basis": "KPI calculation"
+      }
+    },
+    {
       "source": "engine:bills",
       "target": "kpi:billing_error_share",
       "kind": "measure",
-      "note": "Σ|billed − true| ÷ Σ billed",
+      "note": "Σ|net invoice total − net truth total| ÷ Σ|net invoice total|",
       "reference": "utilsim/m2c/kpis.py · measure",
       "explanation": {
         "summary": "Supplies billing-document totals, creation/release timestamps and billing-case links.",
-        "formula": "Σ|released bill total − true bill total| ÷ Σ released bill total",
+        "formula": "Σ|net invoice total − net truth total| ÷ Σ|net invoice total|",
         "steps": [
-          "True totals apply the billing calculation to underlying consumption; only bills released in the reporting window are used."
+          "Absolute net invoice error against simulated truth for invoices issued in the reporting window. Corrective invoice truth includes the credit for the previously invoiced version."
         ],
         "conditions": [
           "Measured through the selected view date. An empty share/average population is reported as no value, not zero."
@@ -32428,13 +32569,13 @@
       "source": "engine:usage",
       "target": "kpi:billing_error_share",
       "kind": "measure",
-      "note": "Σ|billed − true| ÷ Σ billed",
+      "note": "Σ|net invoice total − net truth total| ÷ Σ|net invoice total|",
       "reference": "utilsim/m2c/kpis.py · measure",
       "explanation": {
         "summary": "Supplies the underlying consumption used to calculate the true bill total for comparison.",
-        "formula": "Σ|released bill total − true bill total| ÷ Σ released bill total",
+        "formula": "Σ|net invoice total − net truth total| ÷ Σ|net invoice total|",
         "steps": [
-          "True totals apply the billing calculation to underlying consumption; only bills released in the reporting window are used."
+          "Absolute net invoice error against simulated truth for invoices issued in the reporting window. Corrective invoice truth includes the credit for the previously invoiced version."
         ],
         "conditions": [
           "Measured through the selected view date. An empty share/average population is reported as no value, not zero."
@@ -32454,12 +32595,12 @@
       "reference": "utilsim/m2c/kpis.py · days_to_invoice",
       "direction": -1,
       "explanation": {
-        "summary": "Analysts is listed as an indirect influence on Days to invoice.",
-        "formula": "mean(invoice created − max(scheduled read day of each included document))",
+        "summary": "Analysts is listed as an indirect influence on Days to invoice issue.",
+        "formula": "mean(max(created, planned issue) − last scheduled read day)",
         "steps": [
           "Billing analysts working the exception queues.",
           "People working the queues. Fewer: backlog grows, cases age, estimates and blocked bills wait longer and carry builds; more: queues clear faster.",
-          "Counts invoices created this year through the view date. Uses elapsed calendar days, including time of day; rounds the reported mean to two decimals."
+          "Average elapsed calendar days from the last scheduled read an invoice covers to its issue, including print lag. Only invoices issued by the view date count; issue cannot precede creation."
         ],
         "conditions": [
           "This is a catalogue relationship, not a one-to-one arithmetic effect or a guaranteed direction of change."
@@ -32481,12 +32622,12 @@
       "reference": "utilsim/m2c/kpis.py · days_to_invoice",
       "direction": -1,
       "explanation": {
-        "summary": "Analyst Hours Per Day is listed as an indirect influence on Days to invoice.",
-        "formula": "mean(invoice created − max(scheduled read day of each included document))",
+        "summary": "Analyst Hours Per Day is listed as an indirect influence on Days to invoice issue.",
+        "formula": "mean(max(created, planned issue) − last scheduled read day)",
         "steps": [
           "Productive queue hours per analyst per business day.",
           "Queue hours per analyst per day: capacity, like the number of analysts.",
-          "Counts invoices created this year through the view date. Uses elapsed calendar days, including time of day; rounds the reported mean to two decimals."
+          "Average elapsed calendar days from the last scheduled read an invoice covers to its issue, including print lag. Only invoices issued by the view date count; issue cannot precede creation."
         ],
         "conditions": [
           "This is a catalogue relationship, not a one-to-one arithmetic effect or a guaranteed direction of change."
@@ -32508,12 +32649,12 @@
       "reference": "utilsim/m2c/kpis.py · days_to_invoice",
       "direction": -1,
       "explanation": {
-        "summary": "Rpa Coverage is listed as an indirect influence on Days to invoice.",
-        "formula": "mean(invoice created − max(scheduled read day of each included document))",
+        "summary": "Rpa Coverage is listed as an indirect influence on Days to invoice issue.",
+        "formula": "mean(max(created, planned issue) − last scheduled read day)",
         "steps": [
           "Share of exception types with an RPA/auto-resolve rule.",
           "Share of exception types automation resolves. More coverage: fewer cases for analysts, cheaper and faster resolution, less carry; uncovered types still queue for people.",
-          "Counts invoices created this year through the view date. Uses elapsed calendar days, including time of day; rounds the reported mean to two decimals."
+          "Average elapsed calendar days from the last scheduled read an invoice covers to its issue, including print lag. Only invoices issued by the view date count; issue cannot precede creation."
         ],
         "conditions": [
           "This is a catalogue relationship, not a one-to-one arithmetic effect or a guaranteed direction of change."
@@ -32535,12 +32676,12 @@
       "reference": "utilsim/m2c/kpis.py · days_to_invoice",
       "direction": 1,
       "explanation": {
-        "summary": "Analyst Queue Days Min is listed as an indirect influence on Days to invoice.",
-        "formula": "mean(invoice created − max(scheduled read day of each included document))",
+        "summary": "Analyst Queue Days Min is listed as an indirect influence on Days to invoice issue.",
+        "formula": "mean(max(created, planned issue) − last scheduled read day)",
         "steps": [
           "Minimum queue wait before an analyst picks up an exception.",
           "Shortest wait before an analyst first looks at a case: every human case takes at least this long, so carry and days to release rise.",
-          "Counts invoices created this year through the view date. Uses elapsed calendar days, including time of day; rounds the reported mean to two decimals."
+          "Average elapsed calendar days from the last scheduled read an invoice covers to its issue, including print lag. Only invoices issued by the view date count; issue cannot precede creation."
         ],
         "conditions": [
           "This is a catalogue relationship, not a one-to-one arithmetic effect or a guaranteed direction of change."
@@ -32562,12 +32703,12 @@
       "reference": "utilsim/m2c/kpis.py · days_to_invoice",
       "direction": 1,
       "explanation": {
-        "summary": "Analyst Queue Days Max is listed as an indirect influence on Days to invoice.",
-        "formula": "mean(invoice created − max(scheduled read day of each included document))",
+        "summary": "Analyst Queue Days Max is listed as an indirect influence on Days to invoice issue.",
+        "formula": "mean(max(created, planned issue) − last scheduled read day)",
         "steps": [
           "Maximum queue wait.",
           "Longest first-look wait: the tail of slow cases, open-case counts and carry.",
-          "Counts invoices created this year through the view date. Uses elapsed calendar days, including time of day; rounds the reported mean to two decimals."
+          "Average elapsed calendar days from the last scheduled read an invoice covers to its issue, including print lag. Only invoices issued by the view date count; issue cannot precede creation."
         ],
         "conditions": [
           "This is a catalogue relationship, not a one-to-one arithmetic effect or a guaranteed direction of change."
@@ -32589,11 +32730,11 @@
       "reference": "utilsim/m2c/kpis.py · days_to_invoice",
       "direction": 1,
       "explanation": {
-        "summary": "Print Lag Days is listed as an indirect influence on Days to invoice.",
-        "formula": "mean(invoice created − max(scheduled read day of each included document))",
+        "summary": "Print Lag Days is listed as an indirect influence on Days to invoice issue.",
+        "formula": "mean(max(created, planned issue) − last scheduled read day)",
         "steps": [
-          "Print lag changes invoice issue and due dates. This KPI uses invoice creation, so print lag is not directly added to its elapsed days.",
-          "Counts invoices created this year through the view date. Uses elapsed calendar days, including time of day; rounds the reported mean to two decimals."
+          "Print lag shifts the invoice issue date in business days. The KPI includes that shift in its elapsed calendar days.",
+          "Average elapsed calendar days from the last scheduled read an invoice covers to its issue, including print lag. Only invoices issued by the view date count; issue cannot precede creation."
         ],
         "conditions": [
           "This is a catalogue relationship, not a one-to-one arithmetic effect or a guaranteed direction of change."
@@ -32611,18 +32752,18 @@
       "source": "engine:invoices",
       "target": "kpi:days_to_invoice",
       "kind": "measure",
-      "note": "mean(invoice created − last scheduled read day)",
+      "note": "mean(max(created, planned issue) − last scheduled read day)",
       "reference": "utilsim/m2c/kpis.py · measure",
       "explanation": {
-        "summary": "Supplies the invoice creation timestamp and its list of billing documents. The calculation compares creation with the latest scheduled read those documents cover, not with the issue date.",
-        "formula": "mean(invoice created − max(scheduled read day of each included document))",
+        "summary": "Supplies issue dates including print lag and the service documents covered. Prepared invoices do not count as issued before their planned issue day.",
+        "formula": "mean(max(created, planned issue) − last scheduled read day)",
         "steps": [
-          "Counts invoices created this year through the view date. Uses elapsed calendar days, including time of day; rounds the reported mean to two decimals."
+          "Average elapsed calendar days from the last scheduled read an invoice covers to its issue, including print lag. Only invoices issued by the view date count; issue cannot precede creation."
         ],
         "conditions": [
           "Measured through the selected view date. An empty share/average population is reported as no value, not zero."
         ],
-        "example": "Illustration: last scheduled read 10 January, invoice created 13 January at 20:00 → 3 + 20/24 = 3.83 elapsed days. If this is the only invoice, the reported mean is 3.83 days.",
+        "example": "Illustration: last scheduled read 10 January, invoice created 11 January, issued 16 January: 6 days to issue.",
         "references": [
           "utilsim/m2c/kpis.py · measure",
           "utilsim/m2c/views.py · billing_kpis"
@@ -32634,18 +32775,18 @@
       "source": "engine:schedule",
       "target": "kpi:days_to_invoice",
       "kind": "measure",
-      "note": "mean(invoice created − last scheduled read day)",
+      "note": "mean(max(created, planned issue) − last scheduled read day)",
       "reference": "utilsim/m2c/kpis.py · measure",
       "explanation": {
-        "summary": "Supplies the latest scheduled read day across all documents included in the invoice. Invoice creation is measured from that baseline.",
-        "formula": "mean(invoice created − max(scheduled read day of each included document))",
+        "summary": "Supplies the latest scheduled read across the invoice service documents as the elapsed-time baseline.",
+        "formula": "mean(max(created, planned issue) − last scheduled read day)",
         "steps": [
-          "Counts invoices created this year through the view date. Uses elapsed calendar days, including time of day; rounds the reported mean to two decimals."
+          "Average elapsed calendar days from the last scheduled read an invoice covers to its issue, including print lag. Only invoices issued by the view date count; issue cannot precede creation."
         ],
         "conditions": [
           "Measured through the selected view date. An empty share/average population is reported as no value, not zero."
         ],
-        "example": "Illustration: last scheduled read 10 January, invoice created 13 January at 20:00 → 3 + 20/24 = 3.83 elapsed days. If this is the only invoice, the reported mean is 3.83 days.",
+        "example": "Illustration: last scheduled read 10 January, invoice created 11 January, issued 16 January: 6 days to issue.",
         "references": [
           "utilsim/m2c/kpis.py · measure",
           "utilsim/m2c/views.py · billing_kpis"
@@ -34300,16 +34441,16 @@
       }
     },
     {
-      "source": "kpi.on_time_bill_days",
+      "source": "kpi.timely_invoice_days",
       "target": "kpi:delayed_bill_share",
       "kind": "definition",
       "note": "Defines this KPI’s counting window; does not change the underlying events.",
       "reference": "utilsim/m2c/kpis.py · delayed_bill_share",
       "explanation": {
-        "summary": "kpi.on_time_bill_days supplies the comparison window or target for Delayed bills.",
-        "formula": "late or overdue unreleased current documents ÷ current documents",
+        "summary": "kpi.timely_invoice_days supplies the comparison window or target for Delayed invoices.",
+        "formula": "late or overdue unissued account-cycles ÷ scheduled account-cycles",
         "steps": [
-          "Current billing documents released after the bill window, or still unreleased after that window expires. Newly created bills still within the window are not late.",
+          "Scheduled account-month cycles with any service invoiced after its deadline, or still awaiting issue after that deadline. Includes reads and billing documents held upstream, and invoice print lag. Each service uses its own scheduled read day; an account-cycle is counted once.",
           "Changing this target changes how the recorded events are counted; it does not reschedule those events."
         ],
         "conditions": [],
@@ -34322,21 +34463,44 @@
       }
     },
     {
-      "source": "engine:bills",
+      "source": "engine:invoices",
       "target": "kpi:delayed_bill_share",
       "kind": "measure",
-      "note": "late or overdue unreleased current documents ÷ current documents",
+      "note": "late or overdue unissued account-cycles ÷ scheduled account-cycles",
       "reference": "utilsim/m2c/kpis.py · measure",
       "explanation": {
-        "summary": "Supplies billing-document totals, creation/release timestamps and billing-case links.",
-        "formula": "late or overdue unreleased current documents ÷ current documents",
+        "summary": "Supplies issue dates including print lag and the service documents covered. Prepared invoices do not count as issued before their planned issue day.",
+        "formula": "late or overdue unissued account-cycles ÷ scheduled account-cycles",
         "steps": [
-          "Current billing documents released after the bill window, or still unreleased after that window expires. Newly created bills still within the window are not late."
+          "Scheduled account-month cycles with any service invoiced after its deadline, or still awaiting issue after that deadline. Includes reads and billing documents held upstream, and invoice print lag. Each service uses its own scheduled read day; an account-cycle is counted once."
         ],
         "conditions": [
           "Measured through the selected view date. An empty share/average population is reported as no value, not zero."
         ],
-        "example": "",
+        "example": "Illustration: read scheduled 10 January, document released 11 January, invoice issued 16 January. A 5-day target is missed; releasing the document alone does not make the invoice timely.",
+        "references": [
+          "utilsim/m2c/kpis.py · measure",
+          "utilsim/m2c/billing_quality.py · measure_quality"
+        ],
+        "basis": "KPI calculation"
+      }
+    },
+    {
+      "source": "engine:bills",
+      "target": "kpi:delayed_bill_share",
+      "kind": "measure",
+      "note": "late or overdue unissued account-cycles ÷ scheduled account-cycles",
+      "reference": "utilsim/m2c/kpis.py · measure",
+      "explanation": {
+        "summary": "Supplies billing-document totals, creation/release timestamps and billing-case links.",
+        "formula": "late or overdue unissued account-cycles ÷ scheduled account-cycles",
+        "steps": [
+          "Scheduled account-month cycles with any service invoiced after its deadline, or still awaiting issue after that deadline. Includes reads and billing documents held upstream, and invoice print lag. Each service uses its own scheduled read day; an account-cycle is counted once."
+        ],
+        "conditions": [
+          "Measured through the selected view date. An empty share/average population is reported as no value, not zero."
+        ],
+        "example": "Illustration: read scheduled 10 January, document released 11 January, invoice issued 16 January. A 5-day target is missed; releasing the document alone does not make the invoice timely.",
         "references": [
           "utilsim/m2c/kpis.py · measure",
           "utilsim/m2c/billing_quality.py · measure_quality"
@@ -34348,13 +34512,36 @@
       "source": "engine:schedule",
       "target": "kpi:delayed_bill_share",
       "kind": "measure",
-      "note": "late or overdue unreleased current documents ÷ current documents",
+      "note": "late or overdue unissued account-cycles ÷ scheduled account-cycles",
       "reference": "utilsim/m2c/kpis.py · measure",
       "explanation": {
-        "summary": "Supplies each bill’s scheduled read day from its installation’s main register. The bill’s release date is compared with this baseline.",
-        "formula": "late or overdue unreleased current documents ÷ current documents",
+        "summary": "Supplies each service scheduled read day. Account-month cycles include unissued obligations; each service keeps its own deadline.",
+        "formula": "late or overdue unissued account-cycles ÷ scheduled account-cycles",
         "steps": [
-          "Current billing documents released after the bill window, or still unreleased after that window expires. Newly created bills still within the window are not late."
+          "Scheduled account-month cycles with any service invoiced after its deadline, or still awaiting issue after that deadline. Includes reads and billing documents held upstream, and invoice print lag. Each service uses its own scheduled read day; an account-cycle is counted once."
+        ],
+        "conditions": [
+          "Measured through the selected view date. An empty share/average population is reported as no value, not zero."
+        ],
+        "example": "Illustration: read scheduled 10 January, document released 11 January, invoice issued 16 January. A 5-day target is missed; releasing the document alone does not make the invoice timely.",
+        "references": [
+          "utilsim/m2c/kpis.py · measure",
+          "utilsim/m2c/billing_quality.py · measure_quality"
+        ],
+        "basis": "KPI calculation"
+      }
+    },
+    {
+      "source": "engine:invoices",
+      "target": "kpi:estimated_bill_share",
+      "kind": "measure",
+      "note": "issued invoices containing an estimated charge ÷ issued invoices",
+      "reference": "utilsim/m2c/kpis.py · measure",
+      "explanation": {
+        "summary": "Supplies invoice amounts, included documents, creation/issue dates and due dates.",
+        "formula": "issued invoices containing an estimated charge ÷ issued invoices",
+        "steps": [
+          "Issued invoices containing at least one estimated service charge. A multi-service invoice counts once. Subsequent reversals do not rewrite what was originally issued."
         ],
         "conditions": [
           "Measured through the selected view date. An empty share/average population is reported as no value, not zero."
@@ -34371,13 +34558,13 @@
       "source": "engine:bills",
       "target": "kpi:estimated_bill_share",
       "kind": "measure",
-      "note": "estimated current documents ÷ current documents",
+      "note": "issued invoices containing an estimated charge ÷ issued invoices",
       "reference": "utilsim/m2c/kpis.py · measure",
       "explanation": {
         "summary": "Supplies billing-document totals, creation/release timestamps and billing-case links.",
-        "formula": "estimated current documents ÷ current documents",
+        "formula": "issued invoices containing an estimated charge ÷ issued invoices",
         "steps": [
-          "Current billing documents built on at least one estimated register. Reversed versions are excluded at the view date."
+          "Issued invoices containing at least one estimated service charge. A multi-service invoice counts once. Subsequent reversals do not rewrite what was originally issued."
         ],
         "conditions": [
           "Measured through the selected view date. An empty share/average population is reported as no value, not zero."
@@ -34394,13 +34581,36 @@
       "source": "engine:released",
       "target": "kpi:estimated_bill_share",
       "kind": "measure",
-      "note": "estimated current documents ÷ current documents",
+      "note": "issued invoices containing an estimated charge ÷ issued invoices",
       "reference": "utilsim/m2c/kpis.py · measure",
       "explanation": {
         "summary": "Supplies released values, estimated status and the timestamp at which billing could use the read.",
-        "formula": "estimated current documents ÷ current documents",
+        "formula": "issued invoices containing an estimated charge ÷ issued invoices",
         "steps": [
-          "Current billing documents built on at least one estimated register. Reversed versions are excluded at the view date."
+          "Issued invoices containing at least one estimated service charge. A multi-service invoice counts once. Subsequent reversals do not rewrite what was originally issued."
+        ],
+        "conditions": [
+          "Measured through the selected view date. An empty share/average population is reported as no value, not zero."
+        ],
+        "example": "",
+        "references": [
+          "utilsim/m2c/kpis.py · measure",
+          "utilsim/m2c/billing_quality.py · measure_quality"
+        ],
+        "basis": "KPI calculation"
+      }
+    },
+    {
+      "source": "engine:invoices",
+      "target": "kpi:move_boundary_estimate_share",
+      "kind": "measure",
+      "note": "issued invoices with an estimated move-boundary charge ÷ issued move-boundary invoices",
+      "reference": "utilsim/m2c/kpis.py · measure",
+      "explanation": {
+        "summary": "Supplies invoice amounts, included documents, creation/issue dates and due dates.",
+        "formula": "issued invoices with an estimated move-boundary charge ÷ issued move-boundary invoices",
+        "steps": [
+          "Issued invoices containing an estimated service period spanning a recorded move-in or move-out, among invoices with such a boundary. This is not a separate first/final settlement workflow."
         ],
         "conditions": [
           "Measured through the selected view date. An empty share/average population is reported as no value, not zero."
@@ -34417,13 +34627,13 @@
       "source": "engine:bills",
       "target": "kpi:move_boundary_estimate_share",
       "kind": "measure",
-      "note": "estimated move-boundary documents ÷ move-boundary documents",
+      "note": "issued invoices with an estimated move-boundary charge ÷ issued move-boundary invoices",
       "reference": "utilsim/m2c/kpis.py · measure",
       "explanation": {
         "summary": "Supplies billing-document totals, creation/release timestamps and billing-case links.",
-        "formula": "estimated move-boundary documents ÷ move-boundary documents",
+        "formula": "issued invoices with an estimated move-boundary charge ÷ issued move-boundary invoices",
         "steps": [
-          "Estimated current bills whose read period spans a recorded move-in or move-out. This is a boundary check, not a separate first/final invoice workflow."
+          "Issued invoices containing an estimated service period spanning a recorded move-in or move-out, among invoices with such a boundary. This is not a separate first/final settlement workflow."
         ],
         "conditions": [
           "Measured through the selected view date. An empty share/average population is reported as no value, not zero."
@@ -34440,13 +34650,36 @@
       "source": "engine:accounts",
       "target": "kpi:move_boundary_estimate_share",
       "kind": "measure",
-      "note": "estimated move-boundary documents ÷ move-boundary documents",
+      "note": "issued invoices with an estimated move-boundary charge ÷ issued move-boundary invoices",
       "reference": "utilsim/m2c/kpis.py · measure",
       "explanation": {
         "summary": "Supplies account and supply-contract records, move dates, associations, and account-count denominators as defined by the measure.",
-        "formula": "estimated move-boundary documents ÷ move-boundary documents",
+        "formula": "issued invoices with an estimated move-boundary charge ÷ issued move-boundary invoices",
         "steps": [
-          "Estimated current bills whose read period spans a recorded move-in or move-out. This is a boundary check, not a separate first/final invoice workflow."
+          "Issued invoices containing an estimated service period spanning a recorded move-in or move-out, among invoices with such a boundary. This is not a separate first/final settlement workflow."
+        ],
+        "conditions": [
+          "Measured through the selected view date. An empty share/average population is reported as no value, not zero."
+        ],
+        "example": "",
+        "references": [
+          "utilsim/m2c/kpis.py · measure",
+          "utilsim/m2c/billing_quality.py · measure_quality"
+        ],
+        "basis": "KPI calculation"
+      }
+    },
+    {
+      "source": "engine:invoices",
+      "target": "kpi:consecutive_estimated_bill_share",
+      "kind": "measure",
+      "note": "issued invoices continuing a 2+ month estimate sequence ÷ issued invoices",
+      "reference": "utilsim/m2c/kpis.py · measure",
+      "explanation": {
+        "summary": "Supplies invoice amounts, included documents, creation/issue dates and due dates.",
+        "formula": "issued invoices continuing a 2+ month estimate sequence ÷ issued invoices",
+        "steps": [
+          "Issued invoices containing an estimated charge for a month whose immediately preceding account-month was also estimated on a previously issued invoice. Missing months break the sequence; multiple services, corrective versions and two months on one invoice do not add consecutive cycles. Previously issued corrections update the preceding cycle for later invoices."
         ],
         "conditions": [
           "Measured through the selected view date. An empty share/average population is reported as no value, not zero."
@@ -34463,13 +34696,36 @@
       "source": "engine:bills",
       "target": "kpi:consecutive_estimated_bill_share",
       "kind": "measure",
-      "note": "current documents continuing a 2+ month estimate sequence ÷ current documents",
+      "note": "issued invoices continuing a 2+ month estimate sequence ÷ issued invoices",
       "reference": "utilsim/m2c/kpis.py · measure",
       "explanation": {
         "summary": "Supplies billing-document totals, creation/release timestamps and billing-case links.",
-        "formula": "current documents continuing a 2+ month estimate sequence ÷ current documents",
+        "formula": "issued invoices continuing a 2+ month estimate sequence ÷ issued invoices",
         "steps": [
-          "Current estimated bills whose immediately preceding monthly bill for the same installation and account was also estimated. Missing months break the sequence; the first month has no in-year predecessor."
+          "Issued invoices containing an estimated charge for a month whose immediately preceding account-month was also estimated on a previously issued invoice. Missing months break the sequence; multiple services, corrective versions and two months on one invoice do not add consecutive cycles. Previously issued corrections update the preceding cycle for later invoices."
+        ],
+        "conditions": [
+          "Measured through the selected view date. An empty share/average population is reported as no value, not zero."
+        ],
+        "example": "",
+        "references": [
+          "utilsim/m2c/kpis.py · measure",
+          "utilsim/m2c/billing_quality.py · measure_quality"
+        ],
+        "basis": "KPI calculation"
+      }
+    },
+    {
+      "source": "engine:invoices",
+      "target": "kpi:consecutive_zero_bill_share",
+      "kind": "measure",
+      "note": "issued invoices continuing a 2+ month zero-use sequence ÷ issued invoices",
+      "reference": "utilsim/m2c/kpis.py · measure",
+      "explanation": {
+        "summary": "Supplies invoice amounts, included documents, creation/issue dates and due dates.",
+        "formula": "issued invoices continuing a 2+ month zero-use sequence ÷ issued invoices",
+        "steps": [
+          "Issued invoices with all-zero import and export charges whose preceding account-month on a previously issued invoice was also all zero. Missing months break the sequence. Fixed charges may still apply."
         ],
         "conditions": [
           "Measured through the selected view date. An empty share/average population is reported as no value, not zero."
@@ -34486,13 +34742,36 @@
       "source": "engine:bills",
       "target": "kpi:consecutive_zero_bill_share",
       "kind": "measure",
-      "note": "current documents continuing a 2+ month zero-use sequence ÷ current documents",
+      "note": "issued invoices continuing a 2+ month zero-use sequence ÷ issued invoices",
       "reference": "utilsim/m2c/kpis.py · measure",
       "explanation": {
         "summary": "Supplies billing-document totals, creation/release timestamps and billing-case links.",
-        "formula": "current documents continuing a 2+ month zero-use sequence ÷ current documents",
+        "formula": "issued invoices continuing a 2+ month zero-use sequence ÷ issued invoices",
         "steps": [
-          "Current bills with zero import and export consumption whose preceding monthly bill for the same installation and account also had zero consumption. Fixed charges may still apply."
+          "Issued invoices with all-zero import and export charges whose preceding account-month on a previously issued invoice was also all zero. Missing months break the sequence. Fixed charges may still apply."
+        ],
+        "conditions": [
+          "Measured through the selected view date. An empty share/average population is reported as no value, not zero."
+        ],
+        "example": "",
+        "references": [
+          "utilsim/m2c/kpis.py · measure",
+          "utilsim/m2c/billing_quality.py · measure_quality"
+        ],
+        "basis": "KPI calculation"
+      }
+    },
+    {
+      "source": "engine:invoices",
+      "target": "kpi:bill_period_defect_share",
+      "kind": "measure",
+      "note": "issued invoices with a defective service period ÷ issued invoices",
+      "reference": "utilsim/m2c/kpis.py · measure",
+      "explanation": {
+        "summary": "Supplies invoice amounts, included documents, creation/issue dates and due dates.",
+        "formula": "issued invoices with a defective service period ÷ issued invoices",
+        "steps": [
+          "Issued invoices containing a non-finite, non-positive or overlapping service period for the same installation and account. Corrective versions of the same period and different services are not overlaps."
         ],
         "conditions": [
           "Measured through the selected view date. An empty share/average population is reported as no value, not zero."
@@ -34509,13 +34788,13 @@
       "source": "engine:bills",
       "target": "kpi:bill_period_defect_share",
       "kind": "measure",
-      "note": "current documents failing period checks ÷ current documents",
+      "note": "issued invoices with a defective service period ÷ issued invoices",
       "reference": "utilsim/m2c/kpis.py · measure",
       "explanation": {
         "summary": "Supplies billing-document totals, creation/release timestamps and billing-case links.",
-        "formula": "current documents failing period checks ÷ current documents",
+        "formula": "issued invoices with a defective service period ÷ issued invoices",
         "steps": [
-          "Current bills with non-finite, non-positive or overlapping periods for the same installation and account. Legitimate longer periods after a service interruption are allowed."
+          "Issued invoices containing a non-finite, non-positive or overlapping service period for the same installation and account. Corrective versions of the same period and different services are not overlaps."
         ],
         "conditions": [
           "Measured through the selected view date. An empty share/average population is reported as no value, not zero."
@@ -34532,13 +34811,13 @@
       "source": "engine:schedule",
       "target": "kpi:bill_period_defect_share",
       "kind": "measure",
-      "note": "current documents failing period checks ÷ current documents",
+      "note": "issued invoices with a defective service period ÷ issued invoices",
       "reference": "utilsim/m2c/kpis.py · measure",
       "explanation": {
-        "summary": "Supplies the read periods used to check billing period boundaries.",
-        "formula": "current documents failing period checks ÷ current documents",
+        "summary": "Supplies service periods checked on issued invoices.",
+        "formula": "issued invoices with a defective service period ÷ issued invoices",
         "steps": [
-          "Current bills with non-finite, non-positive or overlapping periods for the same installation and account. Legitimate longer periods after a service interruption are allowed."
+          "Issued invoices containing a non-finite, non-positive or overlapping service period for the same installation and account. Corrective versions of the same period and different services are not overlaps."
         ],
         "conditions": [
           "Measured through the selected view date. An empty share/average population is reported as no value, not zero."
@@ -34575,16 +34854,39 @@
       }
     },
     {
+      "source": "engine:invoices",
+      "target": "kpi:rebill_share",
+      "kind": "measure",
+      "note": "issued invoices replacing a previously invoiced charge ÷ issued invoices",
+      "reference": "utilsim/m2c/kpis.py · measure",
+      "explanation": {
+        "summary": "Supplies invoice amounts, included documents, creation/issue dates and due dates.",
+        "formula": "issued invoices replacing a previously invoiced charge ÷ issued invoices",
+        "steps": [
+          "Issued invoices correcting a charge on a previously issued invoice. Document corrections made before first issue are excluded; their reversals remain visible in billing documents."
+        ],
+        "conditions": [
+          "Measured through the selected view date. An empty share/average population is reported as no value, not zero."
+        ],
+        "example": "",
+        "references": [
+          "utilsim/m2c/kpis.py · measure",
+          "utilsim/m2c/billing_quality.py · measure_quality"
+        ],
+        "basis": "KPI calculation"
+      }
+    },
+    {
       "source": "engine:bills",
       "target": "kpi:rebill_share",
       "kind": "measure",
-      "note": "replacement documents ÷ all documents created year to date",
+      "note": "issued invoices replacing a previously invoiced charge ÷ issued invoices",
       "reference": "utilsim/m2c/kpis.py · measure",
       "explanation": {
         "summary": "Supplies billing-document totals, creation/release timestamps and billing-case links.",
-        "formula": "replacement documents ÷ all documents created year to date",
+        "formula": "issued invoices replacing a previously invoiced charge ÷ issued invoices",
         "steps": [
-          "Documents created this year that explicitly replace another billing document. All versions created this year form the denominator."
+          "Issued invoices correcting a charge on a previously issued invoice. Document corrections made before first issue are excluded; their reversals remain visible in billing documents."
         ],
         "conditions": [
           "Measured through the selected view date. An empty share/average population is reported as no value, not zero."
@@ -34607,7 +34909,7 @@
         "summary": "Supplies invoice amounts, included documents, creation/issue dates and due dates.",
         "formula": "account/cycle combinations with 2+ invoices ÷ invoiced account/cycle combinations",
         "steps": [
-          "Account/cycle-month combinations represented on more than one invoice. Staggered services and corrective invoices can legitimately produce this; it is an audit indicator."
+          "Account/cycle-month combinations represented on more than one issued invoice. Staggered services and corrective invoices can legitimately produce this; it is an audit indicator."
         ],
         "conditions": [
           "Measured through the selected view date. An empty share/average population is reported as no value, not zero."
@@ -34630,7 +34932,7 @@
         "summary": "Supplies billing-document totals, creation/release timestamps and billing-case links.",
         "formula": "account/cycle combinations with 2+ invoices ÷ invoiced account/cycle combinations",
         "steps": [
-          "Account/cycle-month combinations represented on more than one invoice. Staggered services and corrective invoices can legitimately produce this; it is an audit indicator."
+          "Account/cycle-month combinations represented on more than one issued invoice. Staggered services and corrective invoices can legitimately produce this; it is an audit indicator."
         ],
         "conditions": [
           "Measured through the selected view date. An empty share/average population is reported as no value, not zero."
@@ -34647,13 +34949,13 @@
       "source": "engine:invoices",
       "target": "kpi:zero_customer_charge_share",
       "kind": "measure",
-      "note": "invoices with no non-zero computed fixed charge ÷ created invoices",
+      "note": "issued invoices with no non-zero computed fixed charge ÷ issued invoices",
       "reference": "utilsim/m2c/kpis.py · measure",
       "explanation": {
         "summary": "Supplies invoice amounts, included documents, creation/issue dates and due dates.",
-        "formula": "invoices with no non-zero computed fixed charge ÷ created invoices",
+        "formula": "issued invoices with no non-zero computed fixed charge ÷ issued invoices",
         "steps": [
-          "Created invoices with no non-zero fixed charge across their bill lines, as reconstructed by the engine tariff calculation. Zero-fixed-charge tariffs are included; this does not detect an external print omission."
+          "Issued invoices with no non-zero fixed charge across their service lines, reconstructed from the tariff calculation. Zero-fixed-charge tariffs are included; this does not detect an external print omission."
         ],
         "conditions": [
           "Measured through the selected view date. An empty share/average population is reported as no value, not zero."
@@ -34670,17 +34972,38 @@
       "source": "engine:bills",
       "target": "kpi:zero_customer_charge_share",
       "kind": "measure",
-      "note": "invoices with no non-zero computed fixed charge ÷ created invoices",
+      "note": "issued invoices with no non-zero computed fixed charge ÷ issued invoices",
       "reference": "utilsim/m2c/kpis.py · measure",
       "explanation": {
         "summary": "Supplies billing-document totals, creation/release timestamps and billing-case links.",
-        "formula": "invoices with no non-zero computed fixed charge ÷ created invoices",
+        "formula": "issued invoices with no non-zero computed fixed charge ÷ issued invoices",
         "steps": [
-          "Created invoices with no non-zero fixed charge across their bill lines, as reconstructed by the engine tariff calculation. Zero-fixed-charge tariffs are included; this does not detect an external print omission."
+          "Issued invoices with no non-zero fixed charge across their service lines, reconstructed from the tariff calculation. Zero-fixed-charge tariffs are included; this does not detect an external print omission."
         ],
         "conditions": [
           "Measured through the selected view date. An empty share/average population is reported as no value, not zero."
         ],
+        "example": "",
+        "references": [
+          "utilsim/m2c/kpis.py · measure",
+          "utilsim/m2c/billing_quality.py · measure_quality"
+        ],
+        "basis": "KPI calculation"
+      }
+    },
+    {
+      "source": "engine:invoices",
+      "target": "kpi:move_prorated_charge_count",
+      "kind": "measure",
+      "note": "count(issued invoices with a non-zero move-boundary fixed charge)",
+      "reference": "utilsim/m2c/kpis.py · measure",
+      "explanation": {
+        "summary": "Supplies invoice amounts, included documents, creation/issue dates and due dates.",
+        "formula": "count(issued invoices with a non-zero move-boundary fixed charge)",
+        "steps": [
+          "Issued invoices with at least one move-boundary charge prorated by read-period duration. Each invoice counts once. Proration uses read days, not a separate move settlement period."
+        ],
+        "conditions": [],
         "example": "",
         "references": [
           "utilsim/m2c/kpis.py · measure",
@@ -34693,13 +35016,13 @@
       "source": "engine:bills",
       "target": "kpi:move_prorated_charge_count",
       "kind": "measure",
-      "note": "move-boundary documents with a non-zero duration-prorated fixed charge",
+      "note": "count(issued invoices with a non-zero move-boundary fixed charge)",
       "reference": "utilsim/m2c/kpis.py · measure",
       "explanation": {
         "summary": "Supplies billing-document totals, creation/release timestamps and billing-case links.",
-        "formula": "move-boundary documents with a non-zero duration-prorated fixed charge",
+        "formula": "count(issued invoices with a non-zero move-boundary fixed charge)",
         "steps": [
-          "Move-boundary bills carrying a fixed charge prorated by the actual read-period duration. The engine prorates by read days, not by a separate move-in/out settlement period."
+          "Issued invoices with at least one move-boundary charge prorated by read-period duration. Each invoice counts once. Proration uses read days, not a separate move settlement period."
         ],
         "conditions": [],
         "example": "",
@@ -34714,13 +35037,13 @@
       "source": "engine:accounts",
       "target": "kpi:move_prorated_charge_count",
       "kind": "measure",
-      "note": "move-boundary documents with a non-zero duration-prorated fixed charge",
+      "note": "count(issued invoices with a non-zero move-boundary fixed charge)",
       "reference": "utilsim/m2c/kpis.py · measure",
       "explanation": {
         "summary": "Supplies account and supply-contract records, move dates, associations, and account-count denominators as defined by the measure.",
-        "formula": "move-boundary documents with a non-zero duration-prorated fixed charge",
+        "formula": "count(issued invoices with a non-zero move-boundary fixed charge)",
         "steps": [
-          "Move-boundary bills carrying a fixed charge prorated by the actual read-period duration. The engine prorates by read days, not by a separate move-in/out settlement period."
+          "Issued invoices with at least one move-boundary charge prorated by read-period duration. Each invoice counts once. Proration uses read days, not a separate move settlement period."
         ],
         "conditions": [],
         "example": "",
@@ -34867,7 +35190,7 @@
         "summary": "Supplies account and supply-contract records, move dates, associations, and account-count denominators as defined by the measure.",
         "formula": "count(active invoiced accounts without a current linked meter)",
         "steps": [
-          "Active accounts invoiced this year that have no meter linked through an active supply contract on the view date. This is a reference-integrity check, not a zero-consumption check."
+          "Active accounts with invoices issued this year that have no meter linked through an active supply contract on the view date. This is a reference-integrity check, not a zero-consumption check."
         ],
         "conditions": [],
         "example": "",
@@ -34888,7 +35211,7 @@
         "summary": "Supplies meter, installation and service-point associations used for service setup and meter/account integrity checks.",
         "formula": "count(active invoiced accounts without a current linked meter)",
         "steps": [
-          "Active accounts invoiced this year that have no meter linked through an active supply contract on the view date. This is a reference-integrity check, not a zero-consumption check."
+          "Active accounts with invoices issued this year that have no meter linked through an active supply contract on the view date. This is a reference-integrity check, not a zero-consumption check."
         ],
         "conditions": [],
         "example": "",
@@ -34909,7 +35232,7 @@
         "summary": "Supplies invoice amounts, included documents, creation/issue dates and due dates.",
         "formula": "count(active invoiced accounts without a current linked meter)",
         "steps": [
-          "Active accounts invoiced this year that have no meter linked through an active supply contract on the view date. This is a reference-integrity check, not a zero-consumption check."
+          "Active accounts with invoices issued this year that have no meter linked through an active supply contract on the view date. This is a reference-integrity check, not a zero-consumption check."
         ],
         "conditions": [],
         "example": "",
@@ -34990,7 +35313,7 @@
       "note": "count(due active register periods with release after view time)",
       "reference": "utilsim/m2c/kpis.py · measure",
       "explanation": {
-        "summary": "Supplies each register period’s scheduled day for identifying due reads and comparing actual observation dates.",
+        "summary": "Supplies each register period scheduled day for identifying due reads and comparing observation dates.",
         "formula": "count(due active register periods with release after view time)",
         "steps": [
           "Scheduled active register periods due by the view date without a released value, including missing and held reads. Future and service-off periods are excluded."
@@ -35032,7 +35355,7 @@
       "note": "early actual observations ÷ actual observations taken by view time",
       "reference": "utilsim/m2c/kpis.py · measure",
       "explanation": {
-        "summary": "Supplies each register period’s scheduled day for identifying due reads and comparing actual observation dates.",
+        "summary": "Supplies each register period scheduled day for identifying due reads and comparing observation dates.",
         "formula": "early actual observations ÷ actual observations taken by view time",
         "steps": [
           "Actual observations taken on a calendar day before the scheduled read day. Estimates and missing observations are excluded."
@@ -35078,7 +35401,7 @@
       "note": "late actual observations ÷ actual observations taken by view time",
       "reference": "utilsim/m2c/kpis.py · measure",
       "explanation": {
-        "summary": "Supplies each register period’s scheduled day for identifying due reads and comparing actual observation dates.",
+        "summary": "Supplies each register period scheduled day for identifying due reads and comparing observation dates.",
         "formula": "late actual observations ÷ actual observations taken by view time",
         "steps": [
           "Actual observations taken on a calendar day after the scheduled read day. Same-day time-of-day differences do not count as late."

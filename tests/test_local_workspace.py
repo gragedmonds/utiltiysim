@@ -127,13 +127,16 @@ def test_new_large_jobs_use_fifty_checkpoints_for_half_a_million_homes():
     assert len(district_sizes(500000, job['recipe']['chunkSize'])) == 50
 
 
-def test_new_billing_measures_upgrade_old_archives_and_pool_counts(workspace):
+@pytest.mark.parametrize('legacy', ['missing', 'semantics'])
+def test_new_billing_measures_upgrade_old_archives_and_pool_counts(workspace, legacy):
     import gzip
 
     import orjson
 
     _, _, job, _, jobs = workspace
     keys = ['active_services', 'estimated_bill_share', 'active_meterless_accounts']
+    if legacy == 'semantics':
+        keys.reverse()  # distinct query key, without the prior parameterisation's memory cache
     originals, statistics = [], []
     try:
         for part in job['result']['districts']:
@@ -141,9 +144,14 @@ def test_new_billing_measures_upgrade_old_archives_and_pool_counts(workspace):
             original = path.read_bytes()
             originals.append((path, original))
             saved = orjson.loads(gzip.decompress(original))
-            statistics.append(saved['/m2c/kpis']['_statistics'])
+            statistics.append(orjson.loads(orjson.dumps(saved['/m2c/kpis']['_statistics'])))
             # Simulate an installed archive from before this catalogue update.
-            saved['/m2c/kpis']['values'] = {k: v for k, v in saved['/m2c/kpis']['values'].items() if k not in keys}
+            if legacy == 'missing':
+                saved['/m2c/kpis']['values'] = {k: v for k, v in saved['/m2c/kpis']['values'].items() if k not in keys}
+            else:
+                saved['/m2c/kpis']['schemaVersion'] = 'm2c-kpis/1.0'
+                saved['/m2c/kpis']['values']['estimated_bill_share'] = .9999
+                saved['/m2c/kpis']['_statistics']['estimated_bill_share'] = [9999, 10000]
             path.write_bytes(gzip.compress(orjson.dumps(saved)))
         values = query(workspace, '/m2c/kpis', kpis=keys)['values']
         assert values['active_services'] == sum(s['active_services'][0] for s in statistics)

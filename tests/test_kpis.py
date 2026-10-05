@@ -61,7 +61,7 @@ def test_the_catalogue_is_consistent():
 
 def test_thresholds_are_settings_with_defaults_and_bounds():
     cat = catalogue()
-    assert cat["schemaVersion"] == "m2c-kpis/1.0" and cat["settingsGroup"] == "kpi"
+    assert cat["schemaVersion"] == "m2c-kpis/2.0" and cat["settingsGroup"] == "kpi"
     assert cat["thresholds"]["kpi.on_time_bill_days"]["value"] == 3
     assert cat["thresholds"]["kpi.on_time_bill_days"]["unit"] == "days"
     assert cat["thresholds"]["contact.service_target_s"]["value"] == SimConfig().contact.service_target_s
@@ -82,7 +82,7 @@ def test_a_runs_figures_and_how_the_windows_move_them(client):
     r = client.post("/api/m2c/kpis", json=base)
     assert r.status_code == 200, r.text
     d = r.json()
-    assert d["schemaVersion"] == "m2c-kpis/1.0" and d["asOf"] == "2026-06-30" and set(d["values"]) == KPI_IDS
+    assert d["schemaVersion"] == "m2c-kpis/2.0" and d["asOf"] == "2026-06-30" and set(d["values"]) == KPI_IDS
     v = d["values"]
     for k in KPIS:
         x = v[k.id]
@@ -90,7 +90,7 @@ def test_a_runs_figures_and_how_the_windows_move_them(client):
             assert 0.0 <= x <= 1.0, (k.id, x)
     assert v["bills_on_time"] > 0.9 and v["missed_read_share"] > 0 and v["cost_per_account"] > 0
     assert d["thresholds"]["kpi.on_time_bill_days"] == 3
-    # Tighter windows make fewer things on time; looser ones more. A zero-day bill window still counts same-day bills.
+    # Tighter windows make fewer things on time; looser ones more. The default print lag prevents same-day invoice issue.
     def figures(kpi_settings, ids):
         out = client.post("/api/m2c/kpis", json={**base, "settings": {"kpi": kpi_settings}, "kpis": ids}).json()
         assert set(out["values"]) == set(ids)
@@ -101,7 +101,7 @@ def test_a_runs_figures_and_how_the_windows_move_them(client):
                     ["bills_on_time", "reads_released_promptly", "paid_on_time", "cases_resolved_in_time"])
     for key in tight:
         assert tight[key] <= v[key] <= loose[key], (key, tight[key], v[key], loose[key])
-    assert tight["bills_on_time"] > 0.5
+    assert tight["bills_on_time"] == 0
     assert client.post("/api/m2c/kpis", json={**base, "kpis": ["nope"]}).status_code == 422
     # The catalogue for a town carries that town's threshold values.
     cat = client.get("/api/m2c/kpis?town=small_town").json()

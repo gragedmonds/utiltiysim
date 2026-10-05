@@ -1,7 +1,7 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import {kpisForGoals,formatKpi,kpiChips,matchKpis,watchLine,kpiStrip,unitLabel,withKpiTitle} from '../dist/kpis.js';
 import {glossaryMarkup,settingIndex} from '../dist/glossary.js';
-const catalogue={schemaVersion:'m2c-kpis/1.0',families:[{id:'billing',title:'Billing',text:'Bills.'},{id:'cash',title:'Cash and collections',text:'Money in.'}],
+const catalogue={schemaVersion:'m2c-kpis/2.0',families:[{id:'billing',title:'Billing',text:'Bills.'},{id:'cash',title:'Cash and collections',text:'Money in.'}],
  thresholds:{'kpi.on_time_bill_days':{title:'On time bill days',unit:'days',value:3,description:'A bill is on time within this many days.',group:'KPI definitions'}},
  kpis:[{id:'bills_on_time',title:'Bills on time',family:'billing',unit:'share',better:'higher',goals:['billing'],definition:'Share of bills released within the window.',formula:'on time ÷ bills',thresholds:['kpi.on_time_bill_days'],settings:[{path:'process.analysts',direction:-1}],scenarios:['half_staff_billing'],related:['days_to_pay'],where:['Workspace · Run statistics'],twin:false},
   {id:'days_to_pay',title:'Days to pay',family:'cash',unit:'days',better:'lower',goals:['collections'],definition:'Average days from issue to payment.',formula:'mean(paid − issued)',thresholds:[],settings:[],scenarios:[],related:['bills_on_time'],where:['Worklists · tiles'],twin:true}]};

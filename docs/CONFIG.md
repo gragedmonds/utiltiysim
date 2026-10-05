@@ -541,12 +541,12 @@ The work the field crews do over the year and the crews that do it: customer eme
 
 ## KPI definitions
 
-The windows the KPIs count with: what makes a bill on time, a read prompt, a case resolved in time, an invoice paid on time. They change the figures reported, never the run itself.
+The windows the KPIs count with: what makes an invoice on time, a read prompt, a case resolved in time, an invoice paid on time. They change the figures reported, never the run itself.
 
 | Field | Reaches | Default | Range | Unit | Description | How it changes the results |
 |---|---|---|---|---|---|---|
-| `on_time_bill_days` | year | `3` | 0–60 | days | A bill is on time when it is released to invoicing within this many calendar days of the scheduled read it bills. *Affects: bills on time.* | The window that makes a bill on time: days from the scheduled read to the bill's release. Changes the Bills on time figure only. |
-| `timely_invoice_days` | year | `5` | 1–60 | days | An invoice is timely when it is created within this many calendar days of the last scheduled read it bills (the twin's invoice timeliness). *Affects: invoice timeliness.* | The window that makes an invoice timely: days from the last scheduled read to the invoice. Changes the Invoice timeliness figure only. |
+| `on_time_bill_days` | year | `3` | 0–60 | days | Operational invoice issue target: each due service must reach an issued invoice within this many whole calendar days of its scheduled read. Includes print lag; the saved setting key is retained for compatibility. *Affects: invoices on time.* | Operational invoice issue window: calendar days from each service's scheduled read to customer invoice issue, including print lag. Changes Invoices on time. |
+| `timely_invoice_days` | year | `5` | 1–60 | days | Invoice timeliness target used by the twin and Delayed invoices. Each due service must reach an issued invoice within this many whole calendar days of its scheduled read. Includes upstream holds and print lag. *Affects: invoice timeliness, delayed invoices.* | Invoice issue target for Invoice timeliness and Delayed invoices. Includes print lag and overdue obligations still waiting for an invoice. |
 | `read_release_days` | year | `3` | 0–90 | days | A held read is released promptly when its case releases it to billing within this many calendar days of the scheduled read. *Affects: reads released promptly.* | The window that makes a held read prompt: days from the scheduled read to its release. Changes the Reads released promptly figure only. |
 | `payment_grace_days` | year | `3` | 0–60 | days | An invoice is paid on time when it is settled within this many calendar days after its due date. *Affects: invoices paid on time.* | Days after the due date an invoice may still be paid on time. Changes the Invoices paid on time figure only. |
 | `case_resolution_days` | year | `5` | 0–60 | business days | A case is resolved in time when it closes within this many business days of being raised. *Affects: cases resolved in time.* | Business days a case may take and still count as resolved in time. Changes the Cases resolved in time figure only. |

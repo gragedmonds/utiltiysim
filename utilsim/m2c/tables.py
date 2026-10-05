@@ -797,7 +797,7 @@ INVOICES = (Col("invoiceId", "Invoice", "id", link="invoice", search=True),
             Col("dueAt", "Due", "date"), Col("totalAmount", "Total", "money"), Col("amountDue", "Amount due", "money"),
             Col("outstanding", "Outstanding", "money"), Col("status", "Status", facet=True),
             Col("paidAt", "Paid", "date"), Col("daysOverdue", "Days overdue", "int"),
-            Col("documents", "Bills", "int"), Col("commodities", "Commodities", facet=True),
+            Col("documents", "Billing documents", "int"), Col("commodities", "Commodities", facet=True),
             Col("estimated", "On an estimate", "bool", facet=True),
             Col("budgetBilling", "Budget billing", "bool", facet=True), Col("dunning", "Dunning", facet=True),
             Col("lastDunningAt", "Last dunning", "date"), Col("disconnection", "Disconnection", facet=True),
@@ -1271,11 +1271,13 @@ BILLING_AUDIT = (Col('month', 'Month', 'int'), Col('documents', 'Documents creat
                  Col('estimated', 'Estimated documents', 'int'), Col('replacements', 'Replacement documents', 'int'),
                  Col('reversals', 'Documents reversed', 'int'), Col('documentAmount', 'Gross document amount', 'money'),
                  Col('reversedAmount', 'Reversed amount', 'money'), Col('invoices', 'Invoices created', 'int'),
-                 Col('invoicedAmount', 'Net invoice amount', 'money'))
+                 Col('invoicedAmount', 'Net prepared invoice amount', 'money'),
+                 Col('issuedInvoices', 'Invoices issued', 'int'), Col('estimatedInvoices', 'Estimated invoices issued', 'int'),
+                 Col('correctiveInvoices', 'Corrective invoices issued', 'int'), Col('issuedAmount', 'Net issued invoice amount', 'money'))
 
 
 def b_billing_audit(c):
-    rows = [[m, 0, 0, 0, 0, 0.0, 0.0, 0, 0.0] for m in range(1, c.cal.month_of(c.day) + 1)]
+    rows = [[m, 0, 0, 0, 0, 0.0, 0.0, 0, 0.0, 0, 0, 0, 0.0] for m in range(1, c.cal.month_of(c.day) + 1)]
     for doc in c.bk.docs:
         if 0 <= doc['created'] <= c.T:
             row = rows[c.cal.month_of(doc['created']) - 1]
@@ -1292,8 +1294,18 @@ def b_billing_audit(c):
             row = rows[c.cal.month_of(invoice['created']) - 1]
             row[7] += 1
             row[8] += invoice['total']
+    from utilsim.m2c.invoice_metrics import corrective_invoices, issue_time, issued_invoices
+    issued = issued_invoices(c.run, c.T)
+    corrections = corrective_invoices(c.run, issued)
+    for invoice in issued:
+        row = rows[c.cal.month_of(issue_time(invoice)) - 1]
+        docs = [c.bk.docs[k] for k in invoice['docs']]
+        row[9] += 1
+        row[10] += any(d.get('estimated') for d in docs)
+        row[11] += invoice['id'] in corrections
+        row[12] += invoice['total']
     for row in rows:
-        for i in (5, 6, 8):
+        for i in (5, 6, 8, 12):
             row[i] = round(row[i], 2)
     return _rows_to_cols(BILLING_AUDIT, rows)
 
@@ -1301,7 +1313,7 @@ def b_billing_audit(c):
 SPECS: tuple[Spec, ...] = (
     Spec('billingAudit', 'Monthly billing audit', 'billing', 'run',
          'Year-to-date monthly activity, grouped by creation or reversal date. Gross document amounts include versions; '
-         'net invoices include correction credits. Reversed amounts are reported in the month of reversal.', BILLING_AUDIT, b_billing_audit),
+         'Invoice issue, estimate and correction counts use the issue month, with one count per invoice. Net amounts include correction credits. Reversed documents use the month of reversal.', BILLING_AUDIT, b_billing_audit),
     Spec("premises", "Premises", "customers", "town", "Every premise of the town with its building, household and "
          "baseline daily use, and the account billed for it.", PREMISES, b_premises),
     Spec("businessPartners", "Business partners", "customers", "town", "The customers (people and organisations) "

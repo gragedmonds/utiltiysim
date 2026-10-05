@@ -1,7 +1,6 @@
 """Billing assurance measures. Populations and windows are explicit; no missing data becomes zero."""
 from __future__ import annotations
 
-import math
 from collections import defaultdict
 
 import numpy as np
@@ -20,22 +19,22 @@ METRICS = (
     metric('move_ins', 'Move-ins', 'count', 'Premises with a recorded move-in date this year through the view date.', 'count(0 ≤ move-in day ≤ view day)', ['accounts'], better='context'),
     metric('move_outs', 'Move-outs', 'count', 'Premises with a recorded move-out date this year through the view date.', 'count(0 ≤ move-out day ≤ view day)', ['accounts'], better='context'),
     metric('net_terms_mismatch_share', 'Invoice net-term mismatches', 'share', 'Created invoices whose original due date minus issue date differs from the configured payment term. Later payment arrangements do not count as defects.', 'invoices with original due − issued ≠ configured due days ÷ created invoices', ['invoices']),
-    metric('delayed_bill_share', 'Delayed bills', 'share', 'Current billing documents released after the bill window, or still unreleased after that window expires. Newly created bills still within the window are not late.', 'late or overdue unreleased current documents ÷ current documents', ['bills', 'schedule'], thresholds=('kpi.on_time_bill_days',)),
-    metric('estimated_bill_share', 'Estimated bills', 'share', 'Current billing documents built on at least one estimated register. Reversed versions are excluded at the view date.', 'estimated current documents ÷ current documents', ['bills', 'released']),
-    metric('move_boundary_estimate_share', 'Move-boundary bills estimated', 'share', 'Estimated current bills whose read period spans a recorded move-in or move-out. This is a boundary check, not a separate first/final invoice workflow.', 'estimated move-boundary documents ÷ move-boundary documents', ['bills', 'accounts']),
-    metric('consecutive_estimated_bill_share', 'Consecutive estimated bills', 'share', 'Current estimated bills whose immediately preceding monthly bill for the same installation and account was also estimated. Missing months break the sequence; the first month has no in-year predecessor.', 'current documents continuing a 2+ month estimate sequence ÷ current documents', ['bills']),
-    metric('consecutive_zero_bill_share', 'Consecutive zero-use bills', 'share', 'Current bills with zero import and export consumption whose preceding monthly bill for the same installation and account also had zero consumption. Fixed charges may still apply.', 'current documents continuing a 2+ month zero-use sequence ÷ current documents', ['bills']),
-    metric('bill_period_defect_share', 'Bill period defects', 'share', 'Current bills with non-finite, non-positive or overlapping periods for the same installation and account. Legitimate longer periods after a service interruption are allowed.', 'current documents failing period checks ÷ current documents', ['bills', 'schedule']),
+    metric('delayed_bill_share', 'Delayed invoices', 'share', 'Scheduled account-month cycles with any service invoiced after its deadline, or still awaiting issue after that deadline. Includes reads and billing documents held upstream, and invoice print lag. Each service uses its own scheduled read day; an account-cycle is counted once.', 'late or overdue unissued account-cycles ÷ scheduled account-cycles', ['invoices', 'bills', 'schedule'], thresholds=('kpi.timely_invoice_days',)),
+    metric('estimated_bill_share', 'Estimated invoices', 'share', 'Issued invoices containing at least one estimated service charge. A multi-service invoice counts once. Subsequent reversals do not rewrite what was originally issued.', 'issued invoices containing an estimated charge ÷ issued invoices', ['invoices', 'bills', 'released']),
+    metric('move_boundary_estimate_share', 'Move-boundary invoices estimated', 'share', 'Issued invoices containing an estimated service period spanning a recorded move-in or move-out, among invoices with such a boundary. This is not a separate first/final settlement workflow.', 'issued invoices with an estimated move-boundary charge ÷ issued move-boundary invoices', ['invoices', 'bills', 'accounts']),
+    metric('consecutive_estimated_bill_share', 'Consecutive estimated invoices', 'share', 'Issued invoices containing an estimated charge for a month whose immediately preceding account-month was also estimated on a previously issued invoice. Missing months break the sequence; multiple services, corrective versions and two months on one invoice do not add consecutive cycles. Previously issued corrections update the preceding cycle for later invoices.', 'issued invoices continuing a 2+ month estimate sequence ÷ issued invoices', ['invoices', 'bills']),
+    metric('consecutive_zero_bill_share', 'Consecutive zero-use invoices', 'share', 'Issued invoices with all-zero import and export charges whose preceding account-month on a previously issued invoice was also all zero. Missing months break the sequence. Fixed charges may still apply.', 'issued invoices continuing a 2+ month zero-use sequence ÷ issued invoices', ['invoices', 'bills']),
+    metric('bill_period_defect_share', 'Invoice period defects', 'share', 'Issued invoices containing a non-finite, non-positive or overlapping service period for the same installation and account. Corrective versions of the same period and different services are not overlaps.', 'issued invoices with a defective service period ÷ issued invoices', ['invoices', 'bills', 'schedule']),
     metric('due_date_defect_share', 'Invoice due-date defects', 'share', 'Created invoices with missing/non-finite issue or due dates, or an original due date before issue.', 'invoices with invalid original due or issue dates ÷ created invoices', ['invoices']),
-    metric('rebill_share', 'Cancel and rebill', 'share', 'Documents created this year that explicitly replace another billing document. All versions created this year form the denominator.', 'replacement documents ÷ all documents created year to date', ['bills']),
-    metric('multiple_invoice_cycle_share', 'Cycles with multiple invoices', 'share', 'Account/cycle-month combinations represented on more than one invoice. Staggered services and corrective invoices can legitimately produce this; it is an audit indicator.', 'account/cycle combinations with 2+ invoices ÷ invoiced account/cycle combinations', ['invoices', 'bills'], better='context'),
-    metric('zero_customer_charge_share', 'Invoices without a customer charge', 'share', 'Created invoices with no non-zero fixed charge across their bill lines, as reconstructed by the engine tariff calculation. Zero-fixed-charge tariffs are included; this does not detect an external print omission.', 'invoices with no non-zero computed fixed charge ÷ created invoices', ['invoices', 'bills']),
-    metric('move_prorated_charge_count', 'Move-boundary prorated charges', 'count', 'Move-boundary bills carrying a fixed charge prorated by the actual read-period duration. The engine prorates by read days, not by a separate move-in/out settlement period.', 'move-boundary documents with a non-zero duration-prorated fixed charge', ['bills', 'accounts'], better='context'),
+    metric('rebill_share', 'Corrective invoices', 'share', 'Issued invoices correcting a charge on a previously issued invoice. Document corrections made before first issue are excluded; their reversals remain visible in billing documents.', 'issued invoices replacing a previously invoiced charge ÷ issued invoices', ['invoices', 'bills']),
+    metric('multiple_invoice_cycle_share', 'Cycles with multiple invoices', 'share', 'Account/cycle-month combinations represented on more than one issued invoice. Staggered services and corrective invoices can legitimately produce this; it is an audit indicator.', 'account/cycle combinations with 2+ invoices ÷ invoiced account/cycle combinations', ['invoices', 'bills'], better='context'),
+    metric('zero_customer_charge_share', 'Invoices without a customer charge', 'share', 'Issued invoices with no non-zero fixed charge across their service lines, reconstructed from the tariff calculation. Zero-fixed-charge tariffs are included; this does not detect an external print omission.', 'issued invoices with no non-zero computed fixed charge ÷ issued invoices', ['invoices', 'bills']),
+    metric('move_prorated_charge_count', 'Invoices with move-boundary prorated charges', 'count', 'Issued invoices with at least one move-boundary charge prorated by read-period duration. Each invoice counts once. Proration uses read days, not a separate move settlement period.', 'count(issued invoices with a non-zero move-boundary fixed charge)', ['invoices', 'bills', 'accounts'], better='context'),
     metric('invoices_pending_issue', 'Invoices awaiting issue', 'count', 'Invoices already created whose planned issue day is after the view date. This is print-lag workload; the engine does not record actual print completion.', 'count(created invoices with planned issue after view time)', ['invoices'], better='context'),
     metric('billing_exceptions', 'Billing exceptions raised', 'count', 'Billing-check and billing-dispute cases raised this year through the view date, including subsequently resolved cases. This is the model equivalent of a billing exception workload, not SAP BPEM telemetry.', 'count(year-to-date billing check and dispute cases)', ['cases']),
-    metric('active_billing_blocks', 'Active billing blocks', 'count', 'Current documents with a billing case that remain unreleased at the view date. Account-level invoice holds are counted separately.', 'count(current case-blocked documents not released by view time)', ['bills', 'cases']),
+    metric('active_billing_blocks', 'Active billing-document blocks', 'count', 'Current documents with a billing case that remain unreleased at the view date. Account-level invoice holds are counted separately.', 'count(current case-blocked documents not released by view time)', ['bills', 'cases']),
     metric('active_invoice_holds', 'Active invoice holds', 'count', 'Account-level invoice holds in force at the view date.', 'count(hold start ≤ view time < hold end)', ['cases', 'invoices']),
-    metric('meterless_billed_accounts', 'Billed accounts without a linked meter', 'count', 'Active accounts invoiced this year that have no meter linked through an active supply contract on the view date. This is a reference-integrity check, not a zero-consumption check.', 'count(active invoiced accounts without a current linked meter)', ['accounts', 'meters', 'invoices']),
+    metric('meterless_billed_accounts', 'Invoiced accounts without a linked meter', 'count', 'Active accounts with invoices issued this year that have no meter linked through an active supply contract on the view date. This is a reference-integrity check, not a zero-consumption check.', 'count(active invoiced accounts without a current linked meter)', ['accounts', 'meters', 'invoices']),
     metric('active_reading_blocks', 'Active read-release blocks', 'count', 'Scheduled active register periods whose read was attempted, has a case, and remains unreleased. These are VEE/review holds; administrative meter-reading blocks are not separately modelled.', 'count(attempted register periods with a case and release after view time)', ['reads', 'released', 'cases'], family='reading'),
     metric('outstanding_reads', 'Open scheduled reads', 'count', 'Scheduled active register periods due by the view date without a released value, including missing and held reads. Future and service-off periods are excluded.', 'count(due active register periods with release after view time)', ['schedule', 'released'], family='reading'),
     metric('early_read_share', 'Reads taken early', 'share', 'Actual observations taken on a calendar day before the scheduled read day. Estimates and missing observations are excluded.', 'early actual observations ÷ actual observations taken by view time', ['schedule', 'reads'], family='reading', better='context'),
@@ -46,7 +45,7 @@ METRICS = (
 )
 
 
-def measure_quality(run, day, T):
+def measure_quality(run, day, T, *, cycles=None):
     from utilsim.m2c.catalog import BILL_TYPES
     from utilsim.twin.kpis import VEE_TYPES
 
@@ -59,54 +58,29 @@ def measure_quality(run, day, T):
 
     docs = [d for d in bk.docs if 0 <= d['created'] <= T]
     current = [d for d in docs if d['reversed'] is None or d['reversed'] > T]
-    invoices = [i for i in bk.invoices if 0 <= i['created'] <= T]
-    periods = {d['k']: bk.period(d) for d in current}
-    by_period = {(d['inst'], d['month'], bk.account(d)): d for d in current}
-    estimated, zeroes, late, bad_periods, boundary, boundary_est, prorated = 0, 0, 0, 0, 0, 0, 0
-    previous_end = {}
-    def fixed_charge(d):
-        start, end = bk.period(d)
-        return float(tw.tariffs.get(d['rate'], {}).get('fixedMonthly', 0)) * max(0, end - start) / (365.0 / 12)
-    for d in sorted(current, key=lambda d: (d['inst'], periods[d['k']][0])):
-        start, end = periods[d['k']]
-        account = bk.account(d)
-        prev = by_period.get((d['inst'], d['month'] - 1, account)) if not d.get('carried') else None
-        estimated += bool(d.get('estimated') and prev and prev.get('estimated'))
-        zeroes += bool(d['qImp'] == d['qExp'] == 0 and prev and prev['qImp'] == prev['qExp'] == 0)
-        key = (d['inst'], account)
-        bad_periods += not math.isfinite(start + end) or end <= start or start < previous_end.get(key, -math.inf) - 1e-7
-        previous_end[key] = max(end, previous_end.get(key, -math.inf))
-        row = bk.main[d['inst']]
-        scheduled = tw.read_day[row, d['month']]
-        released = d['released'] if d['released'] is not None and d['released'] <= T else None
-        late += (math.floor(released) - scheduled > run.cfg.kpi.on_time_bill_days if released is not None
-                 else T >= scheduled + run.cfg.kpi.on_time_bill_days + 1)
-        premise = tw.prem[row]
-        is_boundary = any(start <= move < end for move in (tw.move_in[premise], tw.move_out[premise]))
-        boundary += is_boundary
-        boundary_est += bool(is_boundary and d.get('estimated'))
-        prorated += bool(is_boundary and fixed_charge(d) != 0)
-    share('estimated_bill_share', sum(bool(d.get('estimated')) for d in current), len(current))
-    share('delayed_bill_share', late, len(current))
-    share('consecutive_estimated_bill_share', estimated, len(current))
-    share('consecutive_zero_bill_share', zeroes, len(current))
-    share('bill_period_defect_share', bad_periods, len(current))
-    share('move_boundary_estimate_share', boundary_est, boundary)
-    count('move_prorated_charge_count', prorated)
-    share('rebill_share', sum(d.get('replaces', -1) >= 0 for d in docs), len(docs))
+    from utilsim.m2c.invoice_metrics import expected_cycles, issued_invoices, quality_counts, timing_counts
+    invoices = issued_invoices(run, T)
+    created = [i for i in bk.invoices if 0 <= i['created'] <= T]
+    q = quality_counts(run, invoices)
+    _, late, total = timing_counts(expected_cycles(run, T) if cycles is None else cycles, T, run.cfg.kpi.timely_invoice_days)
+    share('estimated_bill_share', q['estimated'], len(invoices))
+    share('delayed_bill_share', late, total)
+    share('consecutive_estimated_bill_share', q['consecutive_estimated'], len(invoices))
+    share('consecutive_zero_bill_share', q['consecutive_zero'], len(invoices))
+    share('bill_period_defect_share', q['bad_period'], len(invoices))
+    share('move_boundary_estimate_share', q['boundary_estimated'], q['boundary'])
+    count('move_prorated_charge_count', q['prorated'])
+    share('rebill_share', q['replacement'], len(invoices))
     count('active_billing_blocks', sum(d['case'] >= 0 and (d['released'] is None or d['released'] > T) for d in current))
     count('active_invoice_holds', sum(start <= T and (end is None or T < end) for holds in run.holds.values() for start, end, _ in holds))
+    import math
     def invalid(v):
         return not isinstance(v, (int, float)) or not math.isfinite(v)
-    share('due_date_defect_share', sum(invalid(i.get('due')) or invalid(i.get('issued')) or i['due'] < i['issued'] for i in invoices), len(invoices))
-    share('net_terms_mismatch_share', sum(invalid(i.get('due')) or invalid(i.get('issued')) or abs(i['due'] - i['issued'] - run.cfg.customers_billing.due_days) > 1e-7 for i in invoices), len(invoices))
-    count('invoices_pending_issue', sum(not invalid(i.get('issued')) and i['issued'] > T for i in invoices))
-    share('zero_customer_charge_share', sum(not any(fixed_charge(bk.docs[k]) != 0 for k in i['docs']) for i in invoices), len(invoices))
-    cycles = defaultdict(set)
-    for inv in invoices:
-        for k in inv['docs']:
-            cycles[(inv['account'], bk.docs[k]['month'])].add(inv['id'])
-    share('multiple_invoice_cycle_share', sum(len(v) > 1 for v in cycles.values()), len(cycles))
+    share('due_date_defect_share', sum(invalid(i.get('due')) or invalid(i.get('issued')) or i['due'] < i['issued'] for i in created), len(created))
+    share('net_terms_mismatch_share', sum(invalid(i.get('due')) or invalid(i.get('issued')) or abs(i['due'] - i['issued'] - run.cfg.customers_billing.due_days) > 1e-7 for i in created), len(created))
+    count('invoices_pending_issue', sum(not invalid(i.get('issued')) and i['issued'] > T for i in created))
+    share('zero_customer_charge_share', q['no_fixed'], len(invoices))
+    share('multiple_invoice_cycle_share', q['multiple_cycles'], q['cycles'])
     count('billing_exceptions', sum(0 <= c.created <= T and c.type in (*BILL_TYPES, 'BILL_DISPUTE') for c in run.cases))
     count('active_implausibles', sum(c.created <= T and c.type in VEE_TYPES and not c.work and (c.resolved is None or c.resolved > T) for c in run.cases))
     scheduled, observed = tw.read_day[:, 1:], run.taken_t(slice(None), slice(1, None))

@@ -12,7 +12,7 @@ test('a collapsed connector exposes every real link with its own explanation',()
  const entries=relationshipEntries([edge,edge],graph);
  assert.equal(entries.length,edge.links.length);
  assert.deepEqual(new Set(entries.map(e=>e.link.source)),new Set(edge.links.map(e=>e.source)));
- assert.ok(entries.every(e=>e.edge===edge&&e.link.explanation&&e.label.includes('Bills on time')));
+ assert.ok(entries.every(e=>e.edge===edge&&e.link.explanation&&e.label.includes('Invoices on time')));
 });
 
 test('shared card connectors retain different targets and kinds without merging their details',()=>{
@@ -20,8 +20,8 @@ test('shared card connectors retain different targets and kinds without merging 
  const entries=relationshipEntries(p.edges.filter(e=>e.source==='engine:schedule'),graph);
  assert.equal(entries.length,graph.outgoing.get('engine:schedule').length);
  assert.equal(entries.find(e=>e.link.target==='engine:reading').link.explanation.basis,'Engine rule');
- assert.match(explanationMarkup(entries.find(e=>e.link.target==='kpi:bills_on_time').link),/floor\(released\)/);
- assert.match(explanationMarkup(entries.find(e=>e.link.target==='kpi:days_to_invoice').link),/3\.83 elapsed days/);
+ assert.match(explanationMarkup(entries.find(e=>e.link.target==='kpi:bills_on_time').link),/account-cycles fully issued/);
+ assert.match(explanationMarkup(entries.find(e=>e.link.target==='kpi:days_to_invoice').link),/6 days to issue/);
 });
 
 test('unprojected sidebar links work and markup escapes all metadata',()=>{

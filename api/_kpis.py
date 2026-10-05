@@ -27,7 +27,7 @@ class KpiRequest(RunRequest):
 
 @router.get("/api/m2c/kpis")
 def get_kpis(town: str | None = None):
-    """``m2c-kpis/1.0``: every figure with its family, unit, definition, the settings and scenarios that move it,
+    """``m2c-kpis/2.0``: every figure with its family, unit, definition, the settings and scenarios that move it,
     where it shows, and the threshold settings it counts with (their values from ``town``'s config, else the
     defaults)."""
     cfg = None

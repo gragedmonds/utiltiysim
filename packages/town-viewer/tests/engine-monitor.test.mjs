@@ -27,3 +27,14 @@ test('five hundred distinct loading messages rotate under the illustration',()=>
  assert.match(html,/engine-scene-caption/);assert.ok(!html.includes('monitor-message'));
  assert.match(html,/15 min remaining/);assert.match(html,/Reference test/);
 });
+
+import {stopTarget,stopLocalWork} from '../dist/local-monitor.js';
+test('Stop targets the visible job or analysis and preserves unrelated work',async()=>{
+ const job={active:{jobId:'revision-2',name:'Test',progress:{}}},analysis={analysis:{analysisId:'analysis-1',name:'Test',totalHomes:80}};
+ assert.deepEqual(stopTarget(job),{path:'jobs/revision-2/stop',body:{},id:'revision-2'});
+ const calls=[];await stopLocalWork(analysis,async(...args)=>{calls.push(args);return {stopped:true};});
+ assert.deepEqual(calls,[['analysis/stop',{analysisId:'analysis-1'}]]);
+ assert.match(monitorMarkup(job),/Stop simulation/);assert.match(monitorMarkup({...job,active:{...job.active,stopping:true}}),/disabled>Stopping/);
+ assert.equal(stopTarget({}),null);await assert.rejects(stopLocalWork({}),/finished/);
+ await assert.rejects(stopLocalWork(job,async()=>{throw Error('Offline');}),/Offline/);
+});

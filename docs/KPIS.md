@@ -3,13 +3,13 @@
 Every simulation watches a handful of figures: the person picks them when setting up ("What to test"), the setup
 guide offers them as names while talking, the Command Center and Run statistics show them with their values, and
 the Glossary explains what moves each one. The engine owns the list (`utilsim/m2c/kpis.py`), measures every figure
-from a run, and defines each one with a window the simulation can set: an on-time bill is a bill released within
-`kpi.on_time_bill_days` of its scheduled day (3 by default), a timely invoice within `kpi.timely_invoice_days` (5),
+from a run, and defines each one with a window the simulation can set: an on-time invoice cycle is fully issued within
+`kpi.on_time_bill_days` of each service scheduled day (3 by default), a timely invoice cycle within `kpi.timely_invoice_days` (5),
 a case resolved in time within `kpi.case_resolution_days` business days (5).
 
 ## The catalogue
 
-`GET /api/m2c/kpis?town=` returns `m2c-kpis/1.0`: `families` (id, title, what the family is about), `kpis` (one
+`GET /api/m2c/kpis?town=` returns `m2c-kpis/2.0`: `families` (id, title, what the family is about), `kpis` (one
 entry per figure, below), `thresholds` (the current value, unit, title and bounds of every setting a definition
 counts with, for that town's configuration) and `settingsGroup` (`kpi`). Each figure carries:
 
@@ -36,8 +36,8 @@ simulation and carried in its file:
 
 | Setting | Default | Range | Counts |
 |---|---|---|---|
-| `kpi.on_time_bill_days` | 3 | 0–60 days | a bill is on time when released within this many days of its scheduled day, either side |
-| `kpi.timely_invoice_days` | 5 | 1–60 days | an invoice is timely when created within this many days of the last scheduled read |
+| `kpi.on_time_bill_days` | 3 | 0–60 days | an account-cycle is on time when every due service is issued within this many calendar days of its scheduled read |
+| `kpi.timely_invoice_days` | 5 | 1–60 days | an account-cycle is timely when every due service is issued within this many calendar days of its scheduled read |
 | `kpi.read_release_days` | 3 | 0–90 days | a held read is released promptly within this many days of the scheduled read day |
 | `kpi.payment_grace_days` | 3 | 0–60 days | a payment is on time within this many days after the due date |
 | `kpi.case_resolution_days` | 5 | 0–60 business days | a clarification case is resolved in time within this many business days |
@@ -118,15 +118,15 @@ The clarification cases, who works them, how long they wait.
 
 ### Billing
 
-Bills released on time, held, wrong; invoices out the door.
+Invoices issued on time, estimated, corrected or delayed; upstream billing workload.
 
 | KPI | Unit | Better | Definition | Window | Moved by |
 |---|---|---|---|---|---|
-| `bills_on_time` Bills on time | share | higher | Share of bills created year to date that were released to invoicing within the window, counted from the scheduled read day they bill; a bill still blocked counts as late. | `kpi.on_time_bill_days` (3 days) | Analysts ↓; Analyst Hours Per Day ↓; Rpa Coverage ↓; Analyst Queue Days Min ↑; Analyst Queue Days Max ↑ … |
-| `invoice_timeliness` Invoice timeliness (twin) | share | higher | Share of invoices created within the window of the last scheduled read they bill. The engine bills on an estimate rather than holding a bill, so this stays high under stress; a utility that counts an estimated bill as late wants Estimated reads too. | `kpi.timely_invoice_days` (5 days) | Analysts ↓; Analyst Hours Per Day ↓; Rpa Coverage ↓; Analyst Queue Days Min ↑; Analyst Queue Days Max ↑ … |
-| `blocked_bill_share` Bills blocked | share | lower | Share of bills created year to date that a billing check held for a person (true-up, rate class, high bill, bill credit), whether or not they were released later. | — | High Bill Ratio ↓; Trueup Max Ratio ↓; Leak ↑; Stuck Meter ↑; Slow Meter ↑ … |
-| `billing_error_share` Billing error (twin) | share | lower | Absolute difference between released bills and the simulation's true bills, as a share of the amount billed. | — | High Ratio ↓; Low Ratio ↑; Accept Confidence ↑; Leak ↑; Stuck Meter ↑ … |
-| `days_to_invoice` Days to invoice | days | lower | Average calendar days from the last scheduled read an invoice bills to the invoice. | — | Analysts ↓; Analyst Hours Per Day ↓; Rpa Coverage ↓; Analyst Queue Days Min ↑; Analyst Queue Days Max ↑ … |
+| `bills_on_time` Invoices on time | share | higher | Scheduled account-month cycles with every due service issued within the operational invoice window. Includes print lag; pending cycles are not on time. Each service uses its own scheduled read day. | `kpi.on_time_bill_days` (3 days) | Analysts ↓; Analyst Hours Per Day ↓; Rpa Coverage ↓; Analyst Queue Days Min ↑; Analyst Queue Days Max ↑ … |
+| `invoice_timeliness` Invoice timeliness (twin) | share | higher | Scheduled account-month cycles with every due service issued within the invoice timeliness target. Includes cycles held before an invoice exists and print lag. Pending cycles are not yet timely; Delayed invoices counts them late only after the deadline expires. | `kpi.timely_invoice_days` (5 days) | Analysts ↓; Analyst Hours Per Day ↓; Rpa Coverage ↓; Analyst Queue Days Min ↑; Analyst Queue Days Max ↑ … |
+| `blocked_bill_share` Invoice cycles affected by billing checks | share | lower | Scheduled account-month cycles with at least one billing-document check raised, even if later released. Multiple service documents count once; this tracks upstream causes of invoice holds. | — | High Bill Ratio ↓; Trueup Max Ratio ↓; Leak ↑; Stuck Meter ↑; Slow Meter ↑ … |
+| `billing_error_share` Invoice amount error (twin) | share | lower | Absolute net invoice error against simulated truth for invoices issued in the reporting window. Corrective invoice truth includes the credit for the previously invoiced version. | — | High Ratio ↓; Low Ratio ↑; Accept Confidence ↑; Leak ↑; Stuck Meter ↑ … |
+| `days_to_invoice` Days to invoice issue | days | lower | Average elapsed calendar days from the last scheduled read an invoice covers to its issue, including print lag. Only invoices issued by the view date count; issue cannot precede creation. | — | Analysts ↓; Analyst Hours Per Day ↓; Rpa Coverage ↓; Analyst Queue Days Min ↑; Analyst Queue Days Max ↑ … |
 
 ### Cash and collections
 
@@ -199,22 +199,22 @@ Early reads use the actual final-read timestamp when service ends before the sch
 | `move_ins` — Move-ins | count | Premises with a recorded move-in date this year through the view date. |
 | `move_outs` — Move-outs | count | Premises with a recorded move-out date this year through the view date. |
 | `net_terms_mismatch_share` — Invoice net-term mismatches | share | Created invoices whose original due date minus issue date differs from the configured payment term. Later payment arrangements do not count as defects. |
-| `delayed_bill_share` — Delayed bills | share | Current billing documents released after the bill window, or still unreleased after that window expires. Newly created bills still within the window are not late. |
-| `estimated_bill_share` — Estimated bills | share | Current billing documents built on at least one estimated register. Reversed versions are excluded at the view date. |
-| `move_boundary_estimate_share` — Move-boundary bills estimated | share | Estimated current bills whose read period spans a recorded move-in or move-out. This is a boundary check, not a separate first/final invoice workflow. |
-| `consecutive_estimated_bill_share` — Consecutive estimated bills | share | Current estimated bills whose immediately preceding monthly bill for the same installation and account was also estimated. Missing months break the sequence; the first month has no in-year predecessor. |
-| `consecutive_zero_bill_share` — Consecutive zero-use bills | share | Current bills with zero import and export consumption whose preceding monthly bill for the same installation and account also had zero consumption. Fixed charges may still apply. |
-| `bill_period_defect_share` — Bill period defects | share | Current bills with non-finite, non-positive or overlapping periods for the same installation and account. Legitimate longer periods after a service interruption are allowed. |
+| `delayed_bill_share` — Delayed invoices | share | Scheduled account-month cycles with any service invoiced after its deadline, or still awaiting issue after that deadline. Includes reads and billing documents held upstream, and invoice print lag. Each service uses its own scheduled read day; an account-cycle is counted once. |
+| `estimated_bill_share` — Estimated invoices | share | Issued invoices containing at least one estimated service charge. A multi-service invoice counts once. Subsequent reversals do not rewrite what was originally issued. |
+| `move_boundary_estimate_share` — Move-boundary invoices estimated | share | Issued invoices containing an estimated service period spanning a recorded move-in or move-out, among invoices with such a boundary. This is not a separate first/final settlement workflow. |
+| `consecutive_estimated_bill_share` — Consecutive estimated invoices | share | Issued invoices containing an estimated charge for a month whose immediately preceding account-month was also estimated on a previously issued invoice. Missing months break the sequence; multiple services, corrective versions and two months on one invoice do not add consecutive cycles. Previously issued corrections update the preceding cycle for later invoices. |
+| `consecutive_zero_bill_share` — Consecutive zero-use invoices | share | Issued invoices with all-zero import and export charges whose preceding account-month on a previously issued invoice was also all zero. Missing months break the sequence. Fixed charges may still apply. |
+| `bill_period_defect_share` — Invoice period defects | share | Issued invoices containing a non-finite, non-positive or overlapping service period for the same installation and account. Corrective versions of the same period and different services are not overlaps. |
 | `due_date_defect_share` — Invoice due-date defects | share | Created invoices with missing/non-finite issue or due dates, or an original due date before issue. |
-| `rebill_share` — Cancel and rebill | share | Documents created this year that explicitly replace another billing document. All versions created this year form the denominator. |
-| `multiple_invoice_cycle_share` — Cycles with multiple invoices | share | Account/cycle-month combinations represented on more than one invoice. Staggered services and corrective invoices can legitimately produce this; it is an audit indicator. |
-| `zero_customer_charge_share` — Invoices without a customer charge | share | Created invoices with no non-zero fixed charge across their bill lines, as reconstructed by the engine tariff calculation. Zero-fixed-charge tariffs are included; this does not detect an external print omission. |
-| `move_prorated_charge_count` — Move-boundary prorated charges | count | Move-boundary bills carrying a fixed charge prorated by the actual read-period duration. The engine prorates by read days, not by a separate move-in/out settlement period. |
+| `rebill_share` — Corrective invoices | share | Issued invoices correcting a charge on a previously issued invoice. Document corrections made before first issue are excluded; their reversals remain visible in billing documents. |
+| `multiple_invoice_cycle_share` — Cycles with multiple invoices | share | Account/cycle-month combinations represented on more than one issued invoice. Staggered services and corrective invoices can legitimately produce this; it is an audit indicator. |
+| `zero_customer_charge_share` — Invoices without a customer charge | share | Issued invoices with no non-zero fixed charge across their service lines, reconstructed from the tariff calculation. Zero-fixed-charge tariffs are included; this does not detect an external print omission. |
+| `move_prorated_charge_count` — Invoices with move-boundary prorated charges | count | Issued invoices with at least one move-boundary charge prorated by read-period duration. Each invoice counts once. Proration uses read days, not a separate move settlement period. |
 | `invoices_pending_issue` — Invoices awaiting issue | count | Invoices already created whose planned issue day is after the view date. This is print-lag workload; the engine does not record actual print completion. |
 | `billing_exceptions` — Billing exceptions raised | count | Billing-check and billing-dispute cases raised this year through the view date, including subsequently resolved cases. This is the model equivalent of a billing exception workload, not SAP BPEM telemetry. |
-| `active_billing_blocks` — Active billing blocks | count | Current documents with a billing case that remain unreleased at the view date. Account-level invoice holds are counted separately. |
+| `active_billing_blocks` — Active billing-document blocks | count | Current documents with a billing case that remain unreleased at the view date. Account-level invoice holds are counted separately. |
 | `active_invoice_holds` — Active invoice holds | count | Account-level invoice holds in force at the view date. |
-| `meterless_billed_accounts` — Billed accounts without a linked meter | count | Active accounts invoiced this year that have no meter linked through an active supply contract on the view date. This is a reference-integrity check, not a zero-consumption check. |
+| `meterless_billed_accounts` — Invoiced accounts without a linked meter | count | Active accounts with invoices issued this year that have no meter linked through an active supply contract on the view date. This is a reference-integrity check, not a zero-consumption check. |
 | `active_reading_blocks` — Active read-release blocks | count | Scheduled active register periods whose read was attempted, has a case, and remains unreleased. These are VEE/review holds; administrative meter-reading blocks are not separately modelled. |
 | `outstanding_reads` — Open scheduled reads | count | Scheduled active register periods due by the view date without a released value, including missing and held reads. Future and service-off periods are excluded. |
 | `early_read_share` — Reads taken early | share | Actual observations taken on a calendar day before the scheduled read day. Estimates and missing observations are excluded. |
@@ -232,26 +232,26 @@ Early reads use the actual final-read timestamp when service ends before the sch
 | BR-ACC-04 — Move In Reporting | available | move_ins, accounts | — |
 | BR-ACC-05 — Move Out Reporting | available | move_outs, accounts | — |
 | BR-ACC-06 — Net Term Mismatch | available | net_terms_mismatch_share, invoices | — |
-| BR-ACC-07 — eBill Adoption | needs data |  | Requires an account delivery preference or e-bill enrolment event. Payment method does not establish e-bill adoption. |
+| BR-ACC-07 — eBill Adoption | needs_data |  | Requires an account delivery preference or e-bill enrolment event. Payment method does not establish e-bill adoption. |
 | BR-BIL-01 — Schedule v Actual Invoicing | available | invoice_timeliness, days_to_invoice, bills_on_time, invoices | — |
-| BR-BIL-02 — Delayed Bills | available | delayed_bill_share, billingDocuments | — |
+| BR-BIL-02 — Delayed Invoices | available | delayed_bill_share, invoices | — |
 | BR-BIL-03 — Cycle Schedule | available | early_read_share, late_read_share, readSchedules | — |
 | BR-BIL-04 — Monthly Audit File | available | billingAudit | Monthly document, invoice, estimate, reversal and amount totals; downloadable through Data. |
-| BR-BIL-05 — Estimated Bills | available | estimated_bill_share, billingDocuments | — |
-| BR-BIL-06 — First & Final Estimates | partial | move_boundary_estimate_share, billingDocuments | Uses bills spanning recorded move boundaries. A separate first/final customer settlement process is not modelled. |
-| BR-BIL-07 — Consecutively Estimated Bills | available | consecutive_estimated_bill_share, billingDocuments | — |
-| BR-BIL-08 — Consecutively Zero Consumption Bills | available | consecutive_zero_bill_share, billingDocuments | — |
-| BR-BIL-09 — Bill Period Defects | available | bill_period_defect_share, billingDocuments | — |
+| BR-BIL-05 — Estimated Invoices | available | estimated_bill_share, invoices | — |
+| BR-BIL-06 — First & Final Invoice Estimates | partial | move_boundary_estimate_share, invoices | Uses issued invoices spanning recorded move boundaries. A separate first/final customer settlement process is not modelled. |
+| BR-BIL-07 — Consecutively Estimated Invoices | available | consecutive_estimated_bill_share, invoices | — |
+| BR-BIL-08 — Consecutively Zero Consumption Invoices | available | consecutive_zero_bill_share, invoices | — |
+| BR-BIL-09 — Invoice Period Defects | available | bill_period_defect_share, invoices | — |
 | BR-BIL-10 — Due Date Defects | available | due_date_defect_share, invoices | — |
-| BR-BIL-11 — Cancel Rebill | available | rebill_share, billingDocuments | — |
+| BR-BIL-11 — Corrective Invoices | available | rebill_share, invoices | — |
 | BR-BIL-12 — Multi Invoice Issuance | available | multiple_invoice_cycle_share, invoices | Multiple invoices can be legitimate; this indicator identifies account/cycle combinations to review. |
 | BR-BIL-13 — Invoices Issued without Customer Charge | partial | zero_customer_charge_share, invoices | Audits the engine-computed fixed charge; external line-item or print omissions require the actual issued document. |
-| BR-BIL-14 — Prorated Customer Charge (on MIMO) | partial | move_prorated_charge_count, billingDocuments | Fixed charges use actual read-period days; move-specific settlement proration is not separately modelled. |
-| BR-BIL-15 — Invoices Issued without Print Date | needs data | invoices_pending_issue, invoices | Planned issue dates and print-lag workload are available. Actual print-completion timestamps are not recorded. |
+| BR-BIL-14 — Prorated Customer Charge (on MIMO) | partial | move_prorated_charge_count, invoices | Fixed charges use actual read-period days; move-specific settlement proration is not separately modelled. |
+| BR-BIL-15 — Invoices Issued without Print Date | needs_data | invoices_pending_issue, invoices | Planned issue dates and print-lag workload are available. Actual print-completion timestamps are not recorded. |
 | BR-BIL-16 — Outsorts | available | blocked_bill_share, active_billing_blocks, billingDocuments | — |
 | BR-BIL-17 — Exceptions (BPEMs) | partial | billing_exceptions, cases | Uses the simulation billing-check/dispute cases, not external SAP BPEM records. |
 | BR-BIL-18 — Active Billing Blocks | available | active_billing_blocks, active_invoice_holds, billingDocuments | — |
-| BR-BIL-19 — Accounts Billed without Usage (Meterless) | available | meterless_billed_accounts, consecutive_zero_bill_share, accounts | Meterless account associations and zero recorded consumption are separate checks. |
+| BR-BIL-19 — Accounts Invoiced without Usage (Meterless) | available | meterless_billed_accounts, consecutive_zero_bill_share, accounts | Meterless account associations and zero recorded consumption are separate checks. |
 | BR-BIL-20 — Active Meter Reading Blocks | partial | active_reading_blocks, reads | Counts VEE/review holds on read release. Administrative meter-reading block flags need additional source data. |
 | BR-MTR-01 — Open & Outstanding Reads | available | outstanding_reads, reads | — |
 | BR-MTR-02 — Early & Late Reads | available | early_read_share, late_read_share, reads | — |
@@ -268,3 +268,21 @@ net invoice amounts include correction credits. They are deliberately separate t
 Offline views add the monthly rows across the whole utility before filtering, sorting, projecting columns or
 paging. CSV and Connect exports use those same totals. Old archives without the new table or KPI values replay
 their preserved inputs; users do not need to recreate their simulation.
+
+## Invoice populations (version 2)
+
+Customer-facing billing KPIs measure invoice issue, including print lag. The engine records a planned issue day;
+there is no external print-completion feed. An invoice is counted only after both its creation and issue time.
+Estimated, consecutive-estimated, zero-use, period-defect and corrective measures count each issued invoice once,
+even when it includes several services. Historical invoice contents remain auditable after later corrections.
+Consecutive measures require a prior monthly cycle on a previously issued invoice, not a second service or
+corrective version of the same cycle. Corrections issued before the next invoice update that cycle's history.
+
+Timeliness and delay use scheduled account-month cycles so a missing invoice is still visible. Each service keeps
+its own deadline; late or still-unissued overdue services make that cycle late. Pending cycles inside the window
+are neither timely nor late yet. The operational target is `on_time_bill_days` (3); the twin/delay target is
+`timely_invoice_days` (5). Internal billing-document block counts remain explicitly labelled upstream workload.
+
+IDs containing `bill` are retained for saved selections and recipes. `m2c-kpis/2.0` marks the population change;
+the interactive offline workspace recomputes older archived KPI values instead of relabelling document counts.
+The monthly audit reports document preparation separately from invoices issued, estimated and corrected.

@@ -29,7 +29,7 @@ reproduced:
 
 | KPI | Engine measure | Levers that move it |
 |---|---|---|
-| `invoice_timeliness` | Share of invoices created within `timelyDays` (5) of the last scheduled read they bill | automation, VEE strictness, pickup lag, analyst hours, missed reads, field capacity |
+| `invoice_timeliness` | Share of scheduled account-month cycles fully issued within `timelyDays` (5) of each service scheduled read, including print lag and upstream holds | automation, VEE strictness, pickup lag, analyst hours, missed reads, field capacity |
 | `missed_read_share` | Scheduled billing reads with no read taken | missed reads |
 | `estimated_read_share` | Scheduled reads released to billing as an estimate | missed reads, field capacity, anomalies |
 | `exceptions_all` | Every case opened, per 1,000 accounts a year | missed reads, anomalies, VEE strictness |
@@ -39,7 +39,7 @@ reproduced:
 | `days_to_release` | Calendar days from the read to its case releasing it | pickup lag, automation, analyst hours, field capacity |
 | `days_to_pay` | Days from an invoice's issue to payment in full | none yet (payer behaviour is a town setting) |
 | `collected_share` | Payments in the window over the amount invoiced | none yet |
-| `billing_error_share` | Released bills against the simulation's truth, over the amount billed | VEE strictness, anomalies |
+| `billing_error_share` | Net issued invoices against simulated truth, over absolute net amounts issued | VEE strictness, anomalies |
 
 A KPI is a steady `value`, or a `before` and an `after` around `changedOn`. Rates are per 1,000 accounts a year;
 `absolute: true` gives the utility's own yearly total instead (10,000 exceptions over 50,000 customers is 200 per
@@ -107,15 +107,10 @@ template of 10,000 for a local utility) and any town settings the utility gave; 
 
 ## What the first probe showed
 
-A 50,000-customer, 8-biller spec with timeliness 99 to 94 percent and 8,000 to 10,000 worked exceptions from 1 April
-fits on the small town in 15 replays (two minutes): the "before" figures hold at the defaults, worked exceptions reach
-209 against 200 per 1,000 through missed reads at twice the default and a four-day pickup lag, and timeliness stops at
-98.5 percent, reported as unfitted with the floor explained. On the small town at the defaults, invoice timeliness is 99.3 percent within five days, 171 cases per 1,000 accounts
-reach a person, and four in five cases are missed reads that automation closes. One and eight analysts give identical
-years at that load: staffing only bites once the queues saturate, which is why billers are an input and the fit tells
-you when they are not the constraint. Measured as read-to-invoice days, timeliness has a floor near 96 percent under
-heavy stress, because the engine bills on an estimate instead of holding the bill; a utility that counts an
-estimated bill as late is describing `estimated_read_share`, which moves from 8 to 19 percent over the same stress.
+Historical fit benchmarks used invoice creation and omitted cycles that had not reached invoicing. They are
+not comparable with the version 2 invoice-issue measure. Refit observed targets with the new population: scheduled
+account-month cycles, each service's own deadline, upstream holds and print lag. An estimated invoice can still be
+on time; estimate quality is a separate measure. Print lag remains outside the twin's fitted levers.
 
 ## Limits
 

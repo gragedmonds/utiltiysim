@@ -403,7 +403,7 @@ outsort release: no analyst and no RPA touches a billing block, so every `HIGH_B
 `RATE_CLASS` case waits for your `accept`, `estimate` (rebill) or `escalate`. Bills behind them wait too, so days to
 invoice and billing carry grow.
 
-**Estimated bills.** A billing document built on an estimated read says so: `estimated: true` and
+**Estimates on billing documents and invoices.** A billing document built on an estimated read says so: `estimated: true` and
 `estimatedReadIds` (a rebill on an estimate is estimated too). An invoice carries `estimated` and
 `estimatedBillingDocumentIds`, so premise and installation views show which bills and invoices rest on estimates.
 
