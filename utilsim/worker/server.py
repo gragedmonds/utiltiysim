@@ -171,6 +171,34 @@ def create_app(jobs: LocalJobs, local_token, on_ready=None):
     return app
 
 
+def stable_port(root: Path, listener: socket.socket, port: int = 0) -> int:
+    """Bind ``listener`` for the folder and return the port. An explicit ``port`` is used as given. Otherwise the folder
+    keeps its address: the port saved in ``engine-port.json`` is bound again while it is free, else a free one is
+    taken and saved. The browser keeps the simulation list, settings and analyst actions per address, so the same
+    folder must open at the same address every start, not at a fresh one."""
+    saved = root / 'engine-port.json'
+    if port:
+        listener.bind(('127.0.0.1', port))
+        return listener.getsockname()[1]
+    if os.name != 'nt':  # a just-closed engine's connections may still hold the port for a minute (TIME_WAIT)
+        listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    try:
+        wanted = int(json.loads(saved.read_text())['port'])
+    except (OSError, ValueError, KeyError, TypeError):
+        wanted = 0
+    try:
+        listener.bind(('127.0.0.1', wanted if 1024 <= wanted <= 65535 else 0))
+    except OSError:
+        listener.bind(('127.0.0.1', 0))
+    port = listener.getsockname()[1]
+    if port != wanted:
+        try:
+            saved.write_text(json.dumps({'port': port}))
+        except OSError:
+            pass  # a read-only folder still works; the address is simply chosen again next time
+    return port
+
+
 def serve(store, port=0, open_browser=True, ready_file=None):
     import uvicorn
 
@@ -182,8 +210,7 @@ def serve(store, port=0, open_browser=True, ready_file=None):
     os.environ.setdefault('UTILSIM_CACHE', str(root / 'cache'))  # generated towns' snapshots stay in the library too
     token = secrets.token_urlsafe(32)
     with job_lock(root / 'runner.lock'), socket.socket() as listener:
-        listener.bind(('127.0.0.1', port))
-        port = listener.getsockname()[1]
+        port = stable_port(root, listener, port)
         jobs = LocalJobs(root)
         url = f'http://127.0.0.1:{port}/#token={token}'
 

@@ -71,7 +71,9 @@ revision stands. A completed revision shows the year's monthly totals and timing
 saved-results reader with its full tables, work queues and scorecard. Failed revisions can be retried; queued and
 finished ones removed from the list (their files stay). **Pause** holds the queue after the current district.
 
-On disk under the storage folder: `runner.json` (the queue), `baselines/` (generated towns, reused across revisions
+On disk under the storage folder: `engine-port.json` (the address the folder opens at: the browser keeps the simulation
+list, settings and analyst actions per address, so the same folder opens at the same address every start, and a port
+found taken is replaced and remembered), `runner.json` (the queue), `baselines/` (generated towns, reused across revisions
 that change only the year), `batches/` (checkpoints per district), `runs/<runKey>/` (one bundle per finished district)
 and `results/<jobId>.result.json` (the small summary). A revision interrupted by closing the app resumes from its
 finished districts on the next start. A missing drive pauses work instead of writing anywhere else.
