@@ -128,3 +128,28 @@ func TestReopeningRunningLauncherGoesStraightToStudio(t *testing.T) {
 		}
 	}
 }
+
+func TestOlderEngineKeepsLauncherControlsReachableDuringUpgrade(t *testing.T) {
+	token := strings.Repeat("e", 64)
+	pageURL := "http://127.0.0.1:51234/#token=" + strings.Repeat("l", 64)
+	settings := ""
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/local/status" || r.Header.Get("Authorization") != "Bearer "+token {
+			w.WriteHeader(401)
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]string{"launcherURL": settings})
+	}))
+	defer server.Close()
+	address := server.URL + "/#token=" + token
+	if runnerHasLauncherSettings(address, pageURL) {
+		t.Fatal("older engine without a settings link would hide update controls")
+	}
+	settings = pageURL
+	if !runnerHasLauncherSettings(address, pageURL) {
+		t.Fatal("current engine should bypass the launcher page")
+	}
+	if runnerHasLauncherSettings(server.URL+"/#token="+strings.Repeat("x", 64), pageURL) {
+		t.Fatal("settings support was accepted without authentication")
+	}
+}

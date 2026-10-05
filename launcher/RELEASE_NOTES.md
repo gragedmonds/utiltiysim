@@ -4,6 +4,7 @@ The `runtime-*` files are downloaded automatically by the launcher; you do not n
 On the first launch, choose the storage folder and click **Open Utility Studio**. The first start downloads and verifies
 the engine into that folder; later launches open Studio directly using the saved location. A missing drive or startup
 problem returns to setup. The gear in Studio opens app settings, updates and **Quit Utility Studio**.
+When upgrading an older engine, its update controls stay open until the new engine is active.
 Download this launcher once to get the new startup behaviour; the engine updater does not replace your launcher.
 Utility Studio opens in your browser: set up a simulation,
 tweak any setting, run the year and read the results, all on this computer. Nothing is uploaded.

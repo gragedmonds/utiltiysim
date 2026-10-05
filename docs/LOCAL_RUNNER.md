@@ -20,7 +20,8 @@ through** with Claude (an Anthropic API key you paste in).
    subsequent launches start the engine and open Studio directly, bypassing the folder screen. Opening the executable
    again while it runs brings Studio back instead of starting a second engine. The **App settings and updates** gear
    in Studio opens the launcher's status, restart and quit controls. A missing drive or startup failure brings the
-   setup screen back with the reason. Run the launcher with `--setup` while it is stopped to choose a different library.
+   setup screen back with the reason. When an older installed engine has no settings gear yet, the launcher
+   keeps its controls open for that upgrade; the updated engine then opens directly. Run the launcher with `--setup` while it is stopped to choose a different library.
    On Windows the launcher has no console window. On macOS and Linux
    the terminal it started from shows the address; closing it stops Utility Studio.
 

@@ -28,7 +28,7 @@ import (
 var runtimeURL, runtimeSHA, runtimeSignature, runtimePublicKey, runtimeBytes, releaseVersion string
 var mu sync.Mutex
 var message = "Ready to open Utility Studio."
-var busy, picking bool
+var busy, picking, rememberedLaunch bool
 var engineURL, logPath, engineVersion, launcherPageURL string
 var engineCmd *exec.Cmd
 var quitting, restartRequested bool
@@ -531,6 +531,7 @@ func main() {
 		go startStudio(root, pref)
 	})
 	if remembered {
+		rememberedLaunch = true
 		busy = true
 		logPath = filepath.Join(chosen, "runner.log")
 		message = "Opening your saved library…"
