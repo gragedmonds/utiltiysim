@@ -279,11 +279,12 @@ def thresholds(cfg) -> dict:
 def catalogue(cfg=None) -> dict:
     from utilsim.config.model import SimConfig
     from utilsim.m2c.billing_reports import REPORTS
+    from utilsim.m2c.service_orders import catalogue as service_orders
 
     cfg = cfg or SimConfig()
     return {"schemaVersion": KPIS_VERSION, "families": [{"id": i, "title": t, "text": x} for i, t, x in FAMILIES],
             "kpis": [kpi_json(k) for k in KPIS], "thresholds": thresholds(cfg), "settingsGroup": "kpi",
-            "billingReports": list(REPORTS)}
+            "billingReports": list(REPORTS), "serviceOrders": service_orders()}
 
 
 # ---- measuring ------------------------------------------------------------------------------------------------------

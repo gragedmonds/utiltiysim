@@ -1,5 +1,18 @@
 # utilsim: notes for Claude
 
+## Supported UI target
+
+Utility Studio is a downloadable offline desktop application. Prioritise the desktop
+browser opened by the launcher, with keyboard and mouse interaction. Phone and tablet
+support is deprecated: do not add dedicated mobile navigation, touch-only features,
+mobile-specific layouts or routine mobile viewport checks unless the user requests them.
+
+Keep layouts usable when a desktop window is resized, used side by side, or viewed with
+Windows display scaling or browser zoom. Responsive CSS that serves those desktop needs
+is still useful; do not remove all media queries indiscriminately. Retire dedicated mobile
+behaviour when working on the relevant screen. Verify at ordinary desktop sizes and, when
+the layout changes, a smaller desktop window or increased zoom.
+
 ## Cost guardrails (CI, deploys, cloud)
 
 Every paid or metered resource has a budget: GitHub Actions minutes, Vercel builds and deployments, cloud credits.
