@@ -19,6 +19,24 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 ROOT = Path(__file__).resolve().parents[1]
+WINDOWS_ICON = ROOT / 'launcher' / 'utility-studio.ico'
+
+
+def build_launcher(destination, flags, system, arch):
+    """Embed the Windows logo before linking; other platforms need no Windows resource."""
+    resource = None
+    try:
+        if system == 'windows':
+            go_arch = 'arm64' if arch == 'arm64' else 'amd64'
+            resource = ROOT / 'launcher' / f'rsrc_windows_{go_arch}.syso'
+            subprocess.run(['go', 'run', 'github.com/akavel/rsrc@v0.10.2', '-ico', str(WINDOWS_ICON),
+                            '-arch', go_arch, '-o', str(resource)], cwd=ROOT / 'launcher', check=True)
+            flags += ' -H=windowsgui'
+        subprocess.run(['go', 'build', '-trimpath', '-ldflags', flags, '-o', str(destination), '.'],
+                       cwd=ROOT / 'launcher', check=True)
+    finally:
+        if resource is not None:
+            resource.unlink(missing_ok=True)
 
 
 def smoke_startup(executable, library):
@@ -107,6 +125,8 @@ def main():
                '--hidden-import', 'utilsim.batch', '--hidden-import', 'utilsim.gen.pipeline', '--hidden-import', 'api.app',
                '--collect-data', 'utilsim', '--copy-metadata', 'numpy', '--copy-metadata', 'pydantic',
                '--copy-metadata', 'orjson', '--exclude-module', 'matplotlib', '--exclude-module', 'pyarrow']
+    if system == 'windows':
+        command += ['--icon', str(WINDOWS_ICON)]
     for source, dest in [(ROOT / 'packages/town-viewer/dist', 'packages/town-viewer/dist'),
                          (ROOT / 'utilsim/config/presets', 'utilsim/config/presets'),
                          (ROOT / 'packs', 'packs'), (ROOT / 'schemas', 'schemas'), (build_file, '.')]:
@@ -132,9 +152,7 @@ def main():
     name = 'UtilityStudio-' + target + ('.exe' if system == 'windows' else '')
     launcher = out / name
     flags = '-s -w ' + ' '.join('-X main.' + key + '=' + value for key, value in values.items())
-    if system == 'windows':
-        flags += ' -H=windowsgui'  # no console window: the launcher page in the browser is the window
-    subprocess.run(['go', 'build', '-trimpath', '-ldflags', flags, '-o', str(launcher), '.'], cwd=ROOT / 'launcher', check=True)
+    build_launcher(launcher, flags, system, arch)
     if system != 'windows':
         # Browser downloads do not preserve executable mode. A zip preserves it on extraction.
         with zipfile.ZipFile(out / (name + '.zip'), 'w', zipfile.ZIP_DEFLATED) as archive:

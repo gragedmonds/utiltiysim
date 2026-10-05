@@ -45,7 +45,8 @@ METRICS = (
 )
 
 
-def measure_quality(run, day, T, *, cycles=None):
+def measure_quality(run, day, T, *, cycles=None, since=0, timely_days=None):
+    """Events in [since, T]; outstanding work and reference audits at T, including older work."""
     from utilsim.m2c.catalog import BILL_TYPES
     from utilsim.twin.kpis import VEE_TYPES
 
@@ -58,11 +59,20 @@ def measure_quality(run, day, T, *, cycles=None):
 
     docs = [d for d in bk.docs if 0 <= d['created'] <= T]
     current = [d for d in docs if d['reversed'] is None or d['reversed'] > T]
-    from utilsim.m2c.invoice_metrics import expected_cycles, issued_invoices, quality_counts, timing_counts
-    invoices = issued_invoices(run, T)
-    created = [i for i in bk.invoices if 0 <= i['created'] <= T]
-    q = quality_counts(run, invoices)
-    _, late, total = timing_counts(expected_cycles(run, T) if cycles is None else cycles, T, run.cfg.kpi.timely_invoice_days)
+    from utilsim.m2c.invoice_metrics import (
+        expected_cycles,
+        issue_time,
+        issued_invoices,
+        quality_counts,
+        timing_counts,
+    )
+    all_issued = issued_invoices(run, T)
+    invoices = [i for i in all_issued if issue_time(i) >= since]
+    all_created = [i for i in bk.invoices if 0 <= i['created'] <= T]
+    created = [i for i in all_created if i['created'] >= since]
+    q = quality_counts(run, all_issued, since=since)
+    _, late, total = timing_counts(expected_cycles(run, T, since) if cycles is None else cycles, T,
+                                  run.cfg.kpi.timely_invoice_days if timely_days is None else timely_days)
     share('estimated_bill_share', q['estimated'], len(invoices))
     share('delayed_bill_share', late, total)
     share('consecutive_estimated_bill_share', q['consecutive_estimated'], len(invoices))
@@ -78,21 +88,21 @@ def measure_quality(run, day, T, *, cycles=None):
         return not isinstance(v, (int, float)) or not math.isfinite(v)
     share('due_date_defect_share', sum(invalid(i.get('due')) or invalid(i.get('issued')) or i['due'] < i['issued'] for i in created), len(created))
     share('net_terms_mismatch_share', sum(invalid(i.get('due')) or invalid(i.get('issued')) or abs(i['due'] - i['issued'] - run.cfg.customers_billing.due_days) > 1e-7 for i in created), len(created))
-    count('invoices_pending_issue', sum(not invalid(i.get('issued')) and i['issued'] > T for i in created))
+    count('invoices_pending_issue', sum(not invalid(i.get('issued')) and i['issued'] > T for i in all_created))
     share('zero_customer_charge_share', q['no_fixed'], len(invoices))
     share('multiple_invoice_cycle_share', q['multiple_cycles'], q['cycles'])
-    count('billing_exceptions', sum(0 <= c.created <= T and c.type in (*BILL_TYPES, 'BILL_DISPUTE') for c in run.cases))
+    count('billing_exceptions', sum(since <= c.created <= T and c.type in (*BILL_TYPES, 'BILL_DISPUTE') for c in run.cases))
     count('active_implausibles', sum(c.created <= T and c.type in VEE_TYPES and not c.work and (c.resolved is None or c.resolved > T) for c in run.cases))
     scheduled, observed = tw.read_day[:, 1:], run.taken_t(slice(None), slice(1, None))
     due = (scheduled <= day) & (run.status[:, 1:] != 6)
     unreleased = run.release_t[:, 1:] > T
     count('outstanding_reads', np.sum(due & unreleased))
     count('active_reading_blocks', np.sum(due & unreleased & (observed <= T) & (run.case_of[:, 1:] >= 0)))
-    actual = (run.status[:, 1:] != 6) & (observed <= T) & np.isfinite(run.obs[:, 1:])
+    actual = (run.status[:, 1:] != 6) & (observed >= since) & (observed <= T) & np.isfinite(run.obs[:, 1:])
     share('early_read_share', np.sum(actual & (np.floor(observed) < scheduled)), np.sum(actual))
     share('late_read_share', np.sum(actual & (np.floor(observed) > scheduled)), np.sum(actual))
-    count('move_ins', np.sum((tw.move_in >= 0) & (tw.move_in <= day)))
-    count('move_outs', np.sum((tw.move_out >= 0) & (tw.move_out <= day)))
+    count('move_ins', np.sum((tw.move_in >= since) & (tw.move_in <= day)))
+    count('move_outs', np.sum((tw.move_out >= since) & (tw.move_out <= day)))
     master = tw.audit_master
     def active(row):
         return (row.get('status') not in ('inactive', 'retired', 'cancelled') and

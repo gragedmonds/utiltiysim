@@ -22,3 +22,4 @@ viewer*.png
 .claude/worktrees/
 # PyInstaller generated specification
 /utility-runner.spec
+/launcher/rsrc_windows_*.syso

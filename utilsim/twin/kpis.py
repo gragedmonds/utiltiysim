@@ -15,9 +15,10 @@ import numpy as np
 
 from utilsim.m2c import catalog as cat
 from utilsim.m2c import collections as colls
+from utilsim.m2c.billing_quality import METRICS as BILLING_METRICS
 from utilsim.m2c.run import OFF, M2CRun
 
-SHARE, DAYS, PER_1000 = "share", "days", "per_1000_accounts_year"
+SHARE, DAYS, PER_1000, COUNT = "share", "days", "per_1000_accounts_year", "count"
 
 # A case a person touched: an analyst, a supervisor or you. RPA and automatic estimates are not people.
 PERSON_EVENTS = frozenset(k for k in cat.EVENTS if k.startswith(("ANALYST_", "SUPERVISOR_")) or k == "USER_ACTION")
@@ -46,10 +47,9 @@ KPIS: tuple[Kpi, ...] = (
         "Share of scheduled account-month cycles fully issued within N calendar days of each service's scheduled "
         "read (timelyDays, 5 by default). Includes upstream holds and print lag; pending cycles are not timely.",
         "higher", 0.005,
-        (("automation", 1), ("vee_strictness", -1), ("pickup_lag", -1), ("analyst_hours", 1), ("missed_reads", -1),
+        (("print_lag", -1), ("automation", 1), ("vee_strictness", -1), ("pickup_lag", -1), ("analyst_hours", 1), ("missed_reads", -1),
          ("field_capacity", 1)),
-        "Timeliness measures invoice issue, not whether the charges were estimated. Issue delay includes print "
-        "lag, which is a billing setting outside the twin's fitted levers."),
+        "Timeliness measures invoice issue, not whether the charges were estimated."),
     Kpi("missed_read_share", "Missed reads", SHARE,
         "Share of scheduled billing reads with no read taken (AMI dropouts, drive-by misses, no access).", "lower",
         0.005, (("missed_reads", 1),)),
@@ -86,6 +86,23 @@ KPIS: tuple[Kpi, ...] = (
         "Absolute net invoice error against simulated truth, divided by absolute net amounts issued in the window. "
         "Corrective invoices include credits in both the actual and truth totals.", "lower", 0.002, (("vee_strictness", -1), ("anomalies", 1))),
 )
+# Use the same assurance definitions as the Command Center. Only assign fitting levers
+# with an engine connection; structural audits remain useful comparison observations.
+QUALITY_LEVERS = {
+    'delayed_bill_share': (("print_lag", 1), ("pickup_lag", 1), ("analyst_hours", -1)),
+    'estimated_bill_share': (("missed_reads", 1), ("anomalies", 1), ("field_capacity", -1)),
+    'consecutive_estimated_bill_share': (("missed_reads", 1), ("anomalies", 1), ("field_capacity", -1)),
+    'consecutive_zero_bill_share': (("anomalies", 1),),
+    'move_boundary_estimate_share': (("missed_reads", 1), ("anomalies", 1)),
+    'invoices_pending_issue': (("print_lag", 1),),
+    'active_billing_blocks': (("analyst_hours", -1), ("automation", -1), ("pickup_lag", 1)),
+    'active_reading_blocks': (("analyst_hours", -1), ("automation", -1), ("pickup_lag", 1)),
+    'outstanding_reads': (("missed_reads", 1), ("analyst_hours", -1), ("field_capacity", -1)),
+    'active_implausibles': (("anomalies", 1), ("vee_strictness", 1), ("analyst_hours", -1)),
+}
+KPIS += tuple(Kpi(m['id'], m['title'], m['unit'], m['definition'], m['better'],
+                  .05 if m['unit'] == COUNT else .005, QUALITY_LEVERS.get(m['id'], ()))
+              for m in BILLING_METRICS)
 KPI_BY_ID: dict[str, Kpi] = {k.id: k for k in KPIS}
 
 
@@ -94,11 +111,23 @@ def tolerance_for(kpi: Kpi, target: float, given: float | None = None) -> float:
     10 per 1,000)."""
     if given is not None:
         return float(given)
-    return max(10.0, kpi.tolerance * abs(target)) if kpi.unit == PER_1000 else kpi.tolerance
+    if kpi.unit in (PER_1000, COUNT):
+        return max(10.0 if kpi.unit == PER_1000 else 1.0, kpi.tolerance * abs(target))
+    return kpi.tolerance
 
 
 def kpi_json(kpi: Kpi) -> dict:
+    from utilsim.m2c.kpis import KPI_BY_ID as CATALOGUE
     d = asdict(kpi)
+    d['family'] = CATALOGUE[kpi.id].family
+    d['fitMode'] = 'adjustable' if kpi.levers else 'comparison'
+    d['fitNote'] = ('The fit can adjust engine settings that influence this KPI.' if kpi.levers else
+                    'The current fitter has no adjustable setting for this KPI. '
+                    'Your observation is retained and compared with the simulation; no change is promised.')
+    if kpi.unit == COUNT:
+        d['fitNote'] += ' Enter the count across your utility. Calibration counts are scaled by customer accounts.'
+    if kpi.id in {m['id'] for m in BILLING_METRICS}:
+        d['fitNote'] += ' Event measures use the selected period; active and outstanding counts use its final day.'
     d["levers"] = [{"lever": lever, "direction": direction} for lever, direction in kpi.levers]
     return d
 
@@ -129,7 +158,7 @@ def _mean(values: list[float]) -> float | None:
 
 
 def measure(run: M2CRun, w: Window, timely_days: int = 5, accounts: int | None = None,
-            statistics: dict | None = None, *, cycles=None) -> dict[str, float | None]:
+            statistics: dict | None = None, *, cycles=None, include_quality=True) -> dict[str, float | None]:
     """Every KPI of ``run`` inside ``w`` (None when the window holds nothing to measure). ``accounts`` is the
     denominator of the rates: by default the town's accounts in the year."""
     tw, bk = run.town, run.books
@@ -176,7 +205,7 @@ def measure(run: M2CRun, w: Window, timely_days: int = 5, accounts: int | None =
     def share(count: float, total: float, digits: int = 4) -> float | None:
         return round(count / total, digits) if total else None
 
-    return {
+    values = {
         "invoice_timeliness": share(timely, n_cycles),
         "missed_read_share": share(missed, n_sched),
         "estimated_read_share": share(estimated, n_sched),
@@ -189,3 +218,11 @@ def measure(run: M2CRun, w: Window, timely_days: int = 5, accounts: int | None =
         "collected_share": share(collected, invoiced),
         "billing_error_share": share(error, billed, 5),
     }
+    if include_quality:
+        from utilsim.m2c.billing_quality import measure_quality
+        quality, quality_stats = measure_quality(run, w.day, w.T, cycles=cycles, since=w.d0,
+                                                 timely_days=timely_days)
+        values.update(quality)
+        if statistics is not None:
+            statistics.update(quality_stats)
+    return values

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {newMetrics,metricSpecs,fitMetrics,metricReportMarkup} from '../dist/twin-setup.js';
+import {newMetrics,metricSpecs,fitMetrics,metricReportMarkup,metricsMarkup,metricOptions,bindMetrics} from '../dist/twin-setup.js';
 import {wizardDraft} from '../dist/setup-config.js';
 import {LocalUtility} from '../dist/local-workspace.js';
 const dictionary={kpis:[{id:'invoice_timeliness',label:'Invoice timeliness',unit:'share'}]};
@@ -56,4 +56,50 @@ test('a local utility preserves dated edits and decisions when reopened',async()
  client.clearEpisodes();client.setSettings(null);client.setSeed(null);
  assert.deepEqual(client.body().episodes,[]);assert.deepEqual(client.body().settings,{});
  assert.deepEqual(client.body().outages,[]);assert.equal(client.body().seed,null);
+});
+
+
+test('expanded picker groups invoice and reading metrics and explains comparison counts',()=>{
+ const data={families:[{id:'billing',title:'Billing'},{id:'reading',title:'Meter reading'}],kpis:[
+  {id:'estimated_bill_share',label:'Estimated invoices',family:'billing',unit:'share',fitMode:'adjustable'},
+  {id:'active_services',label:'Active services',family:'billing',unit:'count',fitMode:'comparison',fitNote:'Counts scale to your utility.'},
+  {id:'late_read_share',label:'Reads taken late',family:'reading',unit:'share',fitMode:'comparison'},
+ ]};
+ const d=draft();d.metricDraft.rows=[{id:'active_services',before:25000,after:30000,target:31000}];
+ const html=metricsMarkup(d,data);
+ assert.match(html,/<optgroup label="Billing">/);assert.match(html,/<optgroup label="Meter reading">/);
+ assert.match(html,/Estimated invoices/);assert.match(html,/Active services \(comparison only\)/);
+ assert.match(html,/Count across your utility/);assert.match(html,/Counts scale to your utility/);
+ assert.equal(metricSpecs(d,data).history.kpis[0].after,30000);
+ assert.equal(metricSpecs(d,data).target.kpis[0].value,31000);
+ assert.match(metricOptions(data,'active_services',['active_services','estimated_bill_share']),/value="estimated_bill_share"[^>]*disabled/);
+ const report=metricReportMarkup({history:[{label:'Services',unit:'count',target:30000,achieved:29800,status:'comparison',note:'Comparison only: no fitted lever.'}]});
+ assert.match(report,/Comparison only: no fitted lever/);
+});
+
+
+test('comparison-only goals retain their report without adding a recovery episode',async()=>{
+ const d=draft();d.metricDraft.rows=[{id:'active_services',after:500,target:600}];
+ const data={kpis:[{id:'active_services',label:'Active services',unit:'count',fitMode:'comparison'}]};
+ const output=await fitMetrics(d,data,{fetchImpl:async()=>new Response(JSON.stringify({
+  proposal:{settings:{process:{analysts:2}},episodes:[]},
+  kpis:[{id:'active_services',status:'comparison',target:600,achieved:500}],notes:[],
+ }))});
+ assert.deepEqual(output.proposal.episodes,[]);
+ assert.equal(output.report.target[0].status,'comparison');
+ assert.deepEqual(output.proposal.kpis,['active_services']);
+});
+
+
+test('typing a value then adding a row preserves it before a blur event',()=>{
+ const d=draft();d.metricReport={history:[]};let add,rendered;
+ const input={dataset:{rowField:'after'},value:'88',closest:()=>({dataset:{metricRow:'0'}})};
+ const root={querySelectorAll:selector=>selector==='[data-row-field]'?[input]:[],
+  querySelector:()=>({addEventListener:(_,handler)=>{add=handler;}})};
+ const data={kpis:[...dictionary.kpis,{id:'estimated_bill_share',unit:'share'}]};
+ bindMetrics(root,d,{dictionary:data,save(){},render(){rendered=structuredClone(d.metricDraft);}});
+ input.oninput();add();
+ assert.equal(rendered.rows[0].after,'88');
+ assert.equal(rendered.rows[1].id,'estimated_bill_share');
+ assert.equal(d.metricReport,null);
 });

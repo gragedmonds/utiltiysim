@@ -32,6 +32,14 @@ Maintain the SVG viewBox and aspect ratio; do not stretch or re-typeset the word
 
 The `mono` version inherits `currentColor` when inserted inline. CSS colour from a parent page does not propagate into an SVG loaded through an `<img>` element; use the explicit black or white asset in that case.
 
+## Windows executable icon
+
+`launcher/utility-studio.ico` contains the compact colour mark on transparent square canvases at
+16, 20, 24, 32, 40, 48, 64, 96, 128 and 256 px. Regenerate it with
+`node scripts/build_windows_icon.cjs` with `sharp` available to Node (build-only; not shipped).
+The release builder embeds it in both the Go launcher and the Windows engine executable.
+The Go resource compiler is pinned to `github.com/akavel/rsrc@v0.10.2`; generated `.syso` files are temporary.
+
 ## Palette
 
 | Element | Colour |

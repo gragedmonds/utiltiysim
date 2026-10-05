@@ -1,7 +1,7 @@
 """The KPI catalogue: every figure Utility Studio can watch, what it means, how it is counted, which settings and
 scenarios move it, and where it shows.
 
-The eleven figures of the digital twin (utilsim/twin/kpis.py, each pinned to one measure of a run over a window) are
+The core figures of the digital twin (utilsim/twin/kpis.py, each pinned to one measure of a run over a window) are
 the core; the catalogue adds the figures the Studio's pages already show (VEE against truth, blocked bills, the
 contact centre, field work, reliability, cost) and the threshold figures whose windows are settings
 (``SimConfig.kpi``: a bill on time within N days of its scheduled read, a held read released within N days, an
@@ -59,7 +59,7 @@ class Kpi:
     settings: tuple[tuple[str, int], ...] = ()  # (path, direction): what moves it
     related: tuple[str, ...] = ()
     where: tuple[str, ...] = ()
-    twin: bool = False  # one of the digital twin's figures (fitted from observed values)
+    twin: bool = False  # available for fitting or comparison in Match existing metrics
 
 
 MISSED = (("reading.ami_missed_read", 1), ("reading.amr_missed_read", 1), ("reading.manual_no_access", 1))
@@ -229,7 +229,7 @@ KPIS: tuple[Kpi, ...] = (
         where=(COMMAND_CENTER, STATISTICS, WORKLISTS)),
 )
 
-KPIS += tuple(Kpi(**{k: v for k, v in m.items() if k != 'sources'}) for m in BILLING_METRICS)
+KPIS += tuple(Kpi(**{k: v for k, v in m.items() if k != 'sources'}, twin=True) for m in BILLING_METRICS)
 KPI_BY_ID: dict[str, Kpi] = {k.id: k for k in KPIS}
 KPI_IDS = frozenset(KPI_BY_ID)
 
@@ -318,7 +318,7 @@ def measure(run: M2CRun, as_of: str | None = None, ids=None, *, statistics: dict
     w = window(run, None, cal.date_of(day).isoformat())
     from utilsim.m2c.invoice_metrics import expected_cycles, issue_delays, issued_invoices, timing_counts
     cycles = expected_cycles(run, T)
-    twin = twin_measure(run, w, k_cfg.timely_invoice_days, statistics=statistics, cycles=cycles)
+    twin = twin_measure(run, w, k_cfg.timely_invoice_days, statistics=statistics, cycles=cycles, include_quality=False)
     out.update({k: v for k, v in twin.items() if k in KPI_BY_ID})
     # The summary blocks the Studio already shows.
     s = views.summary(run, as_of)
