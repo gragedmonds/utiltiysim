@@ -75,6 +75,10 @@ def _field_capacity(v: float) -> dict:
     return {"process": {"field_orders_per_day": int(round(v))}}
 
 
+def _print_lag(v: float) -> dict:
+    return {"billing": {"print_lag_days": int(round(v))}}
+
+
 @dataclass(frozen=True)
 class Lever:
     """``patch(value)`` is the run settings the lever sets at ``value``; ``step`` is the fit's first probe."""
@@ -99,6 +103,8 @@ class Lever:
 
 
 LEVERS: dict[str, Lever] = {lever.id: lever for lever in (
+    Lever("print_lag", "Invoice issue lag", "Calendar days from invoice creation to customer issue.",
+          0.0, 10.0, float(DEFAULTS.billing.print_lag_days), 5.0, "days", _print_lag),
     Lever("missed_reads", "Missed reads", "A multiplier on the chance a billing read is missed: AMI reads still "
           "missing after the retry window, drive-by misses and manual no-access, together.", 0.0, 12.0, 1.0, 1.0,
           "× default", _missed_reads),

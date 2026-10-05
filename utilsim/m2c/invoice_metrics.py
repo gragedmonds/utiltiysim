@@ -106,15 +106,17 @@ def timing_counts(cycles, T, days):
     return int(on_time), int(late), len(cycles)
 
 
-def quality_counts(run, invoices):
-    """One observation per issued invoice; preceding cycles use only evidence issued before it."""
+def quality_counts(run, invoices, *, since=0):
+    """Count issues since the window start, retaining earlier issues as sequence evidence."""
     bk, tw = run.books, run.town
     history = defaultdict(dict)
     counts = dict.fromkeys(('estimated', 'consecutive_estimated', 'consecutive_zero', 'bad_period',
                             'boundary', 'boundary_estimated', 'prorated', 'replacement', 'no_fixed'), 0)
     cycles = defaultdict(set)
+    window_cycles = set()
     corrections = corrective_invoices(run, invoices)
     for inv in invoices:
+        in_window = issue_time(inv) >= since
         docs = [bk.docs[k] for k in inv['docs']]
         flags = {k: False for k in counts}
         flags['estimated'] = any(d.get('estimated') for d in docs)
@@ -142,12 +144,14 @@ def quality_counts(run, invoices):
             flags['prorated'] |= boundary and charge != 0
             if not d.get('carried'):
                 cycles[cycle].add(inv['id'])
+                if in_window:
+                    window_cycles.add(cycle)
         flags['no_fixed'] = bool(docs) and not any(fixed)
         for d in docs:
             if not d.get('carried'):
                 history[inv['account'], d['month']][d['inst']] = d
         for key, flag in flags.items():
-            counts[key] += int(flag)
-    counts['multiple_cycles'] = sum(len(v) > 1 for v in cycles.values())
-    counts['cycles'] = len(cycles)
+            counts[key] += int(flag) if in_window else 0
+    counts['multiple_cycles'] = sum(len(cycles[key]) > 1 for key in window_cycles)
+    counts['cycles'] = len(window_cycles)
     return counts

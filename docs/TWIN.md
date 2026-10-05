@@ -8,7 +8,7 @@ result is an ordinary setup proposal, opened, locked in and explored like any ot
 shows for every KPI, which levers it moved and how far each observed figure was reproduced.
 
 Engine module `utilsim/twin/`, command `utilsim twin`, API `GET /api/twin/dictionary` and `POST /api/twin/fit`
-(`twin-fit/1.0`). The eleven figures the twin reproduces are part of the Studio's KPI catalogue under the same ids
+(`twin-fit/1.0`). The fitting and comparison figures are part of the Studio's KPI catalogue under the same ids
 (`utilsim/m2c/kpis.py`, [KPIS.md](KPIS.md)), marked `twin`. The Studio exposes this through **Match existing metrics**; see "Studio" below.
 
 ## What goes in
@@ -29,7 +29,7 @@ reproduced:
 
 | KPI | Engine measure | Levers that move it |
 |---|---|---|
-| `invoice_timeliness` | Share of scheduled account-month cycles fully issued within `timelyDays` (5) of each service scheduled read, including print lag and upstream holds | automation, VEE strictness, pickup lag, analyst hours, missed reads, field capacity |
+| `invoice_timeliness` | Share of scheduled account-month cycles fully issued within `timelyDays` (5) of each service scheduled read, including print lag and upstream holds | invoice issue lag, automation, VEE strictness, pickup lag, analyst hours, missed reads, field capacity |
 | `missed_read_share` | Scheduled billing reads with no read taken | missed reads |
 | `estimated_read_share` | Scheduled reads released to billing as an estimate | missed reads, field capacity, anomalies |
 | `exceptions_all` | Every case opened, per 1,000 accounts a year | missed reads, anomalies, VEE strictness |
@@ -41,17 +41,31 @@ reproduced:
 | `collected_share` | Payments in the window over the amount invoiced | none yet |
 | `billing_error_share` | Net issued invoices against simulated truth, over absolute net amounts issued | VEE strictness, anomalies |
 
+The picker also includes all 28 billing-assurance and reading-audit KPIs from
+`utilsim/m2c/billing_quality.py`, grouped by family. The same IDs, labels, definitions and calculations
+serve the Command Center and the fitting wizard. Estimated, consecutive estimated, consecutive zero-use
+and delayed **invoices** are measured at customer issue, not upstream document creation.
+
+The dictionary labels each KPI `adjustable` or `comparison`. Comparison-only observations are retained
+and reported as `matched`, `comparison` or `unmeasured`; the fitter does not claim to change structural
+reference defects, move counts or other inputs without a supported lever. Each row explains this before
+submission. Raw count inputs refer to the entire utility: calibration counts are scaled by customer
+accounts (and disclosed as estimates), while shares are unchanged. Count tolerances default to five
+percent of the target, at least one. Event measures use the selected window; active and outstanding
+counts are snapshots at its end. Sequence checks retain earlier invoice history across window boundaries.
+
 A KPI is a steady `value`, or a `before` and an `after` around `changedOn`. Rates are per 1,000 accounts a year;
 `absolute: true` gives the utility's own yearly total instead (10,000 exceptions over 50,000 customers is 200 per
 1,000). Each KPI has a tolerance (half a percentage point for a share, half a day, 5 percent of a rate and at least
 10 per 1,000) that the spec can override.
 
-**Levers** are the handful of named, one-dimensional causes the fit may move. Fitting seven explained levers rather
+**Levers** are the handful of named, one-dimensional causes the fit may move. Fitting eight explained levers rather
 than a hundred settings keeps the answer identifiable: "missed reads at 2.4 times the default" says what happened.
 Every lever's default reproduces the engine's defaults exactly, so a lever the fit never moved changes nothing.
 
 | Lever | Sets | Range |
 |---|---|---|
+| `print_lag` | `billing.print_lag_days`, creation to customer issue | 0 to 10 days |
 | `missed_reads` | the AMI, drive-by and manual missed-read chances, together | 0 to 12 × default |
 | `anomalies` | every injected anomaly rate | 0 to 8 × default |
 | `vee_strictness` | high and low tolerances and the auto-accept bar, from the scenario library's loosened (0) through the defaults (0.5) to its tightened battery (1) | 0 to 1 |

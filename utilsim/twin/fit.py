@@ -37,7 +37,7 @@ from utilsim.config.presets import deep_merge
 from utilsim.m2c.base import M2CTown
 from utilsim.m2c.calendar import FIRST_YEAR
 from utilsim.m2c.run import M2CRun
-from utilsim.twin.kpis import KPI_BY_ID, KPIS, PER_1000, Kpi, kpi_json, measure, tolerance_for, window
+from utilsim.twin.kpis import COUNT, KPI_BY_ID, KPIS, PER_1000, Kpi, kpi_json, measure, tolerance_for, window
 from utilsim.twin.levers import DEFAULTS, LEVERS, patches
 
 TWIN_VERSION = "twin-fit/1.0"
@@ -287,6 +287,10 @@ class _Evaluator:
         for name, since, until in self.windows:
             w = window(run, since, until)
             out[name] = measure(run, w, self.spec.timelyDays, self.accounts) if w.days > 0 else {}
+            # Raw counts describe the user's utility, not the smaller calibration town.
+            for kpi in KPIS:
+                if kpi.unit == COUNT and out[name].get(kpi.id) is not None:
+                    out[name][kpi.id] = round(out[name][kpi.id] * self.spec.customers / self.accounts, 2)
         self.cache[key] = out
         if self.progress:
             self.progress({"replay": self.replays, "budget": self.spec.budget, "label": label,
@@ -402,7 +406,10 @@ def _row(spec_kpi: KpiTarget, period: str, target: Target, start: dict, achieved
     moved = [lever for lever, _ in kpi.levers if lever in x and x[lever] != x0.get(lever)]
     status = _status(target, achieved)
     note = ""
-    if status == "unmeasured":
+    if not kpi.levers:
+        note = "Comparison only: no fitted lever adjusts this KPI. The observation is retained for comparison."
+        status = "matched" if status == "fitted" else "unmeasured" if status == "unmeasured" else "comparison"
+    elif status == "unmeasured":
         note = "The window holds nothing to measure for this KPI."
     elif status != "fitted":
         usable = [lever for lever, _ in kpi.levers if lever in free]
@@ -426,7 +433,9 @@ def _row(spec_kpi: KpiTarget, period: str, target: Target, start: dict, achieved
 
 def dictionary() -> dict:
     """The twin's vocabulary for a form or a conversation: the KPIs, the levers, the known inputs and the defaults."""
+    from utilsim.m2c.kpis import FAMILIES
     return {"schemaVersion": TWIN_VERSION, "kpis": [kpi_json(k) for k in KPIS],
+            "families": [{"id": id, "title": title} for id, title, _ in FAMILIES],
             "levers": [lever.json() for lever in LEVERS.values()],
             "known": [{"id": "customers", "label": "Customers", "text": "Contract accounts in the year. Homes "
                        "follow from the calibration town's accounts per home; above the live limit the utility "
@@ -462,6 +471,9 @@ def fit(spec: TwinSpec, *, town: M2CTown | None = None, home_limit: int = HOME_L
     notes = staffing_notes(spec, cal_homes / size["homes"], "the calibration town")
     if notes and size["homes"] > cal_homes:
         notes.append("Calibrate on a larger pack town (town, large_town) for a closer match of capacity per account.")
+    if any(KPI_BY_ID[k.id].unit == COUNT for k in spec.kpis):
+        notes.append("Count targets describe the whole utility. Achieved counts are estimates scaled from the "
+                     "calibration town by customer accounts; the full run may differ.")
     notes += staffing_notes(spec, size["templateHomes"] / size["homes"],
                             "a district" if size["execution"] == "local" else "the town")
 
@@ -551,6 +563,7 @@ def _proposal(spec: TwinSpec, size: dict, x1: dict[str, float], used: list[str],
     local = size["execution"] == "local"
     share = size["templateHomes"] / size["homes"]
     settings = deep_merge(patches({lever: x1[lever] for lever in used}), staffing(spec, share))
+    settings['kpi'] = {'timely_invoice_days': spec.timelyDays}
     town = deep_merge(spec.townOverrides, {"town": {"houses": size["templateHomes"]}})
     if spec.services and set(spec.services) != set(SERVICES):
         town = deep_merge(town, {"customers_billing": {"services": [s for s in SERVICES if s in spec.services]}})
@@ -558,8 +571,8 @@ def _proposal(spec: TwinSpec, size: dict, x1: dict[str, float], used: list[str],
     if episode_settings:
         episodes.append({"title": "What changed", "from": spec.changedOn, "to": None, "ramp": spec.ramp,
                          "settings": episode_settings})
-    fitted = [r for r in rows if r["status"] == "fitted"]
-    unfitted = [r for r in rows if r["status"] in ("close", "unfitted")]
+    fitted = [r for r in rows if r["status"] in ("fitted", "matched")]
+    unfitted = [r for r in rows if r["status"] in ("close", "unfitted", "comparison")]
     moved = [lever for lever in used if x1[lever] != LEVERS[lever].default]
     where = (f"about {size['homes']:,} homes in {size['districts']} districts of up to {DISTRICT_HOMES:,}"
              if local else f"about {size['homes']:,} homes, one live town")
@@ -578,14 +591,15 @@ def _proposal(spec: TwinSpec, size: dict, x1: dict[str, float], used: list[str],
         assumptions.append("Levers moved from the defaults: " + ", ".join(
             f"{LEVERS[lever].label.lower()} {x1[lever]:g} {LEVERS[lever].unit}" for lever in moved) + ".")
     else:
-        assumptions.append("No lever moved: the engine's defaults already reproduce the observed figures.")
+        assumptions.append("No fitted setting changed. The report compares the default simulation with your observations.")
     limitations = [f"Calibrated on a {spec.calibration.replace('_', ' ')} replay; the utility's own town is "
                    "generated when the simulation opens."]
     if unfitted:
         limitations.append("Not reproduced within tolerance: " + "; ".join(
             f"{r['label']} ({r['period']}) {r['achieved']} against {r['target']}" for r in unfitted) + ".")
     if any(not KPI_BY_ID[k.id].levers for k in spec.kpis):
-        limitations.append("Payment figures are reported but not fitted: payer behaviour is a town setting.")
+        limitations.append("Comparison-only figures are reported but not fitted: the current fitter has no adjustable "
+                           "lever for them. These include structural audits and known town inputs.")
     limitations += notes
     purpose = (f"Reproduce {len(rows)} observed figure{'s' if len(rows) != 1 else ''}: "
                + ", ".join(f"{r['label'].lower()} {r['given']:g}" for r in rows[:6]) + ".")[:500]

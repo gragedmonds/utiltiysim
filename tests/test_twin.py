@@ -53,7 +53,7 @@ def test_the_dictionary_is_consistent():
     assert {lever["id"] for lever in d["levers"]} == set(LEVERS)
     for kpi in KPIS:  # every lever a KPI names exists, with a direction
         assert all(lever in LEVERS and direction in (-1, 1) for lever, direction in kpi.levers), kpi.id
-        assert kpi.unit in ("share", "days", "per_1000_accounts_year") and kpi.better in ("higher", "lower")
+        assert kpi.unit in ("share", "days", "per_1000_accounts_year", "count") and kpi.better in ("higher", "lower", "context")
     assert all(lever["settings"] for lever in d["levers"])  # each lever sets something
     assert d["defaults"]["districtHomes"] == DISTRICT_HOMES
 
@@ -203,7 +203,7 @@ def test_a_kpi_without_a_lever_is_reported_not_forced(town, defaults):
     spec = TwinSpec(customers=300, kpis=[{"id": "days_to_pay", "value": defaults["days_to_pay"] + 10}], budget=3)
     result = fit(spec, town=town)
     (row,) = result["kpis"]
-    assert row["status"] == "unfitted" and "No run lever" in row["note"] and row["levers"] == []
+    assert row["status"] == "comparison" and "Comparison only" in row["note"] and row["levers"] == []
     assert result["calibration"]["replays"] == 1  # nothing to try
     assert any("not fitted" in x for x in result["proposal"]["limitations"])
 
@@ -245,3 +245,45 @@ def test_the_twin_over_the_api():
         unknown = client.post("/api/twin/fit", json={"customers": 300, "calibration": "atlantis", "budget": 1,
                                                      "kpis": [{"id": "invoice_timeliness", "value": 0.99}]})
         assert unknown.status_code == 422
+
+
+def test_billing_assurance_dictionary_and_measurements_match_command_center(town):
+    from utilsim.m2c.billing_quality import METRICS
+    from utilsim.m2c.kpis import measure as command_metrics
+    run = M2CRun(town)
+    actual = measure(run, window(run), run.cfg.kpi.timely_invoice_days)
+    shown = command_metrics(run, '2026-12-31')['values']
+    entries = {k['id']: k for k in dictionary()['kpis']}
+    for metric in METRICS:
+        key = metric['id']
+        assert entries[key]['label'] == metric['title']
+        assert entries[key]['unit'] == metric['unit']
+        assert entries[key]['family'] == metric['family']
+        assert actual[key] == shown[key], key
+        TwinSpec(customers=500, kpis=[{'id': key, 'value': .1 if metric['unit'] == 'share' else 10}])
+    assert entries['estimated_bill_share']['fitMode'] == 'adjustable'
+    assert entries['service_setup_defects']['fitMode'] == 'comparison'
+
+
+def test_count_observations_scale_to_user_utility_without_claiming_a_fit(town, defaults):
+    accounts = len(town.account_method)
+    spec = TwinSpec(customers=accounts * 50, kpis=[{'id': 'active_services', 'value': defaults['active_services'] * 50}], budget=2)
+    result = fit(spec, town=town)
+    row = result['kpis'][0]
+    assert row['achieved'] == defaults['active_services'] * 50
+    assert row['status'] == 'matched' and row['levers'] == []
+    assert 'Comparison only' in row['note']
+    assert result['calibration']['replays'] == 1
+    assert any('scaled' in note for note in result['notes'])
+
+
+def test_delayed_invoice_target_can_move_issue_lag(town):
+    target_run = M2CRun(town, {'billing': {'print_lag_days': 7}})
+    target = measure(target_run, window(target_run))['delayed_bill_share']
+    spec = TwinSpec(customers=len(town.account_method), kpis=[{'id': 'delayed_bill_share', 'value': target}], budget=5)
+    result = fit(spec, town=town)
+    row = result['kpis'][0]
+    assert abs(row['achieved'] - target) < abs(row['start'] - target)
+    assert 'print_lag' in row['levers']
+    assert result['proposal']['settings']['billing']['print_lag_days'] > 1
+    assert result['proposal']['settings']['kpi']['timely_invoice_days'] == spec.timelyDays

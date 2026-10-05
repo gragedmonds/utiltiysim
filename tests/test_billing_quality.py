@@ -166,3 +166,15 @@ def test_deadline_accounts_for_print_lag_uncreated_invoices_and_account_grouping
     # A correction issued later cannot erase the original late customer invoice.
     run.books.docs[0]['reversed'] = 36
     assert timing_counts(expected_cycles(run, 65.999), 65.999, 3) == counts
+
+
+def test_fit_window_keeps_preceding_invoice_history_and_existing_backlog(run):
+    values, stats = measure_quality(run, 65, 65.999, since=60)
+    assert stats['estimated_bill_share'] == [1, 1]
+    assert values['consecutive_estimated_bill_share'] == 1
+    assert values['consecutive_zero_bill_share'] == 1
+    assert stats['delayed_bill_share'] == [1, 2]
+    # January's unresolved block still exists, but the old move-in is not a new event.
+    assert values['active_billing_blocks'] == 1 and values['move_ins'] == 0
+    assert measure_quality(run, 65, 65.999, since=64)[0]['estimated_bill_share'] is None
+    assert measure_quality(run, 65, 65.999, since=60, timely_days=1)[1]['delayed_bill_share'] == [2, 2]

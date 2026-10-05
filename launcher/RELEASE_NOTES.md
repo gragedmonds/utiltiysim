@@ -1,6 +1,13 @@
 Download **UtilityStudio** for your computer: Windows opens the `.exe`; macOS and Linux unzip the launcher first.
 The `runtime-*` files are downloaded automatically by the launcher; you do not need to choose one yourself.
 
+**Windows icon.** The executable now uses the Utility Studio colour logo. Download the new `.exe` once to
+update its icon; automatic engine updates do not replace the launcher. Your saved storage folder and simulations stay in place.
+
+**Match existing metrics.** The wizard now includes the additional 28 billing and reading assurance KPIs,
+grouped by area. Invoice measures follow customer issue. Comparison-only metrics are labelled explicitly,
+and count observations are scaled to your utility rather than the smaller calibration town.
+
 On the first launch, choose the storage folder and click **Open Utility Studio**. The first start downloads and verifies
 the engine into that folder; later launches open Studio directly using the saved location. A missing drive or startup
 problem returns to setup. The gear in Studio opens app settings, updates and **Quit Utility Studio**.
