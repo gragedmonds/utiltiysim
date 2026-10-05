@@ -1,0 +1,45 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Loading animation checks</title>
+<link rel="stylesheet" href="/engine-scenes.css">
+<style>body{font:15px system-ui}.sample{width:540px}.sample svg{display:block;width:100%}output{display:block;white-space:pre-wrap}</style>
+<h1>Loading animation checks</h1>
+<output id="result">Checking every pose…</output>
+<div id="samples"></div>
+<script type="module">
+// To run: temporarily serve this file from town-viewer/dist/__qa__/engine-scenes.html.
+// Keep it out of dist's root, where the app's page inventory tests look for production pages.
+import {renderEngineScene,ENGINE_SCENES} from '/engine-scenes.js';
+const results=[],failures=[];
+for (const [index,{id}] of ENGINE_SCENES.entries()) {
+  const sample=document.createElement('div');sample.className='sample';
+  sample.innerHTML=renderEngineScene(index);document.querySelector('#samples').append(sample);
+  const svg=sample.querySelector('svg'),path=svg.querySelector(`.${id}-reach path`),hand=svg.querySelector('.blob-grip');
+  const animations=svg.getAnimations({subtree:true});animations.forEach(a=>a.pause());
+  let maxGap=0,clipped=0;
+  for(let step=0;step<=200;step++) {
+    const ms=step*30;animations.forEach(a=>{a.currentTime=ms;});
+    const end=path.getPointAtLength(path.getTotalLength()).matrixTransform(path.getScreenCTM());
+    const palm=new DOMPoint(0,0).matrixTransform(hand.getScreenCTM());
+    maxGap=Math.max(maxGap,Math.hypot(end.x-palm.x,end.y-palm.y));
+    if(id==='pole') {
+      const prop=svg.querySelector('.pole-prop').getBoundingClientRect(),frame=svg.getBoundingClientRect();
+      if(prop.top<frame.top-.5||prop.left<frame.left-.5||prop.right>frame.right+.5||prop.bottom>frame.bottom+.5)clipped++;
+    }
+  }
+  if(maxGap>.5)failures.push(`${id}: wrist separated by ${maxGap.toFixed(2)}px`);
+  if(clipped)failures.push(`${id}: pole clipped in ${clipped} poses`);
+  results.push(`${id}: 201 poses, maximum wrist gap ${maxGap.toFixed(3)}px, ${clipped} clipped pole poses`);
+  // Disabling animations exposes the authored, complete still illustration.
+  svg.querySelectorAll('*').forEach(el=>{el.style.animation='none';});
+  const end=path.getPointAtLength(path.getTotalLength()).matrixTransform(path.getScreenCTM());
+  const palm=new DOMPoint(0,0).matrixTransform(hand.getScreenCTM());
+  const stillGap=Math.hypot(end.x-palm.x,end.y-palm.y);
+  if(stillGap>.5)failures.push(`${id}: still-pose wrist separated by ${stillGap.toFixed(2)}px`);
+  const body=svg.querySelector(`.${id}-blob`),arm=svg.querySelector(`.${id}-reach`);
+  if(!(arm.compareDocumentPosition(body)&Node.DOCUMENT_POSITION_FOLLOWING))failures.push(`${id}: reaching arm paints over the body`);
+  if(svg.querySelector('.invoice-tongue'))failures.push('External tongue remains');
+}
+document.querySelector('#result').textContent=(failures.length?'FAIL\n'+failures.join('\n'):'PASS — 603 animated poses and 3 still poses')+'\n'+results.join('\n');
+document.documentElement.dataset.result=failures.length?'fail':'pass';
+</script>

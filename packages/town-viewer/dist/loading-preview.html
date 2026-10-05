@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>The little utility crew · Animation preview</title>
+  <link rel="icon" type="image/svg+xml" href="./brand/utility-studio-icon-color.svg">
+  <link rel="stylesheet" href="./engine-monitor.css">
+  <style>
+    *{box-sizing:border-box}body{margin:0;min-height:100dvh;background:#f6f4f8;color:#43334b;font:15px/1.6 system-ui,sans-serif}
+    main{max-width:620px;padding:64px 48px 580px}.eyebrow{font-size:11px;letter-spacing:.17em;font-weight:750;text-transform:uppercase;color:#8d779c}
+    h1{font-size:clamp(28px,4vw,44px);line-height:1.12;letter-spacing:-1.6px;font-weight:650;margin:14px 0 20px;max-width:440px}
+    .intro{max-width:370px;color:#84768c;font-size:15px}.scene-picker{display:flex;flex-wrap:wrap;gap:8px;margin:28px 0 20px}button{font:inherit;cursor:pointer}
+    .scene-picker button{display:flex;align-items:center;gap:8px;background:#fff8;border:1px solid #dfd7e5;border-radius:30px;padding:8px 14px;color:#786683;font-size:12px;font-weight:650}
+    .scene-picker button[aria-pressed=true]{background:#4d365a;color:#fff;border-color:#4d365a}.swatch{width:10px;height:10px;border-radius:50%;background:var(--swatch)}
+    .controls{display:flex;gap:16px;align-items:center;flex-wrap:wrap}.controls button{background:none;border:0;color:#715787;padding:4px 0;font-size:12px;text-decoration:underline;text-underline-offset:4px}
+    .moment-picker{display:flex;align-items:center;gap:10px;margin-top:20px;color:#84768c;font-size:12px}.moment-picker select{font:inherit;color:#715787;border:1px solid #dfd7e5;border-radius:8px;background:#fff8;padding:5px 8px}
+    .note{margin-top:28px;font-size:12px;max-width:345px;color:#9b8aa4}.preview-label{position:fixed;bottom:596px;right:25px;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#9e8ca8}
+    .preview-paused *{animation-play-state:paused!important}.local-floating{z-index:1}.monitor-link{display:none}.monitor-estimate{margin-bottom:0}
+    @media(min-width:1000px){main{padding-bottom:64px}.preview-label{bottom:578px}}
+    @media(max-width:760px){main{padding:28px 24px 550px}h1{font-size:30px}.preview-label{display:none}.local-floating{max-height:57dvh}.intro{font-size:13px}}
+  </style>
+</head>
+<body>
+  <main>
+    <span class="eyebrow">Utility Studio / Motion studies</span>
+    <h1>The little crew<br>behind the loading screen.</h1>
+    <p class="intro">A big wind-up. A very close look. A satisfying seal and send. Three tiny cartoons, tucked into their usual corner.</p>
+    <div class="scene-picker" aria-label="Preview a scene">
+      <button type="button" data-scene="0" aria-pressed="true"><span class="swatch" style="--swatch:#b892d3"></span>Pole crew</button>
+      <button type="button" data-scene="1" aria-pressed="false"><span class="swatch" style="--swatch:#a6c78d"></span>Meter detective</button>
+      <button type="button" data-scene="2" aria-pressed="false"><span class="swatch" style="--swatch:#f7d883"></span>Invoice express</button>
+    </div>
+    <div class="controls">
+      <button type="button" id="pause" aria-pressed="false">Pause animation</button>
+      <button type="button" id="replay">Replay scene</button>
+      <button type="button" id="cycle" aria-pressed="true">Auto-cycle: on</button>
+    </div>
+    <label class="moment-picker">Inspect a moment <select id="moment"><option value="">Playing</option><option value="0">Ready</option><option value="1800">Wind-up</option><option value="2460">Action</option><option value="3300">Reaction</option><option value="4500">Follow-through</option><option value="5940">Loop reset</option></select></label>
+    <p class="note">Actual loading-panel size. Each gag loops gently before the next crew member takes over. Your device’s reduced-motion preference is respected.</p>
+  </main>
+  <span class="preview-label">Loading-screen preview</span>
+  <aside id="preview-monitor" class="local-floating" aria-label="Loading-screen animation preview"></aside>
+  <script type="module" src="./loading-preview.js"></script>
+  <script type="module" src="./dependencies.js"></script>
+</body>
+</html>
