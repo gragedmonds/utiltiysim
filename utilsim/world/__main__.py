@@ -3,8 +3,10 @@
 import argparse
 import gzip
 import json
+import os
 from pathlib import Path
 
+from . import delivery
 from .store import World
 
 
@@ -27,6 +29,17 @@ def main():
     export.add_argument("--sewer-return-factor", default="0.9")
     export.add_argument("--delay-seconds", type=int, default=0)
     sub.add_parser("status")
+    configure = sub.add_parser("configure-delivery", help="Pin automatic observation delivery for future days")
+    configure.add_argument("--environment", required=True)
+    configure.add_argument("--sewer-return-factor", default="0.9")
+    configure.add_argument("--delay-seconds", type=int, default=0)
+    monitor = sub.add_parser("delivery-status", help="Inspect pending and accepted messages")
+    monitor.add_argument("--offset", type=int, default=0)
+    monitor.add_argument("--limit", type=int, default=50)
+    relay = sub.add_parser("deliver", help="Relay to an authenticated local runtime")
+    relay.add_argument("--runtime-url", default="http://127.0.0.1:8027")
+    relay.add_argument("--token-env", default="UTILSIM_RUNTIME_TOKEN", help="Environment variable holding actor credential")
+    relay.add_argument("--limit", type=int, default=100)
     replacement = sub.add_parser("replace-meter")
     for key in ("command-id", "environment", "meter", "new-device", "work-order", "note"):
         replacement.add_argument("--" + key, required=True)
@@ -36,7 +49,7 @@ def main():
         opener = gzip.open if args.snapshot.endswith(".gz") else open
         with opener(args.snapshot, "rt", encoding="utf-8") as stream:
             snapshot = json.load(stream)
-        settings = json.loads(Path(args.settings).read_text()) if args.settings else None
+        settings = json.loads(Path(args.settings).read_text(encoding="utf-8")) if args.settings else None
         result = world.initialize(snapshot, args.environment, args.start, settings)
     elif args.command == "advance":
         result = world.advance(args.through)
@@ -51,9 +64,17 @@ def main():
     elif args.command == "replace-meter":
         result = world.replace_meter(args.command_id, args.environment, args.meter,
                                      args.new_device, args.work_order, args.note)
+    elif args.command == "configure-delivery":
+        result = delivery.configure(world, args.environment, args.sewer_return_factor, args.delay_seconds)
+    elif args.command == "delivery-status":
+        result = delivery.status(world, args.offset, args.limit)
+    elif args.command == "deliver":
+        result = delivery.relay(world, delivery.local_sender(args.runtime_url, os.environ.get(args.token_env)), args.limit)
     else:
         result = world.status()
     print(json.dumps(result, indent=2))
+    if args.command == "deliver" and result["blocked"]:
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

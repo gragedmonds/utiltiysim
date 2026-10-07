@@ -10,6 +10,11 @@ from .store import stable
 
 
 def export_v2(world, start, end, sewer_factor="0.9", delay_seconds=0):
+    with world.db() as db:
+        return export_in_transaction(world, db, start, end, sewer_factor, delay_seconds)
+
+
+def delivery_settings(sewer_factor, delay_seconds):
     try:
         factor = Decimal(str(sewer_factor))
     except InvalidOperation as exc:
@@ -18,7 +23,13 @@ def export_v2(world, start, end, sewer_factor="0.9", delay_seconds=0):
         raise ValueError("Sewer return factor must be between zero and one.")
     if type(delay_seconds) is not int or not 0 <= delay_seconds <= 366 * 86400:
         raise ValueError("Observation delay must be nonnegative integer seconds, at most 366 days.")
-    batch = world.export(start, end)
+    return str(factor), delay_seconds
+
+
+def export_in_transaction(world, db, start, end, sewer_factor="0.9", delay_seconds=0):
+    factor_text, delay_seconds = delivery_settings(sewer_factor, delay_seconds)
+    factor = Decimal(factor_text)
+    batch = world._export(db, start, end)
     env = batch["environmentId"]
     assets, observations = [], []
     points = {}
@@ -37,13 +48,12 @@ def export_v2(world, start, end, sewer_factor="0.9", delay_seconds=0):
     # This export adapter reconstructs registers from received intervals, not world truth.
     # A persisted incremental register model replaces this scan at the scale gate.
     counters, register_values, gaps = {}, {}, set()
-    with world.db() as db:
-        for r in db.execute("SELECT id,device,quantity FROM observations WHERE day<? ORDER BY day,id", (end,)):
-            if r["quantity"] is None:
-                gaps.add(r["device"])
-            elif r["device"] not in gaps:
-                counters[r["device"]] = counters.get(r["device"], Decimal(0)) + Decimal(r["quantity"])
-                register_values[r["id"]] = str(counters[r["device"]])
+    for r in db.execute("SELECT id,device,quantity FROM observations WHERE day<? ORDER BY day,id", (end,)):
+        if r["quantity"] is None:
+            gaps.add(r["device"])
+        elif r["device"] not in gaps:
+            counters[r["device"]] = counters.get(r["device"], Decimal(0)) + Decimal(r["quantity"])
+            register_values[r["id"]] = str(counters[r["device"]])
     for observation in batch["observations"]:
         point = points[observation["meterId"]]
         available = (datetime.fromisoformat(observation["observedAt"].replace("Z", "+00:00")) +

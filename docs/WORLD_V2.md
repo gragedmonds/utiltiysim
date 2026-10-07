@@ -58,12 +58,56 @@ Cumulative registers are reconstructed from observed intervals with a declared z
 
 The matching Virtual Systems consumer requires managed simulation time before receiving v2 observations and refuses data whose availability time has not arrived. It retains original provenance and withdraws dependent sewer billing decisions when a water decision is reopened. The cross-repository demo is described in that repository's `docs/execution/RUNTIME_INCREMENT.md`.
 
+## Durable daily delivery
+
+World advancement can now leave a durable observation message for each completed day. Enable the stream **before** advancing the days you want delivered:
+
+```powershell
+python -m utilsim.world --db out/world-v2/world.sqlite configure-delivery --environment DEMO --delay-seconds 21600
+python -m utilsim.world --db out/world-v2/world.sqlite advance --through 2026-02-01
+python -m utilsim.world --db out/world-v2/world.sqlite delivery-status --limit 50
+python -m utilsim.world --db out/world-v2/world.sqlite deliver --runtime-url http://127.0.0.1:8027
+```
+
+`deliver` reads a credential from `UTILSIM_RUNTIME_TOKEN` (or the variable named by `--token-env`). Provision a dedicated system actor with `isu:ingest_v2` in the matching runtime. The recipient must already have the corresponding commercial service records. Credentials are never stored in the world database or included in delivery status. The transport accepts only explicit loopback URLs and does not follow redirects or use proxies.
+
+Daily observations, the world cursor, the causal completion event and the immutable outgoing envelope commit together. A failed commit rolls them all back. Each message carries stable run/command/batch identities, occurrence and availability times, and a reference to its world event. The relay submits committed messages to the runtime's authenticated command inbox. The runtime supplies actor identity from the credential; it controls availability and processing. Hidden physical truth stays in the world store.
+
+An unavailable recipient or unknown acknowledgment leaves the oldest message pending. Retrying sends its original identity and payload; recipient deduplication prevents repeated effects. Use the **same actor identity** for retries. Acknowledgment means **accepted**, not successfully processed: a failed recipient job remains a failure requiring recovery in the runtime monitor. The relay stops at an unknown receipt instead of silently skipping a day. `deliver` exits with status 1 when blocked. Status queries are limited to 200 messages per page and omit payloads.
+
+Configuration is pinned, versioned `world-observation-delivery/1.0`, and starts at the next unprocessed day. Repeating the same configuration is safe. Changing it requires a separate run; configuring an existing world does not silently enqueue historical days. Storage adds two tables and one index without rewriting observations or changing the world-model fingerprint. Test migration on a SQLite backup first; the acceptance tests verify the original database remains untouched and its exports match the migrated copy.
+
+`utilsim.world.runtime.daily_commands` creates stable daily jobs with predecessor dependencies, and `DailyWorld` executes them under the shared scheduler. The handler advances one physical day, relays the committed message, and records a durable command result. The runtime can fast-forward through the queued physical days and delayed observations in timestamp order. A handoff failure pauses the runtime on that day's job; explicit retry recovers the existing day/message without re-simulating it. Subsequent days cannot overtake an unaccepted handoff. Completed command retries return their recorded result even after later days have run.
+
+Register the handler only behind the authenticated runtime, with a dedicated `world:advance_day` actor for scheduled physical jobs and a separate `isu:ingest_v2` producer for observations. This handler is not a public unauthenticated endpoint. The current recipient rejects newly scheduled messages behind its clock: do not independently advance the world or clock around the scheduler. The acceptance driver wires this integration; adding it to the ordinary multi-application launcher remains outstanding. Daily envelopes are capped at the gateway's 8 MiB limit; oversized days roll back explicitly. Partitioned delivery and removal of the register-history scan remain necessary before the large-town scale milestone.
+
+The optional cross-repository acceptance driver uses fresh stores and an ephemeral authenticated HTTP server; it does not change the running demo:
+
+```powershell
+python scripts/world_runtime_acceptance.py --virtual-systems ../virtual-systems --snapshot examples/village-480-seed42/snapshot.json.gz --out out/world-v2/outbox-acceptance
+```
+
+It currently targets Virtual Systems' `synth_runtime` / `isu` foundation. It is not yet an adapter for the separate billing/subledger implementation on the shared integration branch. It demonstrates an accepted message with a lost reply, a paused daily job, world reopening and explicit retry, a six-hour knowledge delay, three scheduled physical days, and billing across all four domains. On the 480-town fixture it produced 6,618 observations, 2,206 bills and 568 invoices totaling $41,857.17, with no duplicate readings. `--days 31` also passed on a three-meter fixture: 31 scheduled days, 124 received observations (including derived sewer), four bills and one invoice. This is a small month-long recovery check, not the 15,000-account performance benchmark. No physical fault/field-work lifecycle or SAP screen fidelity is claimed by this delivery test.
+
+### Ordered implementation progress
+
+The plan's gates remain acceptance milestones, not pauses for user approval. This increment advances the migration and durable-execution milestones; it does not mark either entire milestone complete.
+
+| Planned requirement | Evidence in this increment | Remaining scope |
+|---|---|---|
+| Preserve data and test migrations on copies | Additive delivery tables; copied legacy database retains identical exports | Cross-application identity migration and integration-branch reconciliation |
+| Persist delivery and resume interrupted runs | Atomic daily outbox, retry identity, recipient deduplication and saved command results | All other message types and production launcher integration |
+| Independent clock and time-filtered knowledge | Scheduled world days, delayed observations and authenticated recipient acceptance | Regional physical-day boundaries, fine-grained field execution |
+| Fast-forward does not skip unresolved dependencies | Paused failed daily job, explicit retry, predecessor-linked future days | Workforce reservations and remaining operational dependencies |
+
 ## Validation and remaining work
 
 `python -m pytest tests/test_world_v2.py` checks year-long deterministic restart/chunking, rollback of an interrupted day, commissioning, replacement retries, hidden-truth exclusion and integration with a generated town.
 
 The 6 October 2026 Windows validation passed all 7 new world tests, all 287 existing viewer tests, all 11 viewer conformance checks and repository lint. The full non-slow engine suite finished with 493 passing and 2 failing tests. Both failures are existing golden-digest mismatches: `village-120-T120` differs in parcels; `village-600-42` differs in premises and parcels. Both were reproduced in the unchanged original checkout at `68bf382805afe4e3a7d6fa329487b7e5eb43565b`, with no engine/test edits there. Goldens were not rewritten. A separate three-meter smoke run completed 3,652 days through 2036-01-01; this establishes date progression across leap years, not large-town capacity.
 
-The daily model currently covers consumption and meters. Pipe degradation, physical outages and repair crews, move-in/out, evolving household finances, propensity to pay, customer complaint generation, construction, seasonal regional calibration, solar/net export, and operational command delivery/acknowledgment remain to be migrated or added. The dashboard is a new world-control surface; it does not yet replace or embed the existing 3D town viewer. Long horizons work by daily iteration, but large-town multi-year capacity and UI pagination require a dedicated performance pass.
+The daily model currently covers consumption and meters. Pipe degradation, physical outages and repair crews, move-in/out, evolving household finances, propensity to pay, customer complaint generation, construction, seasonal regional calibration, solar/net export, and field command delivery/acknowledgment remain to be migrated or added. The dashboard is a new world-control surface; it does not yet replace or embed the existing 3D town viewer. Long horizons work by daily iteration, but large-town multi-year capacity and UI pagination require a dedicated performance pass.
 
 The 7 October 2026 rerun used an isolated Python 3.11 environment synchronized from the frozen lockfile. It passed 495 non-slow engine tests, all 287 viewer tests and all 11 conformance checks, with the same two pre-existing golden failures. All 9 world-runtime tests and repository lint pass. No expected digest was changed.
+
+The subsequent delivery increment's full non-slow run passed 502 tests, with the same two golden failures above. The two scheduled-world-handler tests added after that full run's collection also passed separately. All 18 world/delivery/runtime tests, 287 viewer tests, 11 conformance checks and repository lint passed. The medium three-day integration and the small 31-day integration both passed through the authenticated local runtime. Existing demo databases and expected golden digests were not changed.

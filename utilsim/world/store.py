@@ -56,6 +56,9 @@ class World:
                 CREATE TABLE IF NOT EXISTS commands(id TEXT PRIMARY KEY,payload TEXT NOT NULL,
                   result TEXT NOT NULL);
             """)
+            from .delivery import SCHEMA
+
+            db.executescript(SCHEMA)
 
     @contextmanager
     def db(self):
@@ -203,8 +206,12 @@ class World:
                     db.execute("INSERT INTO observations VALUES(?,?,?,?,?,?)",
                                (observation_id, a["id"], ds, a["device"], observed,
                                 "missing" if observed is None else "observed"))
-                self.event(db, env, ds, "WorldDayCompleted", meta["town"], {"temperatureC": temperature})
-                self.put(db, "through", (day + timedelta(days=1)).isoformat())
+                event = self.event(db, env, ds, "WorldDayCompleted", meta["town"], {"temperatureC": temperature})
+                finish = (day + timedelta(days=1)).isoformat()
+                self.put(db, "through", finish)
+                from .delivery import append_day
+
+                append_day(self, db, ds, finish, event)
 
     def export_v2(self, start, end, sewer_factor="0.9", delay_seconds=0):
         """Observation v2, including source-linked sewer derived from observed water."""
@@ -244,38 +251,41 @@ class World:
 
     def export(self, start, end):
         """Only observable fields cross the boundary. Truth, failures and household finances do not."""
+        with self.db() as db:
+            return self._export(db, start, end)
+
+    def _export(self, db, start, end):
         if date.fromisoformat(start).isoformat() != start or date.fromisoformat(end).isoformat() != end:
             raise ValueError("Use canonical YYYY-MM-DD dates.")
         if date.fromisoformat(start) >= date.fromisoformat(end):
             raise ValueError("Start must precede exclusive end.")
-        with self.db() as db:
-            m = self.metadata(db)
-            if not m or start < m["start"] or end > m["through"]:
-                raise ValueError("Export only completed days within this world's history.")
-            snapshot = json.loads(db.execute("SELECT value FROM meta WHERE key='snapshot'").fetchone()[0])
-            commissioned = {r["id"]: (r.get("installedAt") or m["start"])[:10]
-                            for r in snapshot["meters"]}
-            assets = [{"meterId": r["id"], "premiseId": r["premise"],
-                       "installationId": r["installation"], "commodity": r["commodity"],
-                       "unit": r["unit"], "address": json.loads(r["profile"]).get("address"),
-                       "serviceFrom": commissioned[r["id"]]}
-                      for r in db.execute("SELECT * FROM assets ORDER BY id")]
-            lookup = {a["meterId"]: a for a in assets}
-            observations = []
-            for r in db.execute("SELECT * FROM observations WHERE day>=? AND day<? ORDER BY day,asset",
-                                (start, end)):
-                a = lookup[r["asset"]]
-                finish = (date.fromisoformat(r["day"]) + timedelta(days=1)).isoformat()
-                observations.append({"sourceId": r["id"], "meterId": a["meterId"],
-                                     "deviceId": r["device"], "installationId": a["installationId"],
-                                     "commodity": a["commodity"], "unit": a["unit"],
-                                     "start": r["day"], "end": finish, "quantity": r["quantity"],
-                                     "status": r["status"], "observedAt": finish + "T00:00:00Z"})
-            result = {"schemaVersion": SCHEMA_VERSION, "environmentId": m["environment"],
-                      "producer": "UtilitySim", "modelVersion": m["modelVersion"], "townId": m["town"],
-                      "start": start, "end": end, "assets": assets, "observations": observations}
-            result["batchId"] = stable(result)
-            return result
+        m = self.metadata(db)
+        if not m or start < m["start"] or end > m["through"]:
+            raise ValueError("Export only completed days within this world's history.")
+        snapshot = json.loads(db.execute("SELECT value FROM meta WHERE key='snapshot'").fetchone()[0])
+        commissioned = {r["id"]: (r.get("installedAt") or m["start"])[:10]
+                        for r in snapshot["meters"]}
+        assets = [{"meterId": r["id"], "premiseId": r["premise"],
+                   "installationId": r["installation"], "commodity": r["commodity"],
+                   "unit": r["unit"], "address": json.loads(r["profile"]).get("address"),
+                   "serviceFrom": commissioned[r["id"]]}
+                  for r in db.execute("SELECT * FROM assets ORDER BY id")]
+        lookup = {a["meterId"]: a for a in assets}
+        observations = []
+        for r in db.execute("SELECT * FROM observations WHERE day>=? AND day<? ORDER BY day,asset",
+                            (start, end)):
+            a = lookup[r["asset"]]
+            finish = (date.fromisoformat(r["day"]) + timedelta(days=1)).isoformat()
+            observations.append({"sourceId": r["id"], "meterId": a["meterId"],
+                                 "deviceId": r["device"], "installationId": a["installationId"],
+                                 "commodity": a["commodity"], "unit": a["unit"],
+                                 "start": r["day"], "end": finish, "quantity": r["quantity"],
+                                 "status": r["status"], "observedAt": finish + "T00:00:00Z"})
+        result = {"schemaVersion": SCHEMA_VERSION, "environmentId": m["environment"],
+                  "producer": "UtilitySim", "modelVersion": m["modelVersion"], "townId": m["town"],
+                  "start": start, "end": end, "assets": assets, "observations": observations}
+        result["batchId"] = stable(result)
+        return result
 
     def _status(self, db):
         m = self.metadata(db)
