@@ -59,6 +59,10 @@ class World:
             from .delivery import SCHEMA
 
             db.executescript(SCHEMA)
+        from . import registers
+
+        with self.db() as db:
+            registers.migrate(db)
 
     @contextmanager
     def db(self):
@@ -162,6 +166,8 @@ class World:
 
     def advance(self, through):
         """Process [current date, through), committing each day and its checkpoint atomically."""
+        from . import registers
+
         target = date.fromisoformat(through)
         if target.isoformat() != through:
             raise ValueError("Use canonical YYYY-MM-DD dates.")
@@ -206,9 +212,11 @@ class World:
                     db.execute("INSERT INTO observations VALUES(?,?,?,?,?,?)",
                                (observation_id, a["id"], ds, a["device"], observed,
                                 "missing" if observed is None else "observed"))
+                    registers.record(db, observation_id, a["device"], observed)
                 event = self.event(db, env, ds, "WorldDayCompleted", meta["town"], {"temperatureC": temperature})
                 finish = (day + timedelta(days=1)).isoformat()
                 self.put(db, "through", finish)
+                registers.completed(db, finish)
                 from .delivery import append_day
 
                 append_day(self, db, ds, finish, event)

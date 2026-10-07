@@ -44,16 +44,10 @@ def export_in_transaction(world, db, start, end, sewer_factor="0.9", delay_secon
                            "meterId": None, "commodity": "sewer", "measurementType": "derived",
                            "sourceServicePointId": point,
                            "derivation": {"method": "water-return-factor", "factor": str(factor)}})
-    # Opening register is explicitly zero at simulation start; device changes reset it.
-    # This export adapter reconstructs registers from received intervals, not world truth.
-    # A persisted incremental register model replaces this scan at the scale gate.
-    counters, register_values, gaps = {}, {}, set()
-    for r in db.execute("SELECT id,device,quantity FROM observations WHERE day<? ORDER BY day,id", (end,)):
-        if r["quantity"] is None:
-            gaps.add(r["device"])
-        elif r["device"] not in gaps:
-            counters[r["device"]] = counters.get(r["device"], Decimal(0)) + Decimal(r["quantity"])
-            register_values[r["id"]] = str(counters[r["device"]])
+    # Cached observed-interval reconstruction preserves gaps without scanning prior years.
+    register_values = {r["id"]: r["value"] for r in db.execute(
+        "SELECT o.id,r.value FROM observations o JOIN observed_register_values r ON r.observation=o.id "
+        "WHERE o.day>=? AND o.day<?", (start, end))}
     for observation in batch["observations"]:
         point = points[observation["meterId"]]
         available = (datetime.fromisoformat(observation["observedAt"].replace("Z", "+00:00")) +
