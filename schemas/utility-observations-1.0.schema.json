@@ -1,0 +1,256 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Utility observations 1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "environmentId",
+    "producer",
+    "modelVersion",
+    "townId",
+    "start",
+    "end",
+    "assets",
+    "observations",
+    "batchId"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "utility-observations/1.0"
+    },
+    "environmentId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "producer": {
+      "const": "UtilitySim"
+    },
+    "modelVersion": {
+      "type": "string",
+      "minLength": 1
+    },
+    "townId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "start": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+    },
+    "end": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+    },
+    "assets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "meterId",
+          "premiseId",
+          "installationId",
+          "commodity",
+          "unit",
+          "address",
+          "serviceFrom"
+        ],
+        "properties": {
+          "meterId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "premiseId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "installationId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "commodity": {
+            "enum": [
+              "electric",
+              "gas",
+              "water"
+            ]
+          },
+          "unit": {
+            "enum": [
+              "kWh",
+              "m3"
+            ]
+          },
+          "address": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "serviceFrom": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "commodity": {
+                  "const": "electric"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "unit": {
+                  "const": "kWh"
+                }
+              }
+            },
+            "else": {
+              "properties": {
+                "unit": {
+                  "const": "m3"
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "observations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sourceId",
+          "meterId",
+          "deviceId",
+          "installationId",
+          "commodity",
+          "unit",
+          "start",
+          "end",
+          "quantity",
+          "status",
+          "observedAt"
+        ],
+        "properties": {
+          "sourceId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "meterId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "deviceId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "installationId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "commodity": {
+            "enum": [
+              "electric",
+              "gas",
+              "water"
+            ]
+          },
+          "unit": {
+            "enum": [
+              "kWh",
+              "m3"
+            ]
+          },
+          "start": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          },
+          "end": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          },
+          "quantity": {
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d+(\\.\\d+)?$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "enum": [
+              "observed",
+              "missing"
+            ]
+          },
+          "observedAt": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T00:00:00Z$"
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "status": {
+                  "const": "missing"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "quantity": {
+                  "type": "null"
+                }
+              }
+            },
+            "else": {
+              "properties": {
+                "quantity": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "commodity": {
+                  "const": "electric"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "unit": {
+                  "const": "kWh"
+                }
+              }
+            },
+            "else": {
+              "properties": {
+                "unit": {
+                  "const": "m3"
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "batchId": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{24}$"
+    }
+  }
+}
