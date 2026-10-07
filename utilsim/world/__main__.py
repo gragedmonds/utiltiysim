@@ -23,6 +23,9 @@ def main():
     export.add_argument("--start", required=True)
     export.add_argument("--end", required=True)
     export.add_argument("--out", required=True)
+    export.add_argument("--version", choices=("1", "2"), default="1")
+    export.add_argument("--sewer-return-factor", default="0.9")
+    export.add_argument("--delay-seconds", type=int, default=0)
     sub.add_parser("status")
     replacement = sub.add_parser("replace-meter")
     for key in ("command-id", "environment", "meter", "new-device", "work-order", "note"):
@@ -38,7 +41,8 @@ def main():
     elif args.command == "advance":
         result = world.advance(args.through)
     elif args.command == "export":
-        result = world.export(args.start, args.end)
+        result = (world.export_v2(args.start, args.end, args.sewer_return_factor, args.delay_seconds)
+                  if args.version == "2" else world.export(args.start, args.end))
         path = Path(args.out)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(result, indent=2), encoding="utf-8")

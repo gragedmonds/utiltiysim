@@ -206,6 +206,12 @@ class World:
                 self.event(db, env, ds, "WorldDayCompleted", meta["town"], {"temperatureC": temperature})
                 self.put(db, "through", (day + timedelta(days=1)).isoformat())
 
+    def export_v2(self, start, end, sewer_factor="0.9", delay_seconds=0):
+        """Observation v2, including source-linked sewer derived from observed water."""
+        from .exchange import export_v2
+
+        return export_v2(self, start, end, sewer_factor, delay_seconds)
+
     def replace_meter(self, command_id, environment, meter, new_device, work_order, note):
         """An explicit physical work completion, effective before the next unprocessed day."""
         if any(not isinstance(v, str) or not v.strip() for v in

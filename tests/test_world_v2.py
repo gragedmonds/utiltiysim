@@ -1,11 +1,40 @@
 """Boundary, deterministic time advance, and repair invariants for the v2 world."""
 import json
+from decimal import Decimal
 from pathlib import Path
 
 import jsonschema
 import pytest
 
 from utilsim.world import World
+
+
+def test_four_domain_export_has_derived_sewer_and_separate_registers(tmp_path):
+    w = world(tmp_path, annual_meter_failure=0, annual_meter_drift=0)
+    w.advance("2026-01-03")
+    b = w.export_v2("2026-01-01", "2026-01-03", delay_seconds=3600)
+    schema = json.loads((Path(__file__).parents[1] / "schemas/utility-observations-2.0.schema.json").read_text(encoding="utf-8"))
+    jsonschema.validate(b, schema)
+    assert {a["commodity"] for a in b["assets"]} == {"electric", "gas", "water", "sewer"}
+    source = {o["sourceId"]: o for o in b["observations"]}
+    for o in b["observations"]:
+        assert o["availableAt"] == o["end"] + "T01:00:00Z"
+        if o["commodity"] == "sewer":
+            water = source[o["sourceObservationIds"][0]]
+            assert Decimal(o["quantity"]) == Decimal(water["quantity"]) * Decimal("0.9")
+            assert all(o[k] is None for k in ("meterId", "deviceId", "registerId", "registerValue"))
+    electric = [o for o in b["observations"] if o["commodity"] == "electric"]
+    assert Decimal(electric[-1]["registerValue"]) == sum(Decimal(o["quantity"]) for o in electric)
+    assert w.export_v2("2026-01-02", "2026-01-03")["observations"][0]["registerValue"] is not None
+
+
+def test_missing_water_stays_missing_in_sewer_and_registers(tmp_path):
+    w = world(tmp_path, annual_meter_failure=1, annual_meter_drift=0)
+    w.advance("2026-01-03")
+    b = w.export_v2("2026-01-01", "2026-01-03")
+    assert all(o["quantity"] is None and o["registerValue"] is None for o in b["observations"])
+    with pytest.raises(ValueError):
+        w.export_v2("2026-01-01", "2026-01-03", sewer_factor="NaN")
 
 
 def snapshot():

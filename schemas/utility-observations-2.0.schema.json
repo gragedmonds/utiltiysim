@@ -1,0 +1,392 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Utility observations 2.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "environmentId",
+    "producer",
+    "modelVersion",
+    "townId",
+    "start",
+    "end",
+    "assets",
+    "observations",
+    "batchId"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "utility-observations/2.0"
+    },
+    "environmentId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "producer": {
+      "const": "UtilitySim"
+    },
+    "modelVersion": {
+      "type": "string",
+      "minLength": 1
+    },
+    "townId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "start": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+    },
+    "end": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+    },
+    "assets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "meterId",
+          "premiseId",
+          "installationId",
+          "commodity",
+          "unit",
+          "address",
+          "serviceFrom",
+          "servicePointId",
+          "measurementType",
+          "derivation",
+          "sourceServicePointId"
+        ],
+        "properties": {
+          "meterId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "premiseId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "installationId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "commodity": {
+            "enum": [
+              "electric",
+              "gas",
+              "water",
+              "sewer"
+            ]
+          },
+          "unit": {
+            "enum": [
+              "kWh",
+              "m3"
+            ]
+          },
+          "address": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "serviceFrom": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          },
+          "servicePointId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "measurementType": {
+            "enum": [
+              "metered",
+              "derived"
+            ]
+          },
+          "derivation": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "method",
+                  "factor"
+                ],
+                "properties": {
+                  "method": {
+                    "const": "water-return-factor"
+                  },
+                  "factor": {
+                    "type": "string",
+                    "pattern": "^(0(\\.\\d+)?|1(\\.0+)?)$"
+                  }
+                }
+              }
+            ]
+          },
+          "sourceServicePointId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "measurementType": {
+                  "const": "derived"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "commodity": {
+                  "const": "sewer"
+                },
+                "meterId": {
+                  "type": "null"
+                }
+              }
+            },
+            "else": {
+              "properties": {
+                "commodity": {
+                  "enum": [
+                    "electric",
+                    "gas",
+                    "water"
+                  ]
+                },
+                "meterId": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "derivation": {
+                  "type": "null"
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "observations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sourceId",
+          "meterId",
+          "deviceId",
+          "installationId",
+          "commodity",
+          "unit",
+          "start",
+          "end",
+          "quantity",
+          "status",
+          "observedAt",
+          "servicePointId",
+          "measurementType",
+          "derivation",
+          "registerId",
+          "registerValue",
+          "availableAt",
+          "sourceObservationIds"
+        ],
+        "properties": {
+          "sourceId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "meterId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "deviceId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "installationId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "commodity": {
+            "enum": [
+              "electric",
+              "gas",
+              "water",
+              "sewer"
+            ]
+          },
+          "unit": {
+            "enum": [
+              "kWh",
+              "m3"
+            ]
+          },
+          "start": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          },
+          "end": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          },
+          "quantity": {
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d+(\\.\\d+)?$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "enum": [
+              "observed",
+              "missing"
+            ]
+          },
+          "observedAt": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T00:00:00Z$"
+          },
+          "servicePointId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "measurementType": {
+            "enum": [
+              "metered",
+              "derived"
+            ]
+          },
+          "derivation": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "method",
+                  "factor"
+                ],
+                "properties": {
+                  "method": {
+                    "const": "water-return-factor"
+                  },
+                  "factor": {
+                    "type": "string",
+                    "pattern": "^(0(\\.\\d+)?|1(\\.0+)?)$"
+                  }
+                }
+              }
+            ]
+          },
+          "registerId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "registerValue": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^\\d+(\\.\\d+)?$"
+          },
+          "availableAt": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+          },
+          "sourceObservationIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "uniqueItems": true,
+            "maxItems": 1
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "measurementType": {
+                  "const": "derived"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "commodity": {
+                  "const": "sewer"
+                },
+                "meterId": {
+                  "type": "null"
+                },
+                "deviceId": {
+                  "type": "null"
+                },
+                "registerId": {
+                  "type": "null"
+                },
+                "registerValue": {
+                  "type": "null"
+                },
+                "sourceObservationIds": {
+                  "minItems": 1
+                }
+              }
+            },
+            "else": {
+              "properties": {
+                "commodity": {
+                  "enum": [
+                    "electric",
+                    "gas",
+                    "water"
+                  ]
+                },
+                "meterId": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "derivation": {
+                  "type": "null"
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "batchId": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{24}$"
+    }
+  }
+}

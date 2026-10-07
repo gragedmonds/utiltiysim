@@ -48,6 +48,16 @@ Retrying the same command ID and payload returns the original result. Reusing it
 
 The JSON schema is in `schemas/utility-observations-1.0.schema.json`. A consumer must additionally enforce environment, unit, date, source-conflict, coverage and checksum invariants. Consumers retain received quantities and separately record any estimates.
 
+### Version 2 and derived sewer
+
+`export --version 2 --sewer-return-factor 0.9 --delay-seconds 21600` emits `utility-observations/2.0`; the desktop API also exposes `/api/export-v2`. Both preserve the original v1 interface. The new schema adds stable service-point/register identities, separate interval and reconstructed cumulative quantities, availability time and explicit source-observation links.
+
+Sewer quantity is observed water quantity multiplied by the configured return factor. Missing water produces missing sewer. Sewer meter/device/register fields are null. This first adapter adds derived sewer service to water-connected premises; separately configured sewer infrastructure, blockages and field repairs remain outstanding.
+
+Cumulative registers are reconstructed from observed intervals with a declared zero opening value. Once a device has a missing interval, its reconstructed cumulative value remains unknown. A replacement device has a distinct register identity. Actual opening/final registers and rollover require the later physical-register model. Reconstruction currently scans observed history and is not the final multi-year storage implementation.
+
+The matching Virtual Systems consumer requires managed simulation time before receiving v2 observations and refuses data whose availability time has not arrived. It retains original provenance and withdraws dependent sewer billing decisions when a water decision is reopened. The cross-repository demo is described in that repository's `docs/execution/RUNTIME_INCREMENT.md`.
+
 ## Validation and remaining work
 
 `python -m pytest tests/test_world_v2.py` checks year-long deterministic restart/chunking, rollback of an interrupted day, commissioning, replacement retries, hidden-truth exclusion and integration with a generated town.
@@ -55,3 +65,5 @@ The JSON schema is in `schemas/utility-observations-1.0.schema.json`. A consumer
 The 6 October 2026 Windows validation passed all 7 new world tests, all 287 existing viewer tests, all 11 viewer conformance checks and repository lint. The full non-slow engine suite finished with 493 passing and 2 failing tests. Both failures are existing golden-digest mismatches: `village-120-T120` differs in parcels; `village-600-42` differs in premises and parcels. Both were reproduced in the unchanged original checkout at `68bf382805afe4e3a7d6fa329487b7e5eb43565b`, with no engine/test edits there. Goldens were not rewritten. A separate three-meter smoke run completed 3,652 days through 2036-01-01; this establishes date progression across leap years, not large-town capacity.
 
 The daily model currently covers consumption and meters. Pipe degradation, physical outages and repair crews, move-in/out, evolving household finances, propensity to pay, customer complaint generation, construction, seasonal regional calibration, solar/net export, and operational command delivery/acknowledgment remain to be migrated or added. The dashboard is a new world-control surface; it does not yet replace or embed the existing 3D town viewer. Long horizons work by daily iteration, but large-town multi-year capacity and UI pagination require a dedicated performance pass.
+
+The 7 October 2026 rerun used an isolated Python 3.11 environment synchronized from the frozen lockfile. It passed 495 non-slow engine tests, all 287 viewer tests and all 11 conformance checks, with the same two pre-existing golden failures. All 9 world-runtime tests and repository lint pass. No expected digest was changed.

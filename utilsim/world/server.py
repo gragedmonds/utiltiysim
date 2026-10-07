@@ -64,6 +64,9 @@ def make_server(world, port=8026):
                         result = world.advance(p["through"])
                     elif self.path == "/api/export":
                         result = world.export(p["start"], p["end"])
+                    elif self.path == "/api/export-v2":
+                        result = world.export_v2(p["start"], p["end"], p.get("sewerReturnFactor", "0.9"),
+                                                p.get("delaySeconds", 0))
                     elif self.path == "/api/replace":
                         result = world.replace_meter(p["commandId"], p["environmentId"], p["meterId"],
                                                      p["newDeviceId"], p["workOrderId"], p["note"])
