@@ -104,6 +104,11 @@ The plan's gates remain acceptance milestones, not pauses for user approval. Thi
 
 ## Validation and remaining work
 
+The remaining Windows golden mismatches now have a separate
+[record-level diagnosis and capture/comparison tool](GOLDEN_DIAGNOSTICS.md).
+Existing expected results remain unchanged; this diagnostic work does not close
+the cross-platform deterministic-geometry acceptance item.
+
 `python -m pytest tests/test_world_v2.py` checks year-long deterministic restart/chunking, rollback of an interrupted day, commissioning, replacement retries, hidden-truth exclusion and integration with a generated town.
 
 The 6 October 2026 Windows validation passed all 7 new world tests, all 287 existing viewer tests, all 11 viewer conformance checks and repository lint. The full non-slow engine suite finished with 493 passing and 2 failing tests. Both failures are existing golden-digest mismatches: `village-120-T120` differs in parcels; `village-600-42` differs in premises and parcels. Both were reproduced in the unchanged original checkout at `68bf382805afe4e3a7d6fa329487b7e5eb43565b`, with no engine/test edits there. Goldens were not rewritten. A separate three-meter smoke run completed 3,652 days through 2036-01-01; this establishes date progression across leap years, not large-town capacity.
