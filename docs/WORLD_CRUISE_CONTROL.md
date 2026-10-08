@@ -7,6 +7,31 @@ service orders, ingest invoices or reserve shared enterprise workforce capacity.
 Worlds configured for managed observation delivery belong to the shared runtime
 and cannot start or resume local cruise.
 
+## Start and operate
+
+```powershell
+python -m utilsim.world.server --db out/demo/world.sqlite --field-db out/demo/field.sqlite --port 8043 --viewer-dir packages/town-viewer/dist
+```
+
+Use a backup in a fresh output directory to explore an existing town. Open
+`/cruise`, choose the exclusive target date, enter a reason and start. For example,
+a world at January 3 targeting January 9 processes January 3 through January 8.
+Omit `--field-db` for a world-only run. This does not initialize crews or invent
+assignments; configure them through the existing field controls first.
+
+The server executes one bounded day per iteration. Closing or reloading the
+page leaves the server running; stopping the server stops execution. Reopening
+the same world and field files recovers a saved running job automatically.
+Pause retains its target and unfinished phase. Cancel releases local clock
+ownership after reconciling already committed work. The screen displays pending
+phases, failures and disabled/failed worker guidance. Uncertain command responses
+retain the exact command for retry after reload.
+
+`GET /api/cruise` returns bounded controller state and worker status;
+`POST /api/cruise` accepts the commands below. There is no HTTP tick endpoint.
+Existing local-origin protections apply. Manual world advance and manual field
+execution are blocked while a running, paused or failed cruise owns the clock.
+
 ## Domain API and admin boundary
 
 `utilsim.world.cruise` exposes:
@@ -106,3 +131,41 @@ field/world commit interruption and restart, cancellation at both boundaries,
 cross-process locking, competing ticks/manual actions, and waiting pause.
 The separate HTTP tests and browser acceptance harness verify server controls
 and supervised restart through the desktop page.
+
+## Browser and replay evidence
+
+```powershell
+python scripts/check_world_cruise.py --db SOURCE.sqlite --viewer-dir packages/town-viewer/dist --out out/cruise/new-browser-run
+```
+
+The checker refuses existing output, backs up the source and starts an isolated
+child server. The 8 October 2026 run used a 608-property saved town. It completed
+six days with three capacity-limited visits, exactly one physical repair, and
+pending enterprise reports. It forcibly terminated the child between the
+physical repair commit and field report commit, then recovered the same repair.
+A separate world-only run completed two days. Source bytes, historical records
+and saved map geometry remained unchanged.
+
+At 1440 and 1024 pixels, start/pause/reload/resume and completion worked without
+browser errors or horizontal page overflow. A committed pause response was
+deliberately lost: reload and exact retry preserved the job/target and recorded
+only one pause. Disabled-worker guidance prevented starting an inert run.
+Evidence is saved under `out/cruise-acceptance-final-retry/acceptance.json` with
+screenshots. The harness slows only its test child for stable interaction;
+these browser timings are not a performance benchmark.
+
+A separate tiny fixture ran 1,826 days to January 1, 2031, reopening both stores
+at day 913. Seven physical/register table hashes and five complete field-table
+hashes matched an uninterrupted copy: 5,478 observations, twelve visits, one
+repair and eleven `not_found` results. A Saturday visit waited until Monday;
+capacity never exceeded one visit/day. All 24 field messages stayed pending.
+Bounded direct ticks took 59.88 seconds with restart and 62.03 seconds without,
+under concurrent test load. Evidence is in `out/cruise-long-replay/result.json`.
+This is one premise with three services, not the 15,000-account benchmark or
+measured HTTP-worker throughput.
+
+All 35 focused controller/HTTP tests passed. Viewer checks passed 291 tests and
+11 conformance checks. These components use SQLite; no PostgreSQL schema or
+private enterprise adapter changed. Shared-runtime field scheduling, actual
+enterprise recipients, four-domain repair and complete workforce scheduling
+remain outstanding.

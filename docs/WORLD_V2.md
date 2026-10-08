@@ -189,3 +189,12 @@ See [combined acceptance and startup](WORLD_PARALLEL_ACCEPTANCE.md) for the
 copied-town walkthrough, recovery evidence and remaining integration work.
 These are UtilitySim administrator controls; they do not replace SAP enterprise
 screens or Nikki's human-work queues.
+
+## Local cruise-control increment
+
+[Cruise control](WORLD_CRUISE_CONTROL.md) now runs due field visits before each
+physical day toward a saved target, with pause/resume/cancel and interrupted-run
+recovery. The local server owns execution, so closing the page does not stop the
+run. Shared-runtime worlds retain their existing clock owner. Browser acceptance
+uses a copied 608-property town; a separate one-premise five-year replay verifies
+restart equivalence without establishing the large-town performance target.

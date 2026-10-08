@@ -106,7 +106,9 @@ delivery separately; it offers no transport or enterprise acceptance action.
 `run_due()` is a separate owner operation. Call before advancing the next world
 day, never inside `World.db()` or a `World.advance()` transaction. To integrate
 automatic scheduling, an outer coordinator runs due field work and then advances
-one world day at a time. Calling only before a multi-day advance does not schedule
+one world day at a time. [Local cruise control](WORLD_CRUISE_CONTROL.md) now
+provides this durable coordinator for unmanaged local worlds. Calling only
+before a multi-day advance does not schedule
 visits on skipped intermediate days. Oldest due assignments run first; excess
 work rolls to the next available shift. Manual execution uses action `execute`,
 the assigned crew actor and assignment ID. Configure/accept require administrator
