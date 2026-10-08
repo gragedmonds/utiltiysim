@@ -126,3 +126,54 @@ and rollback, exact retries, strict identities/references, source-preserving
 backup and rejection of unrecognized schemas. Separate clock-boundary tests
 verify that invalid admission cannot reconcile visits and that a serialized
 clock change rejects stale cancellation requests.
+
+## Screens and copied-town acceptance
+
+At `/field-execution`, select pending phases in **Cancel pending water-main
+phases** and review the complete selected IDs, expected revisions and pending
+descendants. Selection survives page changes. A reason is required; no implicit
+cascade or truncated descendant list can authorize cancellation. The replacement
+selector prepares a cancelled phase in the existing acceptance form, locking its
+operation and edge while requiring fresh assignment/order references and an
+explicit predecessor. Lost cancellation or replacement responses retain the
+exact command for retry after reload. `/field-reporting` keeps cancelled history
+visible and disables new policy/report actions for that work.
+
+The paired browser checker takes both owners from the completed staged-main
+fixture and creates disposable copies:
+
+```sh
+python scripts/check_world_field_cancellation.py --db <staged-main-world.sqlite> --field-db <staged-main-field.sqlite> --viewer-dir <town-viewer-dist> --out <new-output-directory>
+```
+
+It requires Playwright/Chromium, refuses an existing output directory, and stops
+its temporary servers. On 8 October 2026, the 608-premise fixture advanced from
+10 to 13 January. Two phases blocked by an inspection-only isolation were
+explicitly cancelled through the screen; a lost response followed by reload
+retried the same command. A new isolation and linked replacement repair and
+restoration completed on three capacity days. Forced exit 86 after isolation's
+physical commit was followed by a rejected cancellation that recovered the
+original visit date/capacity. No phase performed its physical action twice.
+
+Both source database hashes and sidecars, original world events/observations,
+saved map, old field events/outbox envelopes/receipts, accepted payloads/checksums
+and predecessor bindings were preserved. Browser errors were absent at 1440 and
+1024 desktop widths. Evidence is written as `acceptance.json` with screenshots
+below the chosen output directory. The separate 8047 preview copies the final
+fixture, retaining cancelled history and replacement links. No enterprise
+adapter, cancellation receipt or report acceptance is implied.
+
+Ten HTTP checks include the complementary path: real isolation, cancellation
+of pending repair/restoration, valves remaining closed, then replacement work
+referencing the original completed isolation. Five clock/admission checks cover
+serialization and invalid commands before recovery. Thirty-five field-screen
+checks include cross-page selections, truncation, exact retries and cancelled
+reporting guards; independent backend review found no remaining blocker.
+
+A copied 967-pending-phase query fixture also passed with the new lifecycle
+projection: 25-row administrator pages took 997–1,236 ms, crew pages 18–21 ms.
+All 97 authorized crew assignments appeared exactly once; an unassigned actor
+received none. No physical work or days ran. SQLite tracing and the concurrent
+full regression suite were active. This is a bounded-query diagnostic, not the
+15,000-account/five-year scale release evidence. Repeated per-row database and
+catalog reads remain a performance improvement opportunity.
