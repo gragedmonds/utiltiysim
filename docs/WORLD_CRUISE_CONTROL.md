@@ -25,7 +25,10 @@ the same world and field files recovers a saved running job automatically.
 Pause retains its target and unfinished phase. Cancel releases local clock
 ownership after reconciling already committed work. The screen displays pending
 phases, failures and disabled/failed worker guidance. Uncertain command responses
-retain the exact command for retry after reload.
+retain the exact command for retry after reload. Missing field configuration or
+new shared-runtime ownership blocks start/resume but still permits requesting
+pause/cancel; the backend rejects cancellation if committed field work cannot
+be safely reconciled without its original store.
 
 `GET /api/cruise` returns bounded controller state and worker status;
 `POST /api/cruise` accepts the commands below. There is no HTTP tick endpoint.
@@ -150,7 +153,7 @@ At 1440 and 1024 pixels, start/pause/reload/resume and completion worked without
 browser errors or horizontal page overflow. A committed pause response was
 deliberately lost: reload and exact retry preserved the job/target and recorded
 only one pause. Disabled-worker guidance prevented starting an inert run.
-Evidence is saved under `out/cruise-acceptance-final-retry/acceptance.json` with
+Final-release evidence is saved under `out/cruise-acceptance-release/acceptance.json` with
 screenshots. The harness slows only its test child for stable interaction;
 these browser timings are not a performance benchmark.
 
@@ -164,7 +167,11 @@ under concurrent test load. Evidence is in `out/cruise-long-replay/result.json`.
 This is one premise with three services, not the 15,000-account benchmark or
 measured HTTP-worker throughput.
 
-All 35 focused controller/HTTP tests passed. Viewer checks passed 291 tests and
+All 35 focused controller/HTTP tests and six screen-recovery regressions passed.
+Run the latter with `node --test tests/test_cruise_ui_recovery.mjs`; they execute
+the shipped JavaScript with controlled responses, including safe cancellation
+after missing field configuration and rejection of unsafe pending-field cancel.
+Viewer checks passed 291 tests and
 11 conformance checks. These components use SQLite; no PostgreSQL schema or
 private enterprise adapter changed. Shared-runtime field scheduling, actual
 enterprise recipients, four-domain repair and complete workforce scheduling
