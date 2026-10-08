@@ -11,19 +11,20 @@ function nextDay(value){
  const parsed=new Date(value+'T00:00:00Z');if(Number.isNaN(parsed.getTime()))return '';
  parsed.setUTCDate(parsed.getUTCDate()+1);return parsed.toISOString().slice(0,10);
 }
-function unavailable(){return !state?.environmentId||state.managed||!!state.unavailableReason;}
+function hasIdentity(){return !!state?.environmentId&&!!state?.worldFingerprint;}
+function unavailable(){return !hasIdentity()||state.managed||!!state.unavailableReason;}
 function workerUnavailable(){return state?.workerEnabled===false||!!state?.workerError;}
 function controls(){
- const blocked=busy||!!pending||stale||identityChanged||!storageReady||unavailable();
+ const blocked=busy||!!pending||stale||identityChanged||!storageReady||!hasIdentity();
  const status=state?.status;
- $('start').disabled=loading||blocked||workerUnavailable()||!['idle','completed','cancelled'].includes(status);
- $('targetDate').disabled=blocked||!['idle','completed','cancelled'].includes(status);
- $('reason').disabled=busy||!!pending||identityChanged||!storageReady||unavailable();
+ $('start').disabled=loading||blocked||unavailable()||workerUnavailable()||!['idle','completed','cancelled'].includes(status);
+ $('targetDate').disabled=blocked||unavailable()||!['idle','completed','cancelled'].includes(status);
+ $('reason').disabled=busy||!!pending||identityChanged||!storageReady||!hasIdentity();
  $('pause').disabled=loading||blocked||status!=='running';
- $('resume').disabled=loading||blocked||workerUnavailable()||!['paused','failed'].includes(status);
+ $('resume').disabled=loading||blocked||unavailable()||workerUnavailable()||!['paused','failed'].includes(status);
  $('cancel').disabled=loading||blocked||!['running','paused','failed'].includes(status);
  $('refresh').disabled=loading||busy||identityChanged;
- $('retry').hidden=!pending;$('retry').disabled=busy||loading||identityChanged||unavailable()||(workerUnavailable()&&['start','resume'].includes(pending?.action));
+ $('retry').hidden=!pending;$('retry').disabled=busy||loading||identityChanged||!hasIdentity()||((unavailable()||workerUnavailable())&&['start','resume'].includes(pending?.action));
 }
 function render(){
  $('identity').textContent=state.environmentId?`Environment ${state.environmentId}`:'No initialized world';
@@ -51,7 +52,7 @@ function render(){
   failed:'Resolve the recorded cause, then resume. Cancel releases the remaining schedule while keeping completed work.',
   completed:'The stopping date was reached. Choose a later date to start another run.',
   cancelled:'Remaining days were cancelled. Choose a date to start a new run.'};
- $('controlHelp').textContent=unavailable()?'Use the controlling runtime shown above.':workerUnavailable()?'Start and resume are disabled until the server runner is restored. Pause and cancellation remain available for a saved run.':hints[state.status]||'Refresh to recover the saved run state.';
+ $('controlHelp').textContent=!hasIdentity()?'Initialize a saved world before changing its schedule.':unavailable()?'Start and resume are unavailable. You can request pause or cancellation of a saved run; the server checks whether completed field work can be reconciled safely.':workerUnavailable()?'Start and resume are disabled until the server runner is restored. Pause and cancellation remain available for a saved run.':hints[state.status]||'Refresh to recover the saved run state.';
  $('updated').textContent=`Status checked at ${new Date().toLocaleTimeString()}. Updates pause while this page is hidden.`;
  controls();
 }
@@ -98,9 +99,9 @@ async function refresh(manual=false){
 }
 function clearPending(){pending=null;try{sessionStorage.removeItem(storageKey);}catch{/* A stale stored retry remains safe to replay. */}}
 async function send(action){
- if(busy||loading||identityChanged||unavailable())return;
- if(workerUnavailable()&&['start','resume'].includes(pending?.action||action)){
-  message('Restart the local server to restore its automatic runner before starting or resuming.',true);return;
+ if(busy||loading||identityChanged||!hasIdentity())return;
+ if((unavailable()||workerUnavailable())&&['start','resume'].includes(pending?.action||action)){
+  message(unavailable()?(state.unavailableReason||'This world cannot start or resume local cruise control.'):'Restart the local server to restore its automatic runner before starting or resuming.',true);return;
  }
  clearTimeout(timer);timer=null;
  if(!pending){
