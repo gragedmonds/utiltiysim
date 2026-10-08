@@ -302,7 +302,13 @@ def run_batch(cfg, homes: int, store: Path, request: dict | None = None, *,
                         while child.poll() is None:
                             check_cancelled()
                             time.sleep(.25)
-                            stage = orjson.loads(stage_path.read_bytes()) if stage_path.exists() else None
+                            try:
+                                stage = orjson.loads(stage_path.read_bytes())
+                            except (FileNotFoundError, PermissionError):
+                                # Progress is optional telemetry. Windows can deny an observer's open
+                                # during atomic replacement; do not terminate real work for one missed tick.
+                                # The worker's exit status and result/manifest reads below remain mandatory.
+                                stage = None
                             on_progress(progress(job, time.monotonic() - started, stage))
                         if child.returncode:
                             raise RuntimeError(f"{district['id']} failed. Completed districts are saved; rerun to resume.")

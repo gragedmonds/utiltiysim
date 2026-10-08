@@ -152,6 +152,14 @@ def mount_world_library(app, store, viewer):
         from .world_creation import pending
         return {'pending': pending(library)}
 
+    @app.get('/local/worlds/sources')
+    def sources(after: str = '', limit: int = 10):
+        from .snapshot_catalog import listing
+        try:
+            return listing(store, after, limit)
+        except (OSError, ValueError) as exc:
+            raise HTTPException(422, 'Could not list saved towns. Check the library and page cursor.') from exc
+
     @app.post('/local/worlds/create')
     async def create_world(request: Request):
         from fastapi.concurrency import run_in_threadpool
@@ -161,7 +169,7 @@ def mount_world_library(app, store, viewer):
         value = await body(request)
         try:
             return await run_in_threadpool(create, library, value.get('commandId'), value.get('path'),
-                                           value.get('environment'), value.get('start'))
+                                           value.get('environment'), value.get('start'), run_key=value.get('runKey'))
         except (OSError, sqlite3.Error, ValueError, KeyError, TypeError) as exc:
             raise HTTPException(422, 'Could not create this world. Check the full snapshot, name and date; retry a pending request after recovery.') from exc
 

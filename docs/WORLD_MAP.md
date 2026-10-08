@@ -56,8 +56,8 @@ Source snapshots are limited to 64 MiB after gzip decompression and checked for
 required map/service data and consistent premise/meter references. The UI does
 not generate a replacement town or invent missing geometry. Use the full
 snapshot from a saved generated town, not its `town.json` manifest. The first
-creation form accepts an absolute local file path; an in-app saved-town picker
-remains follow-up work.
+creation form accepts an absolute local file path or a town selected from
+Studio's saved result archives using the picker described below.
 
 The app server started by the existing Go launcher now has **Saved world maps**
 links on its simulations and local workspace pages. They appear only in a
@@ -153,8 +153,7 @@ meter on its first premise. The original village contains 570 premises (480
 homes plus other properties); this is not the separate 100-account Billing
 acceptance fixture.
 
-Next work: select source towns directly from the existing saved-results list,
-keep the same environment identity through enterprise startup, add world growth and
+Next work: keep the same environment identity through enterprise startup, add world growth and
 move events, and connect physical field outcomes through the agreed enterprise
 report boundary. This restoration does not complete those living-town features.
 The existing Windows geometry golden discrepancies remain independent failures;
@@ -224,3 +223,46 @@ No external requests or browser script errors were observed. Two earlier
 browser attempts hit startup timeouts while sharing the 16 GB machine with the
 full regression/build workloads; isolated reruns passed without increasing the
 startup timeout. Run these substantial checks sequentially on this machine.
+
+### Pick a saved town
+
+In **Saved world maps**, expand **Choose a town saved in Studio**, select **Use
+this town**, name the new environment and choose its start date. The town list
+reads completed local run manifests, ten at a time. **More towns** and **Earlier
+towns** preserve the selection; **Use snapshot file instead** returns to manual
+import. Missing or invalid archives remain visible as unavailable entries.
+The saved-results date and account/register counts describe the source archive,
+not a new world's history. Creation retains the original town geography and
+starts the physical clock with zero completed days, as with file import.
+
+`GET /local/worlds/sources?after=<run-key>&limit=10` is protected by the existing
+launcher session and loopback host guard. Its sorted run-key cursor and maximum
+25-entry page bound retained metadata; discovery never decompresses town geometry.
+Manifests/inputs are limited to 2 MiB each. Snapshot files have 64 MiB compressed
+and uncompressed limits. Oversized or corrupt sources require repair or a different
+source; the picker never regenerates them to hide the failure.
+
+`POST /local/worlds/create` accepts `runKey` instead of `path`, alongside the
+existing command UUID, environment and start. It checks run-key/input identity,
+compressed-file checksum/size, uncompressed snapshot lineage and town identity
+before pinning the existing creation journal. It decompresses the same bytes it
+verified. Paths cannot escape the archive through run keys or redirected files.
+Once the source is pinned, recovery uses that original copy even when the archive
+has disappeared. Supplying both source forms or reusing a UUID for another source
+is rejected. No new database schema or enterprise delivery contract is introduced.
+
+Run the focused source tests with `pytest tests/test_world_sources.py`. For the
+browser walkthrough, use `python scripts/check_world_creation.py --archive
+PATH_TO_COMPLETED_RUN --engine-python PATH_TO_ENGINE_PYTHON --out out/new-picker-check`
+(one command), or substitute `--engine-executable` for the frozen runtime. It
+copies the archive, selects the town through the real picker, checks the initial
+history and physical advance, and reopens the map after restart with the copied
+source removed. All supplied original archive checksums are verified afterwards.
+
+The picker acceptance run also exposed a Windows local-runner defect: a brief
+sharing lock on a district progress file terminated its worker. The observer now
+omits that optional telemetry update when the file is missing or locked. Worker
+exit status, output records and archive verification remain mandatory. The
+fault-injection regression in `tests/test_progress_polling.py` fails against the
+original reader and completes a real district with the corrected reader. A
+separate case confirms that denied access to the required result still fails.

@@ -43,35 +43,45 @@ def validate_snapshot(snapshot):
             raise ValueError('A service installation identity is required.')
 
 
-def create(library, command, path, environment, start):
+def create(library, command, path, environment, start, *, run_key=None):
     try:
         command = str(uuid.UUID(command))
     except (ValueError, TypeError, AttributeError) as exc:
         raise ValueError('A creation command UUID is required.') from exc
-    if not isinstance(path, str) or not Path(path).is_absolute():
+    if run_key is not None:
+        from .snapshot_catalog import location
+        if path is not None:
+            raise ValueError('Choose either a saved run or a snapshot file.')
+        path = str(location(library.path.parent, run_key) / 'snapshot.json.gz')
+    elif not isinstance(path, str) or not Path(path).is_absolute():
         raise ValueError('Provide the full path to a saved snapshot.')
     if not isinstance(environment, str) or not environment.strip() or len(environment) > 200:
         raise ValueError('Provide a new environment name of at most 200 characters.')
     if not isinstance(start, str) or date.fromisoformat(start).isoformat() != start:
         raise ValueError('Use a canonical YYYY-MM-DD start date.')
     request = canonical({'path': str(Path(path).resolve()), 'environment': environment, 'start': start,
-                         'modelVersion': MODEL_VERSION, 'settings': DEFAULTS})
+                         'modelVersion': MODEL_VERSION, 'settings': DEFAULTS,
+                         **({'runKey': run_key} if run_key is not None else {})})
     with library.db() as db:
         row = db.execute('SELECT * FROM world_creations WHERE command=?', (command,)).fetchone()
     if row:
         if row['request'] != request:
             raise ValueError('That creation command belongs to different inputs.')
     else:
-        source = Path(path).resolve(strict=True)
-        opener = gzip.open if source.suffix.lower() == '.gz' else open
         try:
-            with opener(source, 'rb') as stream:
-                raw = stream.read(MAX_SNAPSHOT_BYTES + 1)
+            if run_key is not None:
+                from .snapshot_catalog import read_snapshot
+                snapshot = read_snapshot(library.path.parent, run_key, MAX_SNAPSHOT_BYTES)
+            else:
+                source = Path(path).resolve(strict=True)
+                opener = gzip.open if source.suffix.lower() == '.gz' else open
+                with opener(source, 'rb') as stream:
+                    raw = stream.read(MAX_SNAPSHOT_BYTES + 1)
+                if len(raw) > MAX_SNAPSHOT_BYTES:
+                    raise ValueError('Snapshot exceeds the 64 MiB uncompressed limit.')
+                snapshot = json.loads(raw)
         except EOFError as exc:
             raise ValueError('The compressed snapshot is incomplete.') from exc
-        if len(raw) > MAX_SNAPSHOT_BYTES:
-            raise ValueError('Snapshot exceeds the 64 MiB uncompressed limit.')
-        snapshot = json.loads(raw)
         validate_snapshot(snapshot)
         pinned = canonical(snapshot)
         with library.db() as db:
