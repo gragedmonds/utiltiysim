@@ -223,9 +223,39 @@ def main():
                 page.locator('#refresh').click()
                 expect(page.locator('#nextDay')).to_contain_text(day(1))
                 page.locator('#reason').fill('Pause copied scenario to inspect finite-capacity backlog')
+                active_job = request(restarted.base)
+                lost_pause = []
+                def lose_pause_reply(route):
+                    if route.request.method == 'POST' and route.request.post_data_json.get('action') == 'pause':
+                        payload = route.request.post_data_json
+                        response = route.fetch()
+                        assert response.ok, response.text()
+                        lost_pause.append({'command': payload, 'result': response.json()})
+                        route.abort()
+                    else:
+                        route.continue_()
+                page.route('**/api/cruise', lose_pause_reply)
                 page.locator('#pause').click()
+                expect(page.locator('#message')).to_contain_text('outcome is uncertain')
+                expect(page.locator('#retry')).to_be_visible()
+                page.unroute('**/api/cruise', lose_pause_reply)
                 wait_for(lambda: request(restarted.base)['status'] == 'paused', 'Cruise did not pause.')
                 paused = request(restarted.base)
+                assert len(lost_pause) == 1
+                assert paused['jobId'] == active_job['jobId'] and paused['targetDate'] == active_job['targetDate']
+                page.reload()
+                expect(page.locator('#retry')).to_be_visible()
+                page.locator('#retry').click()
+                expect(page.locator('#retry')).to_be_hidden()
+                retried_pause = request(restarted.base)
+                assert retried_pause == paused
+                with world.db() as db:
+                    pauses = [json.loads(row[0]) for row in db.execute("SELECT payload FROM events WHERE type='CruiseControlChanged'")]
+                    assert len([event for event in pauses if event['action'] == 'pause']) == 1
+                    persisted = db.execute('SELECT payload,result FROM commands WHERE id=?',
+                                           (lost_pause[0]['command']['commandId'],)).fetchone()
+                    assert json.loads(persisted['payload']) == lost_pause[0]['command']
+                    assert json.loads(persisted['result']) == lost_pause[0]['result']
                 paused_day = paused['through']
                 assert day(1) <= paused_day < day(6)
                 time.sleep(1.1)
@@ -290,6 +320,7 @@ def main():
                     'from': day(0), 'through': day(6), 'worldOnlyThrough': day(2), 'fieldVisits': 3,
                     'repairsPerFault': 1, 'finiteCapacity': 1, 'backlogObserved': True,
                     'pauseReloadResume': True, 'serverExitCode': 86, 'restartRecoveredSamePhysicalRepair': True,
+                    'lostPauseReplyReloadRetry': True, 'pauseControlEvents': 1, 'sameJobAndTargetAfterRetry': True,
                     'disabledWorkerVisibleAndStartBlocked': True,
                     'reportsRemainPending': True, 'viewports': [1440, 1024], 'browserErrors': errors,
                     'testOnlyWorkerDelaySeconds': .75, 'performanceBenchmark': False}
