@@ -3,12 +3,14 @@
 import argparse
 import json
 import mimetypes
+import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlsplit
 
 from . import (
     contacts,
+    cruise,
     customer_finance,
     development,
     field_execution,
@@ -23,10 +25,53 @@ from .map_view import WorldMap
 from .store import World
 
 
-def make_server(world, port=8026, viewer_dir=None, field_db=None):
+def make_server(world, port=8026, viewer_dir=None, field_db=None, cruise_worker=True):
     viewer = Path(viewer_dir or Path(__file__).resolve().parents[2] / "packages/town-viewer/dist").resolve()
     map_view = WorldMap(world)
     field = field_execution.FieldExecution(world, field_db) if field_db is not None else None
+
+    class WorldServer(ThreadingHTTPServer):
+        """Own the local worker's lifetime, including the current durable day."""
+        def __init__(self, address, handler):
+            super().__init__(address, handler)
+            self.cruise_stop = threading.Event()
+            self.cruise_thread = None
+            self.cruise_worker_error = None
+
+        def _work(self):
+            while not self.cruise_stop.is_set():
+                try:
+                    cruise.tick(world, field, max_days=1)
+                except cruise.BusyError:
+                    # Another local controller holds this world's execution
+                    # lock; persistent domain failures stop within the controller.
+                    pass
+                except Exception as exc:
+                    # Expose unexpected worker loss; never claim the run is
+                    # progressing or silently replace it with another policy.
+                    self.cruise_worker_error = type(exc).__name__
+                    return
+                self.cruise_stop.wait(0.2)
+
+        def serve_forever(self, poll_interval=0.5):
+            self.cruise_stop.clear()
+            self.cruise_worker_error = None
+            if cruise_worker:
+                self.cruise_thread = threading.Thread(target=self._work, name="world-cruise", daemon=True)
+                self.cruise_thread.start()
+            try:
+                super().serve_forever(poll_interval)
+            finally:
+                self.cruise_stop.set()
+                if self.cruise_thread is not None:
+                    self.cruise_thread.join()
+
+        def server_close(self):
+            self.cruise_stop.set()
+            if self.cruise_thread is not None and self.cruise_thread is not threading.current_thread():
+                self.cruise_thread.join()
+            super().server_close()
+
     class Handler(BaseHTTPRequestHandler):
         def reply(self, status, value, html=False):
             raw = value if html else json.dumps(value).encode()
@@ -48,6 +93,16 @@ def make_server(world, port=8026, viewer_dir=None, field_db=None):
             if self.path == "/":
                 return self.reply(200, Path(__file__).with_name("index.html").read_bytes(), True)
             url = urlsplit(self.path)
+            if url.path in ("/cruise", "/cruise.js"):
+                return self.static(Path(__file__).with_name("cruise.html" if url.path == "/cruise" else "cruise.js"))
+            if url.path == "/api/cruise":
+                if url.query:
+                    return self.reply(422, {"error": "Cruise status takes no query parameters."})
+                try:
+                    return self.reply(200, {**cruise.inspect(world, field),
+                        "workerEnabled": bool(cruise_worker), "workerError": self.server.cruise_worker_error})
+                except (ValueError, TypeError, KeyError) as exc:
+                    return self.reply(422, {"error": str(exc)})
             if url.path in ("/field-execution", "/field-execution.js"):
                 return self.static(Path(__file__).with_name("field_execution.html" if url.path == "/field-execution" else "field_execution.js"))
             if url.path == "/api/field-execution":
@@ -199,6 +254,7 @@ def make_server(world, port=8026, viewer_dir=None, field_db=None):
                               conditions=[dict(r) for r in db.execute("SELECT condition,COUNT(*) count FROM assets GROUP BY condition")],
                               events=[{**dict(r), "payload": json.loads(r["payload"])} for r in
                                       db.execute("SELECT * FROM events ORDER BY sequence DESC LIMIT 40")])
+            result["cruise"] = cruise.inspect(world, field)
             return self.reply(200, result)
 
         def static(self, path):
@@ -233,15 +289,24 @@ def make_server(world, port=8026, viewer_dir=None, field_db=None):
                 else:
                     if p.get("environmentId") != world.status().get("environmentId"):
                         raise ValueError("Environment mismatch.")
-                    if self.path in ("/api/field-execution", "/api/field-execution/run-due"):
+                    if self.path == "/api/cruise":
+                        if p.get("action") in ("start", "resume") and (not cruise_worker or self.server.cruise_worker_error):
+                            return self.reply(503, {"error": "Cruise worker is unavailable. Restart the local server before changing this run."})
+                        result = cruise.command(world, p, field)
+                    elif self.path in ("/api/field-execution", "/api/field-execution/run-due"):
                         if field is None:
                             return self.reply(503, {"error": "Field execution requires a separate --field-db database."})
                         if self.path.endswith("/run-due"):
                             if set(p) != {"environmentId", "worldFingerprint", "effectiveDate"}:
                                 raise ValueError("Provide the world identity and current date when running due field work.")
-                            result = field_execution.run_due(field, p)
+                            with cruise.manual_control(world, field):
+                                result = field_execution.run_due(field, p)
                         else:
-                            result = field_execution.command(field, p)
+                            if p.get("action") == "execute":
+                                with cruise.manual_control(world, field):
+                                    result = field_execution.command(field, p)
+                            else:
+                                result = field_execution.command(field, p)
                     elif self.path == "/api/customer-finance":
                         result = customer_finance.command(world, p)
                     elif self.path == "/api/development":
@@ -264,7 +329,8 @@ def make_server(world, port=8026, viewer_dir=None, field_db=None):
                         with world.db() as db:
                             if db.execute("SELECT 1 FROM observation_delivery_configuration").fetchone():
                                 raise ValueError("This world uses shared delivery. Advance it from the shared runtime control panel.")
-                        result = world.advance(p["through"])
+                        with cruise.manual_control(world, field):
+                            result = world.advance(p["through"])
                     elif self.path == "/api/export":
                         result = world.export(p["start"], p["end"])
                     elif self.path == "/api/export-v2":
@@ -282,7 +348,7 @@ def make_server(world, port=8026, viewer_dir=None, field_db=None):
         def log_message(self, *args):
             pass
 
-    return ThreadingHTTPServer(("127.0.0.1", port), Handler)
+    return WorldServer(("127.0.0.1", port), Handler)
 
 
 def main():

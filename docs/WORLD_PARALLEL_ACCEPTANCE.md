@@ -34,8 +34,10 @@ adapter functions documented in WORLD_CUSTOMER_FINANCE.md.
 
 Before advancing a physical day, run that day's due field visits. Development
 and customer behavior then advance with the world. Multi-day world advance does
-not secretly schedule field visits on intermediate days. A coordinator that
-alternates these owners remains necessary for unattended integrated field runs.
+not secretly schedule field visits on intermediate days. The subsequent
+[local cruise controller](WORLD_CRUISE_CONTROL.md) now alternates those owners
+durably for unattended local runs. Shared-runtime orchestration and actual
+enterprise recipients remain separate integration work.
 
 ## Repeat the combined desktop check
 
