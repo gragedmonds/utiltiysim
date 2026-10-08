@@ -13,12 +13,14 @@ from contextlib import contextmanager
 from datetime import date, timedelta
 from pathlib import Path
 
-from . import water_faults
+from . import network_faults, sewer, water_faults
 from .migrations import rollback_backup
 from .store import World, canonical, stable
 
 VERSION = "field-world-execution/1"
 OPERATION = "repair-water-leak"
+OPERATIONS = {OPERATION: "plumbing", "restore-electric-supply": "electric",
+              "restore-gas-supply": "gas", "clear-sewer-blockage": "sewer"}
 
 
 def _world_identity(db):
@@ -190,7 +192,9 @@ def _validate(payload):
     if payload["action"] == "configure-crew":
         _integer(payload["expectedRevision"], 0, 2147483647)
         _integer(payload["dailyCapacity"], 0, 100)
-        if (not isinstance(payload["skills"], list) or payload["skills"] not in ([], ["plumbing"])
+        if (not isinstance(payload["skills"], list)
+                or any(not isinstance(s, str) or s not in OPERATIONS.values() for s in payload["skills"])
+                or len(set(payload["skills"])) != len(payload["skills"])
                 or not isinstance(payload["weekdays"], list) or len(payload["weekdays"]) > 7):
             raise ValueError("Invalid crew skills or weekdays.")
         for day in payload["weekdays"]:
@@ -201,7 +205,7 @@ def _validate(payload):
         _day(payload["scheduledDate"])
         _integer(payload["orderRevision"], 1, 2147483647)
         _integer(payload["reportDelayDays"], 0, 365)
-        if payload["operation"] != OPERATION:
+        if payload["operation"] not in OPERATIONS:
             raise ValueError("Unsupported field operation.")
 
 
@@ -242,6 +246,35 @@ def _physical_result(field, row):
         return json.loads(old["result"]) if old else None
 
 
+def _target(db, meta, operation, identity, day):
+    """Validate assigned location, never inspect hidden faults at acceptance."""
+    skill = OPERATIONS[operation]
+    if skill == "plumbing":
+        asset = water_faults._asset(db, identity)
+        if asset["installed"] > day:
+            raise ValueError("Cannot visit a service before commissioning.")
+        return {"assetId": identity}
+    if skill == "sewer":
+        # Stable installation identity exists even before sewer faults are enabled.
+        asset = next((a for a in db.execute("SELECT id,installation FROM assets WHERE commodity='water' ORDER BY id")
+                      if "SEWER-SP-" + stable(meta["environment"], a["installation"]) == identity), None)
+        service = sewer._service(db, asset["id"], meta["environment"]) if asset else None
+        if service is None:
+            raise ValueError("Choose an existing sewer servicePointId.")
+        if service["installed"] > day:
+            raise ValueError("Cannot visit a service before commissioning.")
+        return {"servicePointId": identity, "waterAssetId": service["water_asset"]}
+    catalog = network_faults._catalog(db)
+    edge = next((e for e in catalog[0] if e["commodity"] == skill and e["id"] == identity), None)
+    if not edge or not edge["enabled"]:
+        raise ValueError("Choose a normally enabled matching electricity or gas edge.")
+    reached, _ = network_faults._reachable([e for e in catalog[0] if e["commodity"] == skill], [edge["a"]])
+    commissioned = {a[0] for a in db.execute("SELECT id FROM assets WHERE commodity=? AND installed<=?", (skill, day))}
+    if not any(s["commodity"] == skill and s["node"] in reached and s["asset"] in commissioned for s in catalog[1]):
+        raise ValueError("Cannot visit a network without a commissioned connected service.")
+    return {"commodity": skill, "edgeId": identity}
+
+
 def _physical(field, field_db, meta, row, actor):
     """Trusted broker: authorization is persisted assignment, never caller fault IDs.
 
@@ -259,20 +292,27 @@ def _physical(field, field_db, meta, row, actor):
         current_meta = _world_identity(db)
         if current_meta["through"] != meta["through"]:
             raise ValueError("World date changed before execution.")
-        asset = water_faults._asset(db, row["asset"])
-        if asset["installed"] > meta["through"]:
-            raise ValueError("Cannot visit a service before commissioning.")
-        current = water_faults.state(db, row["asset"])
+        operation = json.loads(row["payload"])["operation"]
+        target = _target(db, meta, operation, row["asset"], meta["through"])
+        skill = OPERATIONS[operation]
+        if skill == "plumbing":
+            current, repair = water_faults.state(db, row["asset"]), water_faults._repair
+        elif skill == "sewer":
+            current, repair = sewer.state(db, row["asset"]), sewer._clear
+        else:
+            current, repair = network_faults.state(db, skill, row["asset"]), network_faults._restore
         result = None
         identity = _physical_key(field, row)
         if current["active"]:
-            result = water_faults._repair(world, db, meta, {
+            result = repair(world, db, meta, {
                 "schemaVersion": VERSION, "commandId": identity, "actorId": actor,
-                "assetId": row["asset"], "faultId": current["active"]["id"],
+                **target, "faultId": current["active"]["id"],
                 "expectedRevision": current["revision"], "workOrderId": row["order_id"],
                 "assignmentId": row["id"], "authorizationEventId": row["accepted_event"],
                 "assignmentChecksum": row["checksum"], "fieldOwnerId": field.owner_id,
-                "causalReference": row["accepted_event"], "reason": "Assigned on-site plumbing inspection and repair"})
+                "causalReference": row["accepted_event"],
+                **({"reason": "Assigned on-site plumbing inspection and repair"} if operation == OPERATION else
+                   {"operation": operation, "reason": "Assigned on-site inspection and physical action"})})
         # Only legitimate on-site findings cross back to the workforce owner.
         observation = {"outcome": "completed" if result else "not_found", "effectiveDate": meta["through"],
                        "physicalEventId": result["eventId"] if result else None}
@@ -283,8 +323,9 @@ def _physical(field, field_db, meta, row, actor):
 
 def _availability(db, row, day):
     crew = db.execute("SELECT * FROM field_crews WHERE id=?", (row["crew"],)).fetchone()
-    if not crew or "plumbing" not in json.loads(crew["skills"]):
-        return "Crew lacks the required plumbing skill."
+    skill = OPERATIONS[json.loads(row["payload"])["operation"]]
+    if not crew or skill not in json.loads(crew["skills"]):
+        return f"Crew lacks the required {skill} skill."
     if row["scheduled_day"] > day:
         return "Assignment is not due."
     if date.fromisoformat(day).weekday() not in json.loads(crew["weekdays"]):
@@ -305,8 +346,17 @@ def _execute(world, db, meta, row, actor, cause):
     physical = _physical(world, db, meta, row, actor)
     meta = {**meta, "through": physical["effectiveDate"]}
     outcome = physical["outcome"]
-    observed = ("On-site plumbing inspection found a downstream leak. Repair completed."
-                if outcome == "completed" else "On-site plumbing inspection found no active downstream leak.")
+    operation = json.loads(row["payload"])["operation"]
+    finding, action = {
+        OPERATION: ("downstream leak", "Repair completed"),
+        "restore-electric-supply": ("electric edge fault", "Assigned edge repaired; wider service restoration not verified"),
+        "restore-gas-supply": ("gas edge fault", "Assigned edge repaired; wider service restoration not verified"),
+        "clear-sewer-blockage": ("sewer lateral blockage", "Blockage cleared"),
+    }[operation]
+    inspection = "On-site plumbing inspection" if operation == OPERATION else "On-site inspection"
+    article = "an" if operation == "restore-electric-supply" else "a"
+    observed = (f"{inspection} found {article} {finding}. {action}." if outcome == "completed"
+                else f"{inspection} found no active {finding}.")
     event = world.event(db, meta["environment"], meta["through"], "FieldVisitExecuted", row["asset"],
                         {"assignmentId": row["id"], "actorId": actor, "orderId": row["order_id"],
                          "authorizationEventId": row["accepted_event"], "outcome": outcome,
@@ -380,12 +430,11 @@ def command(world, payload):
             if payload["scheduledDate"] < meta["through"]:
                 raise ValueError("Cannot accept an assignment in the past.")
             with world.world.db() as physical_db:
-                asset = water_faults._asset(physical_db, payload["assetId"])
-            if asset["installed"] > payload["scheduledDate"]:
-                raise ValueError("Cannot schedule a visit before commissioning.")
+                _target(physical_db, meta, payload["operation"], payload["assetId"], payload["scheduledDate"])
             crew = db.execute("SELECT * FROM field_crews WHERE id=?", (payload["crewId"],)).fetchone()
-            if not crew or "plumbing" not in json.loads(crew["skills"]):
-                raise ValueError("Crew lacks the required plumbing skill.")
+            skill = OPERATIONS[payload["operation"]]
+            if not crew or skill not in json.loads(crew["skills"]):
+                raise ValueError(f"Crew lacks the required {skill} skill.")
             if db.execute("SELECT 1 FROM field_assignments WHERE id=? OR (order_id=? AND order_revision=?)",
                           (payload["assignmentId"], payload["orderId"], payload["orderRevision"])).fetchone():
                 raise ValueError("Assignment or order revision is already accepted.")

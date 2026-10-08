@@ -121,12 +121,12 @@ bypass that guard are detected on the next tick, not prevented by World itself.
 
 ## Scope and checks
 
-The local field store currently verifies the plumbing repair vertical slice.
+The local field store supports the [four-domain operations](WORLD_FIELD_OPERATIONS.md).
 Its daily capacity and weekday shifts remain that owner's limited local model;
 cruise neither adds travel/shift-duration scheduling nor replaces shared runtime
 capacity reservations. Due visits execute at the current day's boundary, then
 the world advances to the next date. Unreceived or delayed reports stay pending.
-No SAP fidelity or four-domain field completion is implied.
+No SAP fidelity or complete four-domain enterprise workflow is implied.
 
 `tests/test_world_cruise.py` covers source-preserving migration, strict commands,
 identity and file bindings, seven-day versus five-day capacity, durable failure,
@@ -177,5 +177,4 @@ after missing field configuration and rejection of unsafe pending-field cancel.
 Viewer checks passed 291 tests and
 11 conformance checks. These components use SQLite; no PostgreSQL schema or
 private enterprise adapter changed. Shared-runtime field scheduling, actual
-enterprise recipients, four-domain repair and complete workforce scheduling
-remain outstanding.
+enterprise recipients and complete workforce scheduling remain outstanding.

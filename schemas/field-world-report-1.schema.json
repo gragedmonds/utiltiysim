@@ -28,7 +28,16 @@
         "outcome": {"enum": ["completed", "not_found"]},
         "submitted_at": {"type": "string", "format": "date-time"},
         "crew_ref": {"type": "string", "minLength": 1},
-        "observations": {"enum": ["On-site plumbing inspection found a downstream leak. Repair completed.", "On-site plumbing inspection found no active downstream leak."]},
+        "observations": {"enum": [
+          "On-site plumbing inspection found a downstream leak. Repair completed.",
+          "On-site plumbing inspection found no active downstream leak.",
+          "On-site inspection found an electric edge fault. Assigned edge repaired; wider service restoration not verified.",
+          "On-site inspection found no active electric edge fault.",
+          "On-site inspection found a gas edge fault. Assigned edge repaired; wider service restoration not verified.",
+          "On-site inspection found no active gas edge fault.",
+          "On-site inspection found a sewer lateral blockage. Blockage cleared.",
+          "On-site inspection found no active sewer lateral blockage."
+        ]},
         "attachments": {"type": "array", "maxItems": 0}
       }
     }
