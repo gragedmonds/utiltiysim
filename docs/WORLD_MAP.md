@@ -278,9 +278,16 @@ separate case confirms that denied access to the required result still fails.
 Final picker/runner validation on 8 October 2026: the full non-slow regression
 completed with 549 passing tests and only the two exact comparisons that Greg
 retired while that run was in progress (947.84 seconds, two local workers).
-The updated golden/geography/core suite then passed all 19 checks. Thus every
+The updated golden/geography/core suite passed all 19 checks. Thus every
 current check has passing evidence across these runs; this is not described as
 one all-green full-suite run. The earlier real runner permission failure is
 corrected: the 30 focused runner/library/world checks pass, including injected
 progress locks and required-result failure. Viewer tests (291), conformance (11),
 repository lint and JavaScript syntax checks pass. No fixtures were regenerated.
+
+The rebuilt Windows runtime also passes the full saved-town picker browser flow:
+570 premises, 3,276 observations after two days, original source archive intact,
+restart after source removal, property inspection and both desktop sizes. No
+browser errors or external requests were observed. The local package includes
+its recorded engine build identity; no signed release or installed-runtime update
+was published. Evidence: ignored `out/map-acceptance/picker-packaged/`.
