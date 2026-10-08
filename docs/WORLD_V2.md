@@ -30,6 +30,11 @@ All date ranges are **start inclusive, end exclusive**. The displayed cursor is 
 
 ## Physical behavior
 
+Opt-in [sanitary laterals and blockages](WORLD_SEWER.md) retain wastewater,
+overflow and clearance history separately from water-derived billing volumes.
+The world controls and map provide working local actions and balance inspection;
+no sewer meter is invented and missing source readings remain missing.
+
 Electricity and gas now have opt-in [durable network supply faults](WORLD_NETWORK_FAULTS.md).
 The saved topology determines interrupted services, unmet demand is retained in
 administrator truth, and explicit physical restoration changes future readings.

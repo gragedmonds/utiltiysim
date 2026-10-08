@@ -171,7 +171,7 @@ class World:
 
     def advance(self, through):
         """Process [current date, through), committing each day and its checkpoint atomically."""
-        from . import network_faults, occupancy, registers, water_faults
+        from . import network_faults, occupancy, registers, sewer, water_faults
 
         target = date.fromisoformat(through)
         if target.isoformat() != through:
@@ -215,6 +215,7 @@ class World:
                     truth = self._demand(a, temperature, seed, ds)
                     truth = water_faults.consumption(self, db, a, ds, truth, meta)
                     truth = network_faults.consumption(db, a, ds, truth, outages)
+                    sewer.flow(self, db, a, ds, truth, meta)
                     observed = None if a["condition"] == "failed" else f"{truth * a['drift']:.4f}"
                     observation_id = stable(env, a["id"], ds, "observation")
                     db.execute("INSERT INTO truth VALUES(?,?,?)", (a["id"], ds, f"{truth:.4f}"))
