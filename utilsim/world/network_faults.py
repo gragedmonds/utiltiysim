@@ -7,6 +7,7 @@ import json
 import math
 from collections import defaultdict
 
+from . import hazards
 from .migrations import rollback_backup
 from .store import canonical, draw, stable
 
@@ -257,12 +258,12 @@ def daily(world, db, meta):
         active = {(f["commodity"], f["edge"]) for f in _active(db)}
         restored = {(r[0], r[1]) for r in db.execute("SELECT commodity,edge FROM network_faults WHERE restored_date=?",
                                                     (meta["through"],))}
-        hazard = 1 - (1-policy["annualProbability"]) ** (1/365.2425)
         for e in catalog[0]:
+            hazard, cause = hazards.risk(meta, e["commodity"], policy["annualProbability"], policy["cause"])
             key = (e["commodity"], e["id"])
             if (e["enabled"] and key not in active | restored
                     and draw(meta["seed"], meta["through"], *key, VERSION, "start") < hazard):
-                _start(world, db, meta, *key, "seeded", policy["cause"], "world-system", "Seeded daily network hazard")
+                _start(world, db, meta, *key, "seeded", cause, "world-system", "Seeded daily network hazard")
     return _outages(catalog, _active(db))
 
 

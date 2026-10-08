@@ -30,6 +30,11 @@ All date ranges are **start inclusive, end exclusive**. The displayed cursor is 
 
 ## Physical behavior
 
+Opt-in [infrastructure aging and cold-weather stress](WORLD_HAZARDS.md) extends
+the existing four-domain fault models using explicit cohort-age assumptions and
+shared daily temperature. Daily causes remain inspectable; repairs do not reset
+infrastructure age, and legacy worlds retain their existing flat behavior.
+
 Opt-in [sanitary laterals and blockages](WORLD_SEWER.md) retain wastewater,
 overflow and clearance history separately from water-derived billing volumes.
 The world controls and map provide working local actions and balance inspection;
