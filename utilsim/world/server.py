@@ -61,7 +61,7 @@ def make_server(world, port=8026, viewer_dir=None, field_db=None):
                 except (ValueError, TypeError, KeyError) as exc:
                     return self.reply(422, {"error": str(exc)})
             if url.path in ("/customer-finance", "/customer-finance.js", "/development", "/development.js"):
-                names = {"/customer-finance": "customer_finance.html", "/customer-finance.js": "customer_finance.js",
+                names = {"/customer-finance": "customer-finance.html", "/customer-finance.js": "customer-finance.js",
                          "/development": "development.html", "/development.js": "development.js"}
                 return self.static(Path(__file__).with_name(names[url.path]))
             if url.path in ("/api/customer-finance", "/api/payment-intents", "/api/development"):
@@ -237,9 +237,9 @@ def make_server(world, port=8026, viewer_dir=None, field_db=None):
                         if field is None:
                             return self.reply(503, {"error": "Field execution requires a separate --field-db database."})
                         if self.path.endswith("/run-due"):
-                            if set(p) != {"environmentId"}:
-                                raise ValueError("Provide only the environment identity when running due field work.")
-                            result = field_execution.run_due(field)
+                            if set(p) != {"environmentId", "worldFingerprint", "effectiveDate"}:
+                                raise ValueError("Provide the world identity and current date when running due field work.")
+                            result = field_execution.run_due(field, p)
                         else:
                             result = field_execution.command(field, p)
                     elif self.path == "/api/customer-finance":
