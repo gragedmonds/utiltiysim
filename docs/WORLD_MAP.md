@@ -1,5 +1,13 @@
 # Restore the map for the durable world
 
+**Acceptance update, 8 October 2026:** at Greg's explicit direction, the
+platform-sensitive premises/parcels golden-hash comparisons are retired.
+Functional geometry, same-environment repeatability and all other golden
+sections remain checked. Saved snapshots, expected fixture files and generator
+output are unchanged. The historical failure counts below record earlier runs;
+these two exact hash comparisons no longer block delivery or require an external
+Mac/Linux capture.
+
 The local v2 world server now opens the existing town renderer at `/map`. It
 uses the original stored `utility-town/2.0` snapshot: buildings, roads, terrain
 and electricity/water/gas network geometry are not regenerated in the browser.
@@ -156,8 +164,8 @@ acceptance fixture.
 Next work: keep the same environment identity through enterprise startup, add world growth and
 move events, and connect physical field outcomes through the agreed enterprise
 report boundary. This restoration does not complete those living-town features.
-The existing Windows geometry golden discrepancies remain independent failures;
-their expected snapshots are not rewritten by this change.
+The historical Windows geometry discrepancies did not originate in this map
+change; their exact-hash acceptance requirement was subsequently retired as noted above.
 
 Verified locally on 7 October 2026: 24 focused world checks pass; the complete
 non-slow Python suite reports 525 passed and the same two existing
@@ -199,8 +207,8 @@ Both the source worker and a locally built Windows PyInstaller runtime pass
 the complete library/restart browser walkthrough with the 570-premise village;
 the standalone map walkthrough also passes again. No browser errors or external
 requests were observed. The Go bootstrap itself is unchanged; no signed release
-or automatic installed-runtime update was published. The PR remains draft
-while the genuine geometry baseline failures are unresolved.
+or automatic installed-runtime update was published. At that point the PR remained
+draft pending the geometry comparison; that condition was subsequently retired.
 
 Creation acceptance is executable with `pytest tests/test_world_creation.py`
 and `python scripts/check_world_creation.py --snapshot PATH_TO_FULL_SNAPSHOT
@@ -266,3 +274,13 @@ exit status, output records and archive verification remain mandatory. The
 fault-injection regression in `tests/test_progress_polling.py` fails against the
 original reader and completes a real district with the corrected reader. A
 separate case confirms that denied access to the required result still fails.
+
+Final picker/runner validation on 8 October 2026: the full non-slow regression
+completed with 549 passing tests and only the two exact comparisons that Greg
+retired while that run was in progress (947.84 seconds, two local workers).
+The updated golden/geography/core suite then passed all 19 checks. Thus every
+current check has passing evidence across these runs; this is not described as
+one all-green full-suite run. The earlier real runner permission failure is
+corrected: the 30 focused runner/library/world checks pass, including injected
+progress locks and required-result failure. Viewer tests (291), conformance (11),
+repository lint and JavaScript syntax checks pass. No fixtures were regenerated.

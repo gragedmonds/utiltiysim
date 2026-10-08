@@ -1,5 +1,10 @@
-"""Golden digests per snapshot section. A failure names the first section that changed; if the change is
-intentional, bump GENERATOR_VERSION and run `uv run python scripts/update_goldens.py`."""
+"""Golden digests for portable snapshot sections.
+
+Exact premises/parcels geometry hashes were retired on 2026-10-08 at the product
+owner's request: numeric geometry differences across platforms made them an
+unreliable release check. Functional geometry and same-environment determinism
+tests remain. Other intentional section changes still require versioned fixtures.
+"""
 
 import importlib.util
 import json
@@ -24,5 +29,6 @@ def test_golden_version_matches():
 def test_golden_digests(case):
     got = mod.digests(*mod.CASES[case])
     want = GOLD["cases"][case]
-    changed = [k for k in mod.SECTIONS + ["townId"] if got[k] != want[k]]
+    sections = [k for k in mod.SECTIONS if k not in ("premises", "parcels")] + ["townId"]
+    changed = [k for k in sections if got[k] != want[k]]
     assert not changed, f"{case}: sections changed {changed} (bump GENERATOR_VERSION and update goldens if intended)"
