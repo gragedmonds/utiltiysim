@@ -2,6 +2,8 @@
 import json
 from datetime import date, timedelta
 
+from . import occupancy
+
 
 class WorldMap:
     def __init__(self, world):
@@ -43,5 +45,6 @@ class WorldMap:
             return {"schemaVersion": "world-map-premise/1", "view": "administrator-truth",
                     "environmentId": meta["environment"], "townId": meta["town"],
                     "through": meta["through"], "lastCompletedDay": day if day >= meta["start"] else None,
-                    "premise": {k: home.get(k) for k in ("id", "address", "occupied", "occupants", "floorAreaM2")},
+                    "premise": {**{k: home.get(k) for k in ("id", "address", "floorAreaM2")},
+                                **occupancy.current(db, identity)},
                     "assets": assets}
