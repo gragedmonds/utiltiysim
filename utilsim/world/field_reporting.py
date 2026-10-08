@@ -144,6 +144,7 @@ def command(field, payload):
 
 
 def inspect(field, actor_id="world-admin", limit=25, after=0):
+    from . import field_water_mains
     execution._text(actor_id)
     execution._page(after, limit)
     with field.db() as db:
@@ -159,6 +160,11 @@ def inspect(field, actor_id="world-admin", limit=25, after=0):
             physical = execution._physical_result(field, row, current)
             report = _report(field, db, row)
             items.append({"assignment": json.loads(row["payload"]), "state": row["state"], **current,
+                          "phase": field_water_mains.public_phase(db, row),
+                          # Current lifecycle checks can inspect physical truth;
+                          # never add them to a crew's filtered report view.
+                          "blockedReason": field_water_mains.blocked(field, db, row)
+                          if actor_id == "world-admin" and row["state"] == "accepted" else None,
                           "actualOutcome": physical["outcome"] if physical else None,
                           "claimedOutcome": json.loads(report["envelope"])["data"]["outcome"] if report else None,
                           "visitDate": physical["effectiveDate"] if physical else None,

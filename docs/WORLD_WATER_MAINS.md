@@ -17,9 +17,10 @@ administrator world screen, not a SAP or worker observation screen.
    with the available valves; the command fails without inventing a valve.
 3. **Repaired:** record physical repair evidence and a work reference. The section
    stays isolated. No timer automatically finishes the repair or opens valves.
-4. **Restored:** explicitly confirm flushing and restore supply. Closures held
-   by other faults remain. Flushing is a recorded prerequisite, not yet a
-   calculated flush-water volume or water-quality clearance process.
+4. **Restored:** record restoration and reopen this fault's closures. Closures
+   held by other faults remain. The administrator form asks for flushing and
+   completion evidence, but the domain does not validate a flushing procedure,
+   calculate flush-water volume or perform water-quality clearance.
 
 The section traversal ports the existing valve-boundary algorithm in
 `utilsim/ops/timeline.py`, adding fail-closed handling for a section containing a
@@ -29,6 +30,11 @@ Only trunk and distribution mains can fail here. Supply works, tanks, service
 lines and individual valves need separate future lifecycle models. Configured
 `sourceIds` are authoritative; dynamic tank levels and standby-source switching
 are not simulated by this component.
+
+The [assigned field phases](WORLD_FIELD_WATER_MAINS.md) use these same physical
+transitions with explicit crew skills, finite visit capacity and predecessor
+checks. Their reports remain separate claims; reporting completion cannot
+isolate, repair or restore a main by itself.
 
 Main loss is **unbilled** and never enters meter observations or sewer charges.
 When a service is isolated, its normal demand becomes recorded unserved demand.
