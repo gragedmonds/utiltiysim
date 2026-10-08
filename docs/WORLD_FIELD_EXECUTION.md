@@ -87,7 +87,7 @@ field_execution.ready(field, after=None)      # observable messages, availabilit
 field_execution.relay(field, send)            # adapter callback, no built-in network
 ```
 
-Suggested administrator routes:
+Implemented administrator routes (start the server with an explicit `--field-db`):
 
 | Route | Handler |
 | --- | --- |
@@ -116,6 +116,10 @@ identity. Command version is `field-world-execution/1`.
 not skipped behind a newer acknowledgement. Each item's cursor can be retained
 even when `nextAfter` is null. Recovery never backdates availability behind its
 recording day. `relay()` scans all pending available messages directly.
+It withholds each report until the matching dispatch acknowledgment has a
+durable received receipt. A failed acknowledgment leaves that report unattempted
+while other assignments can still progress; exact retries recover lost receipts.
+The time-filtered `ready()` observation feed remains independent of transport.
 
 ## Validation and honest scope
 
