@@ -30,6 +30,14 @@ network routing and road-based legacy travel. Keep that ownership. The renderer
 must draw these records rather than adjust streets independently of service
 networks and properties.
 
+The retained 570-premise demo (`town-ab2b8b3609f83517`) provides a first visual
+baseline: 61 road segments, with 26 primary and 35 residential; 17 degree-one
+road nodes; 15 residential segments longer than 300 m (longest 627.13 m); and
+two junctions with a smallest adjoining angle below 45°. Its isometric overview
+shows long parallel streets. These measurements describe this saved snapshot,
+not a representative benchmark or proof that any individual dead end is wrong.
+The next comparison must include varied new seeds and town sizes.
+
 1. Measure representative generated towns: connected components, intersection
    angles and spacing, long unbroken local roads, block proportions, cul-de-sac
    access and served frontage. Save pictures with the seed/configuration.

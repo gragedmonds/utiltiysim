@@ -82,6 +82,7 @@ def main():
                 expect(page.locator('#map')).to_have_attribute('data-view', 'nw')
                 page.get_by_label('Water', exact=True).check()
                 page.get_by_role('button', name='Refresh world').click()
+                expect(page.get_by_role('button', name='Refresh world')).to_be_enabled()
                 expect(page.locator('#place')).to_contain_text(premise['id'])
                 page.set_viewport_size({'width': 1024, 'height': 768})
                 assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')

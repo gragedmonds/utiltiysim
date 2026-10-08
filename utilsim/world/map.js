@@ -38,7 +38,7 @@ el('find').onsubmit=e=>{e.preventDefault();if(!town)return;const q=el('query').v
 el('home').onclick=()=>scene?.home();el('top').onclick=()=>scene?.top();
 el('rotate').onclick=()=>scene?.rotate();
 for(const key of ['electric','water','gas'])el(key).onchange=()=>{scene?.setLayers(layers());if(selected)scene.select(selected,utility(),false);};
-el('refresh').onclick=()=>refresh().catch(error=>{el('place').textContent='Refresh failed; current records are unavailable.';message(error.message,true);});
+el('refresh').onclick=async()=>{el('refresh').disabled=true;try{await refresh();}catch(error){el('place').textContent='Refresh failed; current records are unavailable.';message(error.message,true);}finally{el('refresh').disabled=false;}};
 try{
  town=await get('/snapshot');
  if(!town.bounds||!town.roads||!town.networks)throw Error('This world has service records but no map geometry. Open a world initialized from a full generated snapshot. Existing service records have been preserved.');
