@@ -10,8 +10,9 @@ from test_world_network_faults import command as network_command
 from test_world_network_faults import world
 from test_world_sewer import assert_balance
 from test_world_sewer import command as sewer_command
+from test_world_water_faults import command as water_command
 
-from utilsim.world import World, sewer
+from utilsim.world import World, sewer, water_faults
 from utilsim.world import field_execution as field
 from utilsim.world import network_faults as network
 
@@ -204,6 +205,37 @@ def test_skill_contract_rejects_duplicates_unknown_and_objects(tmp_path, skills)
     f = field.FieldExecution(w, tmp_path / "field.sqlite")
     with pytest.raises(ValueError):
         field.command(f, command(f, "crew", "configure-crew", skills=skills))
+
+
+@pytest.mark.parametrize("skill,operation,event", CASES)
+def test_accept_rejects_uncommissioned_service_component(tmp_path, skill, operation, event):
+    w, f, accepted = setup(tmp_path, skill, operation)
+    with w.db() as db:
+        db.execute("UPDATE assets SET installed='2030-01-01' WHERE commodity=?", ("water" if skill == "sewer" else skill,))
+    with pytest.raises(ValueError, match="commission"):
+        field.command(f, accepted)
+    assert field.inspect(f)["items"] == []
+    assert field.command(f, {**accepted, "scheduledDate": "2030-01-01"})["state"] == "accepted"
+    assert field.run_due(f) == []
+
+
+@pytest.mark.parametrize("has_fault", [True, False])
+def test_original_plumbing_report_schema_and_action_provenance_unchanged(tmp_path, has_fault):
+    w, f, accepted = setup(tmp_path, "plumbing", field.OPERATION)
+    accepted["assetId"] = "water"
+    if has_fault:
+        water_faults.command(w, water_command(w))
+    field.command(f, accepted)
+    field.run_due(f)
+    report = reports(f)[0]
+    validate_report(report)
+    assert report["data"]["outcome"] == ("completed" if has_fault else "not_found")
+    assert report["data"]["observations"].startswith("On-site plumbing inspection")
+    if has_fault:
+        with w.db() as db:
+            payload = json.loads(db.execute("SELECT payload FROM events WHERE type='PhysicalWaterLeakRepaired'").fetchone()[0])
+        assert payload["reason"] == "Assigned on-site plumbing inspection and repair"
+        assert "operation" not in payload
 
 
 @pytest.mark.parametrize("skill,operation,event", CASES[:2])
