@@ -36,7 +36,7 @@ def _enable(field, db):
     field.put(db, "fieldMainPhasesRollbackBackup", backup)
 
 
-def predecessor(db, payload):
+def predecessor(db, payload, allow_cancelled=False):
     identity = payload["predecessorAssignmentId"]
     expected = PREDECESSORS[payload["operation"]]
     if expected is None:
@@ -45,6 +45,8 @@ def predecessor(db, payload):
         return None
     execution._text(identity)
     prior = execution._assignment(db, identity)
+    if prior["state"] == "cancelled" and not allow_cancelled:
+        raise ValueError("Cannot accept a successor of a cancelled main phase.")
     prior_payload = json.loads(prior["payload"])
     if (prior_payload["operation"] != expected or prior["asset"] != payload["assetId"]
             or prior_payload["schemaVersion"] != VERSION or identity == payload["assignmentId"]):
@@ -67,7 +69,7 @@ def phase_binding(db, row):
     if (not stored or payload.get("schemaVersion") != VERSION or stored["assignment_checksum"] != row["checksum"]
             or stored["predecessor"] != payload.get("predecessorAssignmentId")):
         raise ValueError("Main phase has no matching immutable assignment binding.")
-    prior = predecessor(db, payload)
+    prior = predecessor(db, payload, allow_cancelled=True)
     if stored["predecessor_checksum"] != (prior["checksum"] if prior else None):
         raise ValueError("Main phase predecessor checksum changed.")
     return {"predecessorAssignmentId": stored["predecessor"], "predecessorChecksum": stored["predecessor_checksum"]}
