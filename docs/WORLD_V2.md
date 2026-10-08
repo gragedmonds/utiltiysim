@@ -135,11 +135,14 @@ The plan's gates remain acceptance milestones, not pauses for user approval. Thi
 
 The 6 October 2026 Windows validation passed all 7 new world tests, all 287 existing viewer tests, all 11 viewer conformance checks and repository lint. The full non-slow engine suite finished with 493 passing and 2 failing tests. Both failures are existing golden-digest mismatches: `village-120-T120` differs in parcels; `village-600-42` differs in premises and parcels. Both were reproduced in the unchanged original checkout at `68bf382805afe4e3a7d6fa329487b7e5eb43565b`, with no engine/test edits there. Goldens were not rewritten. A separate three-meter smoke run completed 3,652 days through 2036-01-01; this establishes date progression across leap years, not large-town capacity.
 
-The daily model now covers consumption, meters, dated physical occupancy and
-persistent downstream water leaks with explicit repair. Pipe-network degradation,
-other-domain outages, repair crews, commercial move-in/out, household finances,
-propensity to pay, customer complaints, construction, regional calibration,
-solar/net export and field command delivery/acknowledgment remain incomplete.
+The daily model now covers consumption, meters, dated physical occupancy,
+four-domain faults, cold-sensitive water-main breaks, customer contact intents,
+delivered-invoice-driven cash behavior, staged development on existing vacant
+properties, and a separate capacity-limited plumbing field owner. These are
+incremental models with explicit limits, not a completed utility workforce or
+financial lifecycle. Enterprise adapters, travel and hourly reservations,
+commercial move-in/out, new network construction, regional calibration and
+solar/net export remain incomplete.
 The world map reuses the finished isometric Studio renderer and retained snapshot
 geometry, with current physical-record inspection. Long horizons work by daily
 iteration; large-town multi-year capacity and complete UI pagination still need
@@ -172,3 +175,17 @@ four-domain symptoms into delayed, durable messages with bounded repeat memory.
 The controls operate real policy commands; filtered delivery excludes hidden
 causes and future contacts. Recipient acceptance, staff handling and physical
 resolution remain separate, with a tested local inbox/retry boundary.
+
+## Parallel world operations increment
+
+Working [customer cash](WORLD_CUSTOMER_FINANCE.md),
+[staged development](WORLD_DEVELOPMENT.md) and
+[field execution](WORLD_FIELD_EXECUTION.md) screens now share the world clock.
+Development and customer behavior participate in the daily transaction. Field
+execution has its own store and runs outside that transaction, before advancing
+the next physical day. The field store must be explicitly supplied at launch.
+
+See [combined acceptance and startup](WORLD_PARALLEL_ACCEPTANCE.md) for the
+copied-town walkthrough, recovery evidence and remaining integration work.
+These are UtilitySim administrator controls; they do not replace SAP enterprise
+screens or Nikki's human-work queues.

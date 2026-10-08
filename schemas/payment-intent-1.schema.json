@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Simulated payment intention, not settlement or enterprise posting",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "id", "environmentId", "runId", "premiseId", "recipientRef", "customerKind", "invoiceId", "deliveredDocumentId", "currency", "amountCents", "createdAt", "availableAt", "purpose"],
+  "properties": {
+    "schemaVersion": {"const": "payment-intent/1"},
+    "id": {"type": "string", "pattern": "^PAY-[0-9a-f]{24}$"},
+    "environmentId": {"type": "string", "minLength": 1, "maxLength": 512},
+    "runId": {"type": "string", "minLength": 1, "maxLength": 512},
+    "premiseId": {"type": "string", "minLength": 1, "maxLength": 512},
+    "recipientRef": {"type": "string", "minLength": 1, "maxLength": 512},
+    "customerKind": {"enum": ["household", "business"]},
+    "invoiceId": {"type": "string", "minLength": 1, "maxLength": 512},
+    "deliveredDocumentId": {"type": "string", "minLength": 1, "maxLength": 512},
+    "currency": {"const": "USD"},
+    "amountCents": {"type": "integer", "minimum": 1, "maximum": 1000000000000},
+    "createdAt": {"type": "string", "format": "date-time"},
+    "availableAt": {"type": "string", "format": "date-time"},
+    "purpose": {"const": "simulated_invoice_payment"}
+  }
+}

@@ -173,6 +173,8 @@ class World:
         """Process [current date, through), committing each day and its checkpoint atomically."""
         from . import (
             contacts,
+            customer_finance,
+            development,
             hazards,
             network_faults,
             occupancy,
@@ -196,7 +198,10 @@ class World:
                 if day == target:
                     return self._status(db)
                 s, seed, ds, env = meta["settings"], meta["seed"], day.isoformat(), meta["environment"]
+                development.apply_due(self, db, ds, env)
                 occupancy.apply_due(self, db, ds, env)
+                if occupancy.enabled(db):
+                    meta["occupancyModelVersion"] = occupancy.VERSION
                 center = (s["winter_mean_c"] + s["summer_mean_c"]) / 2
                 amplitude = (s["summer_mean_c"] - s["winter_mean_c"]) / 2
                 temperature = round(center - amplitude * math.cos(2 * math.pi * (day.timetuple().tm_yday - 15)
@@ -236,6 +241,7 @@ class World:
                                 "missing" if observed is None else "observed"))
                     registers.record(db, observation_id, a["device"], observed)
                 contacts.daily(self, db, meta)
+                customer_finance.daily(self, db, meta)
                 event = self.event(db, env, ds, "WorldDayCompleted", meta["town"], {"temperatureC": temperature})
                 finish = (day + timedelta(days=1)).isoformat()
                 self.put(db, "through", finish)

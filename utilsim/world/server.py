@@ -7,14 +7,26 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlsplit
 
-from . import contacts, hazards, network_faults, occupancy, sewer, water_faults, water_mains
+from . import (
+    contacts,
+    customer_finance,
+    development,
+    field_execution,
+    hazards,
+    network_faults,
+    occupancy,
+    sewer,
+    water_faults,
+    water_mains,
+)
 from .map_view import WorldMap
 from .store import World
 
 
-def make_server(world, port=8026, viewer_dir=None):
+def make_server(world, port=8026, viewer_dir=None, field_db=None):
     viewer = Path(viewer_dir or Path(__file__).resolve().parents[2] / "packages/town-viewer/dist").resolve()
     map_view = WorldMap(world)
+    field = field_execution.FieldExecution(world, field_db) if field_db is not None else None
     class Handler(BaseHTTPRequestHandler):
         def reply(self, status, value, html=False):
             raw = value if html else json.dumps(value).encode()
@@ -36,6 +48,39 @@ def make_server(world, port=8026, viewer_dir=None):
             if self.path == "/":
                 return self.reply(200, Path(__file__).with_name("index.html").read_bytes(), True)
             url = urlsplit(self.path)
+            if url.path in ("/field-execution", "/field-execution.js"):
+                return self.static(Path(__file__).with_name("field_execution.html" if url.path == "/field-execution" else "field_execution.js"))
+            if url.path == "/api/field-execution":
+                if field is None:
+                    return self.reply(503, {"error": "Field execution is not configured. Start with --field-db pointing to a separate field database."})
+                try:
+                    args = parse_qs(url.query, keep_blank_values=True)
+                    if set(args)-{"after", "limit"} or any(len(v) != 1 for v in args.values()):
+                        raise ValueError("Use one optional field cursor and limit.")
+                    return self.reply(200, field_execution.inspect(field, int(args.get("after", ["0"])[0]), int(args.get("limit", ["25"])[0])))
+                except (ValueError, TypeError, KeyError) as exc:
+                    return self.reply(422, {"error": str(exc)})
+            if url.path in ("/customer-finance", "/customer-finance.js", "/development", "/development.js"):
+                names = {"/customer-finance": "customer-finance.html", "/customer-finance.js": "customer-finance.js",
+                         "/development": "development.html", "/development.js": "development.js"}
+                return self.static(Path(__file__).with_name(names[url.path]))
+            if url.path in ("/api/customer-finance", "/api/payment-intents", "/api/development"):
+                try:
+                    args = parse_qs(url.query, keep_blank_values=True)
+                    allowed = ({"premise"} if url.path == "/api/customer-finance" else
+                               {"after", "limit"} if url.path == "/api/payment-intents" else {"projectId", "offset", "limit"})
+                    if set(args)-allowed or any(len(v) != 1 for v in args.values()):
+                        raise ValueError("Use only the supported selection and page parameters.")
+                    if url.path == "/api/customer-finance":
+                        result = customer_finance.inspect(world, args["premise"][0])
+                    elif url.path == "/api/payment-intents":
+                        result = customer_finance.ready(world, int(args.get("after", ["0"])[0]), int(args.get("limit", ["25"])[0]))
+                    else:
+                        result = development.inspect(world, args.get("projectId", [None])[0],
+                                                     int(args.get("offset", ["0"])[0]), int(args.get("limit", ["25"])[0]))
+                    return self.reply(200, result)
+                except (ValueError, TypeError, KeyError) as exc:
+                    return self.reply(422, {"error": str(exc)})
             if url.path in ("/contacts", "/contacts.js"):
                 return self.static(Path(__file__).with_name("contacts.html" if url.path == "/contacts" else "contacts.js"))
             if url.path in ("/api/contacts", "/api/contact-intents"):
@@ -188,7 +233,20 @@ def make_server(world, port=8026, viewer_dir=None):
                 else:
                     if p.get("environmentId") != world.status().get("environmentId"):
                         raise ValueError("Environment mismatch.")
-                    if self.path == "/api/contacts":
+                    if self.path in ("/api/field-execution", "/api/field-execution/run-due"):
+                        if field is None:
+                            return self.reply(503, {"error": "Field execution requires a separate --field-db database."})
+                        if self.path.endswith("/run-due"):
+                            if set(p) != {"environmentId", "worldFingerprint", "effectiveDate"}:
+                                raise ValueError("Provide the world identity and current date when running due field work.")
+                            result = field_execution.run_due(field, p)
+                        else:
+                            result = field_execution.command(field, p)
+                    elif self.path == "/api/customer-finance":
+                        result = customer_finance.command(world, p)
+                    elif self.path == "/api/development":
+                        result = development.command(world, p)
+                    elif self.path == "/api/contacts":
                         result = contacts.command(world, p)
                     elif self.path == "/api/water-mains":
                         result = water_mains.command(world, p)
@@ -232,9 +290,10 @@ def main():
     parser.add_argument("--db", required=True)
     parser.add_argument("--port", type=int, default=8026)
     parser.add_argument("--viewer-dir", help="Existing town-viewer dist directory with vendored Three.js")
+    parser.add_argument("--field-db", help="Optional separate SQLite field/workforce store for administrator field controls")
     parser.add_argument("--open-map", action="store_true", help="Open the durable world map in the default browser")
     args = parser.parse_args()
-    server = make_server(World(args.db), args.port, args.viewer_dir)
+    server = make_server(World(args.db), args.port, args.viewer_dir, args.field_db)
     print(f"UtilitySim world: http://127.0.0.1:{server.server_port}/", flush=True)
     if args.open_map:
         import webbrowser
