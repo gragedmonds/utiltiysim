@@ -850,5 +850,13 @@
       0.5,
       1
     ]
-  }
+  },
+  "quickPages": [
+    "identity",
+    "services",
+    "size",
+    "region",
+    "meter-mix",
+    "review"
+  ]
 }

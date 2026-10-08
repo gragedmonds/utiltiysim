@@ -16,6 +16,15 @@ cannot create a local durable world. Metrics fitting and conversational setup
 remain available from the first page.
 
 Setup is saved to the existing simulation library after each accepted change.
+New setups default to **Quick setup**: six screens covering identity, services,
+town size, region, meter mix, and review. Remaining settings keep their engine
+defaults or previously tuned values. **Full setup** exposes all refinement pages.
+The first-page cards and sidebar switch let users change paths without losing
+values or pins. Existing drafts keep their full path and current page. Review
+and engine validation include all active settings even when Quick setup hides
+their individual pages. The backend catalogue's `quickPages` list defines the
+short path.
+
 The URL identifies the current draft, so refreshing resumes the same page.
 Users can jump between sections, search across all settings, or review at any
 point. Navigation stops at an invalid input. Final checks validate the complete

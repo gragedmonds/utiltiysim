@@ -26,10 +26,12 @@ export function initialize(draft,data,{local=false,fresh=false}={}){
   const pins={};if(!fresh)for(const [scope,bucket] of Object.entries(BUCKET))for(const path of Object.keys(flatten(draft[bucket])))pins[scope+':'+path]=true;
   draft.guidedSetup={version:1,page:'identity',mode:fresh&&local?'world':'studio',pins,choices:{},suggestions:{}};
  }
- const state=draft.guidedSetup;state.pins??={};state.choices??={};state.suggestions??={};
+ const state=draft.guidedSetup;state.pins??={};state.choices??={};state.suggestions??={};state.pace??=fresh?'quick':'full';
  draft.goals?.length||(draft.goals=['everything']);draft.name||='My utility';
  return state;
 }
+export function visiblePages(pages,state,catalogue){const modePages=pages.filter(p=>!p.mode||p.mode===state.mode);return state.pace==='quick'?modePages.filter(p=>(catalogue.quickPages||['identity','services','size','region','meter-mix','review']).includes(p.id)):modePages;}
+export function changePace(draft,pace,pages,catalogue){if(!['quick','full'].includes(pace))throw Error('Choose Quick setup or Full setup.');const state=draft.guidedSetup;state.pace=pace;if(!visiblePages(pages,state,catalogue).some(p=>p.id===state.page))state.page='identity';}
 export function valueOf(draft,data,field){if(field.scope==='town'&&field.path==='town.houses'&&draft.guidedSetup?.mode==='studio'&&draft.execution==='local'&&draft.totalHomes)return draft.totalHomes;const exact=at(draft[BUCKET[field.scope]],field.path);return exact===undefined?at(data.defaults[field.scope],field.path)??field.default:exact;}
 export function fieldAt(fields,id){
  const direct=fields.find(f=>f.id===id);if(direct)return direct;

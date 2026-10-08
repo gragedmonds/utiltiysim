@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {fieldsFor,pagesFor,initialize,setValue,applyChoice,resetValue,meterMix,moveBoundary,setMix,sliderFor,fieldAt} from '../dist/guided-model.js';
+import {fieldsFor,pagesFor,initialize,setValue,applyChoice,resetValue,meterMix,moveBoundary,setMix,sliderFor,fieldAt,visiblePages,changePace} from '../dist/guided-model.js';
 import {worldRequest} from '../dist/guided-setup.js';
 
 const schema=JSON.parse(readFileSync(new URL('../../../schemas/config.schema.json',import.meta.url)));
@@ -10,6 +10,19 @@ const run={...schema,properties:Object.fromEntries(Object.entries(schema.propert
 const data={wizard,schemas:{town:schema,run},defaults:{town:{town:{houses:500,era_core_year:1925,era_span_years:85,era_noise_years:8},ami:{ami_route_share:.4,amr_route_share:.4}},run:{}}};
 const fields=fieldsFor(data);
 const draft=()=>{const d={name:'Test utility',townOverrides:{},settings:{},operations:{}};initialize(d,data,{fresh:true,local:true});return d;};
+
+test('quick setup has six essential screens and switching paths preserves tuned configuration',()=>{
+ const d=draft(),pages=pagesFor(data,fields);assert.equal(d.guidedSetup.pace,'quick');
+ assert.deepEqual(visiblePages(pages,d.guidedSetup,wizard).map(p=>p.id),['identity','services','size','region','meter-mix','review']);
+ setValue(d,data,fields,'town:town.era_noise_years',7);const saved=structuredClone(d);
+ changePace(d,'full',pages,wizard);d.guidedSetup.page='home-age';changePace(d,'quick',pages,wizard);
+ assert.equal(d.guidedSetup.page,'identity');assert.deepEqual(d.townOverrides,saved.townOverrides);
+ assert.deepEqual(d.guidedSetup.pins,saved.guidedSetup.pins);
+ d.guidedSetup.page='meter-mix';changePace(d,'full',pages,wizard);assert.equal(d.guidedSetup.page,'meter-mix');
+ assert.ok(visiblePages(pages,d.guidedSetup,wizard).length>6);
+ const existing={townOverrides:{},guidedSetup:{page:'home-age',mode:'studio'}};initialize(existing,data);
+ assert.equal(existing.guidedSetup.pace,'full');assert.equal(existing.guidedSetup.page,'home-age');
+});
 
 test('all generation and annual settings have exactly one page, with at most four top-level controls',()=>{
  const pages=pagesFor(data,fields),ids=pages.flatMap(p=>p.fields.map(f=>f.id));
