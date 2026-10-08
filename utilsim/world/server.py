@@ -13,6 +13,7 @@ from . import (
     cruise,
     customer_finance,
     development,
+    field_cancellation,
     field_execution,
     field_reporting,
     field_water_mains,
@@ -308,6 +309,10 @@ def make_server(world, port=8026, viewer_dir=None, field_db=None, cruise_worker=
                         if p.get("action") in ("start", "resume") and (not cruise_worker or self.server.cruise_worker_error):
                             return self.reply(503, {"error": "Cruise worker is unavailable. Restart the local server before changing this run."})
                         result = cruise.command(world, p, field)
+                    elif self.path == "/api/field-assignment-lifecycle":
+                        if field is None:
+                            return self.reply(503, {"error": "Field assignment lifecycle requires a separate --field-db database."})
+                        result = field_cancellation.command(field, p)
                     elif self.path == "/api/field-main-phases":
                         if field is None:
                             return self.reply(503, {"error": "Field main phases require a separate --field-db database."})
