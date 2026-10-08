@@ -1,9 +1,15 @@
-# Durable field execution: water-service repair
+# Durable field execution and report delivery
 
 This slice executes an accepted downstream water-leak assignment with a real
 physical repair. Its acknowledgement and report are separate durable messages.
 Absent, delayed, rejected, or lost delivery never undoes a committed repair and
 never closes an enterprise order.
+
+The later [four-domain extension](WORLD_FIELD_OPERATIONS.md) adds assigned
+electricity/gas network-edge restoration and sewer-lateral clearance through
+this same field store, capacity ledger and report lifecycle. The original water
+walkthrough below remains valid. New operations require their matching crew
+skills and target identities; they do not authorize enterprise order closure.
 
 ## Owners and authorization
 
@@ -141,7 +147,7 @@ workforce/capacity bookings. Capacity is a daily visit count; shift is weekday
 availability. Travel, hours, access failures, unsafe work, multi-person crews,
 materials, cancellation/reassignment, report corrections, shared workforce
 reservations and live dispatch authentication remain unimplemented. Electric/gas
-restoration, water-main repair and sewer clearance need operation-specific broker
-adapters through their existing handlers; they must reuse this assignment,
-recovery and report lifecycle, rather than create competing field queues. No
-four-domain field completion or SAP fidelity is claimed.
+restoration and sewer clearance now use operation-specific brokers through their
+existing handlers; see the extension above. Water-main isolation/repair/flush
+phases still need separate field operations. Four-domain end-to-end enterprise
+completion and SAP fidelity remain outstanding.

@@ -198,3 +198,13 @@ recovery. The local server owns execution, so closing the page does not stop the
 run. Shared-runtime worlds retain their existing clock owner. Browser acceptance
 uses a copied 608-property town; a separate one-premise five-year replay verifies
 restart equivalence without establishing the large-town performance target.
+
+## Four-domain field operations
+
+The existing [field owner](WORLD_FIELD_OPERATIONS.md) now supports water-leak
+repair, electricity/gas network-edge restoration and sewer-lateral clearance.
+Matching skills, persisted assignments and daily capacity govern execution.
+Each operation calls the same physical handler as its administrator command;
+field report delivery and enterprise acceptance remain separate. Local cruise
+can process these operations before each physical day. Water-main work phases,
+travel and actual enterprise dispatch/acceptance remain open.

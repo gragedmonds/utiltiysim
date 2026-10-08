@@ -79,3 +79,63 @@ gas pressure.
 recovery, transaction rollback, no-fault visits, skill and commissioning
 revalidation, report schemas, multi-fault outages, sewer conservation, shared
 capacity and preserved administrator authorization.
+
+## Desktop walkthrough and repeatable checks
+
+Start the existing local server with an explicit separate field file, then open
+`/field-execution`:
+
+```powershell
+python -m utilsim.world.server --db out/demo/world.sqlite --field-db out/demo/field.sqlite --port 8044 --viewer-dir packages/town-viewer/dist
+```
+
+The crew form edits skills without replacing saved weekdays or zero capacity.
+Choose an operation when accepting an assignment; the screen explains the target
+identity and links to the corresponding administrator inspection page. Save a
+real enterprise reference only when supplied by its authorized integration; the
+local scenario form does not validate an enterprise order. Run due work manually
+or choose a target in `/cruise`. The assignment list distinguishes physical
+execution from each message's availability and delivery state.
+
+```powershell
+python scripts/check_world_field_operations.py --db SOURCE.sqlite --viewer-dir packages/town-viewer/dist --out out/field/new-browser-run
+python scripts/check_world_field_capacity.py --db SOURCE.sqlite --out out/field/new-capacity-run
+```
+
+Both commands use copied worlds and refuse existing output directories. The
+browser fixture requires a saved town with occupied water service and two serial
+enabled bridges on a commissioned electric/gas supply path. The capacity fixture
+requires nine eligible targets per metered utility and eight sewer services.
+
+The 8 October 2026 browser run used a 608-property neighborhood. A multiskilled
+crew with one daily visit completed six assignments across four operations over
+six days. Electricity and gas stayed interrupted until both serial faults were
+repaired, then readings matched an independent same-seed baseline. Sewer balances
+preserved stored volume and excluded the downstream water leak. Twelve field
+messages remained pending; no recipient was invented.
+
+The child server was terminated after electric repair committed but before its
+field report committed. Restart recovered one repair and the original visit
+date. A lost assignment response followed by reload and exact retry created one
+assignment. Both 1440- and 1024-pixel desktop views had no page overflow or browser
+errors. Source bytes, historical observations/events and saved map geometry were
+unchanged. Evidence and screenshots are in
+`out/field-operations-acceptance-final/acceptance.json`.
+
+The packaged capacity check used identical pre-run world hashes and 35 explicit
+faults: nine each for water/electric/gas, eight for sewer. Under fixed all-week
+shifts and one visit per crew/day, seven crews completed on day five, while five
+crews completed on day seven. On day five the backlogs were zero and ten. Both
+runs retained 35 pending reports with no delivery attempts; each conserved all
+5,950 sewer flow rows across ten days. Source hashes were unchanged. Evidence is
+in `out/field-capacity-release/result.json`.
+
+This single deterministic diagnostic allocates assignments round-robin as an
+explicit fixture assumption. It does not implement operational dispatch, measure
+uncertainty, compare the complete utility workforce, or establish the large-town
+performance target.
+
+The final focused checks passed 26 operation tests, eight HTTP checks, nine field
+screen tests (including three existing crew-form regressions), 291 viewer tests
+and eleven conformance checks. Backend review found no additional defects. These
+owners use SQLite; no PostgreSQL schema or private enterprise code changed.

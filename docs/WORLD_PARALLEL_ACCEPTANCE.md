@@ -8,12 +8,16 @@ screens. Existing town geometry, earlier observations and other demos are kept.
 |---|---|---|
 | Customer cash | Delivered invoice knowledge, cash constraints, seeded payment intentions, reservations, simulated settlements and full returns | Actual enterprise invoice delivery and payment-provider adapters; partial receipts and broader household income models |
 | Development | Saved vacant property progresses through construction, commissioned services and dated occupancy; pause/failure retains unfinished work; delayed service notices | New parcels/network construction and enterprise service/account creation |
-| Field execution | Explicit separate store, plumbing crews, weekday availability, finite daily visits, assigned repair, durable reports and crash recovery | Hourly travel/reservations, remaining utility operations and enterprise dispatch/acceptance integration |
+| Field execution | Explicit separate store, skills, weekday availability, finite daily visits, assigned water repair, electricity/gas edge restoration, sewer clearance, durable reports and crash recovery | Hourly travel/reservations, staged water-main operations and enterprise dispatch/acceptance integration |
 
 The local screens are administrator scenario controls, not worker authentication
 or SAP replicas. Invoice and order references in the acceptance scenario are
 explicit test fixtures. Receiving a transport acknowledgment never closes an
 enterprise order or posts a financial journal.
+
+The [four-domain field extension](WORLD_FIELD_OPERATIONS.md) supplies the later
+operation/skill additions; the acceptance narrative below records the original
+three-component release and its water-repair scenario.
 
 ## Launch on an existing initialized world
 
