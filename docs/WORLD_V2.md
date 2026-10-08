@@ -30,6 +30,12 @@ All date ranges are **start inclusive, end exclusive**. The displayed cursor is 
 
 ## Physical behavior
 
+[Dated physical occupancy](WORLD_OCCUPANCY.md) adds working schedule/cancel controls
+for vacancies and population changes. Plans apply inside the daily transaction,
+change future demand, and remain hidden from operational consumers. Current map
+inspection reflects the applied state; original town snapshots and prior readings
+remain unchanged. Commercial move-in/out and final billing remain separate work.
+
 The first daily model adjusts generated July demand for seeded temperature, heating fuel, cooling and occupancy. It is an illustrative model, not a calibrated forecast or a replacement for the existing detailed network solvers. Base annual meter-failure probability is 0.015, increased with age; drift probability is 0.01. Both are configurable when initializing a world. Failure produces missing observations; drift changes the observed quantity without changing hidden actual consumption.
 
 Meters with future commissioning dates produce no early readings. `serviceFrom` communicates their original commissioning date to consumers so they can provision service deliberately. Physical replacement resets device condition before the next unprocessed day, records the work-order reference and preserves historic observation/device identities. The work-order reference is recorded but is not yet verified against an external work-order service.

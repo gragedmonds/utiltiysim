@@ -7,6 +7,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlsplit
 
+from . import occupancy
 from .map_view import WorldMap
 from .store import World
 
@@ -35,6 +36,17 @@ def make_server(world, port=8026, viewer_dir=None):
             if self.path == "/":
                 return self.reply(200, Path(__file__).with_name("index.html").read_bytes(), True)
             url = urlsplit(self.path)
+            if url.path in ("/occupancy", "/occupancy.js"):
+                return self.static(Path(__file__).with_name("occupancy.html" if url.path == "/occupancy" else "occupancy.js"))
+            if url.path == "/api/occupancy":
+                try:
+                    args = parse_qs(url.query, keep_blank_values=True)
+                    if set(args) - {"premiseId", "before"} or any(len(v) != 1 for v in args.values()):
+                        raise ValueError("Use a single premise ID and optional history cursor.")
+                    return self.reply(200, occupancy.inspect(world, args["premiseId"][0],
+                                                            int(args["before"][0]) if "before" in args else None))
+                except (ValueError, TypeError, KeyError) as exc:
+                    return self.reply(422, {"error": str(exc)})
             if url.path in ("/map", "/map.js"):
                 if not (viewer / "vendor/three.module.js").is_file():
                     return self.reply(503, {"error": "Map assets unavailable. Run npm install in packages/town-viewer, or provide --viewer-dir."})
@@ -62,7 +74,7 @@ def make_server(world, port=8026, viewer_dir=None):
             with world.db() as db:
                 result = world._status(db)
                 meta = world.metadata(db)
-                result.update(start=meta.get("start"), settings=meta.get("settings"),
+                result.update(start=meta.get("start"), settings=meta.get("settings"), worldFingerprint=meta.get("fingerprint"),
                               managedDelivery=db.execute("SELECT 1 FROM observation_delivery_configuration").fetchone() is not None,
                               weather=[dict(r) for r in db.execute("SELECT * FROM days ORDER BY day DESC LIMIT 60")],
                               assets=[{**dict(r), "profile": json.loads(r["profile"])}
@@ -97,12 +109,16 @@ def make_server(world, port=8026, viewer_dir=None):
                 if not 0 < size <= 64 * 1024 * 1024:
                     return self.reply(413, {"error": "Request too large or empty."})
                 p = json.loads(self.rfile.read(size))
+                if not isinstance(p, dict):
+                    raise ValueError("JSON object required.")
                 if self.path == "/api/init":
                     result = world.initialize(p["snapshot"], p["environmentId"], p["start"], p.get("settings"))
                 else:
                     if p.get("environmentId") != world.status().get("environmentId"):
                         raise ValueError("Environment mismatch.")
-                    if self.path == "/api/advance":
+                    if self.path == "/api/occupancy":
+                        result = occupancy.command(world, p)
+                    elif self.path == "/api/advance":
                         with world.db() as db:
                             if db.execute("SELECT 1 FROM observation_delivery_configuration").fetchone():
                                 raise ValueError("This world uses shared delivery. Advance it from the shared runtime control panel.")

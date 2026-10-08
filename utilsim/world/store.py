@@ -145,28 +145,33 @@ class World:
         occupancy = 1.0 if occupied else 0.12
         floor = float(p.get("floorAreaM2") or 100)
         people = float(p.get("occupants") or 0)
+        baseline_people = float(p.get("occupancyBaselinePeople", people))
+        # Opt-in occupancy model: preserve the original reference loads. Water
+        # scales with population; half the electric/gas base load is fixed.
+        ratio = people / max(1, baseline_people) if occupied and "occupancyBaselinePeople" in p else 1.0
+        base_scale = 0.5 + 0.5 * ratio
         heating = max(0, 18 - temperature) * floor * 0.045
         cooling = max(0, temperature - 20) * floor * 0.018 if p.get("hasAC") else 0
         commodity = asset["commodity"]
         if commodity == "electric":
-            base = float(p.get("dailyKWh") or (4 + 0.03 * floor + 1.5 * people))
+            base = float(p.get("dailyKWh") or (4 + 0.03 * floor + 1.5 * baseline_people))
             heat = heating / 2.6 if p.get("heatingFuel") == "heat_pump" else (
                 heating if p.get("heatingFuel") == "electric_resistance" else 0)
             # Snapshot demand is a July reference day; adjust its cooling contribution
             # instead of adding a second full summer cooling load.
             reference_cooling = 4 * floor * 0.018 if p.get("hasAC") else 0
-            value = max(0, base - reference_cooling) * occupancy + heat + cooling * occupancy
+            value = max(0, base - reference_cooling) * occupancy * base_scale + heat + cooling * occupancy
         elif commodity == "gas":
-            value = float(p.get("dailyGasM3") or 0.3) * occupancy
+            value = float(p.get("dailyGasM3") or 0.3) * occupancy * base_scale
             if p.get("heatingFuel") == "gas":
                 value += heating / (0.92 * 10.35) * (1 if occupied else 0.6)
         else:
-            value = float(p.get("dailyWaterM3") or 0.22 * people) * occupancy
+            value = float(p.get("dailyWaterM3") or 0.22 * baseline_people) * occupancy * ratio
         return max(0, value * (0.9 + 0.2 * draw(seed, day, asset["premise"], "demand")))
 
     def advance(self, through):
         """Process [current date, through), committing each day and its checkpoint atomically."""
-        from . import registers
+        from . import occupancy, registers
 
         target = date.fromisoformat(through)
         if target.isoformat() != through:
@@ -182,6 +187,7 @@ class World:
                 if day == target:
                     return self._status(db)
                 s, seed, ds, env = meta["settings"], meta["seed"], day.isoformat(), meta["environment"]
+                occupancy.apply_due(self, db, ds, env)
                 center = (s["winter_mean_c"] + s["summer_mean_c"]) / 2
                 amplitude = (s["summer_mean_c"] - s["winter_mean_c"]) / 2
                 temperature = round(center - amplitude * math.cos(2 * math.pi * (day.timetuple().tm_yday - 15)
