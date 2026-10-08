@@ -1,5 +1,10 @@
 # UtilitySim v2 world runtime
 
+Latest field extension: [independent crew reporting](WORLD_FIELD_REPORTING.md)
+adds `/field-reporting` administrator controls for missing, late and incorrect
+claims. Physical visits, submitted claims and transport receipts remain separate;
+the existing automatic-report behavior is preserved.
+
 The new `utilsim.world` package advances physical reality independently of billing software. It imports an existing `utility-town/2.0` snapshot, preserves its geography, and stores daily weather, demand, meter condition, observable readings and a restart checkpoint. The original generator, viewer and meter-to-cash engine remain available while their responsibilities are migrated.
 
 ## Ownership

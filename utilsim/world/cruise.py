@@ -173,6 +173,18 @@ def inspect(world, field=None):
 
 
 @contextmanager
+def synchronized_action(world):
+    """Serialize a local dated action with ticks without taking clock ownership.
+
+    Report submission and policy configuration may occur while cruise is active.
+    They must see one stable simulation date and never interleave a partial tick.
+    Acquire this before owner database transactions to retain the clock lock order.
+    """
+    with _exclusive(world, wait_seconds=10):
+        yield
+
+
+@contextmanager
 def manual_control(world, field=None):
     """Use around manual advance and field execute/run_due to close HTTP races."""
     with _exclusive(world):

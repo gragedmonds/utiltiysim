@@ -14,6 +14,7 @@ from . import (
     customer_finance,
     development,
     field_execution,
+    field_reporting,
     hazards,
     network_faults,
     occupancy,
@@ -105,6 +106,19 @@ def make_server(world, port=8026, viewer_dir=None, field_db=None, cruise_worker=
                     return self.reply(422, {"error": str(exc)})
             if url.path in ("/field-execution", "/field-execution.js"):
                 return self.static(Path(__file__).with_name("field_execution.html" if url.path == "/field-execution" else "field_execution.js"))
+            if url.path in ("/field-reporting", "/field-reporting.js"):
+                return self.static(Path(__file__).with_name("field_reporting.html" if url.path == "/field-reporting" else "field_reporting.js"))
+            if url.path == "/api/field-reporting":
+                if field is None:
+                    return self.reply(503, {"error": "Field reporting requires a separate --field-db database."})
+                try:
+                    args = parse_qs(url.query, keep_blank_values=True)
+                    if set(args)-{"after", "limit"} or any(len(v) != 1 for v in args.values()):
+                        raise ValueError("Use one optional field cursor and limit.")
+                    return self.reply(200, field_reporting.inspect(field, limit=int(args.get("limit", ["25"])[0]),
+                                                                   after=int(args.get("after", ["0"])[0])))
+                except (ValueError, TypeError, KeyError) as exc:
+                    return self.reply(422, {"error": str(exc)})
             if url.path == "/api/field-execution":
                 if field is None:
                     return self.reply(503, {"error": "Field execution is not configured. Start with --field-db pointing to a separate field database."})
@@ -293,6 +307,10 @@ def make_server(world, port=8026, viewer_dir=None, field_db=None, cruise_worker=
                         if p.get("action") in ("start", "resume") and (not cruise_worker or self.server.cruise_worker_error):
                             return self.reply(503, {"error": "Cruise worker is unavailable. Restart the local server before changing this run."})
                         result = cruise.command(world, p, field)
+                    elif self.path == "/api/field-reporting":
+                        if field is None:
+                            return self.reply(503, {"error": "Field reporting requires a separate --field-db database."})
+                        result = field_reporting.command(field, p)
                     elif self.path in ("/api/field-execution", "/api/field-execution/run-due"):
                         if field is None:
                             return self.reply(503, {"error": "Field execution requires a separate --field-db database."})

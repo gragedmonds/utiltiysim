@@ -110,3 +110,15 @@ test('assignment rows display operation and required skill without changing shar
  for(const label of ['Repair water leak','Restore electric supply','Restore gas supply','Clear sewer blockage'])assert.ok(ui.elements.history.innerHTML.includes(label));
  assert.match(ui.elements.crews.textContent,/2 visits\/day shared across/);
 });
+
+test('late manual reports use message schema instead of immutable visit result report ID',async()=>{
+ const item={state:'executed',assignment:{operation:'repair-water-leak',assignmentId:'A1',orderId:'O1',orderRevision:1,
+  assetId:'water',crewId:'crew-plumbing',scheduledDate:'2026-01-01'},
+  result:{outcome:'completed',effectiveDate:'2026-01-01',reportId:null},messages:[
+   {id:'ack',schema:'field-ack/1',state:'received',available_day:'2026-01-01',attempts:1},
+   {id:'manual-report',schema:'field-report/1',state:'pending',available_day:'2026-01-04',attempts:0}]};
+ const ui=await screen({items:[item]});
+ assert.equal((ui.elements.history.innerHTML.match(/Dispatch acknowledgement:/g)||[]).length,1);
+ assert.equal((ui.elements.history.innerHTML.match(/Report:/g)||[]).length,1);
+ assert.equal(item.result.reportId,null);
+});

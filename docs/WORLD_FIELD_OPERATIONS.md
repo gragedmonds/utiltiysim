@@ -54,7 +54,11 @@ transaction leaves both the active fault and visit available for retry. A
 
 ## Reports and physical limits
 
-Reports contain the legitimate on-site finding and outcome. Network reports say
+Default automatic reports contain the legitimate on-site finding and outcome.
+The opt-in [independent reporting policy](WORLD_FIELD_REPORTING.md) instead
+records what a crew claims, which can be incorrect or absent. Recipients must
+retain that distinction and independently accept or reject evidence.
+Network reports say
 the assigned edge was repaired and wider service restoration was not verified;
 another fault can still interrupt supply. Sewer clearance leaves retained
 wastewater intact for transport, storage and overflow calculation on the next

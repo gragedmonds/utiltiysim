@@ -41,6 +41,7 @@ def _owned_store(db, binding):
         "field_assignments": "sequence id crew asset order_id order_revision scheduled_day report_delay_days "
                              "payload checksum accepted_event state executed_day result",
         "field_outbox": "sequence id assignment available_day envelope checksum state attempts receipt last_error",
+        "field_reporting": "assignment revision assignment_checksum report_mode work_mode event_id",
     }
     indexes = {"field_assignment_due", "field_crew_usage", "field_outbox_due"}
     tables = {r["name"] for r in objects if r["type"] == "table"}
@@ -60,7 +61,13 @@ def _owned_store(db, binding):
         raise ValueError("Existing database has no valid field ownership record; it was not changed.")
     if stored_binding != binding:
         raise ValueError("Field database belongs to another world or owner.")
-    if tables != (set(columns) if enabled(db) else {"meta", "commands", "events"}):
+    from . import field_reporting
+    expected = set(columns) - {"field_reporting"} if enabled(db) else {"meta", "commands", "events"}
+    if field_reporting.enabled(db):
+        if not enabled(db):
+            raise ValueError("Reporting schema requires a recognized enabled field execution store.")
+        expected.add("field_reporting")
+    if tables != expected:
         raise ValueError("Existing database has an incomplete field schema; it was not changed.")
     return True
 
@@ -238,10 +245,11 @@ def _physical_key(field, row):
     return "field-physical-" + stable(field.owner_id, row["id"])
 
 
-def _physical_result(field, row):
+def _physical_result(field, row, policy=None):
+    from .field_reporting import binding
     with field.world.db() as db:
         old = db.execute("SELECT payload,result FROM commands WHERE id=?", (_physical_key(field, row),)).fetchone()
-        if old and old["payload"] != canonical({"owner": field.owner_id, "assignmentChecksum": row["checksum"]}):
+        if old and old["payload"] != canonical(binding(field, row, policy)):
             raise ValueError("Conflicting physical assignment retry.")
         return json.loads(old["result"]) if old else None
 
@@ -281,7 +289,9 @@ def _physical(field, field_db, meta, row, actor):
     World commits its own idempotency journal with the repair. A crash before the
     field commit is recovered from that journal; it cannot repeat the repair.
     """
-    prior = _physical_result(field, row)
+    from .field_reporting import binding, policy
+    reporting = policy(field_db, row)
+    prior = _physical_result(field, row, reporting)
     if prior:
         return prior
     unavailable = _availability(field_db, row, meta["through"])
@@ -303,7 +313,7 @@ def _physical(field, field_db, meta, row, actor):
             current, repair = network_faults.state(db, skill, row["asset"]), network_faults._restore
         result = None
         identity = _physical_key(field, row)
-        if current["active"]:
+        if current["active"] and reporting["workMode"] == "perform":
             result = repair(world, db, meta, {
                 "schemaVersion": VERSION, "commandId": identity, "actorId": actor,
                 **target, "faultId": current["active"]["id"],
@@ -316,8 +326,10 @@ def _physical(field, field_db, meta, row, actor):
         # Only legitimate on-site findings cross back to the workforce owner.
         observation = {"outcome": "completed" if result else "not_found", "effectiveDate": meta["through"],
                        "physicalEventId": result["eventId"] if result else None}
+        if reporting["workMode"] == "inspect-only":
+            observation["outcome"] = "not_attempted"
         db.execute("INSERT INTO commands VALUES(?,?,?)", (identity,
-                   canonical({"owner": field.owner_id, "assignmentChecksum": row["checksum"]}), canonical(observation)))
+                   canonical(binding(field, row, reporting)), canonical(observation)))
         return observation
 
 
@@ -337,16 +349,7 @@ def _availability(db, row, day):
     return None
 
 
-def _execute(world, db, meta, row, actor, cause):
-    if actor != row["crew"]:
-        raise ValueError("Only the assigned crew may execute this assignment.")
-    if row["state"] == "executed":
-        return json.loads(row["result"])
-    recorded_day = meta["through"]
-    physical = _physical(world, db, meta, row, actor)
-    meta = {**meta, "through": physical["effectiveDate"]}
-    outcome = physical["outcome"]
-    operation = json.loads(row["payload"])["operation"]
+def _narrative(operation, outcome):
     finding, action = {
         OPERATION: ("downstream leak", "Repair completed"),
         "restore-electric-supply": ("electric edge fault", "Assigned edge repaired; wider service restoration not verified"),
@@ -355,18 +358,36 @@ def _execute(world, db, meta, row, actor, cause):
     }[operation]
     inspection = "On-site plumbing inspection" if operation == OPERATION else "On-site inspection"
     article = "an" if operation == "restore-electric-supply" else "a"
-    observed = (f"{inspection} found {article} {finding}. {action}." if outcome == "completed"
-                else f"{inspection} found no active {finding}.")
+    return (f"{inspection} found {article} {finding}. {action}." if outcome == "completed"
+            else f"{inspection} found no active {finding}.")
+
+
+def _report_data(world, meta, row, actor, outcome):
+    return {"order_id": row["order_id"], "revision": row["order_revision"],
+            "report_ref": "REPORT-" + stable(meta["environment"], world.owner_id, row["id"]), "outcome": outcome,
+            "submitted_at": meta["through"] + "T00:00:00Z", "crew_ref": actor,
+            "observations": _narrative(json.loads(row["payload"])["operation"], outcome), "attachments": []}
+
+
+def _execute(world, db, meta, row, actor, cause):
+    from .field_reporting import policy
+    if actor != row["crew"]:
+        raise ValueError("Only the assigned crew may execute this assignment.")
+    if row["state"] == "executed":
+        return json.loads(row["result"])
+    recorded_day = meta["through"]
+    physical = _physical(world, db, meta, row, actor)
+    meta = {**meta, "through": physical["effectiveDate"]}
+    outcome = physical["outcome"]
     event = world.event(db, meta["environment"], meta["through"], "FieldVisitExecuted", row["asset"],
                         {"assignmentId": row["id"], "actorId": actor, "orderId": row["order_id"],
                          "authorizationEventId": row["accepted_event"], "outcome": outcome,
                          "physicalEventId": physical["physicalEventId"]}, cause)
-    data = {"order_id": row["order_id"], "revision": row["order_revision"],
-            "report_ref": "REPORT-" + stable(meta["environment"], world.owner_id, row["id"]), "outcome": outcome,
-            "submitted_at": meta["through"] + "T00:00:00Z", "crew_ref": actor,
-            "observations": observed, "attachments": []}
-    available = max(recorded_day, (date.fromisoformat(meta["through"]) + timedelta(days=row["report_delay_days"])).isoformat())
-    report_id = _enqueue(world, db, meta, row, "report", data, event, available)
+    report_id = None
+    if policy(db, row)["reportMode"] == "automatic":
+        data = _report_data(world, meta, row, actor, outcome)
+        available = max(recorded_day, (date.fromisoformat(meta["through"]) + timedelta(days=row["report_delay_days"])).isoformat())
+        report_id = _enqueue(world, db, meta, row, "report", data, event, available)
     result = {"assignmentId": row["id"], "state": "executed", "outcome": outcome, "eventId": event,
               "physicalEventId": physical["physicalEventId"], "reportId": report_id,
               "effectiveDate": meta["through"], "actorId": actor}
@@ -377,10 +398,11 @@ def _execute(world, db, meta, row, actor, cause):
 
 def _recover(field, db, meta):
     """Reconcile committed physical actions before allocating another crew slot."""
+    from .field_reporting import policy
     rows = db.execute("SELECT id FROM field_assignments WHERE state='accepted' ORDER BY sequence").fetchall()
     for candidate in rows:
         row = _assignment(db, candidate["id"])
-        if _physical_result(field, row):
+        if _physical_result(field, row, policy(db, row)):
             _execute(field, db, meta, row, row["crew"], row["accepted_event"])
 
 
@@ -584,9 +606,15 @@ def inspect(world, after=0, limit=25):
         items = []
         for row in rows[:limit]:
             assignment = _assignment(db, row["id"])
-            messages = [dict(r) for r in db.execute(
-                "SELECT id,state,attempts,last_error,available_day FROM field_outbox WHERE assignment=? ORDER BY sequence",
-                (row["id"],))]
+            messages = []
+            for message in db.execute("SELECT * FROM field_outbox WHERE assignment=? ORDER BY sequence", (row["id"],)):
+                envelope = json.loads(message["envelope"])
+                if (checksum(envelope) != message["checksum"] or envelope.get("id") != message["id"]
+                        or envelope.get("correlation_id") != row["id"]
+                        or envelope.get("schema") not in ("field-ack/1", "field-report/1")):
+                    raise ValueError("Stored field message checksum or assignment association mismatch.")
+                messages.append({**{k: message[k] for k in ("id", "state", "attempts", "last_error", "available_day")},
+                                 "schema": envelope["schema"]})
             items.append({"assignment": json.loads(assignment["payload"]), "state": row["state"],
                           "result": json.loads(row["result"]) if row["result"] else None, "messages": messages,
                           "blockedReason": _availability(db, row, meta["through"]) if row["state"] == "accepted" else None})

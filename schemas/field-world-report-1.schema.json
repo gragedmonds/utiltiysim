@@ -1,7 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "field-world-report-1.schema.json",
-  "title": "UtilitySim field-report/1 observable on-site evidence",
+  "title": "UtilitySim field-report/1 submitted on-site report",
+  "description": "A crew claim for recipient review, not proof of physical repair or enterprise acceptance. Manual submissions can be incorrect. Physical truth remains with the world owner.",
   "type": "object",
   "additionalProperties": false,
   "required": ["specversion", "id", "source", "type", "schema", "instance_id", "subject", "time", "business_time", "correlation_id", "causation_id", "data"],
