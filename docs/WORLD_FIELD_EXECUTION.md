@@ -23,9 +23,10 @@ checkpoint; independently rolling either file back is not supported.
 Opening a pre-existing file first checks its field-owned schema and binding,
 before any schema or record writes. Unrelated stores, partial schemas and other
 world/owner bindings are rejected without adoption. Fresh or empty databases and
-matching field databases are supported. Routine field status, execution and
-delivery read only the physical environment, fingerprint and clock metadata;
-they do not decode physical catalogs.
+matching field databases are supported. Routine field status and report delivery
+read only the physical environment, fingerprint and clock metadata. Assignment
+acceptance and execution use the trusted world broker to resolve the assigned
+target; only authorized execution inspects its active physical fault.
 
 The local administrator registers crews and accepts an assignment naming one
 crew, water-service asset, enterprise order reference/revision and operation.
