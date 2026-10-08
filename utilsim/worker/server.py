@@ -233,6 +233,8 @@ def create_app(jobs: LocalJobs, local_token, on_ready=None):
         return {'ok': True}
 
     # ---- pages and files ----------------------------------------------------------------------------------------
+    from utilsim.worker.worlds import mount_world_library
+    mount_world_library(app, jobs.store, assets())
     (jobs.store / 'runs').mkdir(exist_ok=True)
     app.mount('/runs', StaticFiles(directory=jobs.store / 'runs'), name='runs')
     app.mount('/packs', StaticFiles(directory=bundle_root() / 'packs'), name='packs')

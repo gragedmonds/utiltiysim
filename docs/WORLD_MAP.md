@@ -28,9 +28,46 @@ python -m utilsim.world.server --db PATH_TO_WORLD_SQLITE --port 8033 --open-map
 
 `--viewer-dir PATH_TO_TOWN_VIEWER_DIST` can reuse an existing installation.
 The server refuses to silently replace missing Three.js assets with a CDN.
-The world controls page also has an **Open town map** link. This is the first
-launcher entry point for the durable world; the packaged Go launcher still
-needs world-library selection and process management integration.
+The world controls page also has an **Open town map** link.
+
+## Open through Utility Studio
+
+The app server started by the existing Go launcher now has **Saved world maps**
+links on its simulations and local workspace pages. They appear only in a
+launcher session. Open that library, enter the absolute path to an initialized
+world database, and choose **Open map**. Entries persist in
+`world-library.sqlite` under the selected Studio storage folder. Removing an
+entry does not delete its source. There are 25 entries per page, up to 50 via
+the query API. Missing drives remain visible as unavailable entries.
+
+For a source checkout, use an existing storage folder:
+
+```sh
+python -m utilsim.worker.entry --store PATH_TO_STUDIO_STORAGE
+```
+
+This starts the same worker entry point the packaged launcher uses and opens
+Studio with its per-launch credential. No additional server is launched for a
+world. The `/worlds` and `/world-map` pages are static shells; every library or
+physical-data query is under the existing token-protected `/local/` boundary.
+The UI passes the existing launcher session through navigation. These are
+administrator tools, never enterprise worker endpoints.
+
+Registration inspects an existing SQLite file in read-only mode. It neither
+migrates it nor copies it. Each map query uses a consistent read transaction
+and checks the pinned world/configuration fingerprint. A different world at
+the same path is rejected; explicit registration gives it a new entry identity
+and invalidates the old map URL. Unsupported model versions are rejected.
+Current updates from the owning world process become visible on refresh,
+including when it uses SQLite WAL. No new time-advance or physical-mutation
+interface is added to the library, so a shared-runtime world keeps its clock
+ownership. Legacy result files and raw snapshots are not treated as live worlds.
+
+The existing Go launcher needs no process protocol changes. New worker builds
+include the pages with `--collect-data utilsim`; packaged startup checks cover
+the library shell, map assets and required authorization. An installed older
+runtime will gain the library only after a verified runtime update is released;
+this change does not publish or install one automatically.
 
 To make a separate local demonstration from the original complete village:
 
@@ -89,8 +126,8 @@ meter on its first premise. The original village contains 570 premises (480
 homes plus other properties); this is not the separate 100-account Billing
 acceptance fixture.
 
-Next work: integrate this world entry into the packaged launcher/library, keep
-the same environment identity through enterprise startup, add world growth and
+Next work: create new worlds directly from saved generated towns in the library,
+keep the same environment identity through enterprise startup, add world growth and
 move events, and connect physical field outcomes through the agreed enterprise
 report boundary. This restoration does not complete those living-town features.
 The existing Windows geometry golden discrepancies remain independent failures;
@@ -110,3 +147,31 @@ message without drawing a fabricated map. Evidence stays in ignored
 Priority: Greg requested map/launcher restoration first in project coordination
 on 7 October 2026 at 20:02 EDT. Private coordination links and enterprise data
 are intentionally not copied into this public repository.
+
+Library verification: `pytest tests/test_world_library.py` exercises restart,
+duplicate registration, missing/replaced files, read-only SQL enforcement,
+pagination, concurrent WAL snapshot consistency, HTTP authorization and source
+preservation. The browser check opens the actual Studio navigation, registers
+a disposable backup, observes a physical replacement made only on that backup,
+restarts the worker, opens the remembered map, and removes its shortcut without
+deleting its source:
+
+```sh
+python scripts/check_world_library.py --db PATH_TO_SOURCE_WORLD --engine-python PATH_TO_ENGINE_PYTHON --out out/new-library-check
+```
+
+Use `--engine-executable PATH_TO_UTILITY_RUNNER` instead of `--engine-python`
+to check the frozen runtime. The checking Python needs Playwright/Chromium;
+the packaged executable does not. Ready-file credentials are removed after each
+test process exits. Screenshots/logs remain under the new ignored output folder.
+
+Library increment verified on 7 October 2026: four new library tests pass,
+including concurrent duplicate registration. The full non-slow Python run has
+529 passed and the same two pre-existing geometry failures in 733.56 seconds.
+All 291 viewer tests, 11 conformance checks, lint and JavaScript checks pass.
+Both the source worker and a locally built Windows PyInstaller runtime pass
+the complete library/restart browser walkthrough with the 570-premise village;
+the standalone map walkthrough also passes again. No browser errors or external
+requests were observed. The Go bootstrap itself is unchanged; no signed release
+or automatic installed-runtime update was published. The PR remains draft
+while the genuine geometry baseline failures are unresolved.
