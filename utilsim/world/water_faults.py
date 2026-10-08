@@ -102,6 +102,25 @@ def _start(world, db, env, day, asset, rate, source, cause, actor, reason):
     return {"faultId": identity, "eventId": event, "revision": revision}
 
 
+def _repair(world, db, meta, payload):
+    """Internal transaction primitive; callers must authorize and bind the work.
+
+    The administrator command and assignment executor share the same physical
+    mutation. Field callers retain their real actor and assignment provenance.
+    """
+    current = state(db, payload["assetId"])
+    if not current["active"] or current["active"]["id"] != payload["faultId"]:
+        raise ValueError("Repair must reference this service's active fault.")
+    if current["revision"] != payload["expectedRevision"]:
+        raise ValueError("Water-fault revision changed. Reload before making changes.")
+    revision = _revision(db, payload["assetId"])
+    event = world.event(db, meta["environment"], meta["through"], "PhysicalWaterLeakRepaired", payload["assetId"],
+                        {**payload, "revision": revision}, payload["commandId"])
+    db.execute("UPDATE water_faults SET repaired_date=?,repair_event=?,work_order=? WHERE id=?",
+               (meta["through"], event, payload["workOrderId"], payload["faultId"]))
+    return {"eventId": event, "revision": revision, "faultId": payload["faultId"]}
+
+
 def command(world, payload):
     if not isinstance(payload, dict):
         raise ValueError("Water-fault command must be a JSON object.")
@@ -163,12 +182,7 @@ def command(world, payload):
             result = _start(world, db, meta["environment"], meta["through"], asset["id"], rate, "manual",
                             payload["commandId"], payload["actorId"], payload["reason"])
         else:
-            revision = _revision(db, asset["id"])
-            event = world.event(db, meta["environment"], meta["through"], "PhysicalWaterLeakRepaired", asset["id"],
-                                {**payload, "revision": revision}, payload["commandId"])
-            db.execute("UPDATE water_faults SET repaired_date=?,repair_event=?,work_order=? WHERE id=?",
-                       (meta["through"], event, payload["workOrderId"], payload["faultId"]))
-            result = {"eventId": event, "revision": revision, "faultId": payload["faultId"]}
+            result = _repair(world, db, meta, payload)
         result.update(commandId=payload["commandId"], status="completed", effectiveDate=meta["through"], modelVersion=VERSION)
         # The command journal retains every input, including actor and causal reference.
         db.execute("INSERT INTO commands VALUES(?,?,?)", (payload["commandId"], encoded, canonical(result)))
