@@ -473,20 +473,36 @@ def relay(world, send, limit=25):
     The receiver deduplicates stable envelope/report IDs. Callback receipts must
     match id, environment, checksum and status='received'. This explicitly says
     nothing about the enterprise's later review/acceptance of a field report.
+    Each report waits for its own dispatch acknowledgement receipt. A failed
+    acknowledgement does not prevent other assignments from being delivered.
     """
     _page(0, limit)
-    received, blocked = 0, []
+    received, blocked, attempted, after = 0, [], 0, 0
     with world.db() as db:
         meta = world.metadata(db)
-        rows = [] if not enabled(db) else db.execute(
-            "SELECT * FROM field_outbox WHERE state='pending' AND available_day<=? "
-            "ORDER BY sequence LIMIT ?", (meta["through"], limit)).fetchall()
-    for row in rows:
-        envelope = json.loads(row["envelope"])
-        if checksum(envelope) != row["checksum"]:
-            raise ValueError("Stored field message checksum mismatch.")
+    while attempted < limit:
         with world.db() as db:
+            # Re-query after each receipt, so an acknowledgement can unlock its
+            # report in this call. Withheld reports do not consume the send limit.
+            row = None if not enabled(db) else db.execute(
+                "SELECT m.* FROM field_outbox m WHERE m.state='pending' AND m.available_day<=? "
+                "AND m.sequence>? AND NOT EXISTS (SELECT 1 FROM field_outbox predecessor "
+                "WHERE predecessor.assignment=m.assignment AND predecessor.sequence<m.sequence "
+                "AND predecessor.state!='received') ORDER BY m.sequence LIMIT 1",
+                (meta["through"], after)).fetchone()
+            if row is None:
+                break
+            after = row["sequence"]
+            envelope = json.loads(row["envelope"])
+            if checksum(envelope) != row["checksum"]:
+                raise ValueError("Stored field message checksum mismatch.")
+            if envelope["schema"] == "field-report/1":
+                ack_id = "FIELD-" + stable(meta["environment"], world.owner_id, row["assignment"], "ack")
+                if not db.execute("SELECT 1 FROM field_outbox WHERE id=? AND assignment=? AND state='received'",
+                                  (ack_id, row["assignment"])).fetchone():
+                    continue
             db.execute("UPDATE field_outbox SET attempts=attempts+1 WHERE id=?", (row["id"],))
+        attempted += 1
         try:
             receipt = send(envelope)
             if (not isinstance(receipt, dict)

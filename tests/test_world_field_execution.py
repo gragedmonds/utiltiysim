@@ -181,20 +181,22 @@ def test_concurrent_execution_lost_receipt_and_corruption(tmp_path):
     with ThreadPoolExecutor(max_workers=2) as pool:
         results = list(pool.map(lambda _: field.command(f, execute), range(2)))
     assert results[0] == results[1]
+    assert field.relay(f, receipt, limit=1)["received"] == 1
     seen = []
 
     def lost_reply(envelope):
         seen.append(envelope)
         raise ConnectionError("Accepted remotely, reply lost")
 
-    assert len(field.relay(f, lost_reply)["blocked"]) == 2
+    assert len(field.relay(f, lost_reply)["blocked"]) == 1
+    assert [e["schema"] for e in seen] == ["field-report/1"]
     retried = []
 
     def success(envelope):
         retried.append(envelope)
         return receipt(envelope)
 
-    assert field.relay(f, success)["received"] == 2
+    assert field.relay(f, success)["received"] == 1
     assert retried == seen
     assert field.relay(f, success)["received"] == 0
     with f.db() as db:
@@ -244,7 +246,7 @@ def test_owner_namespaces_do_not_collide_and_bad_receipt_cannot_hide_report(tmp_
     assert reports(one)[0]["id"] != reports(two)[0]["id"]
     assert reports(one)[0]["data"]["report_ref"] != reports(two)[0]["data"]["report_ref"]
     bad = field.relay(one, lambda e: {**receipt(e), "checksum": "changed"})
-    assert bad["received"] == 0 and len(bad["blocked"]) == 2
+    assert bad["received"] == 0 and len(bad["blocked"]) == 1
     assert all(m["state"] == "pending" for m in field.inspect(one)["items"][0]["messages"])
 
 
@@ -321,3 +323,77 @@ def test_field_status_and_delivery_read_only_identity_clock_metadata(tmp_path, m
     assert field.inspect(f)["items"][0]["state"] == "executed"
     assert len(field.ready(f)["items"]) == 2
     assert field.relay(f, receipt)["received"] == 2
+
+
+def test_failed_ack_withholds_its_report_without_blocking_other_assignments(tmp_path):
+    w, f = setup(tmp_path, dailyCapacity=2)
+    water_faults.command(w, leak_command(w))
+    field.command(f, command(f))
+    field.run_due(f)
+    field.command(f, command(f, "second", assignmentId="A2", orderId="ORDER2"))
+    field.run_due(f)
+    available = field.ready(f)
+    assert len(reports(f)) == 2  # Knowledge availability is independent of relay ordering.
+    offered, recipient = [], {}
+
+    def send(envelope):
+        offered.append((envelope["subject"], envelope["schema"]))
+        if envelope["id"] in recipient:
+            assert recipient[envelope["id"]] == envelope
+        else:
+            recipient[envelope["id"]] = envelope
+            if envelope["subject"] == "ORDER1" and envelope["schema"] == "field-ack/1":
+                raise ConnectionError("Recipient committed the dispatch but its reply was lost")
+        return receipt(envelope)
+
+    result = field.relay(f, send, limit=3)
+    assert result["received"] == 2 and len(result["blocked"]) == 1
+    assert offered == [("ORDER1", "field-ack/1"), ("ORDER2", "field-ack/1"), ("ORDER2", "field-report/1")]
+    first, second = field.inspect(f)["items"]
+    assert [(m["state"], m["attempts"]) for m in first["messages"]] == [("pending", 1), ("pending", 0)]
+    assert all(m["state"] == "received" for m in second["messages"])
+    assert field.ready(f) == available
+    assert water_faults.inspect(w, "water")["current"]["active"] is None
+
+    restarted = field.FieldExecution(World(w.path), f.path)
+    assert field.relay(restarted, send) == {"received": 2, "blocked": []}
+    assert offered[-2:] == [("ORDER1", "field-ack/1"), ("ORDER1", "field-report/1")]
+    assert len(recipient) == 4  # Two immutable messages per assignment, no duplicate effect.
+    assert field.relay(restarted, send) == {"received": 0, "blocked": []}
+    first = field.inspect(restarted)["items"][0]
+    assert [(m["state"], m["attempts"]) for m in first["messages"]] == [("received", 2), ("received", 1)]
+    with w.db() as db:
+        assert db.execute("SELECT COUNT(*) FROM events WHERE type='PhysicalWaterLeakRepaired'").fetchone()[0] == 1
+
+
+@pytest.mark.parametrize("ack_day", ["2026-01-01", "2026-01-03"])
+def test_report_requires_both_ack_receipt_and_delivery_date(tmp_path, ack_day):
+    w, f = setup(tmp_path)
+    field.command(f, command(f, reportDelayDays=2))
+    field.run_due(f)
+    rejected = []
+
+    def reject(envelope):
+        rejected.append(envelope["schema"])
+        return {**receipt(envelope), "status": "rejected"}
+
+    assert len(field.relay(f, reject)["blocked"]) == 1
+    w.advance(ack_day)
+    assert len(field.relay(f, reject)["blocked"]) == 1
+    assert rejected == ["field-ack/1", "field-ack/1"]
+    assert field.inspect(f)["items"][0]["messages"][1]["attempts"] == 0
+    sent = []
+
+    def accept(envelope):
+        sent.append(envelope["schema"])
+        return receipt(envelope)
+
+    assert field.relay(f, accept, limit=1) == {"received": 1, "blocked": []}
+    assert sent == ["field-ack/1"]
+    if ack_day == "2026-01-01":
+        assert field.relay(f, accept) == {"received": 0, "blocked": []}
+        assert reports(f) == []
+        w.advance("2026-01-03")
+    assert field.relay(f, accept) == {"received": 1, "blocked": []}
+    assert sent == ["field-ack/1", "field-report/1"]
+    assert field.relay(f, accept) == {"received": 0, "blocked": []}
