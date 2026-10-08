@@ -166,3 +166,22 @@ screenshots are written below the chosen output directory. Nine messages were
 received by a disposable test inbox; no enterprise adapter or enterprise
 acceptance was involved. Test server processes exit on completion. The separate
 8046 preview copies this completed fixture and keeps its unresolved work visible.
+
+`scripts/check_main_phase_queries.py` provides a separate bounded query diagnostic.
+On the copied 608-premise town, fixture creation stopped at its 110-second guard
+with 967 accepted, unexecuted phases across ten crews. Queries reused that fixture
+without rebuilding or advancing the world. First/middle/last 25-row administrator
+execution pages took 876–925 ms; reporting pages took 880–1,014 ms. Crew reporting
+pages took 21–22 ms and returned all 97 authorized IDs exactly once; an unassigned
+actor received none. Phase identities were correct, private lifecycle fields and
+crew live-blocking reasons were absent, and source/history/map were preserved.
+These timings include SQLite tracing during another local regression run. They
+are a query diagnostic, not the 15,000-account/five-year release benchmark.
+Per-item world connections/catalog reads remain an optimization opportunity.
+
+Release verification: all **981** non-slow Python tests, **26** field-screen
+checks, **291** viewer tests and **11** viewer conformance checks passed locally.
+Repository Ruff and whitespace checks passed; independent implementation review
+found no remaining blocker. The only suite warning was the existing
+Starlette/httpx deprecation. This increment changes SQLite world/field owners;
+no PostgreSQL schema or private enterprise implementation changed.
