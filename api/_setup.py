@@ -70,10 +70,14 @@ def gas_district_min_homes() -> int | None:
 
 
 def configuration(preset: str) -> dict:
+    from utilsim.config.wizard import catalogue, world_configuration
+
     cfg = preset_config(preset)
     values = cfg.model_dump(mode="json")
-    return {"schemas": schemas(), "defaults": {"town": values,
-            "run": {k: values[k] for k in RUN_GROUPS}, "operations": grouped_ops_defaults(cfg)},
+    world_schema, world_defaults = world_configuration()
+    return {"schemas": {**schemas(), "world": world_schema}, "defaults": {"town": values,
+            "run": {k: values[k] for k in RUN_GROUPS}, "operations": grouped_ops_defaults(cfg),
+            "world": world_defaults}, "wizard": catalogue(),
             "goals": GOALS, "homeLimit": MAX_HOUSES, "townSizes": TOWN_SIZES, "regions": REGIONS, "regionalNote": REGIONAL_NOTE,
             "gasDistrictMinHomes": gas_district_min_homes()}
 

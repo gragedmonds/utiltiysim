@@ -135,6 +135,7 @@ def main():
         command += ['--icon', str(WINDOWS_ICON)]
     for source, dest in [(ROOT / 'packages/town-viewer/dist', 'packages/town-viewer/dist'),
                          (ROOT / 'utilsim/config/presets', 'utilsim/config/presets'),
+                         (ROOT / 'utilsim/config/wizard.json', 'utilsim/config'),
                          (ROOT / 'packs', 'packs'), (ROOT / 'schemas', 'schemas'), (build_file, '.')]:
         command += ['--add-data', str(source) + os.pathsep + dest]
     command += [str(ROOT / 'utilsim/worker/entry.py')]

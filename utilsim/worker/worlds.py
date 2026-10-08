@@ -160,6 +160,24 @@ def mount_world_library(app, store, viewer):
         except (OSError, ValueError) as exc:
             raise HTTPException(422, 'Could not list saved towns. Check the library and page cursor.') from exc
 
+    @app.post('/local/worlds/setup/{action}')
+    async def guided_world(action: str, request: Request):
+        from fastapi.concurrency import run_in_threadpool
+
+        from . import guided_setup
+        from .prepare import body
+        if action not in ('validate', 'create'):
+            raise HTTPException(404, 'Unknown setup action.')
+        value = await body(request)
+        try:
+            if action == 'validate':
+                return await run_in_threadpool(guided_setup.review, value)
+            return await run_in_threadpool(guided_setup.create, library, value)
+        except (ValueError, KeyError, TypeError) as exc:
+            raise HTTPException(422, str(exc)) from exc
+        except (OSError, sqlite3.Error) as exc:
+            raise HTTPException(409, 'Creation could not finish. Keep this setup and retry after checking storage.') from exc
+
     @app.post('/local/worlds/create')
     async def create_world(request: Request):
         from fastapi.concurrency import run_in_threadpool

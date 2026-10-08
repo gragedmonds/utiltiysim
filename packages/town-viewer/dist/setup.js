@@ -8,7 +8,8 @@ import {fetchKpiCatalogue,kpisForGoals} from './kpis.js';
 import {servedServices} from './schema-form.js';
 import {GAS_PATH,servicesState,servicesSummary,staffingSummary,staffingBase} from './setup-utility.js';
 import {installShareFiles,handleLabel} from './share-file.js';
-import {isApp} from './local-session.js';
+import {isApp,localRequest} from './local-session.js';
+import {installGuidedSetup,worldRequest} from './guided-setup.js';
 import {newMetrics,metricsMarkup,bindMetrics,fitMetrics,metricReportMarkup} from './twin-setup.js';
 import {installEngineMonitor} from './engine-monitor.js';
 installEngineMonitor();
@@ -36,7 +37,7 @@ function showLibrary(){closeAgent?.();closeAgent=null;agentOpen=false;draft=null
   card.querySelector('[data-cancel-delete]').onclick=()=>confirming(card,false);card.onkeydown=e=>{if(e.key==='Escape'&&card.classList.contains('is-confirming'))confirming(card,false);};
   card.querySelector('[data-confirm-delete]').onclick=()=>{const id=card.dataset.card,name=card.querySelector('h2').textContent;try{library.remove(id);}catch(e){alertMessage(e.message);return;}if(!library.list().length){begin();return;}showLibrary();alertMessage(`Deleted “${name}”.`);};});
 }
-function begin(s){agentOpen=false;configError='';draft=wizardDraft(s||library.create(),packs);step=draft.step||0;message='';history.replaceState(null,'',location.pathname+location.search+'#/setup');render();loadConfiguration();loadScenarios();loadKpis();loadTwinDictionary();}
+function begin(s){agentOpen=false;configError='';draft=wizardDraft(s||library.create(),packs);if(!s){draft.guidedSetup={version:1,page:'identity',mode:isApp()?'world':'studio',pins:{},choices:{},suggestions:{}};draft.asOf='2026-01-01';}if(draft.guidedSetup)draft.guidedSetup.review=null;step=draft.step||0;message='';history.replaceState(null,'',location.pathname+location.search+'#/setup/'+encodeURIComponent(draft.id));render();loadConfiguration();loadScenarios();loadKpis();loadTwinDictionary();}
 async function loadConfiguration(){const preset=draft?.preset;if(!preset){configError='The town catalogue could not load. Refresh to try again.';render(false);return;}if(configs.has(preset))return;
  configError='';try{const r=await fetch(api+'/setup/configuration?preset='+encodeURIComponent(preset),{signal:AbortSignal.timeout(15000)});const data=await r.json();if(!r.ok)throw Error(typeof data.detail==='string'?data.detail:'Setup settings are unavailable.');configs.set(preset,data);}catch(e){configError='Could not load setup settings. '+(e.name==='TimeoutError'?'The engine took too long.':e.message);}
  if(draft?.preset===preset&&!agentOpen)render(false);
@@ -60,6 +61,24 @@ function reviewMarkup(){const local=draft.execution==='local',p=local&&draft.age
 function render(focus=true){if(!draft)return;if(summaryNeedsRefresh(draft.agentProposal))draft.agentSummaryDirty=true;closeAgent?.();closeAgent=null;stageControls=null;
  if(agentOpen){root.innerHTML='<section class="wizard agent-wizard"><aside class="wizard-rail"><div class="eyebrow">CONVERSATIONAL SETUP</div><h2>Your environment.<br>Your utility.</h2><p>Start with what to test, then focus on the environment and operations that matter.</p><div class="rail-foot">You review every input before opening the Command Center.</div></aside><section class="wizard-panel" id="agent-root"></section></section>';
   closeAgent=installSetupAgent({root:document.getElementById('agent-root'),api,getDraft:()=>draft,onSave:agent=>{draft.agent=agent;draft.name||='Untitled simulation';save();},onApply:p=>{draft=applyAgentProposal(draft,p);draft.environmentProfile='custom';draft.agentSummaryDirty=false;draft.configDirty=false;step=4;save();agentOpen=false;render();loadConfiguration();},onBack:()=>{agentOpen=false;render();loadConfiguration();}});return;}
+ if(draft.setupPath!=='metrics'){
+  installGuidedSetup({root,data:configs.get(draft.preset),draft,local:isApp(),focus,error:configError,onRetry:loadConfiguration,
+   onSave:updated=>{draft=updated;save();},onLibrary:showLibrary,onAgent:()=>{agentOpen=true;render();},
+   onMetrics:()=>{draft.setupPath='metrics';draft.metricDraft||=newMetrics();step=1;save();render();},
+   onFinish:async(updated,{create})=>{
+    draft=updated;
+    if(draft.guidedSetup.mode==='world'){
+     const request=worldRequest(draft,configs.get(draft.preset));save();
+     if(!create){await localRequest('worlds/setup/validate',request);return;}
+     const world=await localRequest('worlds/setup/create',request,{timeout:600000});
+     Object.assign(updated,{worldId:world.id,status:'ready',locked:true,townName:updated.region||updated.name});draft=updated;save();open(draft);return true;
+    }else{
+     // Validate again at the final boundary, including dependencies across pages and any imported episodes.
+     Object.assign(draft,acceptSetup(draft,await checked(setupProposal(draft))));
+     if(create){delete draft.worldId;draft.status='ready';draft.locked=draft.execution!=='local';save();open(draft);return true;}
+    }
+   }});return;
+ }
  const data=configs.get(draft.preset),agentEntry='<aside class="agent-entry"><div><strong>Prefer to talk it through?</strong><p>Describe the question you want to answer. Claude can help choose the relevant settings.</p></div><button class="secondary" type="button" id="open-agent">Talk it through →</button></aside>';
  const configPart=configError?`<p class="inline-error">${esc(configError)}</p><button type="button" class="secondary" id="retry-config">Retry settings</button>`:`<p class="focus-note">Focus: ${selectedGoals(data,draft).map(g=>esc(g.title)).join(', ')||'Choose what to test first'}. Advanced includes the relevant settings and an option to show everything.</p>${stageMarkup(step-2,data,draft)}`;
  const start=`<div class="setup-paths"><button type="button" class="setup-path ${draft.setupPath!=='metrics'?'selected':''}" data-setup-path="build" aria-pressed="${draft.setupPath!=='metrics'}"><span class="path-symbol">⌂</span><strong>Build from the ground up</strong><span>Shape a place, choose your services and teams, then explore what happens.</span><small>Settings → simulated outcomes</small></button><button type="button" class="setup-path ${draft.setupPath==='metrics'?'selected':''}" data-setup-path="metrics" aria-pressed="${draft.setupPath==='metrics'}"><span class="path-symbol">↗</span><strong>Match existing metrics</strong><span>Start with where your KPIs were, where they went, and where they need to be.</span><small>Observed outcomes → a fitted utility</small></button></div><label for="setup-name">Simulation name</label><input id="setup-name" value="${esc(draft.name)}" maxlength="100" placeholder="My utility"><p class="path-footnote">Both paths lead to the same editable Command Center. You can change the year as you explore.</p>`;
@@ -86,7 +105,7 @@ function render(focus=true){if(!draft)return;if(summaryNeedsRefresh(draft.agentP
  const retry=root.querySelector('#retry-config');if(retry)retry.onclick=()=>loadConfiguration();
 }
 function bindKpis(){root.querySelectorAll('[name="kpi"]').forEach(input=>input.onchange=()=>{const chosen=new Set(draft.kpis||[]);if(input.checked)chosen.add(input.value);else chosen.delete(input.value);if(chosen.size>12){input.checked=false;alertMessage('Watch up to twelve figures; the glossary explains them all.');return;}draft.kpis=[...chosen];input.closest('.kpi-chip')?.classList.toggle('is-on',input.checked);changed();});}
-function open(s){if(isApp()&&s.execution==='local')s.locked=false;library.update(s.id,{openedAt:new Date().toISOString()});location.href=studioURL(s,location.search);}
+function open(s){if(isApp()&&s.execution==='local'&&!s.worldId)s.locked=false;library.update(s.id,{openedAt:new Date().toISOString()});location.href=s.worldId?'/world-map?world='+encodeURIComponent(s.worldId):studioURL(s,location.search);}
 async function loadTwinDictionary(){if(twinDictionary)return;try{const r=await fetch(api+'/twin/dictionary');if(!r.ok)throw Error('KPI definitions could not load.');twinDictionary=await r.json();if(draft?.setupPath==='metrics'&&step===1)render(false);}catch(e){message=e.message;}}
-try{library=new SimulationLibrary();packs=await fetchPackIndex();library.adoptPacks(packs);files=installShareFiles({api,library,onMessage:alertMessage,onImported:s=>{showLibrary();alertMessage(`Imported “${s.name}” (${handleLabel(s.handle)}). Open it to review its settings and start.`);}});if(query.get('edit')&&library.get(query.get('edit')))begin({...library.get(query.get('edit')),status:'draft',step:0});else if(location.hash==='#/new'||!library.list().length)begin();else showLibrary();}
+try{library=new SimulationLibrary();packs=await fetchPackIndex();library.adoptPacks(packs);files=installShareFiles({api,library,onMessage:alertMessage,onImported:s=>{showLibrary();alertMessage(`Imported “${s.name}” (${handleLabel(s.handle)}). Open it to review its settings and start.`);}});if(query.get('edit')&&library.get(query.get('edit')))begin({...library.get(query.get('edit')),status:'draft',step:0});else if(location.hash.startsWith('#/setup/')&&library.get(decodeURIComponent(location.hash.slice(8))))begin(library.get(decodeURIComponent(location.hash.slice(8))));else if(location.hash==='#/new'||!library.list().length)begin();else showLibrary();}
 catch(e){root.innerHTML=`<section class="library"><h1>Your simulations couldn’t open.</h1><p role="alert">${esc(e.message)}</p><button class="primary" onclick="location.reload()">Try again</button><p>Existing browser data has not been removed.</p></section>`;}
