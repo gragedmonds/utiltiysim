@@ -137,6 +137,21 @@ def _start(world, db, meta, commodity, edge, source, cause, actor, reason):
     return {"faultId": identity, "eventId": event, "revision": revision}
 
 
+def _restore(world, db, meta, payload):
+    """Physical transition; callers own authorization, identity and transaction."""
+    commodity, edge = payload["commodity"], payload["edgeId"]
+    current = state(db, commodity, edge)
+    if (not current["active"] or current["active"]["id"] != payload["faultId"]
+            or current["revision"] != payload["expectedRevision"]):
+        raise ValueError("Restoration must reference this edge's current active fault and revision.")
+    revision = _revision(db, commodity, edge)
+    event = world.event(db, meta["environment"], meta["through"], "PhysicalNetworkRestored", edge,
+                        {**payload, "revision": revision}, payload["commandId"])
+    db.execute("UPDATE network_faults SET restored_date=?,restore_event=?,work_order=? WHERE id=?",
+               (meta["through"], event, payload["workOrderId"], payload["faultId"]))
+    return {"eventId": event, "revision": revision, "faultId": payload["faultId"]}
+
+
 def command(world, payload):
     common = {"schemaVersion", "commandId", "environmentId", "worldFingerprint", "actorId", "expectedRevision",
               "effectiveDate", "action", "reason", "causalReference"}
@@ -197,12 +212,7 @@ def command(world, payload):
             result = _start(world, db, meta, commodity, edge, "manual", payload["commandId"],
                             payload["actorId"], payload["reason"])
         else:
-            revision = _revision(db, commodity, edge)
-            event = world.event(db, meta["environment"], meta["through"], "PhysicalNetworkRestored", edge,
-                                {**payload, "revision": revision}, payload["commandId"])
-            db.execute("UPDATE network_faults SET restored_date=?,restore_event=?,work_order=? WHERE id=?",
-                       (meta["through"], event, payload["workOrderId"], payload["faultId"]))
-            result = {"eventId": event, "revision": revision, "faultId": payload["faultId"]}
+            result = _restore(world, db, meta, payload)
         result.update(commandId=payload["commandId"], status="completed", effectiveDate=meta["through"], modelVersion=VERSION)
         db.execute("INSERT INTO commands VALUES(?,?,?)", (payload["commandId"], encoded, canonical(result)))
         return result
