@@ -7,6 +7,7 @@ import pytest
 from test_world_v2 import snapshot
 
 from utilsim.world import World, delivery, development, occupancy
+from utilsim.world.store import stable
 
 
 def world(tmp_path, name="world", future=None):
@@ -39,6 +40,11 @@ def change(w, action, identity=None):
 
 def state(w):
     return development.inspect(w, "site-1")["projects"][0]
+
+
+def acknowledge(envelope):
+    return {"id": envelope["id"], "runId": envelope["runId"], "fingerprint": stable(envelope),
+            "receiptId": "receipt-" + envelope["id"], "status": "accepted"}
 
 
 def test_stages_dates_existing_service_and_consumption_linkage(tmp_path):
@@ -159,7 +165,7 @@ def test_chunking_replay_and_durable_relay_unknown_receipt(tmp_path):
     assert development.relay(a, unknown, "2026-01-06T00:00:00Z")["blocked"]
     def accept(envelope):
         delivered.append(envelope)
-        return {"id": envelope["id"], "status": "pending"}
+        return acknowledge(envelope)
     a = World(a.path)
     assert development.relay(a, accept, "2026-01-06T00:00:00Z")["accepted"] == 1
     assert delivered[0] == delivered[1]
@@ -242,6 +248,90 @@ def test_first_move_in_day_contacts_use_new_occupancy_cohort(tmp_path):
     w.advance("2026-01-07")
     with w.db() as db:
         assert db.execute("SELECT count(*) FROM contact_episodes").fetchone()[0] == 1
+
+
+def test_filtered_feed_and_relay_both_reject_stored_payload_corruption(tmp_path):
+    w = world(tmp_path)
+    development.command(w, plan(w))
+    w.advance("2026-01-07")
+    with w.db() as db:
+        row = db.execute("SELECT id,envelope FROM development_outbox ORDER BY sequence LIMIT 1").fetchone()
+        envelope = json.loads(row["envelope"])
+        envelope["payload"]["premiseId"] = "corrupted-premise"
+        db.execute("UPDATE development_outbox SET envelope=? WHERE id=?", (json.dumps(envelope), row["id"]))
+    with pytest.raises(ValueError, match="checksum"):
+        development.available_notices(w, "2026-01-07T00:00:00Z")
+    with pytest.raises(ValueError, match="checksum"):
+        development.relay(w, lambda _: pytest.fail("corrupt send"), "2026-01-07T00:00:00Z")
+
+
+@pytest.mark.parametrize("override", [{"id": "wrong"}, {"runId": "another-run"}, {"fingerprint": "wrong-payload"},
+                                     {"status": "failed"}, {"status": "pending"}, {"receiptId": ""},
+                                     {"receiptId": " "}, {"extra": "unexpected"}])
+def test_invalid_recipient_receipts_remain_pending(tmp_path, override):
+    w = world(tmp_path)
+    development.command(w, plan(w))
+    w.advance("2026-01-07")
+    result = development.relay(w, lambda envelope: {**acknowledge(envelope), **override}, "2026-01-07T00:00:00Z")
+    assert result["accepted"] == 0 and result["blocked"] and result["error"] == "ValueError"
+    with w.db() as db:
+        assert db.execute("SELECT count(*) FROM development_outbox WHERE state='accepted'").fetchone()[0] == 0
+    assert development.relay(World(w.path), acknowledge, "2026-01-07T00:00:00Z")["accepted"] == 2
+
+
+def test_configured_sewer_notice_matches_observation_identity_and_provenance(tmp_path):
+    w = world(tmp_path)
+    delivery.configure(w, "TEST", sewer_factor="0.73")
+    development.command(w, plan(w))
+    w.advance("2026-01-07")
+    observed = w.export_v2("2026-01-05", "2026-01-07", sewer_factor="0.73")["assets"]
+    schema = json.loads((Path(__file__).parents[1] / "schemas/development-service-notice-1.schema.json").read_text())
+    for row in development.available_notices(w, "2026-01-07T00:00:00Z")["items"]:
+        notice = row["envelope"]["payload"]
+        jsonschema.validate(notice, schema, format_checker=jsonschema.FormatChecker())
+        assert {s["commodity"] for s in notice["services"]} == {"electric", "gas", "water", "sewer"}
+        for service in notice["services"]:
+            reference = next(asset for asset in observed if asset["commodity"] == service["commodity"])
+            for key in ("meterId", "installationId", "servicePointId", "measurementType", "sourceServicePointId", "derivation"):
+                assert service[key] == reference[key]
+            if service["commodity"] == "sewer":
+                assert service["assetId"] is None and service["meterId"] is None
+
+
+def test_availability_cursor_uses_index_and_preserves_unequal_delays(tmp_path):
+    town = snapshot()
+    town["premises"][0].update(occupied=False, occupants=0)
+    town["premises"].append({**town["premises"][0], "id": "P2"})
+    town["meters"].append({"id": "water-2", "installedAt": "2015-01-01"})
+    town["servicePoints"].append({"premiseId": "P2", "commodity": "water", "meterId": "water-2", "installationId": "I-water-2"})
+    w = World(tmp_path / "availability.sqlite")
+    w.initialize(town, "TEST")
+    development.command(w, plan(w, notificationDelaySeconds=10*86400))
+    development.command(w, plan(w, commandId="plan-2", projectId="site-2", premiseId="P2", notificationDelaySeconds=0))
+    w.advance("2026-01-20")
+    rows, after = [], None
+    while page := development.available_notices(w, "2026-01-20T00:00:00Z", after=after, limit=1)["items"]:
+        rows.extend(page)
+        after = page[-1]["cursor"]
+    assert [row["envelope"]["payload"]["premiseId"] for row in rows] == ["P2", "P2", "P1", "P1"]
+    assert len({row["envelope"]["id"] for row in rows}) == 4
+    with w.db() as db:
+        query_plan = " ".join(row["detail"] for row in db.execute(
+            "EXPLAIN QUERY PLAN SELECT sequence,available_at,envelope,fingerprint FROM development_outbox "
+            "WHERE (available_at,sequence)>(?,?) AND available_at<=? ORDER BY available_at,sequence LIMIT ?",
+            ("2026-01-05T00:00:00Z", 1, "2026-01-20T00:00:00Z", 1)))
+        assert "SEARCH" in query_plan and "development_outbox_availability" in query_plan
+        assert "TEMP B-TREE" not in query_plan
+
+
+def test_inspection_feed_and_relay_do_not_decode_full_world_metadata(tmp_path, monkeypatch):
+    w = world(tmp_path)
+    development.command(w, plan(w))
+    w.advance("2026-01-07")
+    monkeypatch.setattr(w, "metadata", lambda _: pytest.fail("decoded full world metadata"))
+    assert development.inspect(w, "site-1")["projects"][0]["phase"] == "occupied"
+    assert len(development.available_notices(w, "2026-01-07T00:00:00Z")["items"]) == 2
+    assert development.relay(w, acknowledge, "2026-01-07T00:00:00Z")["accepted"] == 2
 
 
 @pytest.mark.parametrize("override", [{"constructionDays": True}, {"constructionDays": 0}, {"occupants": 0},

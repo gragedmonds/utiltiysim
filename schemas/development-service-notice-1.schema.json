@@ -16,14 +16,31 @@
       "type": "array", "minItems": 1,
       "items": {
         "type": "object", "additionalProperties": false,
-        "required": ["assetId", "installationId", "servicePointId", "commodity", "commissionedDate"],
+        "required": ["assetId", "meterId", "installationId", "servicePointId", "commodity", "commissionedDate", "measurementType", "sourceServicePointId", "derivation"],
         "properties": {
-          "assetId": {"type": "string", "minLength": 1},
+          "assetId": {"type": ["string", "null"], "minLength": 1},
+          "meterId": {"type": ["string", "null"], "minLength": 1},
           "installationId": {"type": "string", "minLength": 1},
-          "servicePointId": {"type": "string", "pattern": "^SP-[a-f0-9]{24}$"},
-          "commodity": {"enum": ["electric", "gas", "water"]},
-          "commissionedDate": {"type": "string", "format": "date"}
-        }
+          "servicePointId": {"type": "string", "pattern": "^(SEWER-)?SP-[a-f0-9]{24}$"},
+          "commodity": {"enum": ["electric", "gas", "water", "sewer"]},
+          "commissionedDate": {"type": "string", "format": "date"},
+          "measurementType": {"enum": ["metered", "derived"]},
+          "sourceServicePointId": {"type": ["string", "null"], "pattern": "^SP-[a-f0-9]{24}$"},
+          "derivation": {
+            "oneOf": [
+              {"type": "null"},
+              {"type": "object", "additionalProperties": false, "required": ["method", "factor"],
+               "properties": {"method": {"const": "water-return-factor"}, "factor": {"type": "string", "minLength": 1}}}
+            ]
+          }
+        },
+        "allOf": [{
+          "if": {"properties": {"commodity": {"const": "sewer"}}},
+          "then": {"properties": {"assetId": {"type": "null"}, "meterId": {"type": "null"},
+                    "measurementType": {"const": "derived"}, "sourceServicePointId": {"type": "string"}, "derivation": {"type": "object"}}},
+          "else": {"properties": {"assetId": {"type": "string"}, "meterId": {"type": "string"},
+                    "measurementType": {"const": "metered"}, "sourceServicePointId": {"type": "null"}, "derivation": {"type": "null"}}}
+        }]
       }
     }
   }

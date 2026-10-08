@@ -15,6 +15,12 @@ NOTICE_VERSION = "development-service-notice/1"
 ACTOR = "world-admin"
 
 
+def _meta(db):
+    # Routine inspection/delivery never decode saved physical network catalogs.
+    return {row["key"]: json.loads(row["value"]) for row in db.execute(
+        "SELECT key,value FROM meta WHERE key IN ('environment','fingerprint','through')")}
+
+
 def enabled(db):
     row = db.execute("SELECT value FROM meta WHERE key='developmentModelVersion'").fetchone()
     if row and json.loads(row[0]) != VERSION:
@@ -24,6 +30,8 @@ def enabled(db):
 
 def _enable(world, db):
     if enabled(db):
+        db.execute("CREATE INDEX IF NOT EXISTS development_outbox_availability ON development_outbox(available_at,sequence)")
+        db.execute("CREATE INDEX IF NOT EXISTS development_outbox_project ON development_outbox(project,sequence)")
         return
     backup = rollback_backup(world, "development")
     for sql in [
@@ -37,6 +45,8 @@ def _enable(world, db):
         "project TEXT NOT NULL,available_at TEXT NOT NULL,envelope TEXT NOT NULL,fingerprint TEXT NOT NULL,"
         "state TEXT NOT NULL DEFAULT 'pending',attempts INTEGER NOT NULL DEFAULT 0,receipt TEXT,last_error TEXT)",
         "CREATE INDEX development_outbox_due ON development_outbox(state,available_at,sequence)",
+        "CREATE INDEX development_outbox_availability ON development_outbox(available_at,sequence)",
+        "CREATE INDEX development_outbox_project ON development_outbox(project,sequence)",
     ]:
         db.execute(sql)
     world.put(db, "developmentModelVersion", VERSION)
@@ -63,7 +73,7 @@ def _move_id(project):
 
 
 def _committed_time(world, db, at):
-    through = world.metadata(db).get("through")
+    through = _meta(db).get("through")
     if through is None or at > through + "T00:00:00Z":
         raise ValueError("Notification time cannot exceed the committed world clock.")
 
@@ -120,7 +130,7 @@ def command(world, payload):
         datetime.fromisoformat(occupied) + timedelta(days=1, seconds=payload["notificationDelaySeconds"])
     encoded = canonical(payload)
     with world.db() as db:
-        meta = world.metadata(db)
+        meta = _meta(db)
         if payload["environmentId"] != meta.get("environment") or payload["worldFingerprint"] != meta.get("fingerprint"):
             raise ValueError("World identity mismatch.")
         old = db.execute("SELECT * FROM commands WHERE id=?", (payload["commandId"],)).fetchone()
@@ -175,6 +185,16 @@ def _notice(world, db, meta, project, phase, day, source):
                                            "FROM assets WHERE premise=? ORDER BY id", (project["premise"],))]
     for service in services:
         service["servicePointId"] = "SP-" + stable(meta["environment"], service["installationId"])
+        service.update(meterId=service["assetId"], measurementType="metered", sourceServicePointId=None, derivation=None)
+    configuration = db.execute("SELECT value FROM observation_delivery_configuration WHERE singleton=1").fetchone()
+    if configuration:
+        factor = json.loads(configuration[0])["sewerReturnFactor"]
+        services += [{**service, "assetId": None, "meterId": None, "commodity": "sewer",
+                      "installationId": "SEWER-"+service["installationId"],
+                      "servicePointId": "SEWER-"+service["servicePointId"], "measurementType": "derived",
+                      "sourceServicePointId": service["servicePointId"],
+                      "derivation": {"method": "water-return-factor", "factor": factor}}
+                     for service in services if service["commodity"] == "water"]
     notice = {"schemaVersion": NOTICE_VERSION, "environmentId": meta["environment"],
               "premiseId": project["premise"], "effectiveDate": day, "noticeType": phase,
               "services": services, "sourceEventId": source}
@@ -191,7 +211,7 @@ def apply_due(world, db, day, environment):
     """Run once per day in its transaction BEFORE occupancy and consumption."""
     if not enabled(db):
         return
-    meta = world.metadata(db)
+    meta = _meta(db)
     if environment != meta["environment"] or day != meta["through"]:
         raise ValueError("Development must run at the current physical day boundary.")
     for record in db.execute("SELECT * FROM development_projects WHERE phase!='occupied' AND hold IS NULL ORDER BY id").fetchall():
@@ -234,7 +254,7 @@ def inspect(world, project=None, offset=0, limit=25):
     if project is not None and (not isinstance(project, str) or not project or len(project) > 512):
         raise ValueError("Invalid project identity.")
     with world.db() as db:
-        meta = world.metadata(db)
+        meta = _meta(db)
         projects, history, notices = [], [], []
         if enabled(db):
             where, args = (" WHERE id=?", [project]) if project else ("", [])
@@ -264,11 +284,16 @@ def available_notices(world, processing_at, after=None, limit=50):
             raise ValueError("Invalid notification cursor.")
     with world.db() as db:
         _committed_time(world, db, at)
-        rows = db.execute("SELECT sequence,available_at,envelope FROM development_outbox WHERE available_at<=? "
-                          "AND (available_at>? OR (available_at=? AND sequence>?)) ORDER BY available_at,sequence LIMIT ?",
-                          (at, stamp, stamp, sequence, limit)).fetchall() if enabled(db) else []
-        return {"schemaVersion": NOTICE_VERSION, "items": [{"cursor": r["available_at"]+"|"+str(r["sequence"]),
-                "envelope": json.loads(r["envelope"])} for r in rows]}
+        rows = db.execute("SELECT sequence,available_at,envelope,fingerprint FROM development_outbox "
+                          "WHERE (available_at,sequence)>(?,?) AND available_at<=? ORDER BY available_at,sequence LIMIT ?",
+                          (stamp, sequence, at, limit)).fetchall() if enabled(db) else []
+        items = []
+        for row in rows:
+            envelope = json.loads(row["envelope"])
+            if stable(envelope) != row["fingerprint"]:
+                raise ValueError("Stored development notification checksum mismatch.")
+            items.append({"cursor": row["available_at"]+"|"+str(row["sequence"]), "envelope": envelope})
+        return {"schemaVersion": NOTICE_VERSION, "items": items}
 
 
 def relay(world, send, processing_at, limit=100):
@@ -284,7 +309,7 @@ def relay(world, send, processing_at, limit=100):
     for _ in range(limit):
         with world.db() as db:
             _committed_time(world, db, at)
-            row = db.execute("SELECT * FROM development_outbox WHERE state='pending' AND available_at<=? ORDER BY sequence LIMIT 1", (at,)).fetchone() if enabled(db) else None
+            row = db.execute("SELECT * FROM development_outbox WHERE state='pending' AND available_at<=? ORDER BY available_at,sequence LIMIT 1", (at,)).fetchone() if enabled(db) else None
             if row is None:
                 break
             envelope = json.loads(row["envelope"])
@@ -293,7 +318,11 @@ def relay(world, send, processing_at, limit=100):
             db.execute("UPDATE development_outbox SET attempts=attempts+1 WHERE id=?", (row["id"],))
         try:
             receipt = send(envelope)
-            if not isinstance(receipt, dict) or receipt.get("id") != envelope["id"] or receipt.get("status") not in ("pending", "delivering", "completed", "failed"):
+            if (not isinstance(receipt, dict) or set(receipt) != {"id", "runId", "fingerprint", "receiptId", "status"} or
+                    receipt["id"] != envelope["id"] or receipt["runId"] != envelope["runId"] or
+                    receipt["fingerprint"] != row["fingerprint"] or receipt["status"] != "accepted" or
+                    not isinstance(receipt["receiptId"], str) or not receipt["receiptId"].strip() or
+                    len(receipt["receiptId"]) > 512):
                 raise ValueError("Recipient did not acknowledge this notification.")
             encoded = canonical(receipt)
         except Exception as exc:
