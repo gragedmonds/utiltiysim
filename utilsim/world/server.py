@@ -2,13 +2,18 @@
 
 import argparse
 import json
+import mimetypes
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import parse_qs, unquote, urlsplit
 
+from .map_view import WorldMap
 from .store import World
 
 
-def make_server(world, port=8026):
+def make_server(world, port=8026, viewer_dir=None):
+    viewer = Path(viewer_dir or Path(__file__).resolve().parents[2] / "packages/town-viewer/dist").resolve()
+    map_view = WorldMap(world)
     class Handler(BaseHTTPRequestHandler):
         def reply(self, status, value, html=False):
             raw = value if html else json.dumps(value).encode()
@@ -29,12 +34,36 @@ def make_server(world, port=8026):
                 return self.reply(403, {"error": "Local host required."})
             if self.path == "/":
                 return self.reply(200, Path(__file__).with_name("index.html").read_bytes(), True)
+            url = urlsplit(self.path)
+            if url.path in ("/map", "/map.js"):
+                if not (viewer / "vendor/three.module.js").is_file():
+                    return self.reply(503, {"error": "Map assets unavailable. Run npm install in packages/town-viewer, or provide --viewer-dir."})
+                name = "map.html" if url.path == "/map" else "map.js"
+                return self.static(Path(__file__).with_name(name))
+            if url.path.startswith("/viewer/"):
+                target = (viewer / unquote(url.path.removeprefix("/viewer/"))).resolve()
+                if not target.is_relative_to(viewer) or target.suffix.lower() not in (".js", ".css", ".png", ".svg", ".webp", ".jpg"):
+                    return self.reply(403, {"error": "Invalid map asset."})
+                return self.static(target)
+            if url.path.startswith("/api/map/"):
+                try:
+                    args = parse_qs(url.query, keep_blank_values=True)
+                    if url.path == "/api/map/snapshot" and not args:
+                        return self.reply(200, map_view.snapshot())
+                    if url.path == "/api/map/status" and not args:
+                        return self.reply(200, map_view.status())
+                    if url.path == "/api/map/premise" and set(args) == {"id"} and len(args["id"]) == 1:
+                        return self.reply(200, map_view.premise(args["id"][0]))
+                    raise ValueError("Use the snapshot or a single premise ID.")
+                except (ValueError, TypeError, KeyError) as exc:
+                    return self.reply(422, {"error": str(exc)})
             if self.path != "/api/state":
                 return self.reply(404, {"error": "Not found."})
             with world.db() as db:
                 result = world._status(db)
                 meta = world.metadata(db)
                 result.update(start=meta.get("start"), settings=meta.get("settings"),
+                              managedDelivery=db.execute("SELECT 1 FROM observation_delivery_configuration").fetchone() is not None,
                               weather=[dict(r) for r in db.execute("SELECT * FROM days ORDER BY day DESC LIMIT 60")],
                               assets=[{**dict(r), "profile": json.loads(r["profile"])}
                                       for r in db.execute("SELECT * FROM assets ORDER BY id LIMIT 300")],
@@ -42,6 +71,19 @@ def make_server(world, port=8026):
                               events=[{**dict(r), "payload": json.loads(r["payload"])} for r in
                                       db.execute("SELECT * FROM events ORDER BY sequence DESC LIMIT 40")])
             return self.reply(200, result)
+
+        def static(self, path):
+            if not path.is_file():
+                return self.reply(404, {"error": "Map asset not found."})
+            raw = path.read_bytes()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/javascript" if path.suffix == ".js" else
+                             mimetypes.guess_type(path.name)[0] or "application/octet-stream")
+            self.send_header("Content-Length", str(len(raw)))
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.end_headers()
+            self.wfile.write(raw)
 
         def do_POST(self):
             port = self.server.server_port
@@ -61,6 +103,9 @@ def make_server(world, port=8026):
                     if p.get("environmentId") != world.status().get("environmentId"):
                         raise ValueError("Environment mismatch.")
                     if self.path == "/api/advance":
+                        with world.db() as db:
+                            if db.execute("SELECT 1 FROM observation_delivery_configuration").fetchone():
+                                raise ValueError("This world uses shared delivery. Advance it from the shared runtime control panel.")
                         result = world.advance(p["through"])
                     elif self.path == "/api/export":
                         result = world.export(p["start"], p["end"])
@@ -86,9 +131,14 @@ def main():
     parser = argparse.ArgumentParser(description="UtilitySim v2 world controls")
     parser.add_argument("--db", required=True)
     parser.add_argument("--port", type=int, default=8026)
+    parser.add_argument("--viewer-dir", help="Existing town-viewer dist directory with vendored Three.js")
+    parser.add_argument("--open-map", action="store_true", help="Open the durable world map in the default browser")
     args = parser.parse_args()
-    server = make_server(World(args.db), args.port)
+    server = make_server(World(args.db), args.port, args.viewer_dir)
     print(f"UtilitySim world: http://127.0.0.1:{server.server_port}/", flush=True)
+    if args.open_map:
+        import webbrowser
+        webbrowser.open(f"http://127.0.0.1:{server.server_port}/map")
     server.serve_forever()
 
 
