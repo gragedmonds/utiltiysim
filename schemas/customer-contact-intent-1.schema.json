@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Simulated customer contact intent; not a ticket or resolution",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "id", "environmentId", "premiseId", "servicePointId", "commodity", "callerKind", "condition", "experienceId", "observedAt", "noticedAt", "createdAt", "availableAt", "attempt", "previousContactId", "reason"],
+  "properties": {
+    "schemaVersion": {"const": "customer-contact-intent/1"},
+    "id": {"type": "string", "minLength": 1},
+    "environmentId": {"type": "string", "minLength": 1},
+    "premiseId": {"type": "string", "minLength": 1},
+    "servicePointId": {"type": "string", "minLength": 1},
+    "commodity": {"enum": ["electric", "gas", "water", "sewer"]},
+    "callerKind": {"const": "premise_occupants"},
+    "condition": {"enum": ["no_supply", "visible_overflow"]},
+    "experienceId": {"type": "string", "minLength": 1},
+    "observedAt": {"type": "string", "format": "date-time"},
+    "noticedAt": {"type": "string", "format": "date-time"},
+    "createdAt": {"type": "string", "format": "date-time"},
+    "availableAt": {"type": "string", "format": "date-time"},
+    "attempt": {"type": "integer", "minimum": 1, "maximum": 10},
+    "previousContactId": {"type": ["string", "null"]},
+    "reason": {"enum": ["service_problem", "repeat_service_problem"]}
+  }
+}
