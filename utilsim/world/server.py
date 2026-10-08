@@ -7,7 +7,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlsplit
 
-from . import hazards, network_faults, occupancy, sewer, water_faults
+from . import hazards, network_faults, occupancy, sewer, water_faults, water_mains
 from .map_view import WorldMap
 from .store import World
 
@@ -36,6 +36,18 @@ def make_server(world, port=8026, viewer_dir=None):
             if self.path == "/":
                 return self.reply(200, Path(__file__).with_name("index.html").read_bytes(), True)
             url = urlsplit(self.path)
+            if url.path in ("/water-mains", "/water-mains.js"):
+                return self.static(Path(__file__).with_name("water_mains.html" if url.path == "/water-mains" else "water_mains.js"))
+            if url.path == "/api/water-mains":
+                try:
+                    args = parse_qs(url.query, keep_blank_values=True)
+                    if set(args)-{"edgeId", "after", "before", "serviceAfter", "beforeDay"} or any(len(v) != 1 for v in args.values()):
+                        raise ValueError("Use one main ID and optional page cursors.")
+                    return self.reply(200, water_mains.inspect(world, args.get("edgeId", [None])[0],
+                        args.get("after", [""])[0], int(args["before"][0]) if "before" in args else None,
+                        args.get("serviceAfter", [""])[0], args.get("beforeDay", [None])[0]))
+                except (ValueError, TypeError, KeyError) as exc:
+                    return self.reply(422, {"error": str(exc)})
             if url.path in ("/hazards", "/hazards.js"):
                 return self.static(Path(__file__).with_name("hazards.html" if url.path == "/hazards" else "hazards.js"))
             if url.path == "/api/hazards":
@@ -163,7 +175,9 @@ def make_server(world, port=8026, viewer_dir=None):
                 else:
                     if p.get("environmentId") != world.status().get("environmentId"):
                         raise ValueError("Environment mismatch.")
-                    if self.path == "/api/hazards":
+                    if self.path == "/api/water-mains":
+                        result = water_mains.command(world, p)
+                    elif self.path == "/api/hazards":
                         result = hazards.command(world, p)
                     elif self.path == "/api/sewer":
                         result = sewer.command(world, p)

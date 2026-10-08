@@ -175,7 +175,7 @@ def command(world, payload):
         return result
 
 
-def consumption(world, db, asset, day, quantity, meta):
+def consumption(world, db, asset, day, quantity, meta, supplied=True):
     """Run inside the day transaction. Fault truth never fills a missing meter read."""
     if asset["commodity"] != "water" or not enabled(db):
         return quantity
@@ -193,7 +193,7 @@ def consumption(world, db, asset, day, quantity, meta):
         return quantity
     # Carry forward the legacy hourly additive leak model for a 24-hour UTC day.
     normal = Decimal(f"{quantity:.4f}")
-    leak = (Decimal(active["rate"]) * 24).quantize(Decimal("0.0001"))
+    leak = (Decimal(active["rate"]) * 24).quantize(Decimal("0.0001")) if supplied else Decimal("0.0000")
     db.execute("INSERT INTO water_fault_effects VALUES(?,?,?,?,?)",
                (asset["id"], day, active["id"], str(normal), str(leak)))
     return float(normal + leak)
