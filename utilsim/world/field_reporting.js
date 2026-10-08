@@ -1,7 +1,9 @@
 const $=id=>document.getElementById(id);
 const esc=value=>String(value??'—').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const operations={'repair-water-leak':'Repair water leak','restore-electric-supply':'Restore electric supply','restore-gas-supply':'Restore gas supply','clear-sewer-blockage':'Clear sewer blockage'};
+const operations={'repair-water-leak':'Repair water leak','restore-electric-supply':'Restore electric supply','restore-gas-supply':'Restore gas supply','clear-sewer-blockage':'Clear sewer blockage','isolate-water-main':'Isolate water main','repair-water-main':'Repair water main','restore-water-main':'Restore water main'};
+const phases={'isolate-water-main':'Isolation completed','repair-water-main':'Main repaired; valves remain closed','restore-water-main':'Restoration completed; wider supply not verified'};
 const outcomes={completed:'Repair completed',not_found:'No active fault found',not_attempted:'Inspected; repair not attempted'};
+const outcomeText=(operation,outcome)=>phases[operation]?(outcome==='completed'?phases[operation]:outcome==='not_attempted'?'Inspected; assigned phase not performed':outcome==='not_found'?'No applicable main fault found':'Visit not recorded'):outcomes[outcome]||'Visit not recorded';
 let state=null,pending=null,storageKey=null,selectedId='',after=0,busy=false,loading=false,stale=true,identityChanged=false,storageReady=true;
 const selected=()=>state?.items.find(item=>item.assignment.assignmentId===selectedId);
 function message(text,error=false){$('message').textContent=text;$('message').className=error?'error':'';}
@@ -21,15 +23,20 @@ function controls(){
 function renderSelection(){
  const item=selected();
  if(!item){
+  $('phaseDetails').hidden=true;
   $('assignmentDetails').textContent='No accepted assignments on this page. Register a crew and accept an assignment in Crews and visits.';
   for(const id of ['physicalResult','reportStatus','transportStatus'])$(id).textContent='No assignment selected';
   $('policyHelp').textContent='Select an assignment before configuring reporting.';
   $('submitHelp').textContent='A manual report requires a completed visit.';controls();return;
  }
  const a=item.assignment;
+ $('phaseDetails').hidden=!phases[a.operation];
+ $('phaseDetails').textContent=phases[a.operation]?`Local water-main phase · predecessor ${item.phase?.predecessorAssignmentId||(a.operation==='isolate-water-main'?'none — initial isolation':'not available in this response')}. ${item.blockedReason||'Progress depends on committed physical actions, not report claims.'}`:'';
  $('assignmentDetails').textContent=`${operations[a.operation]||a.operation} · target ${a.assetId} · crew ${a.crewId} · order ${a.orderId} / revision ${a.orderRevision} · scheduled ${a.scheduledDate}`;
- $('physicalResult').textContent=item.actualOutcome?`${outcomes[item.actualOutcome]||item.actualOutcome} · visit ${item.visitDate}`:'Visit not yet recorded';
- $('reportStatus').textContent=item.claimedOutcome?`Submitted claim: ${item.claimedOutcome}. Report ${item.reportId}`:item.reportMode==='manual'?(item.actualOutcome?'Awaiting crew submission — no report exists':'Manual submission waits for the visit'):'Automatic report waits for the visit';
+ $('physicalResult').textContent=item.actualOutcome?`${outcomeText(a.operation,item.actualOutcome)} · visit ${item.visitDate}`:'Visit not yet recorded';
+ $('reportStatus').textContent=item.claimedOutcome?`Submitted claim: ${item.claimedOutcome}${phases[a.operation]?' — '+outcomeText(a.operation,item.claimedOutcome):''}. Report ${item.reportId}`:item.reportMode==='manual'?(item.actualOutcome?'Awaiting crew submission — no report exists':'Manual submission waits for the visit'):'Automatic report waits for the visit';
+ $('completedClaim').textContent=phases[a.operation]?`Completed — crew claims: ${phases[a.operation]}`:'Completed — crew claims the repair succeeded';
+ $('notFoundClaim').textContent=phases[a.operation]?'Not found — crew claims no applicable main fault was found':'Not found — crew claims no active fault was found';
  const transport=item.reportTransport;
  $('transportStatus').textContent=!item.reportId?'No report to deliver':`Available from ${item.reportAvailableDate}. `+(transport?`${transport.state==='received'?'Transport receipt recorded':transport.state==='pending'?'Pending transport':transport.state} · ${transport.attempts} attempt(s)${transport.lastError?' · '+transport.lastError:''}. A receipt is not enterprise acceptance.`:'Transport receipt status is not exposed here. Availability is not delivery.');
  $('reportMode').value=item.reportMode;$('workMode').value=item.workMode;
@@ -47,7 +54,7 @@ function render(){
  if(!state.items.some(item=>item.assignment.assignmentId===selectedId))selectedId=state.items[0]?.assignment.assignmentId||'';
  $('assignmentSelect').innerHTML=state.items.length?state.items.map(item=>`<option value="${esc(item.assignment.assignmentId)}">${esc(item.assignment.assignmentId)} · ${esc(operations[item.assignment.operation]||item.assignment.operation)} · ${esc(item.assignment.crewId)}</option>`).join(''):'<option value="">No assignments</option>';
  $('assignmentSelect').value=selectedId;
- $('history').innerHTML=state.items.length?state.items.map(item=>{const a=item.assignment;return `<tr><td>${esc(a.assignmentId)}<br>${esc(a.orderId)} · revision ${esc(a.orderRevision)}</td><td>${esc(operations[a.operation]||a.operation)}<br>${esc(a.crewId)}</td><td>${esc(item.reportMode)} / ${esc(item.workMode)}<br>Revision ${esc(item.policyRevision)}</td><td>${esc(outcomes[item.actualOutcome]||'Visit not recorded')}<br>${esc(item.visitDate)}</td><td>${esc(item.claimedOutcome||'Not submitted')}</td></tr>`;}).join(''):'<tr><td colspan="5">No accepted assignments.</td></tr>';
+ $('history').innerHTML=state.items.length?state.items.map(item=>{const a=item.assignment;return `<tr><td>${esc(a.assignmentId)}<br>${esc(a.orderId)} · revision ${esc(a.orderRevision)}</td><td>${esc(operations[a.operation]||a.operation)}<br>${esc(a.crewId)}</td><td>${esc(item.reportMode)} / ${esc(item.workMode)}<br>Revision ${esc(item.policyRevision)}</td><td>${esc(outcomeText(a.operation,item.actualOutcome))}<br>${esc(item.visitDate)}</td><td>${esc(item.claimedOutcome?(phases[a.operation]?outcomeText(a.operation,item.claimedOutcome):item.claimedOutcome):'Not submitted')}</td></tr>`;}).join(''):'<tr><td colspan="5">No accepted assignments.</td></tr>';
  renderSelection();
 }
 async function request(body=null,cursor=after){
