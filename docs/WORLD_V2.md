@@ -30,6 +30,11 @@ All date ranges are **start inclusive, end exclusive**. The displayed cursor is 
 
 ## Physical behavior
 
+[Persistent water leaks and physical repair](WORLD_WATER_FAULTS.md) add manual
+and seeded downstream faults, increased daily demand, repair controls and map
+inspection. Meter condition remains independent; hidden faults stay outside
+operational observations, and physical repair does not close enterprise work.
+
 [Dated physical occupancy](WORLD_OCCUPANCY.md) adds working schedule/cancel controls
 for vacancies and population changes. Plans apply inside the daily transaction,
 change future demand, and remain hidden from operational consumers. Current map
