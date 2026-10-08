@@ -12,21 +12,22 @@ function nextDay(value){
  parsed.setUTCDate(parsed.getUTCDate()+1);return parsed.toISOString().slice(0,10);
 }
 function unavailable(){return !state?.environmentId||state.managed||!!state.unavailableReason;}
+function workerUnavailable(){return state?.workerEnabled===false||!!state?.workerError;}
 function controls(){
  const blocked=busy||!!pending||stale||identityChanged||!storageReady||unavailable();
  const status=state?.status;
- $('start').disabled=loading||blocked||!['idle','completed','cancelled'].includes(status);
+ $('start').disabled=loading||blocked||workerUnavailable()||!['idle','completed','cancelled'].includes(status);
  $('targetDate').disabled=blocked||!['idle','completed','cancelled'].includes(status);
  $('reason').disabled=busy||!!pending||identityChanged||!storageReady||unavailable();
  $('pause').disabled=loading||blocked||status!=='running';
- $('resume').disabled=loading||blocked||!['paused','failed'].includes(status);
+ $('resume').disabled=loading||blocked||workerUnavailable()||!['paused','failed'].includes(status);
  $('cancel').disabled=loading||blocked||!['running','paused','failed'].includes(status);
  $('refresh').disabled=loading||busy||identityChanged;
- $('retry').hidden=!pending;$('retry').disabled=busy||loading||identityChanged||unavailable();
+ $('retry').hidden=!pending;$('retry').disabled=busy||loading||identityChanged||unavailable()||(workerUnavailable()&&['start','resume'].includes(pending?.action));
 }
 function render(){
  $('identity').textContent=state.environmentId?`Environment ${state.environmentId}`:'No initialized world';
- $('runState').textContent=labels[state.status]||'Unavailable';
+ $('runState').textContent=workerUnavailable()&&state.status==='running'?'Waiting for server':labels[state.status]||'Unavailable';
  $('completedThrough').textContent=state.through?previousDay(state.through):'—';
  $('target').textContent=state.targetDate||'No target saved';
  $('nextDay').textContent=state.through||'—';$('revision').textContent=state.revision??'—';
@@ -36,9 +37,11 @@ function render(){
  $('progress').value=total?Math.min(100,Math.max(0,completed/total*100)):0;
  $('progressText').textContent=total?`${completed} of ${total} planned days completed · ${Number(progress.remainingDays)||0} remaining.`:'No run is scheduled.';
  const failure=state.error?typeof state.error==='string'?state.error:JSON.stringify(state.error):'';
- $('failure').hidden=!failure;$('failure').textContent=failure?`Saved failure: ${failure}`:'';
+ const workerFailure=workerUnavailable()?`The automatic runner is unavailable${state.workerError?' ('+String(state.workerError)+')':''}. Restart the local server to restore its supervised runner before starting or resuming. Saved progress is retained; you can still pause or cancel an existing run.`:'';
+ $('failure').hidden=!failure&&!workerFailure;
+ $('failure').textContent=[workerFailure,failure?`Saved failure: ${failure}`:''].filter(Boolean).join(' ');
  const phase=state.phase?String(state.phase).replaceAll('_',' '):'No active checkpoint';
- $('cause').textContent=failure||phase;
+ $('cause').textContent=failure||state.workerError||phase;
  $('unavailable').hidden=!unavailable();
  $('unavailableReason').textContent=state.unavailableReason||(state.managed?'This world is controlled by the shared runtime. Continue its authenticated schedule there. Local cruise control cannot advance it.':'Initialize a saved world in World controls first.');
  $('targetDate').min=state.through?nextDay(state.through):'';
@@ -48,7 +51,7 @@ function render(){
   failed:'Resolve the recorded cause, then resume. Cancel releases the remaining schedule while keeping completed work.',
   completed:'The stopping date was reached. Choose a later date to start another run.',
   cancelled:'Remaining days were cancelled. Choose a date to start a new run.'};
- $('controlHelp').textContent=unavailable()?'Use the controlling runtime shown above.':hints[state.status]||'Refresh to recover the saved run state.';
+ $('controlHelp').textContent=unavailable()?'Use the controlling runtime shown above.':workerUnavailable()?'Start and resume are disabled until the server runner is restored. Pause and cancellation remain available for a saved run.':hints[state.status]||'Refresh to recover the saved run state.';
  $('updated').textContent=`Status checked at ${new Date().toLocaleTimeString()}. Updates pause while this page is hidden.`;
  controls();
 }
@@ -96,6 +99,9 @@ async function refresh(manual=false){
 function clearPending(){pending=null;try{sessionStorage.removeItem(storageKey);}catch{/* A stale stored retry remains safe to replay. */}}
 async function send(action){
  if(busy||loading||identityChanged||unavailable())return;
+ if(workerUnavailable()&&['start','resume'].includes(pending?.action||action)){
+  message('Restart the local server to restore its automatic runner before starting or resuming.',true);return;
+ }
  clearTimeout(timer);timer=null;
  if(!pending){
   if(stale||!storageReady)return;
