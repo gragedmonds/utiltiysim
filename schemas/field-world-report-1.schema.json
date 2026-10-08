@@ -37,7 +37,13 @@
           "On-site inspection found a gas edge fault. Assigned edge repaired; wider service restoration not verified.",
           "On-site inspection found no active gas edge fault.",
           "On-site inspection found a sewer lateral blockage. Blockage cleared.",
-          "On-site inspection found no active sewer lateral blockage."
+          "On-site inspection found no active sewer lateral blockage.",
+          "On-site water-main isolation completed using the saved valve boundaries; repair and restoration remain separate.",
+          "On-site inspection found no active water-main break to isolate.",
+          "Assigned isolated water-main break repaired; isolation remains in place pending restoration.",
+          "On-site inspection found no matching isolated water-main break to repair.",
+          "Assigned repaired water-main isolation released; wider supply restoration not verified.",
+          "On-site inspection found no matching repaired water-main isolation to restore."
         ]},
         "attachments": {"type": "array", "maxItems": 0}
       }

@@ -143,3 +143,23 @@ test('world-committed visit awaiting field recovery is shown as actual work and 
  assert.equal(ui.element('configure').disabled,true);assert.equal(ui.element('submitReport').disabled,false);
  await ui.submit();assert.equal(ui.posted.length,1);assert.equal(ui.posted[0].action,'submit');
 });
+
+test('phase results and submitted claims describe the assigned stage without asserting repair or full supply',async()=>{
+ for(const [operation,label] of [['isolate-water-main','Isolation completed'],['repair-water-main','Main repaired; valves remain closed'],['restore-water-main','Restoration completed; wider supply not verified']]){
+  const saved={...manual(),assignment:{...manual().assignment,operation},actualOutcome:'completed',claimedOutcome:'completed',reportId:'phase-report',canSubmit:false,phase:{predecessorAssignmentId:'preceding-phase'}};
+  const ui=await screen({items:[saved]});
+  assert.ok(ui.element('physicalResult').textContent.includes(label));assert.ok(ui.element('reportStatus').textContent.includes(label));
+  assert.ok(ui.element('completedClaim').textContent.includes(label));assert.match(ui.element('phaseDetails').textContent,/preceding-phase/);
+  assert.ok(ui.element('history').innerHTML.includes(label));assert.doesNotMatch(ui.element('physicalResult').textContent,/Repair completed/);
+ }
+});
+
+test('false phase completion remains a claim and pending successor displays physical blocker',async()=>{
+ const saved={...manual(),assignment:{...manual().assignment,operation:'isolate-water-main'},claimedOutcome:'completed',reportId:'false-report',canSubmit:false,phase:{predecessorAssignmentId:null}};
+ const ui=await screen({items:[saved]});assert.match(ui.element('physicalResult').textContent,/assigned phase not performed/);
+ assert.match(ui.element('reportStatus').textContent,/Isolation completed/);
+ const waiting={...item(),assignment:{...item().assignment,operation:'repair-water-main'},phase:{predecessorAssignmentId:'isolation-1'},blockedReason:'Waiting for committed physical predecessor.'};
+ ui.setRecord({items:[waiting]});await ui.click('refresh');
+ assert.match(ui.element('phaseDetails').textContent,/Waiting for committed physical predecessor/);
+ assert.equal(ui.element('submitReport').disabled,true);
+});

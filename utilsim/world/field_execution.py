@@ -23,6 +23,11 @@ OPERATIONS = {OPERATION: "plumbing", "restore-electric-supply": "electric",
               "restore-gas-supply": "gas", "clear-sewer-blockage": "sewer"}
 
 
+def _skill(operation):
+    from . import field_water_mains
+    return "water-main" if operation in field_water_mains.OPERATIONS else OPERATIONS[operation]
+
+
 def _world_identity(db):
     return {r["key"]: json.loads(r["value"]) for r in db.execute(
         "SELECT key,value FROM meta WHERE key IN ('environment','fingerprint','through')")}
@@ -42,6 +47,7 @@ def _owned_store(db, binding):
                              "payload checksum accepted_event state executed_day result",
         "field_outbox": "sequence id assignment available_day envelope checksum state attempts receipt last_error",
         "field_reporting": "assignment revision assignment_checksum report_mode work_mode event_id",
+        "field_main_phases": "assignment assignment_checksum predecessor predecessor_checksum",
     }
     indexes = {"field_assignment_due", "field_crew_usage", "field_outbox_due"}
     tables = {r["name"] for r in objects if r["type"] == "table"}
@@ -61,12 +67,16 @@ def _owned_store(db, binding):
         raise ValueError("Existing database has no valid field ownership record; it was not changed.")
     if stored_binding != binding:
         raise ValueError("Field database belongs to another world or owner.")
-    from . import field_reporting
-    expected = set(columns) - {"field_reporting"} if enabled(db) else {"meta", "commands", "events"}
+    from . import field_reporting, field_water_mains
+    expected = set(columns) - {"field_reporting", "field_main_phases"} if enabled(db) else {"meta", "commands", "events"}
     if field_reporting.enabled(db):
         if not enabled(db):
             raise ValueError("Reporting schema requires a recognized enabled field execution store.")
         expected.add("field_reporting")
+    if field_water_mains.enabled(db):
+        if not enabled(db):
+            raise ValueError("Main phases require a recognized enabled field execution store.")
+        expected.add("field_main_phases")
     if tables != expected:
         raise ValueError("Existing database has an incomplete field schema; it was not changed.")
     return True
@@ -181,6 +191,7 @@ def _day(value):
 
 
 def _validate(payload):
+    from . import field_water_mains
     common = {"schemaVersion", "commandId", "environmentId", "worldFingerprint", "actorId",
               "effectiveDate", "action", "causalReference"}
     extra = {
@@ -189,18 +200,21 @@ def _validate(payload):
                    "operation", "reportDelayDays"},
         "execute": {"assignmentId"},
     }
+    main = isinstance(payload, dict) and payload.get("schemaVersion") == field_water_mains.VERSION
+    if main:
+        extra = {"accept": extra["accept"] | {"predecessorAssignmentId"}}
     if (not isinstance(payload, dict) or not isinstance(payload.get("action"), str)
             or payload["action"] not in extra or set(payload) != common | extra[payload["action"]]
-            or payload.get("schemaVersion") != VERSION):
+            or payload.get("schemaVersion") != (field_water_mains.VERSION if main else VERSION)):
         raise ValueError("Invalid field-execution command contract.")
-    for key in set(payload) - {"expectedRevision", "skills", "weekdays", "dailyCapacity", "orderRevision", "reportDelayDays"}:
+    for key in set(payload) - {"expectedRevision", "skills", "weekdays", "dailyCapacity", "orderRevision", "reportDelayDays", "predecessorAssignmentId"}:
         _text(payload[key])
     _day(payload["effectiveDate"])
     if payload["action"] == "configure-crew":
         _integer(payload["expectedRevision"], 0, 2147483647)
         _integer(payload["dailyCapacity"], 0, 100)
         if (not isinstance(payload["skills"], list)
-                or any(not isinstance(s, str) or s not in OPERATIONS.values() for s in payload["skills"])
+                or any(not isinstance(s, str) or s not in {*OPERATIONS.values(), "water-main"} for s in payload["skills"])
                 or len(set(payload["skills"])) != len(payload["skills"])
                 or not isinstance(payload["weekdays"], list) or len(payload["weekdays"]) > 7):
             raise ValueError("Invalid crew skills or weekdays.")
@@ -212,8 +226,15 @@ def _validate(payload):
         _day(payload["scheduledDate"])
         _integer(payload["orderRevision"], 1, 2147483647)
         _integer(payload["reportDelayDays"], 0, 365)
-        if payload["operation"] not in OPERATIONS:
+        if payload["operation"] not in (field_water_mains.OPERATIONS if main else OPERATIONS):
             raise ValueError("Unsupported field operation.")
+        if main:
+            prior = payload["predecessorAssignmentId"]
+            if payload["operation"] == "isolate-water-main":
+                if prior is not None:
+                    raise ValueError("Isolation cannot have a predecessor.")
+            else:
+                _text(prior)
 
 
 def _enqueue(world, db, meta, assignment, kind, data, cause, available):
@@ -238,25 +259,38 @@ def _assignment(db, identity):
               "scheduled_day": "scheduledDate", "report_delay_days": "reportDelayDays", "id": "assignmentId"}
     if checksum(payload) != row["checksum"] or any(row[col] != payload[key] for col, key in mapped.items()):
         raise ValueError("Stored assignment checksum mismatch.")
-    return row
+    from .field_water_mains import phase_binding
+    phase = phase_binding(db, row)
+    return {**dict(row), "_mainBinding": phase} if phase is not None else row
 
 
 def _physical_key(field, row):
     return "field-physical-" + stable(field.owner_id, row["id"])
 
 
-def _physical_result(field, row, policy=None):
+def _physical_binding(field, row, policy=None):
     from .field_reporting import binding
+    result = binding(field, row, policy)
+    if "_mainBinding" in row.keys():
+        result["mainPhase"] = row["_mainBinding"]
+    return result
+
+
+def _physical_result(field, row, policy=None):
     with field.world.db() as db:
         old = db.execute("SELECT payload,result FROM commands WHERE id=?", (_physical_key(field, row),)).fetchone()
-        if old and old["payload"] != canonical(binding(field, row, policy)):
+        if old and old["payload"] != canonical(_physical_binding(field, row, policy)):
             raise ValueError("Conflicting physical assignment retry.")
-        return json.loads(old["result"]) if old else None
+        result = json.loads(old["result"]) if old else None
+        return {k: v for k, v in result.items() if k != "_mainLifecycle"} if result else None
 
 
 def _target(db, meta, operation, identity, day):
     """Validate assigned location, never inspect hidden faults at acceptance."""
-    skill = OPERATIONS[operation]
+    from . import field_water_mains
+    if operation in field_water_mains.OPERATIONS:
+        return field_water_mains.target(db, meta, identity, day)
+    skill = _skill(operation)
     if skill == "plumbing":
         asset = water_faults._asset(db, identity)
         if asset["installed"] > day:
@@ -289,12 +323,13 @@ def _physical(field, field_db, meta, row, actor):
     World commits its own idempotency journal with the repair. A crash before the
     field commit is recovered from that journal; it cannot repeat the repair.
     """
-    from .field_reporting import binding, policy
+    from . import field_water_mains
+    from .field_reporting import policy
     reporting = policy(field_db, row)
     prior = _physical_result(field, row, reporting)
     if prior:
         return prior
-    unavailable = _availability(field_db, row, meta["through"])
+    unavailable = _availability(field_db, row, meta["through"], field)
     if unavailable:
         raise ValueError(unavailable)
     world = field.world
@@ -303,6 +338,11 @@ def _physical(field, field_db, meta, row, actor):
         if current_meta["through"] != meta["through"]:
             raise ValueError("World date changed before execution.")
         operation = json.loads(row["payload"])["operation"]
+        if operation in field_water_mains.OPERATIONS:
+            observation = field_water_mains.physical(field, field_db, db, meta, row, actor, reporting)
+            db.execute("INSERT INTO commands VALUES(?,?,?)", (_physical_key(field, row),
+                       canonical(_physical_binding(field, row, reporting)), canonical(observation)))
+            return {k: v for k, v in observation.items() if k != "_mainLifecycle"}
         target = _target(db, meta, operation, row["asset"], meta["through"])
         skill = OPERATIONS[operation]
         if skill == "plumbing":
@@ -329,17 +369,22 @@ def _physical(field, field_db, meta, row, actor):
         if reporting["workMode"] == "inspect-only":
             observation["outcome"] = "not_attempted"
         db.execute("INSERT INTO commands VALUES(?,?,?)", (identity,
-                   canonical(binding(field, row, reporting)), canonical(observation)))
+                   canonical(_physical_binding(field, row, reporting)), canonical(observation)))
         return observation
 
 
-def _availability(db, row, day):
+def _availability(db, row, day, field=None):
+    from . import field_water_mains
     crew = db.execute("SELECT * FROM field_crews WHERE id=?", (row["crew"],)).fetchone()
-    skill = OPERATIONS[json.loads(row["payload"])["operation"]]
+    skill = _skill(json.loads(row["payload"])["operation"])
     if not crew or skill not in json.loads(crew["skills"]):
         return f"Crew lacks the required {skill} skill."
     if row["scheduled_day"] > day:
         return "Assignment is not due."
+    if field is not None:
+        waiting = field_water_mains.blocked(field, db, row)
+        if waiting:
+            return waiting
     if date.fromisoformat(day).weekday() not in json.loads(crew["weekdays"]):
         return "Crew is off shift."
     used = db.execute("SELECT COUNT(*) FROM field_assignments WHERE crew=? AND executed_day=?",
@@ -350,6 +395,9 @@ def _availability(db, row, day):
 
 
 def _narrative(operation, outcome):
+    from . import field_water_mains
+    if operation in field_water_mains.NARRATIVES:
+        return field_water_mains.NARRATIVES[operation][0 if outcome == "completed" else 1]
     finding, action = {
         OPERATION: ("downstream leak", "Repair completed"),
         "restore-electric-supply": ("electric edge fault", "Assigned edge repaired; wider service restoration not verified"),
@@ -412,7 +460,16 @@ def command(world, payload):
     Actor IDs are simulator principals, not remote authentication credentials.
     Transport adapters must authenticate their callers before invoking this API.
     """
+    from . import field_water_mains
+    if isinstance(payload, dict) and payload.get("schemaVersion") == field_water_mains.VERSION:
+        raise ValueError("Main phases require atomic acceptance through the field main phases API.")
+    return _command(world, payload)
+
+
+def _command(world, payload):
+    """Shared owner transaction, reached through the appropriate public boundary."""
     _validate(payload)
+    from . import field_water_mains
     encoded = canonical(payload)
     with world.db() as db:
         meta = world.metadata(db)
@@ -454,12 +511,14 @@ def command(world, payload):
             with world.world.db() as physical_db:
                 _target(physical_db, meta, payload["operation"], payload["assetId"], payload["scheduledDate"])
             crew = db.execute("SELECT * FROM field_crews WHERE id=?", (payload["crewId"],)).fetchone()
-            skill = OPERATIONS[payload["operation"]]
+            skill = _skill(payload["operation"])
             if not crew or skill not in json.loads(crew["skills"]):
                 raise ValueError(f"Crew lacks the required {skill} skill.")
             if db.execute("SELECT 1 FROM field_assignments WHERE id=? OR (order_id=? AND order_revision=?)",
                           (payload["assignmentId"], payload["orderId"], payload["orderRevision"])).fetchone():
                 raise ValueError("Assignment or order revision is already accepted.")
+            if payload["operation"] in field_water_mains.OPERATIONS:
+                field_water_mains.predecessor(db, payload)
             event = world.event(db, meta["environment"], meta["through"], "FieldAssignmentAccepted", payload["assignmentId"],
                                 payload, payload["causalReference"])
             db.execute("INSERT INTO field_assignments(id,crew,asset,order_id,order_revision,scheduled_day,"
@@ -467,6 +526,8 @@ def command(world, payload):
                        (payload["assignmentId"], payload["crewId"], payload["assetId"], payload["orderId"],
                         payload["orderRevision"], payload["scheduledDate"], payload["reportDelayDays"],
                         encoded, checksum(payload), event))
+            if payload["operation"] in field_water_mains.OPERATIONS:
+                field_water_mains.store_binding(world, db, payload, checksum(payload))
             row = _assignment(db, payload["assignmentId"])
             ack = _enqueue(world, db, meta, row, "ack", {
                 "order_id": row["order_id"], "revision": row["order_revision"], "dispatch_ref": row["id"],
@@ -488,7 +549,7 @@ def _daily(world, db, meta):
                       "ORDER BY scheduled_day,sequence", (meta["through"],)).fetchall()
     for candidate in rows:
         row = _assignment(db, candidate["id"])
-        if _availability(db, row, meta["through"]) is None:
+        if _availability(db, row, meta["through"], world) is None:
             results.append(_execute(world, db, meta, row, row["crew"], row["accepted_event"]))
     return results
 
@@ -597,6 +658,7 @@ def relay(world, send, limit=25):
 
 def inspect(world, after=0, limit=25):
     """Administrator-only execution/delivery status; never an enterprise worklist."""
+    from . import field_water_mains
     _page(after, limit)
     with world.db() as db:
         meta = world.metadata(db)
@@ -617,7 +679,8 @@ def inspect(world, after=0, limit=25):
                                  "schema": envelope["schema"]})
             items.append({"assignment": json.loads(assignment["payload"]), "state": row["state"],
                           "result": json.loads(row["result"]) if row["result"] else None, "messages": messages,
-                          "blockedReason": _availability(db, row, meta["through"]) if row["state"] == "accepted" else None})
+                          "phase": field_water_mains.public_phase(db, assignment),
+                          "blockedReason": _availability(db, assignment, meta["through"], world) if row["state"] == "accepted" else None})
         return {"view": "administrator-truth", "modelVersion": VERSION, "enabled": present,
                 "ownerId": world.owner_id,
                 "crews": [{**dict(r), "skills": json.loads(r["skills"]), "weekdays": json.loads(r["weekdays"])}

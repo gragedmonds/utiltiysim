@@ -15,6 +15,7 @@ from . import (
     development,
     field_execution,
     field_reporting,
+    field_water_mains,
     hazards,
     network_faults,
     occupancy,
@@ -307,6 +308,10 @@ def make_server(world, port=8026, viewer_dir=None, field_db=None, cruise_worker=
                         if p.get("action") in ("start", "resume") and (not cruise_worker or self.server.cruise_worker_error):
                             return self.reply(503, {"error": "Cruise worker is unavailable. Restart the local server before changing this run."})
                         result = cruise.command(world, p, field)
+                    elif self.path == "/api/field-main-phases":
+                        if field is None:
+                            return self.reply(503, {"error": "Field main phases require a separate --field-db database."})
+                        result = field_water_mains.command(field, p)
                     elif self.path == "/api/field-reporting":
                         if field is None:
                             return self.reply(503, {"error": "Field reporting requires a separate --field-db database."})
@@ -314,6 +319,8 @@ def make_server(world, port=8026, viewer_dir=None, field_db=None, cruise_worker=
                     elif self.path in ("/api/field-execution", "/api/field-execution/run-due"):
                         if field is None:
                             return self.reply(503, {"error": "Field execution requires a separate --field-db database."})
+                        if p.get("schemaVersion") == field_water_mains.VERSION:
+                            raise ValueError("Accept main phases through /api/field-main-phases.")
                         if self.path.endswith("/run-due"):
                             if set(p) != {"environmentId", "worldFingerprint", "effectiveDate"}:
                                 raise ValueError("Provide the world identity and current date when running due field work.")
