@@ -166,3 +166,14 @@ reports by verified envelope schema, preserving the original visit result.
 Actual enterprise recipient/review/rework integration, report corrections with
 new order revisions, stochastic reporting-error policies, hourly workforce,
 travel, protected AI operation and large-scale acceptance remain unfinished.
+
+A bounded query diagnostic used a fresh one-premise synthetic fixture with
+1,000 accepted assignments, ten crews and 50 manual policies; it executed no
+visits or physical days. First/middle/last 100-row administrator pages took
+47–54 ms; 25-row crew pages took 12–13 ms. Every authorized assignment appeared
+exactly once over pagination; an unassigned actor received none. Process working
+memory was 45.47–46.64 MiB. Evidence is in
+`out/reporting-query-diagnostic/diagnostic.json`. Each administrator page opens
+one world connection per item plus its metadata connection; future optimization
+can reduce this overhead. This small query diagnostic does not constitute the
+15,000-account/five-year release benchmark.
