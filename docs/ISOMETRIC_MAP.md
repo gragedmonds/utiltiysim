@@ -5,6 +5,33 @@ engine's generation still decides everything: every house, facility, pole, pad t
 and network line is drawn where the engine placed it. The viewer only chooses which sprite draws each one. The 3D
 map is still available with `?map=3d`.
 
+## UtilitySim v2 world map
+
+The live `/map` and Studio's saved `/world-map` now use this same isometric
+renderer by default. The earlier v2 map mistakenly selected the older 3D
+renderer in light mode. **Map style** switches between Isometric and 3D;
+**Rotate** (R) turns through four sides, and **Plan view** (T) toggles overhead.
+These controls preserve the saved town's geometry. Property selection and
+refresh continue to inspect current physical occupancy, meters, readings and
+leaks from the world store. Equipment clicks show their stored map identity;
+they do not invent live operational measurements.
+
+The optional 3D world inspector renders when selection, layers, camera or size
+changes, rather than continuously repainting an idle town. The original animated
+Studio renderer retains its default behavior. This opt-in mode resolved browser
+interaction timeouts reproduced while local engine acceptance was running.
+
+The bundled atlas must finish loading before the map reports readiness. A
+missing atlas produces an explicit error with reload/3D recovery guidance.
+The standalone server serves only the specific atlas JSON alongside its
+existing asset allowlist; arbitrary JSON files remain inaccessible.
+
+`scripts/check_world_isometric.py` exercises all four views, plan view,
+keyboard controls, live inspection/refresh, the 3D option, atlas failure and
+recovery, and 1440/1024 desktop layouts against a disposable world copy.
+`scripts/check_world_library.py` separately checks the authenticated Studio
+library path and restart. Original snapshots and source databases remain intact.
+
 ## Pipeline
 
 | Step | Where | What it does |

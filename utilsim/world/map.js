@@ -1,9 +1,13 @@
-import {TownScene} from '/viewer/scene.js';
 import {inspectSnapshot} from '/viewer/adapter.js';
 const el=id=>document.getElementById(id);
 let scene,town,selected=null,requestVersion=0;
 const libraryMode=location.pathname==='/world-map';
 const worldId=new URLSearchParams(location.search).get('world');
+const mapStyle=new URLSearchParams(location.search).get('map')==='3d'?'3d':'iso';
+el('style').value=mapStyle;
+el('style').onchange=()=>{const url=new URL(location.href);url.searchParams.set('map',el('style').value);location.assign(url);};
+el('rotate').hidden=mapStyle==='3d';
+if(mapStyle==='3d'){el('gestures').textContent='Drag to pan · scroll to zoom · right-drag to rotate. Click a property to inspect it.';el('top').textContent='Top view';el('top').removeAttribute('aria-pressed');}
 let api='/api/map',headers={};
 if(libraryMode){
  const {localToken}=await import('/viewer/local-session.js');
@@ -32,13 +36,24 @@ async function refresh(){
 }
 el('find').onsubmit=e=>{e.preventDefault();if(!town)return;const q=el('query').value.trim().toLowerCase();const matches=town.premises.filter(p=>p.id.toLowerCase()===q||q&&(p.address||'').toLowerCase().includes(q)).slice(0,20);el('matches').replaceChildren();for(const p of matches){const b=document.createElement('button');b.type='button';b.textContent=(p.address||p.id)+' · '+p.id;b.onclick=()=>choose(p);el('matches').append(b);}if(!matches.length)el('matches').textContent=q?'No matching property.':'Enter an address or premise ID.';};
 el('home').onclick=()=>scene?.home();el('top').onclick=()=>scene?.top();
+el('rotate').onclick=()=>scene?.rotate();
 for(const key of ['electric','water','gas'])el(key).onchange=()=>{scene?.setLayers(layers());if(selected)scene.select(selected,utility(),false);};
 el('refresh').onclick=()=>refresh().catch(error=>{el('place').textContent='Refresh failed; current records are unavailable.';message(error.message,true);});
 try{
  town=await get('/snapshot');
  if(!town.bounds||!town.roads||!town.networks)throw Error('This world has service records but no map geometry. Open a world initialized from a full generated snapshot. Existing service records have been preserved.');
  inspectSnapshot(town);
- scene=new TownScene(el('map'),({home})=>choose(home),'lite');scene.load(town,{demo:false});scene.play=false;scene.setLayers(layers());
+ const {IsoScene,TownScene}=await import(mapStyle==='iso'?'/viewer/iso-scene.js':'/viewer/scene.js');
+ const Renderer=mapStyle==='iso'?IsoScene:TownScene;
+ scene=new Renderer(el('map'),({home,landmark,asset,nodeId})=>{
+  if(home){choose(home);return;}
+  ++requestVersion;selected=null;scene.clearSelection();
+  const title=landmark?.label||landmark?.kind||asset||'Map equipment';
+  el('place').innerHTML=`<h2>${esc(title)}</h2><p>${esc(landmark?.id||nodeId||'No individual asset ID supplied')}</p><p>Stored map equipment. Select a property to inspect its current physical service records.</p>`;
+ },mapStyle==='iso'?'full':'lite',{renderOnDemand:true});
+ scene.onViewChange=()=>{if(mapStyle==='iso'){el('top').setAttribute('aria-pressed',String(scene.view==='top'));el('map').dataset.view=scene.view;}};
+ if(scene.ready&&!(await scene.ready))throw Error('Isometric artwork could not load. Restore the bundled viewer artwork and reload, or choose 3D.');
+ scene.load(town,{demo:false});scene.play=false;scene.setLayers(layers());el('map').dataset.renderer=mapStyle;
  await refresh();document.body.dataset.ready='true';
-}catch(error){message('Map could not open: '+error.message,true);}
+}catch(error){scene?.destroy();scene=null;message('Map could not open: '+error.message,true);}
 window.addEventListener('pagehide',()=>scene?.destroy(),{once:true});

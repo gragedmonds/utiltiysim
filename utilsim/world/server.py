@@ -65,7 +65,9 @@ def make_server(world, port=8026, viewer_dir=None):
                 return self.static(Path(__file__).with_name(name))
             if url.path.startswith("/viewer/"):
                 target = (viewer / unquote(url.path.removeprefix("/viewer/"))).resolve()
-                if not target.is_relative_to(viewer) or target.suffix.lower() not in (".js", ".css", ".png", ".svg", ".webp", ".jpg"):
+                atlas = target == viewer / "iso/atlas.json"
+                if not target.is_relative_to(viewer) or (not atlas and target.suffix.lower() not in (
+                        ".js", ".css", ".png", ".svg", ".webp", ".jpg")):
                     return self.reply(403, {"error": "Invalid map asset."})
                 return self.static(target)
             if url.path.startswith("/api/map/"):
