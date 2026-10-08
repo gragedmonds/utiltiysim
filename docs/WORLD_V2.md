@@ -30,6 +30,12 @@ All date ranges are **start inclusive, end exclusive**. The displayed cursor is 
 
 ## Physical behavior
 
+Electricity and gas now have opt-in [durable network supply faults](WORLD_NETWORK_FAULTS.md).
+The saved topology determines interrupted services, unmet demand is retained in
+administrator truth, and explicit physical restoration changes future readings.
+World controls and the map link to the operational fault inspector; no enterprise
+report or queue is closed by the physical action.
+
 [Persistent water leaks and physical repair](WORLD_WATER_FAULTS.md) add manual
 and seeded downstream faults, increased daily demand, repair controls and map
 inspection. Meter condition remains independent; hidden faults stay outside

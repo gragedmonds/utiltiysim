@@ -7,7 +7,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlsplit
 
-from . import occupancy, water_faults
+from . import network_faults, occupancy, water_faults
 from .map_view import WorldMap
 from .store import World
 
@@ -36,6 +36,19 @@ def make_server(world, port=8026, viewer_dir=None):
             if self.path == "/":
                 return self.reply(200, Path(__file__).with_name("index.html").read_bytes(), True)
             url = urlsplit(self.path)
+            if url.path in ("/network-faults", "/network-faults.js"):
+                return self.static(Path(__file__).with_name("network_faults.html" if url.path == "/network-faults" else "network_faults.js"))
+            if url.path == "/api/network-faults":
+                try:
+                    args = parse_qs(url.query, keep_blank_values=True)
+                    if set(args) - {"commodity", "edgeId", "after", "before", "serviceAfter"} or any(len(v) != 1 for v in args.values()):
+                        raise ValueError("Use one commodity, edge ID and optional page cursors.")
+                    return self.reply(200, network_faults.inspect(world, args.get("commodity", ["electric"])[0],
+                        args.get("edgeId", [None])[0], args.get("after", [""])[0],
+                        int(args["before"][0]) if "before" in args else None,
+                        service_after=args.get("serviceAfter", [""])[0]))
+                except (ValueError, TypeError, KeyError) as exc:
+                    return self.reply(422, {"error": str(exc)})
             if url.path in ("/water-faults", "/water-faults.js"):
                 return self.static(Path(__file__).with_name("water_faults.html" if url.path == "/water-faults" else "water_faults.js"))
             if url.path == "/api/water-faults":
@@ -129,7 +142,9 @@ def make_server(world, port=8026, viewer_dir=None):
                 else:
                     if p.get("environmentId") != world.status().get("environmentId"):
                         raise ValueError("Environment mismatch.")
-                    if self.path == "/api/water-faults":
+                    if self.path == "/api/network-faults":
+                        result = network_faults.command(world, p)
+                    elif self.path == "/api/water-faults":
                         result = water_faults.command(world, p)
                     elif self.path == "/api/occupancy":
                         result = occupancy.command(world, p)
