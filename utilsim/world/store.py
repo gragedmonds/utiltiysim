@@ -171,7 +171,7 @@ class World:
 
     def advance(self, through):
         """Process [current date, through), committing each day and its checkpoint atomically."""
-        from . import hazards, network_faults, occupancy, registers, sewer, water_faults
+        from . import hazards, network_faults, occupancy, registers, sewer, water_faults, water_mains
 
         target = date.fromisoformat(through)
         if target.isoformat() != through:
@@ -196,6 +196,7 @@ class World:
                 db.execute("INSERT INTO days VALUES(?,?)", (ds, temperature))
                 meta["_hazards"] = hazards.daily(self, db, meta, temperature)
                 outages = network_faults.daily(self, db, meta)
+                water_outages = water_mains.daily(self, db, meta)
                 for record in db.execute("SELECT * FROM assets ORDER BY id").fetchall():
                     a = dict(record)
                     # Assets not yet commissioned cannot supply observations.
@@ -214,7 +215,8 @@ class World:
                     db.execute("UPDATE assets SET condition=?,drift=? WHERE id=?",
                                (a["condition"], a["drift"], a["id"]))
                     truth = self._demand(a, temperature, seed, ds)
-                    truth = water_faults.consumption(self, db, a, ds, truth, meta)
+                    truth = water_mains.consumption(db, a, ds, truth, water_outages)
+                    truth = water_faults.consumption(self, db, a, ds, truth, meta, supplied=a["id"] not in water_outages)
                     truth = network_faults.consumption(db, a, ds, truth, outages)
                     sewer.flow(self, db, a, ds, truth, meta)
                     observed = None if a["condition"] == "failed" else f"{truth * a['drift']:.4f}"

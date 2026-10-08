@@ -157,3 +157,10 @@ The 7 October 2026 rerun used an isolated Python 3.11 environment synchronized f
 The subsequent delivery increment's full non-slow run passed 502 tests, with the same two golden failures above. The two scheduled-world-handler tests added after that full run's collection also passed separately. All 18 world/delivery/runtime tests, 287 viewer tests, 11 conformance checks and repository lint passed. The medium three-day integration and the small 31-day integration both passed through the authenticated local runtime. Existing demo databases and expected golden digests were not changed.
 
 The incremental register-cache follow-up passed 508 non-slow tests with the same two known golden failures, all 287 viewer tests, 11 conformance checks and repository lint. All 22 world/delivery/runtime/cache tests pass. The medium three-day integration again produced 6,618 observations, 2,206 bills and 568 invoices totaling $41,857.17 with delayed availability and lost-acknowledgment recovery. A bounded-query test confirms that an end-of-year export reads only its requested dates; this is not a measured five-year large-town benchmark.
+
+## Water-main lifecycle increment
+
+Dedicated [water-main controls and acceptance](WORLD_WATER_MAINS.md) now model
+seeded/manual main breaks, unbilled loss, saved-valve isolation, explicit repair
+and flushing/restoration, with downstream water/leak/sewer conservation. Existing
+worlds opt in on their first valid command; earlier history remains unchanged.

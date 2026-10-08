@@ -161,9 +161,12 @@ weather-dependent roads/travel/field productivity, customer detection, assignmen
 physical execution/report reconciliation, and 15,000-account five-year integrated
 acceptance. No entire implementation gate is declared complete by this increment.
 
-### Next water-main integration boundary
+### Water-main integration boundary
 
-Read-only inventory confirms the saved water graph already retains sources,
+Implemented by [the dedicated water-main component](WORLD_WATER_MAINS.md).
+Customer/field evidence and workforce integration remain outstanding.
+
+The original integration inventory confirms the saved water graph already retains sources,
 service-node links, enabled edges, main diameters, material, depth and geometry.
 Reuse the legacy exposure/isolation work in `utilsim/ops/hazards.py`,
 `utilsim/ops/timeline.py` and `docs/NETWORK_RULES.md`; do not use the legacy
@@ -175,4 +178,5 @@ receiving a full downstream leak supply. Its water-leak loss and sanitary inflow
 must stay consistent with actual delivered water; simply adding water to the
 existing electricity/gas zero-supply filter would leave the current leak journal
 inconsistent. Add explicit fault/isolation/repair state and topology-based affected
-services, then cover these joint water/sewer balances and customer/field evidence.
+services and cover the joint water/sewer balances. This is now implemented;
+customer/field evidence and delayed awareness remain the next integration work.

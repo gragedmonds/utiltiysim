@@ -22,12 +22,13 @@ import numpy as np
 
 from utilsim.core.rng import Purpose, hash_u01
 
+from .materials import CAST_IRON_FACTOR
+
 P = Purpose.OPS_INCIDENT
 # Relative thunderstorm days per month (January … December).
 STORM_MONTH_WEIGHT = (0.1, 0.1, 0.4, 1.2, 2.6, 4.4, 5.4, 4.6, 2.6, 1.0, 0.4, 0.1)
 STORM_HOURS = (13.0, 18.0)  # a storm day's cells arrive between these local hours …
 STORM_LENGTH_H = 3.0  # … and its line faults fall within this many hours of the first
-CAST_IRON_FACTOR = 2.0  # unlined cast-iron water mains break twice as often
 OVERLOAD_FACTOR = 3.0  # a transformer loaded above its rating fails three times as often
 PEAK_HOUR = 18.0  # transformer loading is judged at the day's evening peak
 # (hazard code, incident kind, utility, run setting with the rate)
