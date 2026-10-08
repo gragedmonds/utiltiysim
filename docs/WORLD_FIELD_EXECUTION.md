@@ -1,5 +1,11 @@
 # Durable field execution and report delivery
 
+This document describes the default automatic-report policy. The opt-in
+[independent reporting extension](WORLD_FIELD_REPORTING.md) lets a visit remain
+unreported, records later crew submissions, and models incorrect claims without
+changing physical truth. Manual claims require recipient review; they are not
+proof of a successful repair.
+
 This slice executes an accepted downstream water-leak assignment with a real
 physical repair. Its acknowledgement and report are separate durable messages.
 Absent, delayed, rejected, or lost delivery never undoes a committed repair and
