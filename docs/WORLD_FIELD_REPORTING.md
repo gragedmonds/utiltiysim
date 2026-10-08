@@ -81,6 +81,12 @@ columns and version and refuses partial or foreign schemas before writing.
 A reporting table cannot stand alone without the existing execution schema.
 Policy inspection and implicit defaults do not migrate any database.
 
+Older field code cannot open the optional reporting table or replay its policy
+binding. For a code downgrade after new visits, restore a coordinated world and
+field checkpoint taken before enabling reporting. The automatic field migration
+backup alone is not a full-run rollback: do not restore that field file against
+a world that has subsequently committed policy-bound visits.
+
 Non-default policies are bound into the world's existing physical command
 journal together with the accepted assignment checksum. Once that journal
 commits, policy changes are frozen even if the field visit transaction was lost.
