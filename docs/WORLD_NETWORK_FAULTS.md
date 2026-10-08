@@ -163,3 +163,15 @@ not applicable to this slice.
   conformance: 11 passed. The first viewer attempt could not find Three.js
   because its local junction was created in the wrong directory; no product
   code changed to fix that environment setup.
+
+- Full regression: 634 passed with two dependency deprecation warnings in
+  1,271.11 seconds. Final focused coverage (62 checks, including 26 network
+  regressions) also passed after the commissioning/page refinements made while
+  that broader run was in progress.
+- The repeatable `scripts/check_network_fault_scale.py` run also passed on the
+  2,268-premise snapshot: initial inspection 0.951 seconds, enabled inspection
+  0.084 seconds, one day 1.662 seconds under concurrent host load.
+
+```powershell
+python scripts/check_network_fault_scale.py --snapshot path/to/town.json --out out/network-faults/scale
+```
