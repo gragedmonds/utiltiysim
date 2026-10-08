@@ -102,6 +102,9 @@ class TownConfig(BaseModel):
     houses: int = F(480, "Number of residential premises to place.", ge=20, le=10_000,
                     effects=["town extent", "era mix", "substations", "feeders", "pipe sizes", "MRUs"])
     units: Literal["ontario", "us", "uk"] = F("ontario", "Display unit profile (stored values are always SI).")
+    street_pattern: Literal["legacy", "neighborhoods"] = F(
+        "legacy", "Original street pattern or connected neighborhood loops and shorter blocks. New towns only.",
+        effects=["streets", "blocks", "property locations", "utility routing", "travel routes"])
     anchor_lat: float = F(43.30, "Latitude of the town (sun path, day length).", unit="deg", ge=-80, le=80,
                           advanced=True)
     anchor_lon: float = F(-80.60, "Longitude of the town.", unit="deg", ge=-180, le=180,
@@ -1034,6 +1037,8 @@ class SimConfig(BaseModel):
             d.pop(k, None)
         if d.get("customers_billing", {}).get("services") == list(SERVICES):
             d["customers_billing"].pop("services")
+        if d["town"].get("street_pattern") == "legacy":
+            d["town"].pop("street_pattern")  # Preserve identities of configurations written before this option.
         return d
 
     def serves(self, commodity: str) -> bool:

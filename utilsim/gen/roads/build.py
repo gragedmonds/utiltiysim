@@ -59,9 +59,12 @@ def build_geography(cfg: SimConfig) -> Geography:
                           t.era_noise_years, cfg.gas.all_electric_district_share)
     synth, bulbs, _, templates = synthetic_skeleton(
         seed, extent, center, era, arterial_spacing=t.arterial_spacing_m, arterial_warp=t.arterial_warp_m,
-        collector_block=t.collector_block_m, lot_depth_by_era=depth_by_era)
+        collector_block=t.collector_block_m, lot_depth_by_era=depth_by_era, street_pattern=t.street_pattern)
     roads = planarize([], synth, bulbs=bulbs)
     source = {"type": "synthetic", "label": "Synthetic town", "expansion": "none"}
+    if t.street_pattern == "neighborhoods":
+        from utilsim.gen.roads.neighborhoods import VERSION
+        source["streetModel"] = VERSION
     return Geography(roads, era, _terrain(cfg), center, extent, t.anchor_lat, t.anchor_lon, source, templates)
 
 

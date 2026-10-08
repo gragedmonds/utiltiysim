@@ -298,7 +298,7 @@ def name_lines(seed: str, lines: list[RoadLine], reserved: set[str]) -> None:
 
 def synthetic_skeleton(seed: str, extent, center, era: EraField, *, arterial_spacing: float, arterial_warp: float,
                        collector_block: float, lot_depth_by_era: list[float], exclude: Polygon | None = None,
-                       reserved_names: set[str] | None = None):
+                       reserved_names: set[str] | None = None, street_pattern: str = "legacy"):
     """All synthetic lines for an extent (optionally leaving a hole empty)."""
     frame = box(*extent)
     arts = arterial_lines(seed, extent, center, arterial_spacing, arterial_warp)
@@ -315,7 +315,13 @@ def synthetic_skeleton(seed: str, extent, center, era: EraField, *, arterial_spa
     if exclude is not None:
         anchor_parts.append(exclude.boundary)
     anchor = unary_union(anchor_parts)
-    locs, bulbs, templates = local_lines(seed, nblocks, era, lot_depth_by_era, anchor)
+    if street_pattern == "neighborhoods":
+        from utilsim.gen.roads.neighborhoods import local_lines as neighborhood_lines
+        locs, bulbs, templates = neighborhood_lines(seed, nblocks, era, lot_depth_by_era, anchor)
+    elif street_pattern == "legacy":
+        locs, bulbs, templates = local_lines(seed, nblocks, era, lot_depth_by_era, anchor)
+    else:
+        raise ValueError("Unknown street pattern")
     all_lines = kept_arts + cols + locs
     name_lines(seed, all_lines, reserved_names or set())
     return all_lines, np.asarray(bulbs, dtype=np.float64).reshape(-1, 2), nblocks, templates

@@ -66,6 +66,9 @@ IMPACT: dict[str, tuple[str, str]] = {
                             "a bigger town also spreads further, so its edge reaches newer eras."),
     "town.units": ("display", "How values are labelled (Ontario, US or UK units). Stored values stay SI; no result "
                               "changes."),
+    "town.street_pattern": ("shape", "Builds either the original street pattern or connected neighborhood loops "
+                                     "and shorter blocks. Property placement, service routes and travel follow the "
+                                     "new roads; existing saved towns are not changed."),
     "town.anchor_lat": ("display", "Where the town sits on the globe: its latitude and the sun path "
                                    "in the map's day and night. Measured: no usage, network or year change."),
     "town.anchor_lon": ("display", "Where the town sits on the globe (its longitude). Measured: no "

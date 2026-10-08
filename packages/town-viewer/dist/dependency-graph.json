@@ -128,6 +128,19 @@
       "reference": "utilsim/config/impact.py · town.units"
     },
     {
+      "id": "town.street_pattern",
+      "title": "Street Pattern",
+      "lane": "environment",
+      "topic": "Town & geography",
+      "kind": "setting",
+      "description": "Original street pattern or connected neighborhood loops and shorter blocks. New towns only.",
+      "impact": "Builds either the original street pattern or connected neighborhood loops and shorter blocks. Property placement, service routes and travel follow the new roads; existing saved towns are not changed.",
+      "reach": "shape",
+      "unit": "",
+      "default": "legacy",
+      "reference": "utilsim/config/impact.py · town.street_pattern"
+    },
+    {
       "id": "town.anchor_lat",
       "title": "Anchor Lat",
       "lane": "environment",
@@ -10740,6 +10753,30 @@
         "references": [
           "utilsim/config/impact.py · town.units",
           "utilsim/config/impact.py"
+        ],
+        "basis": "Configuration input"
+      }
+    },
+    {
+      "source": "town.street_pattern",
+      "target": "engine:layout",
+      "kind": "uses",
+      "note": "Builds either the original street pattern or connected neighborhood loops and shorter blocks. Property placement, service routes and travel follow the new roads; existing saved towns are not changed.",
+      "reference": "utilsim/config/impact.py · town.street_pattern",
+      "explanation": {
+        "summary": "town.street_pattern is read by Town layout.",
+        "formula": "",
+        "steps": [
+          "Original street pattern or connected neighborhood loops and shorter blocks. New towns only.",
+          "Builds either the original street pattern or connected neighborhood loops and shorter blocks. Property placement, service routes and travel follow the new roads; existing saved towns are not changed."
+        ],
+        "conditions": [
+          "Takes effect when the town is regenerated."
+        ],
+        "example": "",
+        "references": [
+          "utilsim/config/impact.py · town.street_pattern",
+          "utilsim/gen/pipeline.py"
         ],
         "basis": "Configuration input"
       }

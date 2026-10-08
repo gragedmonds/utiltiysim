@@ -129,6 +129,13 @@ geometry, with current physical-record inspection. Long horizons work by daily
 iteration; large-town multi-year capacity and complete UI pagination still need
 a dedicated performance pass.
 
+New towns can now opt into `town.street_pattern = neighborhoods`, a versioned
+layout of connected local loops and shorter blocks behind the existing main-road
+hierarchy. The choice drives parcels, service networks and travel and remains
+in the saved snapshot; old towns retain their geometry and identities. See
+[street generation and acceptance](WORLD_STREET_DESIGN.md) for settings,
+verified design sources, tests and remaining map/field-work scope.
+
 The 7 October 2026 rerun used an isolated Python 3.11 environment synchronized from the frozen lockfile. It passed 495 non-slow engine tests, all 287 viewer tests and all 11 conformance checks, with the same two pre-existing golden failures. All 9 world-runtime tests and repository lint pass. No expected digest was changed.
 
 The subsequent delivery increment's full non-slow run passed 502 tests, with the same two golden failures above. The two scheduled-world-handler tests added after that full run's collection also passed separately. All 18 world/delivery/runtime tests, 287 viewer tests, 11 conformance checks and repository lint passed. The medium three-day integration and the small 31-day integration both passed through the authenticated local runtime. Existing demo databases and expected golden digests were not changed.
