@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "field-world-report-1.schema.json",
+  "title": "UtilitySim field-report/1 observable on-site evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["specversion", "id", "source", "type", "schema", "instance_id", "subject", "time", "business_time", "correlation_id", "causation_id", "data"],
+  "properties": {
+    "specversion": {"const": "1.0"},
+    "id": {"type": "string", "minLength": 1},
+    "source": {"const": "utilsim-field"},
+    "type": {"const": "FieldReportSubmitted"},
+    "schema": {"const": "field-report/1"},
+    "instance_id": {"type": "string", "minLength": 1},
+    "subject": {"type": "string", "minLength": 1},
+    "time": {"type": "string", "format": "date-time"},
+    "business_time": {"type": "string", "format": "date"},
+    "correlation_id": {"type": "string", "minLength": 1},
+    "causation_id": {"type": "string", "minLength": 1},
+    "data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["order_id", "revision", "report_ref", "outcome", "submitted_at", "crew_ref", "observations", "attachments"],
+      "properties": {
+        "order_id": {"type": "string", "minLength": 1},
+        "revision": {"type": "integer", "minimum": 1},
+        "report_ref": {"type": "string", "minLength": 1},
+        "outcome": {"enum": ["completed", "not_found"]},
+        "submitted_at": {"type": "string", "format": "date-time"},
+        "crew_ref": {"type": "string", "minLength": 1},
+        "observations": {"enum": ["On-site plumbing inspection found a downstream leak. Repair completed.", "On-site plumbing inspection found no active downstream leak."]},
+        "attachments": {"type": "array", "maxItems": 0}
+      }
+    }
+  }
+}
