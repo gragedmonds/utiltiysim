@@ -14,6 +14,13 @@ World database. The field file is bound to the world's environment/fingerprint
 and its field owner ID. Back up/restore both owners together for a coordinated
 checkpoint; independently rolling either file back is not supported.
 
+Opening a pre-existing file first checks its field-owned schema and binding,
+before any schema or record writes. Unrelated stores, partial schemas and other
+world/owner bindings are rejected without adoption. Fresh or empty databases and
+matching field databases are supported. Routine field status, execution and
+delivery read only the physical environment, fingerprint and clock metadata;
+they do not decode physical catalogs.
+
 The local administrator registers crews and accepts an assignment naming one
 crew, water-service asset, enterprise order reference/revision and operation.
 The executor checks the persisted assignment, checksum, assigned crew, commissioning

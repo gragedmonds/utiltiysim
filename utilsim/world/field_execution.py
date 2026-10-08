@@ -21,6 +21,48 @@ VERSION = "field-world-execution/1"
 OPERATION = "repair-water-leak"
 
 
+def _world_identity(db):
+    return {r["key"]: json.loads(r["value"]) for r in db.execute(
+        "SELECT key,value FROM meta WHERE key IN ('environment','fingerprint','through')")}
+
+
+def _owned_store(db, binding):
+    """Read-only ownership check before creating or changing any field records."""
+    objects = db.execute("SELECT type,name FROM sqlite_master WHERE name NOT GLOB 'sqlite_*'").fetchall()
+    if not objects:
+        return False
+    columns = {
+        "meta": "key value",
+        "commands": "id payload result",
+        "events": "sequence id day type subject cause payload",
+        "field_crews": "id revision skills weekdays daily_capacity",
+        "field_assignments": "sequence id crew asset order_id order_revision scheduled_day report_delay_days "
+                             "payload checksum accepted_event state executed_day result",
+        "field_outbox": "sequence id assignment available_day envelope checksum state attempts receipt last_error",
+    }
+    indexes = {"field_assignment_due", "field_crew_usage", "field_outbox_due"}
+    tables = {r["name"] for r in objects if r["type"] == "table"}
+    if (not {"meta", "commands", "events"} <= tables or not tables <= columns.keys()
+            or any(r["type"] != "table" and (r["type"] != "index" or r["name"] not in indexes) for r in objects)):
+        raise ValueError("Existing database is not a recognized field store; it was not changed.")
+    for name in tables:
+        actual = [r["name"] for r in db.execute(f"PRAGMA table_info({name})")]
+        if actual != columns[name].split():
+            raise ValueError("Existing database is not a recognized field store; it was not changed.")
+    row = db.execute("SELECT value FROM meta WHERE key='worldBinding'").fetchone()
+    try:
+        stored_binding = json.loads(row[0]) if row else None
+    except (ValueError, TypeError) as exc:
+        raise ValueError("Existing database has no valid field ownership record; it was not changed.") from exc
+    if not isinstance(stored_binding, dict) or set(stored_binding) != {"environment", "fingerprint", "owner"}:
+        raise ValueError("Existing database has no valid field ownership record; it was not changed.")
+    if stored_binding != binding:
+        raise ValueError("Field database belongs to another world or owner.")
+    if tables != (set(columns) if enabled(db) else {"meta", "commands", "events"}):
+        raise ValueError("Existing database has an incomplete field schema; it was not changed.")
+    return True
+
+
 class FieldExecution:
     """Explicit workforce owner with a separate database and trusted world broker.
 
@@ -35,11 +77,13 @@ class FieldExecution:
             raise ValueError("Field execution requires a separate database.")
         Path(path).parent.mkdir(parents=True, exist_ok=True)
         with world.db() as db:
-            meta = world.metadata(db)
-        if not meta:
+            meta = _world_identity(db)
+        if set(meta) != {"environment", "fingerprint", "through"}:
             raise ValueError("Initialize the physical world first.")
         binding = {"environment": meta["environment"], "fingerprint": meta["fingerprint"], "owner": owner_id}
         with self.db() as db:
+            if _owned_store(db, binding):
+                return
             for sql in [
                 "CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY,value TEXT NOT NULL)",
                 "CREATE TABLE IF NOT EXISTS commands(id TEXT PRIMARY KEY,payload TEXT NOT NULL,result TEXT NOT NULL)",
@@ -47,9 +91,6 @@ class FieldExecution:
                 "day TEXT NOT NULL,type TEXT NOT NULL,subject TEXT NOT NULL,cause TEXT,payload TEXT NOT NULL)",
             ]:
                 db.execute(sql)
-            row = db.execute("SELECT value FROM meta WHERE key='worldBinding'").fetchone()
-            if row and json.loads(row[0]) != binding:
-                raise ValueError("Field database belongs to another world or owner.")
             self.put(db, "worldBinding", binding)
 
     @contextmanager
@@ -68,7 +109,7 @@ class FieldExecution:
 
     def metadata(self, db):
         with self.world.db() as physical:
-            meta = self.world.metadata(physical)
+            meta = _world_identity(physical)
         binding = json.loads(db.execute("SELECT value FROM meta WHERE key='worldBinding'").fetchone()[0])
         if binding != {"environment": meta.get("environment"), "fingerprint": meta.get("fingerprint"), "owner": self.owner_id}:
             raise ValueError("Field database belongs to another world or owner.")
@@ -215,7 +256,7 @@ def _physical(field, field_db, meta, row, actor):
         raise ValueError(unavailable)
     world = field.world
     with world.db() as db:
-        current_meta = world.metadata(db)
+        current_meta = _world_identity(db)
         if current_meta["through"] != meta["through"]:
             raise ValueError("World date changed before execution.")
         asset = water_faults._asset(db, row["asset"])
