@@ -135,6 +135,11 @@ explicit fixture assumption. It does not implement operational dispatch, measure
 uncertainty, compare the complete utility workforce, or establish the large-town
 performance target.
 
+The full non-slow Python run passed 908 tests, with only the existing
+Starlette/httpx deprecation warning. Five operation cases and eight HTTP cases
+were added after full collection; these passed in the final focused checks
+below. Final collection contains 921 non-slow tests.
+
 The final focused checks passed 26 operation tests, eight HTTP checks, nine field
 screen tests (including three existing crew-form regressions), 291 viewer tests
 and eleven conformance checks. Backend review found no additional defects. These
