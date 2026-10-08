@@ -86,13 +86,31 @@ plan's pinned notification delay. No planning, failure, population, private
 reason, construction-progress or hidden asset condition crosses this boundary.
 The payload contains environment, premise, effective date, stage notice type,
 existing installation/asset/commodity/commissioning identities, and an opaque
-source event ID. The world retains the full causal chain privately.
+source event ID. When observation delivery is configured, water services also
+include their derived sewer service: the same `SEWER-SP-...` service point,
+`SEWER-...` installation, source water point and pinned water-return factor used
+by observation/2 exports. The sewer asset and meter IDs are null; no sewer meter
+is fabricated. Unconfigured observation delivery produces physical-only notices
+because there is no pinned sewer derivation configuration. Already committed
+notices never change when a delivery stream is configured later. The world
+retains the full causal chain privately.
 
 `development.relay(world, send, processing_at, limit=100)` is the durable handoff:
 only due committed messages are passed to `send`. It keeps immutable IDs and
 payload hashes, persists attempts/receipts, and retains unknown acknowledgments
 for retry across restarts. No network call holds a database lock. The receiving
-authenticated scheduler must deduplicate by producer actor and command ID.
+dedicated authenticated adapter must deduplicate by producer actor, run and
+command ID and compare the full envelope fingerprint. Its receipt must contain
+exactly these fields:
+
+```json
+{"id":"<envelope id>","runId":"<envelope runId>","fingerprint":"<stable(envelope)>","receiptId":"<nonempty receipt identity>","status":"accepted"}
+```
+
+Wrong identity, run or fingerprint, missing/extra fields, blank receipt identity,
+and any status other than `accepted` keep the notice pending. This is a dedicated
+acceptance contract, not the generic runtime job-status response. Receipt IDs
+must be at most 512 characters.
 Pass trusted shared-clock time, never a worker-provided future timestamp. Both
 relay and filtered export reject times beyond the committed world clock; even
 an administrator cannot use a future timestamp to reveal delayed notices early.
@@ -102,8 +120,10 @@ support that versioned operation before wiring the relay. No enterprise handler
 or automatic commercial move-in is supplied by this world module.
 
 `available_notices(world, processing_at, after=None, limit=50)` is a filtered
-snapshot inspection/export. Its page cursor orders by availability time and row
-sequence so unequal delays do not skip already-persisted messages. It is not a
+snapshot inspection/export. Both export and relay verify stored payload hashes
+before returning or sending any notice. Its indexed tuple cursor orders by
+availability time and row sequence so unequal delays do not skip already-persisted
+messages or sort all history. It is not a
 durable change-stream cursor across concurrent world advances; use the relay's
 persisted pending/accepted state for consumption. Never expose administrator
 inspection as a substitute for this filtered boundary.
@@ -112,8 +132,11 @@ inspection as a substitute for this filtered boundary.
 
 Focused tests cover chronological stages, future services, increased consumption
 after move-in, preserved earlier observations, holds and restart, interrupted
-ready/move-in days, delayed notices, unknown receipt retry, opt-in migration and
-backup, command validation and forged occupancy context. Run:
+ready/move-in days, delayed notices, unknown receipt retry, strict receipt
+identity and checksum checks, derived sewer identity/provenance, indexed
+availability paging, opt-in migration and backup, command validation and forged
+occupancy context. Routine development inspection, feed and relay read only
+needed metadata keys and never decode the full physical catalogs. Run:
 
 ```text
 python -m pytest tests/test_world_development.py tests/test_world_occupancy_transactions.py
