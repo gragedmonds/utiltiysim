@@ -200,6 +200,8 @@ class World:
                 s, seed, ds, env = meta["settings"], meta["seed"], day.isoformat(), meta["environment"]
                 development.apply_due(self, db, ds, env)
                 occupancy.apply_due(self, db, ds, env)
+                if occupancy.enabled(db):
+                    meta["occupancyModelVersion"] = occupancy.VERSION
                 center = (s["winter_mean_c"] + s["summer_mean_c"]) / 2
                 amplitude = (s["summer_mean_c"] - s["winter_mean_c"]) / 2
                 temperature = round(center - amplitude * math.cos(2 * math.pi * (day.timetuple().tm_yday - 15)
