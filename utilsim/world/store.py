@@ -171,7 +171,16 @@ class World:
 
     def advance(self, through):
         """Process [current date, through), committing each day and its checkpoint atomically."""
-        from . import hazards, network_faults, occupancy, registers, sewer, water_faults, water_mains
+        from . import (
+            contacts,
+            hazards,
+            network_faults,
+            occupancy,
+            registers,
+            sewer,
+            water_faults,
+            water_mains,
+        )
 
         target = date.fromisoformat(through)
         if target.isoformat() != through:
@@ -226,6 +235,7 @@ class World:
                                (observation_id, a["id"], ds, a["device"], observed,
                                 "missing" if observed is None else "observed"))
                     registers.record(db, observation_id, a["device"], observed)
+                contacts.daily(self, db, meta)
                 event = self.event(db, env, ds, "WorldDayCompleted", meta["town"], {"temperatureC": temperature})
                 finish = (day + timedelta(days=1)).isoformat()
                 self.put(db, "through", finish)

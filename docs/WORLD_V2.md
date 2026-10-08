@@ -164,3 +164,11 @@ Dedicated [water-main controls and acceptance](WORLD_WATER_MAINS.md) now model
 seeded/manual main breaks, unbilled loss, saved-valve isolation, explicit repair
 and flushing/restoration, with downstream water/leak/sewer conservation. Existing
 worlds opt in on their first valid command; earlier history remains unchanged.
+
+## Customer-awareness increment
+
+[Customer awareness and contact intents](WORLD_CONTACTS.md) now turn experienced
+four-domain symptoms into delayed, durable messages with bounded repeat memory.
+The controls operate real policy commands; filtered delivery excludes hidden
+causes and future contacts. Recipient acceptance, staff handling and physical
+resolution remain separate, with a tested local inbox/retry boundary.

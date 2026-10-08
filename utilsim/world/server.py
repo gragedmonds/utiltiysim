@@ -7,7 +7,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlsplit
 
-from . import hazards, network_faults, occupancy, sewer, water_faults, water_mains
+from . import contacts, hazards, network_faults, occupancy, sewer, water_faults, water_mains
 from .map_view import WorldMap
 from .store import World
 
@@ -36,6 +36,19 @@ def make_server(world, port=8026, viewer_dir=None):
             if self.path == "/":
                 return self.reply(200, Path(__file__).with_name("index.html").read_bytes(), True)
             url = urlsplit(self.path)
+            if url.path in ("/contacts", "/contacts.js"):
+                return self.static(Path(__file__).with_name("contacts.html" if url.path == "/contacts" else "contacts.js"))
+            if url.path in ("/api/contacts", "/api/contact-intents"):
+                try:
+                    args = parse_qs(url.query, keep_blank_values=True)
+                    if set(args)-{"after", "limit"} or any(len(v) != 1 for v in args.values()):
+                        raise ValueError("Use one optional contact cursor and limit.")
+                    limit = int(args.get("limit", ["25"])[0])
+                    result = (contacts.inspect(world, int(args.get("after", ["0"])[0]), limit) if url.path == "/api/contacts" else
+                              contacts.ready(world, args.get("after", [None])[0], limit))
+                    return self.reply(200, result)
+                except (ValueError, TypeError) as exc:
+                    return self.reply(422, {"error": str(exc)})
             if url.path in ("/water-mains", "/water-mains.js"):
                 return self.static(Path(__file__).with_name("water_mains.html" if url.path == "/water-mains" else "water_mains.js"))
             if url.path == "/api/water-mains":
@@ -175,7 +188,9 @@ def make_server(world, port=8026, viewer_dir=None):
                 else:
                     if p.get("environmentId") != world.status().get("environmentId"):
                         raise ValueError("Environment mismatch.")
-                    if self.path == "/api/water-mains":
+                    if self.path == "/api/contacts":
+                        result = contacts.command(world, p)
+                    elif self.path == "/api/water-mains":
                         result = water_mains.command(world, p)
                     elif self.path == "/api/hazards":
                         result = hazards.command(world, p)
