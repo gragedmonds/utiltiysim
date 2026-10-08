@@ -4399,6 +4399,25 @@
           "x-impact": "Blocks kept as parks. Homes move to other blocks; the count stays the same.",
           "x-reach": "shape"
         },
+        "street_pattern": {
+          "default": "legacy",
+          "description": "Original street pattern or connected neighborhood loops and shorter blocks. New towns only.",
+          "enum": [
+            "legacy",
+            "neighborhoods"
+          ],
+          "title": "Street Pattern",
+          "type": "string",
+          "x-effects": [
+            "streets",
+            "blocks",
+            "property locations",
+            "utility routing",
+            "travel routes"
+          ],
+          "x-impact": "Builds either the original street pattern or connected neighborhood loops and shorter blocks. Property placement, service routes and travel follow the new roads; existing saved towns are not changed.",
+          "x-reach": "shape"
+        },
         "terrain_relief_m": {
           "default": 15.0,
           "description": "Peak-to-trough terrain relief.",
