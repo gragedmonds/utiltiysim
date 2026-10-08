@@ -123,3 +123,46 @@ crash boundary and physical rollback, shared capacity, private token filtering,
 false-claim and missing-report dependencies, no-fault visits, replacement fault
 holds, overlapping isolation, unavailable valves, authorization, atomic
 acceptance/retry, backup/reopen, checksum binding and legacy administrator bytes.
+
+## Screen walkthrough and copied-town acceptance
+
+Start the existing world server with an explicitly separate field store:
+
+```sh
+python -m utilsim.world.server --db <world-copy.sqlite> --field-db <field-copy.sqlite> --viewer-dir <town-viewer-dist> --port 8046
+```
+
+At `/field-execution`, configure a crew with the `water-main` skill. Accept
+isolation against a saved water-main edge using a local synthetic order
+reference. Accept repair against that same edge with the isolation assignment
+as its predecessor, and restoration with the repair assignment as predecessor.
+Use distinct local order references. One visit per day makes the physical
+sequence visible over three crew days; greater capacity can complete eligible
+phases on the same day. Advance through `/cruise` or run eligible visits from
+the field screen. Inspect the actual work, separate report claims and transport
+at `/field-reporting`.
+
+To reproduce the browser acceptance on a disposable copy, choose an unused
+output directory and a saved world with a valve-bounded water main:
+
+```sh
+python scripts/check_world_main_field_phases.py --db <saved-world.sqlite> --viewer-dir <town-viewer-dist> --out <new-output-directory>
+```
+
+This requires Playwright and Chromium in the selected Python environment. It
+creates world/baseline copies and a separate field store; it does not reset the
+source or existing demos. The 8 October 2026 run used 608 premises and a main
+affecting ten services. Isolation, repair and restoration consumed one crew
+visit each on successive days. A forced exit after physical isolation recovered
+the original visit date without repeating its action. A missing isolation
+report did not prevent valid physical repair. A second, inspection-only chain
+with a false completed report left its main broken and both successors pending
+through later days. Upstream loss remained unbilled, sewer volumes conserved,
+and source hashes, prior observations/events and saved map were unchanged.
+
+Both ordinary (1440 px) and smaller (1024 px) desktop layouts were exercised,
+including lost acceptance reply, reload and exact retry. `acceptance.json` and
+screenshots are written below the chosen output directory. Nine messages were
+received by a disposable test inbox; no enterprise adapter or enterprise
+acceptance was involved. Test server processes exit on completion. The separate
+8046 preview copies this completed fixture and keeps its unresolved work visible.
