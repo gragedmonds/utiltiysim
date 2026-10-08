@@ -27,6 +27,7 @@ export async function localRequest(path,data,{method,fetchImpl=globalThis.fetch,
 // controls reachable from Studio without persisting its per-launch credential.
 export function validLauncherURL(address){try{const u=new URL(address);return u.protocol==='http:'&&u.hostname==='127.0.0.1'&&!!u.port&&!u.username&&!u.password&&u.pathname==='/'&&!u.search&&new URLSearchParams(u.hash.slice(1)).get('token')?.length>=32;}catch{return false;}}
 async function installAppSettings(){
+ if(isApp())document.querySelectorAll('.local-worlds-link').forEach(a=>{a.hidden=false;});
  if(!isApp()||document.querySelector('.local-app-settings'))return;
  try{const s=await localRequest('status');if(!validLauncherURL(s.launcherURL))return;
   const header=document.querySelector('.top-actions,.offline-header,.studio-header,body > header');if(!header)return;

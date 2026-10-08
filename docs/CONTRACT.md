@@ -418,8 +418,11 @@ timestamp are ordered by `sequence`. Labels such as "nightly AMI collection" com
 
 ## Determinism
 
-Same config + generator version ⇒ byte-identical snapshot and fixtures (golden digests per section). The tests
-protect geography, networks, customer identities, ids, revisions, schedules and baseline reads. Weather, incidents
+Same config + generator version + numeric/geometry runtime ⇒ reproducible snapshots and fixtures.
+Cross-platform byte equality for premises/parcels is not a release requirement; those exact hash
+comparisons were retired on 8 October 2026. Functional tests still check geometry validity,
+lot overlap, building containment and road connectivity. Golden comparisons continue for the other
+sections, including networks, customer identities, ids, revisions, schedules and baseline reads. Weather, incidents
 and operations (M2/M3) modulate magnitudes and may legitimately change a run's event graph; for a fixed seed that
 event graph is also reproducible. Weather never changes geography or customer identities.
 

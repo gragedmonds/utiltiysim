@@ -70,6 +70,12 @@ def smoke_startup(executable, library):
                             assert client.get(origin + '/packs/index.json').status_code == 200
                             assert client.get(origin + '/api/health').status_code == 200
                             assert client.get(origin + '/local/status').status_code == 401
+                            assert client.get(origin + '/worlds').status_code == 200
+                            assert client.get(origin + '/worlds.js').status_code == 200
+                            assert client.get(origin + '/world-map').status_code == 200
+                            assert client.get(origin + '/map.js').status_code == 200
+                            assert client.get(origin + '/local/worlds').status_code == 401
+                            assert client.get(origin + '/local/worlds', headers=headers).json()['worlds'] == []
                             print('Packaged server startup, Studio pages, engine API and authenticated readiness passed.')
                             return
                     except (OSError, ValueError, httpx.HTTPError):
