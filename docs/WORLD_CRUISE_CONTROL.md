@@ -167,7 +167,10 @@ under concurrent test load. Evidence is in `out/cruise-long-replay/result.json`.
 This is one premise with three services, not the 15,000-account benchmark or
 measured HTTP-worker throughput.
 
-All 35 focused controller/HTTP tests and six screen-recovery regressions passed.
+The full non-slow Python run passed 858 tests. The 29 controller tests were added
+after that run's collection and passed in the final 35-test controller/HTTP
+selection; they are reported separately. All six screen-recovery regressions
+also passed. The full run emitted only the existing Starlette/httpx deprecation.
 Run the latter with `node --test tests/test_cruise_ui_recovery.mjs`; they execute
 the shipped JavaScript with controlled responses, including safe cancellation
 after missing field configuration and rejection of unsafe pending-field cancel.
