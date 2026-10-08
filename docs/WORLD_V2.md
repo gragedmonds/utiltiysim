@@ -30,6 +30,11 @@ All date ranges are **start inclusive, end exclusive**. The displayed cursor is 
 
 ## Physical behavior
 
+[Persistent water leaks and physical repair](WORLD_WATER_FAULTS.md) add manual
+and seeded downstream faults, increased daily demand, repair controls and map
+inspection. Meter condition remains independent; hidden faults stay outside
+operational observations, and physical repair does not close enterprise work.
+
 [Dated physical occupancy](WORLD_OCCUPANCY.md) adds working schedule/cancel controls
 for vacancies and population changes. Plans apply inside the daily transaction,
 change future demand, and remain hidden from operational consumers. Current map
@@ -114,7 +119,15 @@ The plan's gates remain acceptance milestones, not pauses for user approval. Thi
 
 The 6 October 2026 Windows validation passed all 7 new world tests, all 287 existing viewer tests, all 11 viewer conformance checks and repository lint. The full non-slow engine suite finished with 493 passing and 2 failing tests. Both failures are existing golden-digest mismatches: `village-120-T120` differs in parcels; `village-600-42` differs in premises and parcels. Both were reproduced in the unchanged original checkout at `68bf382805afe4e3a7d6fa329487b7e5eb43565b`, with no engine/test edits there. Goldens were not rewritten. A separate three-meter smoke run completed 3,652 days through 2036-01-01; this establishes date progression across leap years, not large-town capacity.
 
-The daily model currently covers consumption and meters. Pipe degradation, physical outages and repair crews, move-in/out, evolving household finances, propensity to pay, customer complaint generation, construction, seasonal regional calibration, solar/net export, and field command delivery/acknowledgment remain to be migrated or added. The dashboard is a new world-control surface; it does not yet replace or embed the existing 3D town viewer. Long horizons work by daily iteration, but large-town multi-year capacity and UI pagination require a dedicated performance pass.
+The daily model now covers consumption, meters, dated physical occupancy and
+persistent downstream water leaks with explicit repair. Pipe-network degradation,
+other-domain outages, repair crews, commercial move-in/out, household finances,
+propensity to pay, customer complaints, construction, regional calibration,
+solar/net export and field command delivery/acknowledgment remain incomplete.
+The world map reuses the finished isometric Studio renderer and retained snapshot
+geometry, with current physical-record inspection. Long horizons work by daily
+iteration; large-town multi-year capacity and complete UI pagination still need
+a dedicated performance pass.
 
 The 7 October 2026 rerun used an isolated Python 3.11 environment synchronized from the frozen lockfile. It passed 495 non-slow engine tests, all 287 viewer tests and all 11 conformance checks, with the same two pre-existing golden failures. All 9 world-runtime tests and repository lint pass. No expected digest was changed.
 

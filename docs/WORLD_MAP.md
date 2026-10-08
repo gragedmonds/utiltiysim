@@ -16,6 +16,13 @@ whole-town/top camera controls. Refresh reads current physical records from the
 same world database. A replacement changes the current device while historical
 observations retain their old device identity.
 
+The default is now the finished v1 **isometric** renderer and bundled artwork,
+with four-sided rotation, plan view and a 3D option. See
+[ISOMETRIC_MAP.md](ISOMETRIC_MAP.md) for controls and acceptance. The original
+3D-only v2 presentation was a renderer-selection regression; restoring the art
+does not change geography. [Street design work](WORLD_STREET_DESIGN.md) remains
+a separate generator increment based on verified references.
+
 This is an **administrator physical-truth view**, alongside the existing local
 world controls. It has no enterprise worker credential interface and must not
 be exposed as an AI worker tool or network service. The server binds loopback,

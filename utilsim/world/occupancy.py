@@ -4,11 +4,9 @@ Opt-in additive tables; old worlds are unchanged until the first accepted comman
 All scheduling, application and cancellation share the world's transaction boundary.
 """
 import json
-import sqlite3
-import uuid
 from datetime import date
-from pathlib import Path
 
+from .migrations import rollback_backup
 from .store import canonical
 
 VERSION = "world-occupancy/1"
@@ -27,14 +25,7 @@ def _enable(world, db):
         return
     # A separate reader can take a consistent backup while this transaction holds
     # the write reservation. Never overwrite a backup or the live database.
-    backup = Path(world.path).with_name(Path(world.path).name + f".pre-occupancy-{uuid.uuid4().hex}.bak")
-    source = sqlite3.connect(Path(world.path).resolve().as_uri() + "?mode=ro", uri=True)
-    target = sqlite3.connect(backup)
-    try:
-        source.backup(target)
-    finally:
-        source.close()
-        target.close()
+    backup = rollback_backup(world, "occupancy")
     db.execute("CREATE TABLE occupancy_premises(premise TEXT PRIMARY KEY, baseline TEXT NOT NULL, "
                "occupied INTEGER NOT NULL, occupants INTEGER NOT NULL, revision INTEGER NOT NULL, "
                "applied_command TEXT)")
@@ -48,7 +39,7 @@ def _enable(world, db):
     db.execute("CREATE INDEX occupancy_history ON occupancy_changes(premise,sequence)")
     db.execute("CREATE INDEX IF NOT EXISTS assets_occupancy_premise ON assets(premise)")
     world.put(db, "occupancyModelVersion", VERSION)
-    world.put(db, "occupancyRollbackBackup", str(backup.resolve()))
+    world.put(db, "occupancyRollbackBackup", backup)
 
 
 def _home(db, premise):

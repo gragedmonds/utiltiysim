@@ -171,7 +171,7 @@ class World:
 
     def advance(self, through):
         """Process [current date, through), committing each day and its checkpoint atomically."""
-        from . import occupancy, registers
+        from . import occupancy, registers, water_faults
 
         target = date.fromisoformat(through)
         if target.isoformat() != through:
@@ -212,6 +212,7 @@ class World:
                     db.execute("UPDATE assets SET condition=?,drift=? WHERE id=?",
                                (a["condition"], a["drift"], a["id"]))
                     truth = self._demand(a, temperature, seed, ds)
+                    truth = water_faults.consumption(self, db, a, ds, truth, meta)
                     observed = None if a["condition"] == "failed" else f"{truth * a['drift']:.4f}"
                     observation_id = stable(env, a["id"], ds, "observation")
                     db.execute("INSERT INTO truth VALUES(?,?,?)", (a["id"], ds, f"{truth:.4f}"))

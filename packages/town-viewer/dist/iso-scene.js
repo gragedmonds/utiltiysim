@@ -44,10 +44,10 @@ export class IsoScene{
   this.abort=new AbortController();const signal=this.abort.signal;bindPropertyPicking(this.canvas,e=>this.pick(e),signal);bindContextPicking(this.canvas,e=>this.contextPick(e),signal);this.bindGestures(signal);
   this.resizeObserver=new ResizeObserver(()=>this.resize());this.resizeObserver.observe(container);this.resize();
   document.addEventListener('visibilitychange',()=>this.performanceMonitor.reset(),{signal});
-  this.loadAtlas();this.last=performance.now();this.animate(this.last);
+  this.ready=this.loadAtlas();this.last=performance.now();this.animate(this.last);
  }
  // ---- atlas --------------------------------------------------------------------------------------------------------
- async loadAtlas(){try{const url=new URL('./iso/atlas.json',import.meta.url),index=await (await fetch(url)).json(),image=new Image();image.src=new URL(index.image,url).href;await image.decode();const small=document.createElement('canvas');small.width=Math.ceil(image.naturalWidth/LOD);small.height=Math.ceil(image.naturalHeight/LOD);const g=small.getContext('2d');g.imageSmoothingQuality='high';g.drawImage(image,0,0,small.width,small.height);this.atlas={sprites:index.sprites,image,small};this.invalidate();}catch(e){this.atlasError=e.message;console.warn('Isometric atlas: '+e.message);}}
+ async loadAtlas(){try{const url=new URL('./iso/atlas.json',import.meta.url),response=await fetch(url);if(!response.ok)throw Error('Artwork index unavailable ('+response.status+').');const index=await response.json(),image=new Image();image.src=new URL(index.image,url).href;await image.decode();const small=document.createElement('canvas');small.width=Math.ceil(image.naturalWidth/LOD);small.height=Math.ceil(image.naturalHeight/LOD);const g=small.getContext('2d');g.imageSmoothingQuality='high';g.drawImage(image,0,0,small.width,small.height);this.atlas={sprites:index.sprites,image,small};this.invalidate();return true;}catch(e){this.atlasError=e.message;console.warn('Isometric atlas: '+e.message);return false;}}
  sprite(name){return this.atlas?.sprites[name]||null;}
  // ---- town ---------------------------------------------------------------------------------------------------------
  load(town,{demo=false}={}){

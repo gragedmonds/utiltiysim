@@ -2,7 +2,7 @@
 import json
 from datetime import date, timedelta
 
-from . import occupancy
+from . import occupancy, water_faults
 
 
 class WorldMap:
@@ -41,7 +41,10 @@ class WorldMap:
                                   "LEFT JOIN truth t ON t.asset=a.id AND t.day=? "
                                   "LEFT JOIN observations o ON o.asset=a.id AND o.day=? "
                                   "WHERE a.premise=? ORDER BY a.commodity,a.id", (day, day, identity)):
-                assets.append(dict(row))
+                asset = dict(row)
+                if asset["commodity"] == "water":
+                    asset["waterFault"] = water_faults.state(db, asset["id"])["active"]
+                assets.append(asset)
             return {"schemaVersion": "world-map-premise/1", "view": "administrator-truth",
                     "environmentId": meta["environment"], "townId": meta["town"],
                     "through": meta["through"], "lastCompletedDay": day if day >= meta["start"] else None,

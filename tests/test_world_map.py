@@ -39,6 +39,9 @@ def test_map_http_boundaries_and_managed_clock(tmp_path):
     assets = tmp_path / 'viewer'
     (assets / 'vendor').mkdir(parents=True)
     (assets / 'vendor/three.module.js').write_text('// test static asset')
+    (assets / 'iso').mkdir()
+    (assets / 'iso/atlas.json').write_text('{"version":"iso-atlas/1.0"}')
+    (assets / 'private.json').write_text('{"secret":"must not be served"}')
     (tmp_path / 'private.json').write_text('{"secret":"must not be served"}')
     server = make_server(w, 0, assets)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -59,6 +62,8 @@ def test_map_http_boundaries_and_managed_clock(tmp_path):
         assert request('/map')[0] == 200
         assert request('/map.js')[0] == 200
         assert request('/viewer/vendor/three.module.js')[0] == 200
+        assert json.loads(request('/viewer/iso/atlas.json')[1]) == {'version': 'iso-atlas/1.0'}
+        assert request('/viewer/private.json')[0] == 403
         assert request('/viewer/%2e%2e/private.json')[0] == 403
         assert request('/viewer/missing.js')[0] == 404
         assert request('/api/map/snapshot', headers={'Host': 'untrusted.example'})[0] == 403

@@ -7,7 +7,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlsplit
 
-from . import occupancy
+from . import occupancy, water_faults
 from .map_view import WorldMap
 from .store import World
 
@@ -36,6 +36,17 @@ def make_server(world, port=8026, viewer_dir=None):
             if self.path == "/":
                 return self.reply(200, Path(__file__).with_name("index.html").read_bytes(), True)
             url = urlsplit(self.path)
+            if url.path in ("/water-faults", "/water-faults.js"):
+                return self.static(Path(__file__).with_name("water_faults.html" if url.path == "/water-faults" else "water_faults.js"))
+            if url.path == "/api/water-faults":
+                try:
+                    args = parse_qs(url.query, keep_blank_values=True)
+                    if set(args) - {"assetId", "before"} or any(len(v) != 1 for v in args.values()):
+                        raise ValueError("Use a single water service meter and optional history cursor.")
+                    return self.reply(200, water_faults.inspect(world, args["assetId"][0],
+                                                               int(args["before"][0]) if "before" in args else None))
+                except (ValueError, TypeError, KeyError) as exc:
+                    return self.reply(422, {"error": str(exc)})
             if url.path in ("/occupancy", "/occupancy.js"):
                 return self.static(Path(__file__).with_name("occupancy.html" if url.path == "/occupancy" else "occupancy.js"))
             if url.path == "/api/occupancy":
@@ -54,7 +65,9 @@ def make_server(world, port=8026, viewer_dir=None):
                 return self.static(Path(__file__).with_name(name))
             if url.path.startswith("/viewer/"):
                 target = (viewer / unquote(url.path.removeprefix("/viewer/"))).resolve()
-                if not target.is_relative_to(viewer) or target.suffix.lower() not in (".js", ".css", ".png", ".svg", ".webp", ".jpg"):
+                atlas = target == viewer / "iso/atlas.json"
+                if not target.is_relative_to(viewer) or (not atlas and target.suffix.lower() not in (
+                        ".js", ".css", ".png", ".svg", ".webp", ".jpg")):
                     return self.reply(403, {"error": "Invalid map asset."})
                 return self.static(target)
             if url.path.startswith("/api/map/"):
@@ -116,7 +129,9 @@ def make_server(world, port=8026, viewer_dir=None):
                 else:
                     if p.get("environmentId") != world.status().get("environmentId"):
                         raise ValueError("Environment mismatch.")
-                    if self.path == "/api/occupancy":
+                    if self.path == "/api/water-faults":
+                        result = water_faults.command(world, p)
+                    elif self.path == "/api/occupancy":
                         result = occupancy.command(world, p)
                     elif self.path == "/api/advance":
                         with world.db() as db:
