@@ -80,6 +80,12 @@ def inspect(world, premise, before=None, limit=25):
 
 def command(world, payload):
     """Versioned local administrator command; workers do not get this interface."""
+    with world.db() as db:
+        return command_in_transaction(world, db, payload)
+
+
+def command_in_transaction(world, db, payload, *, development_context=None):
+    """Internal world-owner scheduling within the caller's existing transaction."""
     if not isinstance(payload, dict):
         raise ValueError("Occupancy command must be a JSON object.")
     common = {"schemaVersion", "commandId", "environmentId", "worldFingerprint", "actorId", "premiseId", "expectedRevision",
@@ -103,50 +109,55 @@ def command(world, payload):
         if (payload["occupied"] and n == 0) or (not payload["occupied"] and n != 0):
             raise ValueError("Vacancies require zero occupants; occupied premises require at least one.")
     encoded = canonical(payload)
-    with world.db() as db:
-        meta = world.metadata(db)
-        if payload["environmentId"] != meta.get("environment"):
-            raise ValueError("Environment mismatch.")
-        if payload["worldFingerprint"] != meta.get("fingerprint"):
-            raise ValueError("World identity changed. Reload the world before making changes.")
-        old = db.execute("SELECT * FROM commands WHERE id=?", (payload["commandId"],)).fetchone()
-        if old:
-            if old["payload"] != encoded:
-                raise ValueError("Conflicting command retry.")
-            return json.loads(old["result"])
-        premise = payload["premiseId"]
-        state = current(db, premise)
-        if state["revision"] != payload["expectedRevision"]:
-            raise ValueError("Occupancy revision changed. Reload before changing this premise.")
-        if payload["action"] == "schedule":
-            if payload["effectiveDate"] < meta["through"]:
-                raise ValueError("Cannot change occupancy on a completed day.")
-            if enabled(db) and db.execute("SELECT 1 FROM occupancy_changes WHERE premise=? AND effective_date=? "
-                                          "AND status!='cancelled'", (premise, payload["effectiveDate"])).fetchone():
-                raise ValueError("An occupancy change already exists on that date; cancel it before replacing it.")
-        else:
-            target = db.execute("SELECT * FROM occupancy_changes WHERE command_id=? AND premise=?",
-                                (payload["targetCommandId"], premise)).fetchone() if enabled(db) else None
-            if not target or target["status"] != "scheduled":
-                raise ValueError("Only a scheduled change for this premise can be cancelled.")
-        _enable(world, db)
-        db.execute("INSERT OR IGNORE INTO occupancy_premises VALUES(?,?,?,?,0,NULL)",
-                   (premise, canonical(_home(db, premise)), int(state["occupied"]), state["occupants"]))
-        revision = state["revision"] + 1
-        db.execute("UPDATE occupancy_premises SET revision=? WHERE premise=?", (revision, premise))
-        if payload["action"] == "schedule":
-            db.execute("INSERT INTO occupancy_changes(command_id,premise,effective_date,occupied,occupants,status,actor,reason,cause) "
-                       "VALUES(?,?,?,?,?,'scheduled',?,?,?)", (payload["commandId"], premise, payload["effectiveDate"],
-                       int(payload["occupied"]), payload["occupants"], payload["actorId"], payload["reason"], payload["causalReference"]))
-        else:
-            db.execute("UPDATE occupancy_changes SET status='cancelled' WHERE command_id=?", (payload["targetCommandId"],))
-        event = world.event(db, meta["environment"], meta["through"],
-                            "OccupancyScheduled" if payload["action"] == "schedule" else "OccupancyCancelled",
-                            premise, {**payload, "revision": revision}, payload["commandId"])
-        result = {"commandId": payload["commandId"], "status": "accepted", "revision": revision,
-                  "eventId": event, "recordedDate": meta["through"], "modelVersion": VERSION}
-        db.execute("INSERT INTO commands VALUES(?,?,?)", (payload["commandId"], encoded, canonical(result)))
-        return result
+    meta = world.metadata(db)
+    if payload["environmentId"] != meta.get("environment"):
+        raise ValueError("Environment mismatch.")
+    if payload["worldFingerprint"] != meta.get("fingerprint"):
+        raise ValueError("World identity changed. Reload the world before making changes.")
+    old = db.execute("SELECT * FROM commands WHERE id=?", (payload["commandId"],)).fetchone()
+    if old:
+        if old["payload"] != encoded:
+            raise ValueError("Conflicting command retry.")
+        return json.loads(old["result"])
+    premise = payload["premiseId"]
+    state = current(db, premise)
+    if state["revision"] != payload["expectedRevision"]:
+        raise ValueError("Occupancy revision changed. Reload before changing this premise.")
+    if db.execute("SELECT 1 FROM meta WHERE key='developmentModelVersion'").fetchone():
+        from . import development
+
+        development.validate_occupancy(db, payload, development_context=development_context)
+    elif development_context is not None:
+        raise ValueError("No development reservation authorizes this occupancy change.")
+    if payload["action"] == "schedule":
+        if payload["effectiveDate"] < meta["through"]:
+            raise ValueError("Cannot change occupancy on a completed day.")
+        if enabled(db) and db.execute("SELECT 1 FROM occupancy_changes WHERE premise=? AND effective_date=? "
+                                      "AND status!='cancelled'", (premise, payload["effectiveDate"])).fetchone():
+            raise ValueError("An occupancy change already exists on that date; cancel it before replacing it.")
+    else:
+        target = db.execute("SELECT * FROM occupancy_changes WHERE command_id=? AND premise=?",
+                            (payload["targetCommandId"], premise)).fetchone() if enabled(db) else None
+        if not target or target["status"] != "scheduled":
+            raise ValueError("Only a scheduled change for this premise can be cancelled.")
+    _enable(world, db)
+    db.execute("INSERT OR IGNORE INTO occupancy_premises VALUES(?,?,?,?,0,NULL)",
+               (premise, canonical(_home(db, premise)), int(state["occupied"]), state["occupants"]))
+    revision = state["revision"] + 1
+    db.execute("UPDATE occupancy_premises SET revision=? WHERE premise=?", (revision, premise))
+    if payload["action"] == "schedule":
+        db.execute("INSERT INTO occupancy_changes(command_id,premise,effective_date,occupied,occupants,status,actor,reason,cause) "
+                   "VALUES(?,?,?,?,?,'scheduled',?,?,?)", (payload["commandId"], premise, payload["effectiveDate"],
+                   int(payload["occupied"]), payload["occupants"], payload["actorId"], payload["reason"], payload["causalReference"]))
+    else:
+        db.execute("UPDATE occupancy_changes SET status='cancelled' WHERE command_id=?", (payload["targetCommandId"],))
+    event = world.event(db, meta["environment"], meta["through"],
+                        "OccupancyScheduled" if payload["action"] == "schedule" else "OccupancyCancelled",
+                        premise, {**payload, "revision": revision}, payload["commandId"])
+    result = {"commandId": payload["commandId"], "status": "accepted", "revision": revision,
+              "eventId": event, "recordedDate": meta["through"], "modelVersion": VERSION}
+    db.execute("INSERT INTO commands VALUES(?,?,?)", (payload["commandId"], encoded, canonical(result)))
+    return result
 
 
 def apply_due(world, db, day, environment):
