@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Trusted adapter evidence of an actually delivered simulated document",
+  "type": "object", "additionalProperties": false,
+  "required": ["schemaVersion", "deliveryId", "environmentId", "worldFingerprint", "runId", "premiseId", "recipientRef", "invoiceId", "currency", "amountCents", "dueDate", "deliveredAt", "kind", "status"],
+  "$defs": {"ref": {"type": "string", "minLength": 1, "maxLength": 512, "pattern": "\\S"}},
+  "properties": {
+    "schemaVersion": {"const": "customer-finance-delivery/1"},
+    "deliveryId": {"$ref": "#/$defs/ref"},
+    "environmentId": {"$ref": "#/$defs/ref"},
+    "worldFingerprint": {"$ref": "#/$defs/ref"},
+    "runId": {"$ref": "#/$defs/ref"},
+    "premiseId": {"$ref": "#/$defs/ref"},
+    "recipientRef": {"$ref": "#/$defs/ref"},
+    "invoiceId": {"$ref": "#/$defs/ref"},
+    "currency": {"const": "USD"},
+    "amountCents": {"type": "integer", "minimum": 1, "maximum": 1000000000000},
+    "dueDate": {"type": "string", "format": "date"},
+    "deliveredAt": {"type": "string", "format": "date-time", "pattern": "Z$"},
+    "kind": {"enum": ["invoice", "notice"]},
+    "status": {"const": "delivered"}
+  }
+}

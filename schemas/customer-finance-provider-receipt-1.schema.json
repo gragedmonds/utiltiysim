@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Trusted simulated provider full settlement or full return",
+  "type": "object", "additionalProperties": false,
+  "required": ["schemaVersion", "receiptId", "environmentId", "worldFingerprint", "runId", "intentId", "intentFingerprint", "status", "amountCents", "currency", "occurredAt", "settlementReceiptId"],
+  "$defs": {"ref": {"type": "string", "minLength": 1, "maxLength": 512, "pattern": "\\S"}},
+  "properties": {
+    "schemaVersion": {"const": "customer-finance-provider-receipt/1"},
+    "receiptId": {"$ref": "#/$defs/ref"},
+    "environmentId": {"$ref": "#/$defs/ref"},
+    "worldFingerprint": {"$ref": "#/$defs/ref"},
+    "runId": {"$ref": "#/$defs/ref"},
+    "intentId": {"type": "string", "pattern": "^PAY-[0-9a-f]{24}$"},
+    "intentFingerprint": {"type": "string", "pattern": "^[0-9a-f]{24}$"},
+    "status": {"enum": ["settled", "returned"]},
+    "amountCents": {"type": "integer", "minimum": 1, "maximum": 1000000000000},
+    "currency": {"const": "USD"},
+    "occurredAt": {"type": "string", "format": "date-time", "pattern": "Z$"},
+    "settlementReceiptId": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/ref"}]}
+  },
+  "allOf": [{"if": {"properties": {"status": {"const": "settled"}}}, "then": {"properties": {"settlementReceiptId": {"type": "null"}}}, "else": {"properties": {"settlementReceiptId": {"$ref": "#/$defs/ref"}}}}]
+}

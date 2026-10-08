@@ -173,6 +173,7 @@ class World:
         """Process [current date, through), committing each day and its checkpoint atomically."""
         from . import (
             contacts,
+            customer_finance,
             hazards,
             network_faults,
             occupancy,
@@ -236,6 +237,7 @@ class World:
                                 "missing" if observed is None else "observed"))
                     registers.record(db, observation_id, a["device"], observed)
                 contacts.daily(self, db, meta)
+                customer_finance.daily(self, db, meta)
                 event = self.event(db, env, ds, "WorldDayCompleted", meta["town"], {"temperatureC": temperature})
                 finish = (day + timedelta(days=1)).isoformat()
                 self.put(db, "through", finish)
