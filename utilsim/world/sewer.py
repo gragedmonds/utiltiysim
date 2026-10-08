@@ -7,6 +7,7 @@ import math
 from datetime import date
 from decimal import Decimal, InvalidOperation
 
+from . import hazards
 from .migrations import rollback_backup
 from .store import canonical, draw, stable
 
@@ -189,9 +190,9 @@ def flow(world, db, asset, day, quantity, meta):
     current, policy = state(db, identity), meta["sewerPolicy"]
     if not current["active"] and policy["annualProbability"] > 0:
         cleared_today = db.execute("SELECT 1 FROM sewer_faults WHERE service=? AND cleared_date=? LIMIT 1", (identity, day)).fetchone()
-        hazard = 1 - (1-policy["annualProbability"]) ** (1/365.2425)
+        hazard, cause = hazards.risk(meta, "sewer", policy["annualProbability"], policy["cause"])
         if not cleared_today and draw(meta["seed"], day, identity, VERSION, "start") < hazard:
-            _start(world, db, meta, identity, policy["blockedCapacityM3PerDay"], "seeded", policy["cause"],
+            _start(world, db, meta, identity, policy["blockedCapacityM3PerDay"], "seeded", cause,
                    "world-system", "Seeded daily blockage hazard")
             current = state(db, identity)
     water = Decimal(f"{quantity:.4f}")

@@ -171,7 +171,7 @@ class World:
 
     def advance(self, through):
         """Process [current date, through), committing each day and its checkpoint atomically."""
-        from . import network_faults, occupancy, registers, sewer, water_faults
+        from . import hazards, network_faults, occupancy, registers, sewer, water_faults
 
         target = date.fromisoformat(through)
         if target.isoformat() != through:
@@ -194,6 +194,7 @@ class World:
                                                                   / 365.2425) + s["daily_weather_spread_c"] *
                                     (2 * draw(seed, ds, "weather") - 1), 2)
                 db.execute("INSERT INTO days VALUES(?,?)", (ds, temperature))
+                meta["_hazards"] = hazards.daily(self, db, meta, temperature)
                 outages = network_faults.daily(self, db, meta)
                 for record in db.execute("SELECT * FROM assets ORDER BY id").fetchall():
                     a = dict(record)

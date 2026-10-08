@@ -7,7 +7,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlsplit
 
-from . import network_faults, occupancy, sewer, water_faults
+from . import hazards, network_faults, occupancy, sewer, water_faults
 from .map_view import WorldMap
 from .store import World
 
@@ -36,6 +36,16 @@ def make_server(world, port=8026, viewer_dir=None):
             if self.path == "/":
                 return self.reply(200, Path(__file__).with_name("index.html").read_bytes(), True)
             url = urlsplit(self.path)
+            if url.path in ("/hazards", "/hazards.js"):
+                return self.static(Path(__file__).with_name("hazards.html" if url.path == "/hazards" else "hazards.js"))
+            if url.path == "/api/hazards":
+                try:
+                    args = parse_qs(url.query, keep_blank_values=True)
+                    if set(args)-{"before"} or any(len(v) != 1 for v in args.values()):
+                        raise ValueError("Use one optional history cursor.")
+                    return self.reply(200, hazards.inspect(world, args.get("before", [None])[0]))
+                except (ValueError, TypeError) as exc:
+                    return self.reply(422, {"error": str(exc)})
             if url.path in ("/sewer", "/sewer.js"):
                 return self.static(Path(__file__).with_name("sewer.html" if url.path == "/sewer" else "sewer.js"))
             if url.path == "/api/sewer":
@@ -153,7 +163,9 @@ def make_server(world, port=8026, viewer_dir=None):
                 else:
                     if p.get("environmentId") != world.status().get("environmentId"):
                         raise ValueError("Environment mismatch.")
-                    if self.path == "/api/sewer":
+                    if self.path == "/api/hazards":
+                        result = hazards.command(world, p)
+                    elif self.path == "/api/sewer":
                         result = sewer.command(world, p)
                     elif self.path == "/api/network-faults":
                         result = network_faults.command(world, p)

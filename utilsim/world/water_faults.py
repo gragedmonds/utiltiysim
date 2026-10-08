@@ -3,6 +3,7 @@ import json
 import math
 from decimal import Decimal, InvalidOperation
 
+from . import hazards
 from .migrations import rollback_backup
 from .store import canonical, draw, stable
 
@@ -183,10 +184,10 @@ def consumption(world, db, asset, day, quantity, meta):
     if active is None and policy["annualProbability"] > 0:
         repaired_today = db.execute("SELECT 1 FROM water_faults WHERE asset=? AND repaired_date=? LIMIT 1",
                                     (asset["id"], day)).fetchone()
-        hazard = 1 - (1-policy["annualProbability"]) ** (1/365.2425)
+        hazard, cause = hazards.risk(meta, "water", policy["annualProbability"], policy["cause"])
         if not repaired_today and draw(meta["seed"], day, asset["id"], VERSION, "start") < hazard:
             _start(world, db, meta["environment"], day, asset["id"], policy["leakM3PerHour"], "seeded",
-                   policy["cause"], "world-system", "Seeded daily leak hazard")
+                   cause, "world-system", "Seeded daily leak hazard")
             active = state(db, asset["id"])["active"]
     if active is None:
         return quantity
