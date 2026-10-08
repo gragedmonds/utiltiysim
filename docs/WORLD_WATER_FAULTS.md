@@ -99,3 +99,13 @@ passed on a 570-premise copied world with no browser errors or external requests
 An initial map-button scroll timeout was retained in the local run history; the
 same script passed unchanged on an isolated retry. This is not evidence of the
 complete four-domain field or financial lifecycle.
+
+Final local release checks on 8 October: **602 non-slow Python tests passed**
+(two dependency deprecation warnings, 1,450.62 seconds); 66 final focused
+world/map/library checks passed; 291 viewer tests and 11 snapshot conformance
+checks passed; repository lint and changed JavaScript syntax passed. Final
+leak/repair, restored-isometric and authenticated-library browser checks all
+passed on copied 570-premise worlds, with no browser errors or external requests.
+The isometric check also verifies idle 3D rendering stops and property, camera,
+layer and viewport changes redraw it. Local evidence is retained under
+`out/water-faults/`; these are source checks, not a newly packaged launcher.
