@@ -1,5 +1,7 @@
 import json
+import sqlite3
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import closing
 from pathlib import Path
 
 import jsonschema
@@ -244,3 +246,78 @@ def test_owner_namespaces_do_not_collide_and_bad_receipt_cannot_hide_report(tmp_
     bad = field.relay(one, lambda e: {**receipt(e), "checksum": "changed"})
     assert bad["received"] == 0 and len(bad["blocked"]) == 2
     assert all(m["state"] == "pending" for m in field.inspect(one)["items"][0]["messages"])
+
+
+@pytest.mark.parametrize("lookalike", [False, True])
+def test_unrelated_database_is_rejected_without_schema_history_or_byte_changes(tmp_path, lookalike):
+    w = world(tmp_path)
+    path = tmp_path / "unrelated.sqlite"
+    with closing(sqlite3.connect(path)) as db:
+        if lookalike:
+            # Matching generic journal names alone are not an ownership claim.
+            db.execute("CREATE TABLE meta(key TEXT PRIMARY KEY,value TEXT NOT NULL)")
+            db.execute("CREATE TABLE commands(id TEXT PRIMARY KEY,payload TEXT NOT NULL,result TEXT NOT NULL)")
+            db.execute("CREATE TABLE events(sequence INTEGER PRIMARY KEY AUTOINCREMENT,id TEXT UNIQUE NOT NULL,"
+                       "day TEXT NOT NULL,type TEXT NOT NULL,subject TEXT NOT NULL,cause TEXT,payload TEXT NOT NULL)")
+            db.execute("INSERT INTO meta VALUES('application','billing')")
+            db.execute("INSERT INTO commands VALUES('prior','{}','prior result')")
+        else:
+            db.execute("CREATE TABLE billing_history(id TEXT PRIMARY KEY,amount INTEGER)")
+            db.execute("INSERT INTO billing_history VALUES('preserve-me',1925)")
+        db.commit()
+        before_dump = list(db.iterdump())
+    before_bytes = path.read_bytes()
+    with pytest.raises(ValueError, match="recognized field store|ownership record"):
+        field.FieldExecution(w, path)
+    assert path.read_bytes() == before_bytes
+    with closing(sqlite3.connect(path)) as db:
+        assert list(db.iterdump()) == before_dump
+
+
+def test_field_reopen_preserves_bytes_and_wrong_world_does_not_write(tmp_path):
+    w, f = setup(tmp_path)
+    field.command(f, command(f))
+    field.run_due(f)
+    before = Path(f.path).read_bytes()
+    reopened = field.FieldExecution(w, f.path)
+    assert Path(f.path).read_bytes() == before
+    assert field.inspect(reopened) == field.inspect(f)
+    other_world = world(tmp_path, "other-world", annual_meter_failure=1)
+    with pytest.raises(ValueError, match="another world"):
+        field.FieldExecution(other_world, f.path)
+    assert Path(f.path).read_bytes() == before
+    with pytest.raises(ValueError, match="another world or owner"):
+        field.FieldExecution(w, f.path, owner_id="another-owner")
+    assert Path(f.path).read_bytes() == before
+
+
+def test_fresh_empty_and_unconfigured_field_databases_are_allowed(tmp_path):
+    w = world(tmp_path)
+    for name in ("new", "empty-file", "empty-sqlite"):
+        path = tmp_path / (name + ".sqlite")
+        if name == "empty-file":
+            path.touch()
+        elif name == "empty-sqlite":
+            with closing(sqlite3.connect(path)) as db:
+                db.execute("VACUUM")
+        f = field.FieldExecution(w, path)
+        before = path.read_bytes()
+        assert field.inspect(field.FieldExecution(w, path))["enabled"] is False
+        assert path.read_bytes() == before
+        field.command(f, command(f, "crew", "configure-crew"))
+        assert field.inspect(field.FieldExecution(w, path))["enabled"] is True
+
+
+def test_field_status_and_delivery_read_only_identity_clock_metadata(tmp_path, monkeypatch):
+    w = world(tmp_path)
+    water_faults.command(w, leak_command(w))
+    monkeypatch.setattr(w, "metadata", lambda db: pytest.fail("Full physical metadata must not be decoded"))
+    f = field.FieldExecution(w, tmp_path / "field.sqlite")
+    with f.db() as db:
+        assert set(f.metadata(db)) == {"environment", "fingerprint", "through"}
+    field.command(f, command(f, "crew", "configure-crew"))
+    field.command(f, command(f))
+    assert field.run_due(f)[0]["outcome"] == "completed"
+    assert field.inspect(f)["items"][0]["state"] == "executed"
+    assert len(field.ready(f)["items"]) == 2
+    assert field.relay(f, receipt)["received"] == 2
