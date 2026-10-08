@@ -183,3 +183,11 @@ memory was 45.47–46.64 MiB. Evidence is in
 one world connection per item plus its metadata connection; future optimization
 can reduce this overhead. This small query diagnostic does not constitute the
 15,000-account/five-year release benchmark.
+
+Release checks: all **951** non-slow Python tests passed locally, including the
+22 reporting, five HTTP and three clock synchronization cases. All **20** field
+screen checks, **291** viewer tests and **11** viewer conformance checks passed;
+repository Ruff and whitespace checks passed. Independent review identified
+the old visits-page message-label defect described above, which was corrected
+and regression-tested. This increment changes the SQLite world/field owners;
+it does not claim new PostgreSQL enterprise coverage.
