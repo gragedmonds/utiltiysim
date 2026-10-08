@@ -4,10 +4,23 @@ let state,pending=null,key,busy=false,after=0;
 function message(text,error=false){$('message').textContent=text;$('message').className=error?'error':'';}
 async function request(path,body){const response=await fetch(path,body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{cache:'no-store'});const data=await response.json();if(!response.ok){const error=Error(data.error||'Request failed.');error.rejected=response.status>=400&&response.status<500;throw error;}return data;}
 function controls(){for(const el of document.querySelectorAll('input,button,select'))el.disabled=busy||!!pending;$('retry').hidden=!pending;$('retry').disabled=busy;$('next').disabled=busy||!!pending||!state?.nextAfter;}
+function hydrateCrew(){
+ const f=$('crew').elements,crew=state?.crews.find(c=>c.id===f.crewId.value.trim());
+ for(const option of Array.from(f.weekdays.options))if(option.dataset.savedSchedule)option.remove();
+ f.dailyCapacity.value=crew?.daily_capacity??1;
+ const weekdays=crew?crew.weekdays.join(','):'0,1,2,3,4';
+ if(!Array.from(f.weekdays.options).some(option=>option.value===weekdays)){
+  const option=document.createElement('option');option.value=weekdays;option.dataset.savedSchedule='true';
+  option.textContent='Saved schedule: '+crew.weekdays.map(day=>['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][day]).join(', ');
+  f.weekdays.append(option);
+ }
+ f.weekdays.value=weekdays;
+}
 async function load(){
  const next=await request('/api/field-execution?after='+after);
  if(state&&(next.worldFingerprint!==state.worldFingerprint||next.ownerId!==state.ownerId))throw Error('World or field owner changed. Reload this page.');
- state=next;$('identity').textContent=`${state.environmentId} · ${state.ownerId}`;
+ if(!state&&next.crews.length&&!next.crews.some(c=>c.id===$('crew').elements.crewId.value.trim()))$('crew').elements.crewId.value=next.crews[0].id;
+ state=next;hydrateCrew();$('identity').textContent=`${state.environmentId} · ${state.ownerId}`;
  $('today').textContent=`Current world day: ${state.through}. Visits run before that day's next physical simulation.`;
  $('assignment').elements.scheduledDate.value||=state.through;
  $('crews').textContent=state.crews.length?state.crews.map(c=>`${c.id}: ${c.daily_capacity} visits/day, revision ${c.revision}`).join(' · '):'No crews registered.';
@@ -22,7 +35,8 @@ async function send(fields){
  catch(error){if(error.rejected){pending=null;sessionStorage.removeItem(key);}message(error.message+(pending?' The outcome is uncertain. Retry the same retained command.':''),true);}
  finally{busy=false;controls();}
 }
-$('crew').onsubmit=event=>{event.preventDefault();const f=event.target.elements;send({action:'configure-crew',crewId:f.crewId.value.trim(),expectedRevision:state.crews.find(c=>c.id===f.crewId.value.trim())?.revision||0,skills:['plumbing'],weekdays:f.weekdays.value?f.weekdays.value.split(',').map(Number):[],dailyCapacity:Number(f.dailyCapacity.value)});};
+$('crew').elements.crewId.onchange=hydrateCrew;
+$('crew').onsubmit=event=>{event.preventDefault();const f=event.target.elements,crew=state.crews.find(c=>c.id===f.crewId.value.trim());return send({action:'configure-crew',crewId:f.crewId.value.trim(),expectedRevision:crew?.revision||0,skills:crew?[...crew.skills]:['plumbing'],weekdays:f.weekdays.value?f.weekdays.value.split(',').map(Number):[],dailyCapacity:Number(f.dailyCapacity.value)});};
 $('assignment').onsubmit=event=>{event.preventDefault();const f=event.target.elements;send({action:'accept',assignmentId:f.assignmentId.value.trim(),crewId:f.crewId.value.trim(),assetId:f.assetId.value.trim(),orderId:f.orderId.value.trim(),orderRevision:Number(f.orderRevision.value),scheduledDate:f.scheduledDate.value,operation:'repair-water-leak',reportDelayDays:Number(f.reportDelayDays.value)});};
 $('run').onclick=async()=>{if(busy||pending)return;busy=true;controls();message('Executing due visits…');try{const result=await request('/api/field-execution/run-due',{environmentId:state.environmentId,worldFingerprint:state.worldFingerprint,effectiveDate:state.through});await load();message(`Due visits processed: ${Array.isArray(result)?result.length:(result.results||[]).length}. Reports remain in the delivery queue.`);}catch(error){message(error.message+' Refresh status before running again; committed physical actions recover without repeating repairs.',true);}finally{busy=false;controls();}};
 $('retry').onclick=()=>send();$('refresh').onclick=()=>load().catch(e=>message(e.message,true));$('first').onclick=()=>{after=0;load().catch(e=>message(e.message,true));};$('next').onclick=()=>{after=state.nextAfter;load().catch(e=>message(e.message,true));};
