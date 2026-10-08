@@ -44,6 +44,8 @@ class WorldLibrary:
         with self.db() as db:
             db.execute('CREATE TABLE IF NOT EXISTS worlds '
                        '(id TEXT PRIMARY KEY,path TEXT UNIQUE NOT NULL,fingerprint TEXT NOT NULL)')
+        from .world_creation import schema
+        schema(self)
 
     @contextmanager
     def db(self):
@@ -144,6 +146,32 @@ def mount_world_library(app, store, viewer):
             return {'id': library.register(value.get('path'))}
         except (OSError, sqlite3.Error, ValueError, KeyError) as exc:
             raise HTTPException(422, 'Could not open a supported existing world. Check its path and initialization.') from exc
+
+    @app.get('/local/worlds/creations')
+    def pending_creations():
+        from .world_creation import pending
+        return {'pending': pending(library)}
+
+    @app.post('/local/worlds/create')
+    async def create_world(request: Request):
+        from fastapi.concurrency import run_in_threadpool
+
+        from .prepare import body
+        from .world_creation import create
+        value = await body(request)
+        try:
+            return await run_in_threadpool(create, library, value.get('commandId'), value.get('path'),
+                                           value.get('environment'), value.get('start'))
+        except (OSError, sqlite3.Error, ValueError, KeyError, TypeError) as exc:
+            raise HTTPException(422, 'Could not create this world. Check the full snapshot, name and date; retry a pending request after recovery.') from exc
+
+    @app.post('/local/worlds/creations/{command}/retry')
+    def retry_creation(command: str):
+        from .world_creation import retry
+        try:
+            return retry(library, command)
+        except (OSError, sqlite3.Error, ValueError, KeyError, TypeError) as exc:
+            raise HTTPException(409, 'Creation remains pending. Check source integrity and storage availability.') from exc
 
     @app.delete('/local/worlds/{identity}')
     def remove(identity: str):

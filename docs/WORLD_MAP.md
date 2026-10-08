@@ -32,6 +32,33 @@ The world controls page also has an **Open town map** link.
 
 ## Open through Utility Studio
 
+**Create a new world from a saved town** accepts a complete generated
+`snapshot.json` or `snapshot.json.gz`, a new environment name and a canonical
+start date. It preserves geography, seed and native service identities, and
+starts an independent physical history at that date. It does not import legacy
+simulation outcomes or create billing records. The default weather and failure
+settings remain explicitly illustrative. Sewer observations continue to derive
+from water; no sewer meter is created.
+
+Creation saves a command UUID, exact canonical source snapshot, SHA-256,
+configuration and model version in the library before initializing a managed
+`worlds/<id>/world.sqlite` file. The original source is never changed. Duplicate
+requests return the original result; changed inputs on an existing command are
+rejected. A crash after the world commit but before catalog completion leaves a
+pending request that **Retry creation** finishes without resetting the world or
+duplicating its initialization. Recovery uses the pinned snapshot even if the
+source file disappears or changes. Model-version mismatches fail explicitly.
+New commands are stored in the browser before sending, so a lost response or
+page reload can retry the same request. Creation queries and retries require the
+same launcher session as the library.
+
+Source snapshots are limited to 64 MiB after gzip decompression and checked for
+required map/service data and consistent premise/meter references. The UI does
+not generate a replacement town or invent missing geometry. Use the full
+snapshot from a saved generated town, not its `town.json` manifest. The first
+creation form accepts an absolute local file path; an in-app saved-town picker
+remains follow-up work.
+
 The app server started by the existing Go launcher now has **Saved world maps**
 links on its simulations and local workspace pages. They appear only in a
 launcher session. Open that library, enter the absolute path to an initialized
@@ -126,7 +153,7 @@ meter on its first premise. The original village contains 570 premises (480
 homes plus other properties); this is not the separate 100-account Billing
 acceptance fixture.
 
-Next work: create new worlds directly from saved generated towns in the library,
+Next work: select source towns directly from the existing saved-results list,
 keep the same environment identity through enterprise startup, add world growth and
 move events, and connect physical field outcomes through the agreed enterprise
 report boundary. This restoration does not complete those living-town features.
@@ -175,3 +202,25 @@ the standalone map walkthrough also passes again. No browser errors or external
 requests were observed. The Go bootstrap itself is unchanged; no signed release
 or automatic installed-runtime update was published. The PR remains draft
 while the genuine geometry baseline failures are unresolved.
+
+Creation acceptance is executable with `pytest tests/test_world_creation.py`
+and `python scripts/check_world_creation.py --snapshot PATH_TO_FULL_SNAPSHOT
+--engine-python PATH_TO_ENGINE_PYTHON --out out/new-creation-check` (one command).
+The browser checker also accepts `--engine-executable` for the frozen runtime.
+It uses a disposable source copy, creates a fresh world through the form,
+advances that world through its existing domain command, verifies current map
+records, and reopens it after a worker restart and source disappearance. It
+checks that the supplied original snapshot remains byte-for-byte unchanged.
+
+Creation increment verified on 7 October 2026: full Python regression reports
+533 passed and the same two geometry failures in 782.51 seconds. The final ten
+focused creation/library/map tests pass, including truncated gzip rejection and
+refusal to overwrite an independently registered shortcut during recovery.
+Viewer tests (291), conformance checks (11), lint and JavaScript checks pass.
+The source worker and rebuilt Windows executable both pass the creation browser
+flow on 570 premises: zero initial history, 3,276 observations after two days,
+unchanged geography, property inspection and restart after source removal.
+No external requests or browser script errors were observed. Two earlier
+browser attempts hit startup timeouts while sharing the 16 GB machine with the
+full regression/build workloads; isolated reruns passed without increasing the
+startup timeout. Run these substantial checks sequentially on this machine.
