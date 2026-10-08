@@ -112,6 +112,22 @@ directions, plan view, 3D, selection, refresh and no idle 3D drawing. Original
 world files and physical records stayed unchanged; no external requests or
 browser errors occurred. Local evidence is in `out/streets/`.
 
+Release checks on 8 October 2026: the full non-slow Python run completed in
+1,072.24 seconds with 608 passes and two stale-generated-artifact failures
+(offline dependency graph and published configuration schema). Both artifacts
+were refreshed from their source models; all 33 affected configuration,
+schema, dependency and street checks then passed. All 291 viewer checks and
+11 existing-snapshot conformance checks passed, as did repository lint and
+diff validation. Initial failing logs remain in the local evidence directory;
+no golden geometry or business-result expectation was changed. This owner uses
+SQLite; no PostgreSQL-owned application code or database was changed.
+
+A new 608-premise demonstration world is available locally at
+`http://127.0.0.1:8036/map`, with source database
+`out/streets/neighborhood-world.sqlite`. It is separate from the retained
+8033/8034/8035 worlds. These are source-level checks and preview processes,
+not a newly packaged launcher release.
+
 ## Remaining scope
 
 This increment introduces connected neighborhood loops and blocks. More varied
