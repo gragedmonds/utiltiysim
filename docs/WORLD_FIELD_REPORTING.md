@@ -111,3 +111,58 @@ and false claims, all new-domain inspection-only visits, original-day crash
 recovery, immutable report retries, late availability, transaction rollback,
 wrong actors/revisions/dates, filtered pagination, policy binding, checksummed
 claims, optional schema ownership and pre-migration backup preservation.
+
+## Desktop walkthrough and acceptance
+
+Start with a copied initialized world and a separate field file:
+
+```powershell
+python -m utilsim.world.server --db out/demo/world.sqlite --field-db out/demo/field.sqlite --port 8045 --viewer-dir packages/town-viewer/dist
+```
+
+1. In `/field-execution`, register a crew and accept a supported assignment.
+2. In `/field-reporting`, select it and save manual reporting before the visit.
+   Keep physical work as `perform` to repair, or choose `inspect-only` to leave
+   the physical fault unchanged. The latter still consumes a visit slot.
+3. Run the visit or start cruise. The actual outcome appears independently of
+   the still-missing report. Time can continue without a submission.
+4. Submit the crew's claimed outcome. The report is immutable and dated now;
+   its availability adds the assignment's configured transport delay. An
+   uncertain response retains the exact command through reload for retry.
+5. Compare physical outcome, claimed outcome and transport status. Delivery
+   never changes the physical outcome or accepts an enterprise conclusion.
+
+The page is an administrator scenario tool. It explicitly simulates the assigned
+crew identity; it is not the permission-isolated worker application in the full
+plan. Ordinary and smaller desktop layouts are supported.
+
+```powershell
+python -m pytest tests/test_world_field_reporting.py tests/test_world_field_reporting_http.py tests/test_world_dated_actions.py
+node --test tests/test_field_reporting_ui.mjs tests/test_field_operations_ui.mjs
+python scripts/check_world_field_reporting.py --db SOURCE.sqlite --viewer-dir packages/town-viewer/dist --out out/reporting/new-run
+```
+
+The browser checker requires Playwright and a local Chromium installation. It
+refuses an existing output directory, copies its source with SQLite backup,
+starts temporary local servers and stops its own children in cleanup. It does
+not contact an enterprise or a real customer/provider.
+
+The 8 October copied 608-premise run spans 3–8 January 2026. It terminates a
+child immediately after physical repair, recovers the original visit without
+manufacturing a report, and advances three days while that report is missing.
+An inspection-only visit leaves a second leak active and consuming water after
+the crew falsely claims completion. Both manual submissions occur on 6 January
+and become available on 8 January. Lost submission responses survive reload and
+exact retry; a separate test inbox deduplicates a lost receipt. All six messages
+are received once, while the false claim still does not repair the leak.
+
+Evidence is in `out/field-reporting-acceptance/acceptance.json` and accompanying
+1440/1024 screenshots. Source hashes, historical events/observations and saved
+map are unchanged; no browser errors occurred and both test server processes
+exited. `out/field-reporting-demo` is a separate copy served on port 8045, with
+its own preview verification. The old visits page now labels later manual
+reports by verified envelope schema, preserving the original visit result.
+
+Actual enterprise recipient/review/rework integration, report corrections with
+new order revisions, stochastic reporting-error policies, hourly workforce,
+travel, protected AI operation and large-scale acceptance remain unfinished.
