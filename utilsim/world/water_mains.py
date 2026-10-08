@@ -152,6 +152,32 @@ def _number(value, maximum, positive=False):
     return value
 
 
+def _transition(world, db, meta, payload):
+    """Shared physical transition; callers supply independently checked authority."""
+    action, edge = payload["action"], payload["edgeId"]
+    cat, current = catalog(db), state(db, edge)
+    selected = next((e for e in cat["edges"] if e["id"] == edge), None)
+    active = current["active"]
+    if not selected or not selected["enabled"] or selected["kind"] not in ("trunk", "distribution"):
+        raise ValueError("Choose a normally enabled water trunk or distribution main.")
+    if (action not in TRANSITIONS or not active or active["id"] != payload["faultId"]
+            or active["status"] != TRANSITIONS[action][0] or current["revision"] != payload["expectedRevision"]):
+        raise ValueError("Invalid physical lifecycle transition, fault reference or revision.")
+    closed = section(cat, edge)
+    if closed is None:
+        raise ValueError("Saved valves do not bound this section away from supply. Isolation is unavailable.")
+    if action != "isolate" and json.loads(active["closed_edges"]) != closed:
+        raise ValueError("Saved isolation boundaries changed during this fault lifecycle.")
+    revision = _revision(db, edge)
+    event = world.event(db, meta["environment"], meta["through"], "WaterMainPhysicalAction", edge,
+                        {**payload, "revision": revision, "closedEdges": closed if action == "isolate" else
+                         json.loads(active["closed_edges"])}, payload["commandId"])
+    db.execute("UPDATE water_main_faults SET status=?,closed_edges=?,work_order=?,cause=?,restored_date=? WHERE id=?",
+               (TRANSITIONS[action][1], canonical(closed) if action == "isolate" else active["closed_edges"],
+                payload["workOrderId"], event, meta["through"] if action == "restore" else None, payload["faultId"]))
+    return {"eventId": event, "revision": revision, "faultId": payload["faultId"]}
+
+
 def command(world, payload):
     common = {"schemaVersion", "commandId", "environmentId", "worldFingerprint", "actorId", "expectedRevision",
               "effectiveDate", "action", "reason", "causalReference"}
@@ -216,14 +242,7 @@ def command(world, payload):
         elif action == "start":
             result = _start(world, db, meta, edge, rate, "manual", payload["commandId"], payload)
         else:
-            revision = _revision(db, edge)
-            event = world.event(db, meta["environment"], meta["through"], "WaterMainPhysicalAction", edge,
-                                {**payload, "revision": revision, "closedEdges": closed if action == "isolate" else
-                                 json.loads(active["closed_edges"])}, payload["commandId"])
-            db.execute("UPDATE water_main_faults SET status=?,closed_edges=?,work_order=?,cause=?,restored_date=? WHERE id=?",
-                       (TRANSITIONS[action][1], canonical(closed) if action == "isolate" else active["closed_edges"],
-                        payload["workOrderId"], event, meta["through"] if action == "restore" else None, payload["faultId"]))
-            result = {"eventId": event, "revision": revision, "faultId": payload["faultId"]}
+            result = _transition(world, db, meta, payload)
         result.update(commandId=payload["commandId"], status="completed", effectiveDate=meta["through"], modelVersion=VERSION)
         db.execute("INSERT INTO commands VALUES(?,?,?)", (payload["commandId"], encoded, canonical(result)))
         return result
