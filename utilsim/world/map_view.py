@@ -2,7 +2,7 @@
 import json
 from datetime import date, timedelta
 
-from . import occupancy, water_faults
+from . import network_faults, occupancy, water_faults
 
 
 class WorldMap:
@@ -44,6 +44,8 @@ class WorldMap:
                 asset = dict(row)
                 if asset["commodity"] == "water":
                     asset["waterFault"] = water_faults.state(db, asset["id"])["active"]
+                elif asset["commodity"] in network_faults.UTILITIES:
+                    asset["lastSupplyInterruption"] = network_faults.service_state(db, asset["id"])
                 assets.append(asset)
             return {"schemaVersion": "world-map-premise/1", "view": "administrator-truth",
                     "environmentId": meta["environment"], "townId": meta["town"],
