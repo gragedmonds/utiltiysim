@@ -48,6 +48,10 @@ from the lifecycle command ID. Its actor, environment, fingerprint, effective
 date and causal reference must match the outer command. Any predecessor is
 explicitly chosen in the new payload and checked by the existing phase
 acceptance rules. A cancelled predecessor is not valid for new work.
+The replacement is new work with the usual automatic-report/perform defaults;
+it does not copy the old assignment's reporting policy. Configure the new
+assignment explicitly before its visit when manual or inspection-only behavior
+is required.
 
 Replacement atomically commits the new accepted assignment, immutable phase
 binding, dispatch acknowledgement, lineage event, updated old lifecycle record,
@@ -177,3 +181,16 @@ received none. No physical work or days ran. SQLite tracing and the concurrent
 full regression suite were active. This is a bounded-query diagnostic, not the
 15,000-account/five-year scale release evidence. Repeated per-row database and
 catalog reads remain a performance improvement opportunity.
+
+### Resumed release verification, 9 October 2026
+
+The interrupted session's complete non-slow Python run finished successfully:
+1,020 tests, with exit code zero retained in
+`out/field-cancellation-full-tests.exit`. It ran against the five implementation
+commits through `e7967c9`; subsequent changes only clarify this document.
+The copied-town `acceptance.json` also records success and source preservation.
+On resuming, all 39 cancellation/clock/HTTP checks and all nine cancellation
+screen checks passed again. The original implementation branch is retained;
+the resumed release uses `greg/field-cancellation-release`.
+Ruff, all 291 viewer tests and all 11 export conformance checks also passed on
+9 October after installing the worktree's locked viewer dependency.
