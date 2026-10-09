@@ -96,9 +96,11 @@ daily-world model, without overriding manual pins.
 The generator's engineering inputs shape the saved geography. Housing age and
 infrastructure profiles are separate. The infrastructure cards set construction
 year cutoffs for overhead lines, cast-iron mains, and low-pressure gas areas;
-they do not invent a causal pipe-age-to-leak model. Studio incident rates do not
-automatically drive the newer physical world. Sewer remains water-derived use,
-not a separate network or physical meter.
+they do not configure the newer world's optional infrastructure-hazard policy.
+Studio incident rates do not automatically drive the newer physical world.
+Sewer consumption remains water-derived, with no invented sewer meter; the
+world's separate sanitary-lateral fault model is configured through its own
+controls after creation.
 
 **Studio year** retains the existing validated proposal, scenarios, metrics,
 operations, and launch paths. Desktop utilities can contain up to 500,000 homes;
@@ -163,3 +165,33 @@ with Playwright and pass `--engine-python` when the engine uses another environm
 ```powershell
 python scripts/check_guided_setup.py --engine-python .venv/Scripts/python.exe --out out/guided-acceptance
 ```
+
+### Current-world integration, 9 October 2026
+
+`greg/world-guided-integration` retains the original wizard commits and merges
+them with the world loop through PR #72 (`8fc2dbb`). The integration does not
+reset any existing town or enable optional hazard/field policies implicitly.
+The continuation release is on `greg/utilitysim-continuation`, which also
+includes the independent [saved-road visit estimates](WORLD_FIELD_TRAVEL.md).
+Both original source branches are retained.
+
+The combined browser run creates and reopens a water-only world, checks six-page
+Quick setup, switches paths while preserving tuned settings, visits all 117
+Studio pages, and validates the 25,000-home Studio configuration. Both desktop
+sizes have no browser errors. Screenshots and results are under
+`out/guided-current-engine-acceptance/`.
+
+`tests/test_guided_world_loop.py` additionally generates a real town, selects a
+commissioned water service, creates a leak, assigns a finite-capacity repair,
+then continues through delayed report availability and a cruise restart. The
+repair occurs once, old observations and the map remain identical, receipt
+retries do not duplicate delivery, and retrying the original wizard creation
+does not reset the now-advanced world. Its receiver is a test inbox; this does
+not imply enterprise report acceptance. Creating a future service does not
+permit physical work before its commissioning date.
+
+The current integration passed 28 setup/creation checks, the additional complete
+world-loop check, 301 viewer tests, 11 conformance checks and Ruff. The combined
+setup/travel continuation passed all 1,060 non-slow Python tests in 718.65 seconds
+on 9 October 2026. Its log and exit code are retained in
+`out/continuation-full-tests.log` and `out/continuation-full-tests.exit`.
