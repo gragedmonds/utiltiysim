@@ -1,0 +1,862 @@
+{
+  "version": 1,
+  "note": "Illustrative starting points, not calibrated utility statistics. Manually tuned values stay pinned when another choice is selected.",
+  "sections": [
+    "Start",
+    "Place",
+    "Homes",
+    "Climate",
+    "Networks",
+    "Meters",
+    "Studio operations",
+    "Studio year",
+    "Review"
+  ],
+  "pages": [
+    {
+      "id": "identity",
+      "section": "Start",
+      "title": "Make it your utility.",
+      "label": "Your utility",
+      "kind": "identity"
+    },
+    {
+      "id": "services",
+      "section": "Start",
+      "title": "What do you provide?",
+      "label": "Commodities",
+      "match": [
+        "town:customers_billing.services"
+      ],
+      "note": "Choose the services this utility operates. Other networks can still exist in the town. Sewer use is derived from water; it has no separate physical meter."
+    },
+    {
+      "id": "size",
+      "section": "Place",
+      "title": "How big is your town?",
+      "label": "Town size",
+      "match": [
+        "town:town.houses"
+      ],
+      "presets": [
+        {
+          "id": "village",
+          "label": "Village",
+          "caption": "500 homes",
+          "values": {
+            "town:town.houses": 500
+          }
+        },
+        {
+          "id": "town",
+          "label": "Town",
+          "caption": "2,500 homes",
+          "values": {
+            "town:town.houses": 2500
+          }
+        },
+        {
+          "id": "city",
+          "label": "City",
+          "caption": "10,000 homes",
+          "values": {
+            "town:town.houses": 10000
+          }
+        }
+      ]
+    },
+    {
+      "id": "region",
+      "section": "Place",
+      "title": "Give it a sense of place.",
+      "label": "Region",
+      "kind": "region",
+      "match": [
+        "town:town.anchor_",
+        "town:town.timezone",
+        "town:town.units"
+      ],
+      "note": "Regional choices set housing and seasonal weather together. They are illustrative, not a calibration of local prices or regulations."
+    },
+    {
+      "id": "streets",
+      "section": "Place",
+      "title": "Shape the neighbourhoods.",
+      "label": "Streets",
+      "match": [
+        "town:town.street_pattern",
+        "town:town.arterial_",
+        "town:town.collector_",
+        "town:town.corridor",
+        "town:town.margin"
+      ]
+    },
+    {
+      "id": "terrain",
+      "section": "Place",
+      "title": "Flat, rolling, or hilly?",
+      "label": "Terrain & parks",
+      "match": [
+        "town:town.terrain_",
+        "town:town.park_share"
+      ],
+      "presets": [
+        {
+          "id": "flat",
+          "label": "Flat",
+          "values": {
+            "town:town.terrain_relief_m": 5,
+            "town:town.park_share": 0.08
+          }
+        },
+        {
+          "id": "rolling",
+          "label": "Rolling",
+          "values": {
+            "town:town.terrain_relief_m": 35,
+            "town:town.park_share": 0.12
+          }
+        },
+        {
+          "id": "hills",
+          "label": "Hilly",
+          "values": {
+            "town:town.terrain_relief_m": 80,
+            "town:town.park_share": 0.18
+          }
+        }
+      ]
+    },
+    {
+      "id": "business",
+      "section": "Place",
+      "title": "Room for work and community.",
+      "label": "Businesses & schools",
+      "match": [
+        "town:town.commercial_",
+        "town:town.industrial_",
+        "town:town.houses_per_school"
+      ]
+    },
+    {
+      "id": "home-age",
+      "section": "Homes",
+      "title": "When were the homes built?",
+      "label": "Home ages",
+      "match": [
+        "town:town.era_"
+      ],
+      "note": "These choices set the centre and spread of development years. They are not a guarantee that every home falls in one age band.",
+      "presets": [
+        {
+          "id": "new",
+          "label": "New",
+          "caption": "Recent development",
+          "values": {
+            "town:town.era_core_year": 2016,
+            "town:town.era_span_years": 10,
+            "town:town.era_noise_years": 3
+          }
+        },
+        {
+          "id": "mixed",
+          "label": "Mixed",
+          "caption": "Several generations",
+          "values": {
+            "town:town.era_core_year": 1960,
+            "town:town.era_span_years": 60,
+            "town:town.era_noise_years": 12
+          }
+        },
+        {
+          "id": "historic",
+          "label": "Historic",
+          "caption": "An older centre",
+          "values": {
+            "town:town.era_core_year": 1900,
+            "town:town.era_span_years": 100,
+            "town:town.era_noise_years": 10
+          }
+        }
+      ]
+    },
+    {
+      "id": "lots",
+      "section": "Homes",
+      "title": "Give each home its space.",
+      "label": "Lots & buildings",
+      "match": [
+        "town:housing.lot_",
+        "town:housing.setback",
+        "town:housing.two_storey"
+      ],
+      "presets": [
+        {
+          "id": "compact",
+          "label": "Compact",
+          "values": {
+            "town:housing.lot_frontage_m.pre_1945": 12,
+            "town:housing.lot_frontage_m.postwar": 14,
+            "town:housing.lot_frontage_m.modern": 12,
+            "town:housing.lot_depth_m.pre_1945": 28,
+            "town:housing.lot_depth_m.postwar": 30,
+            "town:housing.lot_depth_m.modern": 28
+          }
+        },
+        {
+          "id": "balanced",
+          "label": "Balanced",
+          "values": {
+            "town:housing.lot_frontage_m.pre_1945": 15,
+            "town:housing.lot_frontage_m.postwar": 18.5,
+            "town:housing.lot_frontage_m.modern": 16.5,
+            "town:housing.lot_depth_m.pre_1945": 36,
+            "town:housing.lot_depth_m.postwar": 35,
+            "town:housing.lot_depth_m.modern": 33
+          }
+        },
+        {
+          "id": "spacious",
+          "label": "Spacious",
+          "values": {
+            "town:housing.lot_frontage_m.pre_1945": 20,
+            "town:housing.lot_frontage_m.postwar": 26,
+            "town:housing.lot_frontage_m.modern": 24,
+            "town:housing.lot_depth_m.pre_1945": 40,
+            "town:housing.lot_depth_m.postwar": 45,
+            "town:housing.lot_depth_m.modern": 42
+          }
+        }
+      ]
+    },
+    {
+      "id": "people",
+      "section": "Homes",
+      "title": "Who lives here?",
+      "label": "Households",
+      "match": [
+        "town:housing.household_",
+        "town:housing.occupancy_",
+        "town:housing.rental_"
+      ],
+      "presets": [
+        {
+          "id": "small",
+          "label": "Smaller",
+          "values": {
+            "town:housing.household_size_weights": [
+              0.45,
+              0.35,
+              0.08,
+              0.07,
+              0.04,
+              0.01
+            ],
+            "town:housing.rental_share": 0.45,
+            "town:housing.occupancy_rate": 0.94
+          }
+        },
+        {
+          "id": "mixed",
+          "label": "Mixed",
+          "values": {
+            "town:housing.household_size_weights": [
+              0.28,
+              0.34,
+              0.15,
+              0.15,
+              0.06,
+              0.02
+            ],
+            "town:housing.rental_share": 0.28,
+            "town:housing.occupancy_rate": 0.955
+          }
+        },
+        {
+          "id": "families",
+          "label": "Families",
+          "values": {
+            "town:housing.household_size_weights": [
+              0.1,
+              0.2,
+              0.25,
+              0.3,
+              0.1,
+              0.05
+            ],
+            "town:housing.rental_share": 0.18,
+            "town:housing.occupancy_rate": 0.98
+          }
+        }
+      ]
+    },
+    {
+      "id": "heating",
+      "section": "Homes",
+      "title": "How do homes stay comfortable?",
+      "label": "Heating & cooling",
+      "match": [
+        "town:housing.electric_heat",
+        "town:housing.heat_pump",
+        "town:housing.ac_rate"
+      ],
+      "presets": [
+        {
+          "id": "gas",
+          "label": "Gas-led",
+          "values": {
+            "town:housing.electric_heat_rate.pre_1945": 0.05,
+            "town:housing.electric_heat_rate.postwar": 0.08,
+            "town:housing.electric_heat_rate.modern": 0.12,
+            "town:housing.heat_pump_share_of_electric": 0.3,
+            "town:housing.ac_rate": 0.7
+          }
+        },
+        {
+          "id": "mixed",
+          "label": "Mixed",
+          "values": {
+            "town:housing.electric_heat_rate.pre_1945": 0.2,
+            "town:housing.electric_heat_rate.postwar": 0.35,
+            "town:housing.electric_heat_rate.modern": 0.5,
+            "town:housing.heat_pump_share_of_electric": 0.55,
+            "town:housing.ac_rate": 0.85
+          }
+        },
+        {
+          "id": "electric",
+          "label": "Electric",
+          "values": {
+            "town:housing.electric_heat_rate.pre_1945": 0.75,
+            "town:housing.electric_heat_rate.postwar": 0.85,
+            "town:housing.electric_heat_rate.modern": 0.95,
+            "town:housing.heat_pump_share_of_electric": 0.85,
+            "town:housing.ac_rate": 0.95
+          }
+        }
+      ]
+    },
+    {
+      "id": "electrification",
+      "section": "Homes",
+      "title": "Cars, rooftops, and the grid.",
+      "label": "EVs & solar",
+      "match": [
+        "town:housing.ev_",
+        "town:housing.solar_",
+        "town:housing.pv_"
+      ],
+      "presets": [
+        {
+          "id": "early",
+          "label": "Early",
+          "values": {
+            "town:housing.ev_rate.pre_1945": 0.01,
+            "town:housing.ev_rate.postwar": 0.03,
+            "town:housing.ev_rate.modern": 0.05,
+            "town:housing.solar_rate.pre_1945": 0.02,
+            "town:housing.solar_rate.postwar": 0.04,
+            "town:housing.solar_rate.modern": 0.06,
+            "town:housing.pv_kw_min": 3,
+            "town:housing.pv_kw_max": 6
+          }
+        },
+        {
+          "id": "growing",
+          "label": "Growing",
+          "values": {
+            "town:housing.ev_rate.pre_1945": 0.08,
+            "town:housing.ev_rate.postwar": 0.15,
+            "town:housing.ev_rate.modern": 0.25,
+            "town:housing.solar_rate.pre_1945": 0.06,
+            "town:housing.solar_rate.postwar": 0.12,
+            "town:housing.solar_rate.modern": 0.2,
+            "town:housing.pv_kw_min": 4,
+            "town:housing.pv_kw_max": 9.5
+          }
+        },
+        {
+          "id": "advanced",
+          "label": "Advanced",
+          "values": {
+            "town:housing.ev_rate.pre_1945": 0.3,
+            "town:housing.ev_rate.postwar": 0.45,
+            "town:housing.ev_rate.modern": 0.6,
+            "town:housing.solar_rate.pre_1945": 0.2,
+            "town:housing.solar_rate.postwar": 0.4,
+            "town:housing.solar_rate.modern": 0.6,
+            "town:housing.pv_kw_min": 6,
+            "town:housing.pv_kw_max": 12
+          }
+        }
+      ]
+    },
+    {
+      "id": "outdoor",
+      "section": "Homes",
+      "title": "What happens outside?",
+      "label": "Pools & irrigation",
+      "match": [
+        "town:housing.pool_",
+        "town:housing.irrigation_"
+      ],
+      "presets": [
+        {
+          "id": "light",
+          "label": "Light",
+          "values": {
+            "town:housing.pool_rate": 0.01,
+            "town:housing.irrigation_rate": 0.1
+          }
+        },
+        {
+          "id": "typical",
+          "label": "Typical",
+          "values": {
+            "town:housing.pool_rate": 0.06,
+            "town:housing.irrigation_rate": 0.3
+          }
+        },
+        {
+          "id": "lush",
+          "label": "Lush",
+          "values": {
+            "town:housing.pool_rate": 0.2,
+            "town:housing.irrigation_rate": 0.65
+          }
+        }
+      ]
+    },
+    {
+      "id": "world-weather",
+      "section": "Climate",
+      "title": "Set the rhythm of the seasons.",
+      "label": "Daily weather",
+      "mode": "world",
+      "match": [
+        "world:weather."
+      ],
+      "note": "These temperatures and daily variation drive the saved world's daily consumption. Studio's separate seasonal weather controls are available in Studio mode.",
+      "presets": [
+        {
+          "id": "cold",
+          "label": "Cold",
+          "values": {
+            "world:weather.winter_mean_c": -8,
+            "world:weather.summer_mean_c": 22,
+            "world:weather.daily_weather_spread_c": 7
+          }
+        },
+        {
+          "id": "temperate",
+          "label": "Temperate",
+          "values": {
+            "world:weather.winter_mean_c": 2,
+            "world:weather.summer_mean_c": 26,
+            "world:weather.daily_weather_spread_c": 6
+          }
+        },
+        {
+          "id": "warm",
+          "label": "Warm",
+          "values": {
+            "world:weather.winter_mean_c": 12,
+            "world:weather.summer_mean_c": 32,
+            "world:weather.daily_weather_spread_c": 4
+          }
+        }
+      ]
+    },
+    {
+      "id": "seasons",
+      "section": "Climate",
+      "title": "Four seasons, your climate.",
+      "label": "Seasonal weather",
+      "mode": "studio",
+      "match": [
+        "town:weather.winter",
+        "town:weather.spring",
+        "town:weather.summer",
+        "town:weather.fall"
+      ]
+    },
+    {
+      "id": "climate-demand",
+      "section": "Climate",
+      "title": "When does demand change?",
+      "label": "Weather & demand",
+      "mode": "studio",
+      "match": [
+        "town:weather."
+      ]
+    },
+    {
+      "id": "infrastructure",
+      "section": "Networks",
+      "title": "How seasoned is the infrastructure?",
+      "label": "Infrastructure age",
+      "match": [
+        "town:electric.overhead_before_year",
+        "town:water.cast_iron_before_year",
+        "town:gas.lp_core_before_year"
+      ],
+      "note": "Age profiles set construction-year cutoffs for overhead lines, cast-iron mains, and low-pressure gas areas. Meter condition and Studio incident rates have their own pages; pipe age does not automatically create leaks in a saved world.",
+      "presets": [
+        {
+          "id": "new",
+          "label": "New",
+          "caption": "0–10 years · profile",
+          "values": {
+            "town:electric.overhead_before_year": 1950,
+            "town:water.cast_iron_before_year": 1920,
+            "town:gas.lp_core_before_year": 1920
+          }
+        },
+        {
+          "id": "mature",
+          "label": "Mature",
+          "caption": "11–50 years · profile",
+          "values": {
+            "town:electric.overhead_before_year": 1980,
+            "town:water.cast_iron_before_year": 1960,
+            "town:gas.lp_core_before_year": 1960
+          }
+        },
+        {
+          "id": "legacy",
+          "label": "Legacy",
+          "caption": "50+ years · profile",
+          "values": {
+            "town:electric.overhead_before_year": 2010,
+            "town:water.cast_iron_before_year": 1980,
+            "town:gas.lp_core_before_year": 1980
+          }
+        }
+      ]
+    },
+    {
+      "id": "electric-supply",
+      "section": "Networks",
+      "title": "Power the community.",
+      "label": "Electric supply",
+      "match": [
+        "town:electric.planning_",
+        "town:electric.feeder_",
+        "town:electric.min_feeder",
+        "town:electric.primary_",
+        "town:electric.secondary_",
+        "town:electric.voltage_"
+      ]
+    },
+    {
+      "id": "electric-transformers",
+      "section": "Networks",
+      "title": "Bring power to the street.",
+      "label": "Transformers",
+      "match": [
+        "town:electric.transformer_"
+      ]
+    },
+    {
+      "id": "electric-routes",
+      "section": "Networks",
+      "title": "Connect the grid.",
+      "label": "Electric routes",
+      "match": [
+        "town:electric."
+      ]
+    },
+    {
+      "id": "gas-supply",
+      "section": "Networks",
+      "title": "Where does gas reach?",
+      "label": "Gas service",
+      "match": [
+        "town:gas.all_electric_",
+        "town:gas.scheme",
+        "town:gas.lp_",
+        "town:gas.mp_",
+        "town:gas.transmission_"
+      ],
+      "note": "The gas-free district share changes physical mains, not the list of services your utility provides. Small towns have one district and retain gas mains."
+    },
+    {
+      "id": "gas-design",
+      "section": "Networks",
+      "title": "Size the gas network.",
+      "label": "Gas engineering",
+      "match": [
+        "town:gas."
+      ]
+    },
+    {
+      "id": "water-demand",
+      "section": "Networks",
+      "title": "How much water is needed?",
+      "label": "Water demand",
+      "match": [
+        "town:water.lpcd",
+        "town:water.irrigation_",
+        "town:water.max_day_",
+        "town:water.peak_hour_",
+        "town:water.fire_flow"
+      ]
+    },
+    {
+      "id": "water-pipes",
+      "section": "Networks",
+      "title": "Move water through town.",
+      "label": "Water mains",
+      "match": [
+        "town:water.arterial_",
+        "town:water.collector_",
+        "town:water.min_main_",
+        "town:water.hw_",
+        "town:water.valve_"
+      ]
+    },
+    {
+      "id": "water-storage",
+      "section": "Networks",
+      "title": "Keep water in reach.",
+      "label": "Storage & pressure",
+      "match": [
+        "town:water."
+      ]
+    },
+    {
+      "id": "meter-mix",
+      "section": "Meters",
+      "title": "How will you read the meters?",
+      "label": "AMI · AMR · Manual",
+      "kind": "mix",
+      "match": [
+        "town:ami.ami_route_share",
+        "town:ami.amr_route_share"
+      ],
+      "note": "This allocates reading routes. Routes contain different numbers of meters, so the final meter counts can differ from these percentages."
+    },
+    {
+      "id": "meter-network",
+      "section": "Meters",
+      "title": "Give the readings a way home.",
+      "label": "Coverage & reads",
+      "match": [
+        "town:ami."
+      ]
+    },
+    {
+      "id": "meter-condition",
+      "section": "Meters",
+      "title": "How reliable are the meters?",
+      "label": "Meter condition",
+      "mode": "world",
+      "match": [
+        "world:meters."
+      ],
+      "note": "Annual base failure probability increases with device age. Drift is an annual probability, not a percent error applied to every reading.",
+      "presets": [
+        {
+          "id": "healthy",
+          "label": "Healthy",
+          "values": {
+            "world:meters.annual_meter_failure": 0.005,
+            "world:meters.annual_meter_drift": 0.005
+          }
+        },
+        {
+          "id": "typical",
+          "label": "Typical",
+          "values": {
+            "world:meters.annual_meter_failure": 0.015,
+            "world:meters.annual_meter_drift": 0.01
+          }
+        },
+        {
+          "id": "worn",
+          "label": "Worn",
+          "values": {
+            "world:meters.annual_meter_failure": 0.04,
+            "world:meters.annual_meter_drift": 0.03
+          }
+        }
+      ]
+    },
+    {
+      "id": "repeatability",
+      "section": "Meters",
+      "title": "Make the experiment repeatable.",
+      "label": "Random seeds",
+      "match": [
+        "town:seeds."
+      ]
+    },
+    {
+      "id": "incidents",
+      "section": "Studio operations",
+      "title": "What can go wrong in a day?",
+      "label": "Leaks & faults",
+      "mode": "studio",
+      "match": [
+        "town:incidents."
+      ]
+    },
+    {
+      "id": "day-crews",
+      "section": "Studio operations",
+      "title": "Put a team in the field.",
+      "label": "Map-day crews",
+      "mode": "studio",
+      "match": [
+        "town:operations."
+      ]
+    },
+    {
+      "id": "scenario",
+      "section": "Studio operations",
+      "title": "Choose a map-day starting event.",
+      "label": "Map-day scenario",
+      "mode": "studio",
+      "match": [
+        "town:scenario."
+      ]
+    },
+    {
+      "id": "tariffs",
+      "section": "Studio year",
+      "title": "Set the service prices.",
+      "label": "Rates & accounts",
+      "mode": "studio",
+      "match": [
+        "town:customers_billing."
+      ]
+    },
+    {
+      "id": "year-reading",
+      "section": "Studio year",
+      "title": "Get the readings in.",
+      "label": "Reading performance",
+      "mode": "studio",
+      "match": [
+        "run:reading.",
+        "run:anomalies."
+      ]
+    },
+    {
+      "id": "vee",
+      "section": "Studio year",
+      "title": "Which readings need attention?",
+      "label": "Validation & estimates",
+      "mode": "studio",
+      "match": [
+        "run:vee."
+      ]
+    },
+    {
+      "id": "analysts",
+      "section": "Studio year",
+      "title": "Keep the work moving.",
+      "label": "Analysts & automation",
+      "mode": "studio",
+      "match": [
+        "run:process."
+      ]
+    },
+    {
+      "id": "billing",
+      "section": "Studio year",
+      "title": "From readings to bills.",
+      "label": "Billing & collections",
+      "mode": "studio",
+      "match": [
+        "run:billing."
+      ]
+    },
+    {
+      "id": "contact",
+      "section": "Studio year",
+      "title": "Help customers get answers.",
+      "label": "Customer contact",
+      "mode": "studio",
+      "match": [
+        "run:contact."
+      ]
+    },
+    {
+      "id": "field",
+      "section": "Studio year",
+      "title": "Plan a year of field work.",
+      "label": "Field workload & crews",
+      "mode": "studio",
+      "match": [
+        "run:field.",
+        "run:outages."
+      ]
+    },
+    {
+      "id": "kpi",
+      "section": "Studio year",
+      "title": "Define a good result.",
+      "label": "Performance targets",
+      "mode": "studio",
+      "match": [
+        "run:kpi."
+      ]
+    },
+    {
+      "id": "map-overrides",
+      "section": "Studio operations",
+      "title": "Refine this operations day.",
+      "label": "Map-day overrides",
+      "mode": "studio",
+      "match": [
+        "operations:"
+      ]
+    },
+    {
+      "id": "review",
+      "section": "Review",
+      "title": "Your utility, ready to build.",
+      "label": "Review & create",
+      "kind": "review"
+    }
+  ],
+  "sliders": {
+    "world:meters.annual_meter_failure": [
+      0,
+      0.1
+    ],
+    "world:meters.annual_meter_drift": [
+      0,
+      0.1
+    ],
+    "world:weather.winter_mean_c": [
+      -30,
+      20
+    ],
+    "world:weather.summer_mean_c": [
+      10,
+      45
+    ],
+    "world:weather.daily_weather_spread_c": [
+      0,
+      20
+    ],
+    "town:town.houses": [
+      20,
+      10000
+    ],
+    "town:housing.occupancy_rate": [
+      0.5,
+      1
+    ]
+  },
+  "quickPages": [
+    "identity",
+    "services",
+    "size",
+    "region",
+    "meter-mix",
+    "review"
+  ]
+}
