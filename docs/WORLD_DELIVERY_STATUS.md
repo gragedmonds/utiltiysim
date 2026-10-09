@@ -1,0 +1,69 @@
+# Living-world delivery status
+
+Owner: `greg-gpt-listener`. Updated 9 October 2026. Branch:
+`greg/utilitysim-continuation`, proposed through public
+[PR #73](https://github.com/gragedmonds/utiltiysim/pull/73).
+
+This record separates implemented local behavior from outstanding integration.
+An idle coordination channel is not evidence that this backlog is complete.
+
+## Current candidate
+
+| Area | Working behavior | Remaining boundary |
+| --- | --- | --- |
+| Guided setup | Quick and Full configuration, retained values/pins, validated creation and exact retry on the current world engine | Release review; staffing suggestions and broader operational calibration |
+| Travel estimates | Saved-road round trips for water and sewer premise visits; explicit selected work-site access for network-edge planning | A quote does not reserve a worker, establish the physical location, authorize execution or consume shared time |
+| Provider failure | Versioned terminal failure evidence releases unspent reserved customer cash exactly once; no settlement/refund/debt reduction is invented | Actual provider and enterprise recipient adapters, partial amounts, enterprise reconciliation |
+| Storm scenarios | Dated temperature and utility-risk effects, explicit cancellation before start, shared daily transaction and causal fault history | Geographic storm tracks, wind/rain/flood physics, weather-dependent travel and staffing |
+
+The existing local field model retains finite daily capacity, distinct physical
+results and submitted reports, staged main work, and cancellation/replacement.
+Storm completion does not repair faults or close business work. Provider failure
+does not acknowledge transport or erase the historical payment intention.
+
+## Integration still required
+
+1. Bind field assignments and complete travel intervals to the existing shared
+   runtime jobs, resources and active reservations. Enforce skills, shift fit,
+   calendars, daily capacity, cancellation and next-boundary physical effects.
+   Preserve the independent field/world recovery protocol and exclusive clock
+   ownership. Do not build a competing scheduler.
+2. Connect actually delivered enterprise invoices to explicitly bound recipients,
+   then route confirmed provider outcomes to independently retried world and
+   enterprise transactions. Transport acceptance is not delivery or settlement.
+3. Connect authorized dispatch, acknowledgments, submitted reports and enterprise
+   acceptance/rework. A completion claim must not fabricate physical repair or
+   bypass operation-specific evidence checks.
+4. Extend customer reactions to financial notices and moves, household economics,
+   and service creation for new development through their corresponding owners.
+5. Finish authenticated worker/AI operations with bounded knowledge and budgets.
+6. Execute the twelve integrated acceptance scenarios and the 15,000-account,
+   five-year benchmark. Small fixtures and individual component timings do not
+   establish this acceptance.
+
+## Reproduce local verification
+
+The 9 October candidate has independent code review and fresh desktop acceptance
+for storm controls and water/sewer/network travel estimates. The travel check
+preserves both owner databases byte for byte. Storm recovery tests demonstrate
+the effect of five versus seven crews while preserving the distinction between
+physical work and submitted reports. A seven-day, 5,864-premise diagnostic also
+preserves source/map hashes and the completed database across restart. These
+component results do not close the integrated acceptance or scale work above.
+
+Use the normal repository regression checks in `CLAUDE.md`. Focused suites are
+`tests/test_world_customer_finance_failures.py`, `tests/test_world_field_travel.py`,
+`tests/test_world_storms.py`, `tests/test_world_storms_http.py` and
+`tests/test_world_storm_recovery.py`.
+
+The desktop checkers use fresh output directories and preserve source packs:
+
+```powershell
+python scripts/check_world_storms.py --engine-python .venv/Scripts/python.exe --out out/storm-browser
+python scripts/check_world_field_travel.py --engine-python .venv/Scripts/python.exe --out out/travel-browser
+```
+
+Run the checkers with a Python environment containing Playwright. Each starts
+and closes its own local engine, saves screenshots and writes `result.json`.
+They require no paid CI or live enterprise/payment connection. See the feature
+documents for exact contracts and intentionally unsupported behavior.

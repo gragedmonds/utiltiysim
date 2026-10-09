@@ -99,26 +99,33 @@ def base_policies(meta):
 
 
 def daily(world, db, meta, temperature):
-    if not enabled(db):
+    present, storm = enabled(db), meta.get("_storm")
+    if not present and not storm:
         return None
-    policy = meta["hazardPolicy"]
+    policy = meta.get("hazardPolicy", default_policy(meta["through"]))
     factors, ages = {}, {}
     for family, profile in policy["profiles"].items():
         ages[family] = age(profile, policy["asOf"], meta["through"])
         cold = profile["coldMultiplier"] if temperature <= profile["coldBelowC"] else 1
         factors[family] = min(10000, (1+ages[family]*profile["annualAgeIncrease"])*cold) if policy["active"] else 1
+        if storm:
+            factors[family] = min(10000, factors[family]*storm["multipliers"][family])
     bases = base_policies(meta)
     payload = {"modelVersion": VERSION, "policy": policy, "temperatureC": temperature,
                "ageYears": ages, "multipliers": factors, "basePolicies": bases,
                "dailyProbabilities": {f: probability(b["annualProbability"], factors[f]) for f, b in bases.items()}}
-    event = world.event(db, meta["environment"], meta["through"], "InfrastructureHazardDay", meta["town"], payload, policy["cause"])
-    db.execute("INSERT INTO hazard_days VALUES(?,?,?)", (meta["through"], event, canonical(payload)))
+    if storm:
+        payload["storm"] = storm
+    event = world.event(db, meta["environment"], meta["through"], "InfrastructureHazardDay", meta["town"], payload,
+                        storm["eventId"] if storm else policy["cause"])
+    if present:
+        db.execute("INSERT INTO hazard_days VALUES(?,?,?)", (meta["through"], event, canonical(payload)))
     return {"eventId": event, **payload}
 
 
 def risk(meta, family, annual, cause):
     context = meta.get("_hazards")
-    if not context or not context["policy"]["active"]:
+    if not context or (not context["policy"]["active"] and not context.get("storm")):
         return probability(annual), cause
     return context["dailyProbabilities"][family], context["eventId"]
 
