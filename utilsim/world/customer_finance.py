@@ -232,8 +232,11 @@ def receive_delivery(world, message):
 
 def daily(world, db, meta):
     """Run inside the physical day transaction before advancing meta.through."""
+    from . import customer_cashflow
+
     if not enabled(db):
         return
+    cashflow_active = customer_cashflow.enabled(db)
     day = meta['through']
     finish = (date.fromisoformat(day)+timedelta(days=1)).isoformat()+'T00:00:00Z'
     # Decode the town once, not once per baseline household. Profiles without a
@@ -249,6 +252,8 @@ def daily(world, db, meta):
         db.execute('INSERT INTO customer_finance_decisions VALUES(?,?)', (profile['premise'], day))
         policy = json.loads(profile['policy'])
         stamp, occupied = cohorts.get(profile['premise'], (None, False))
+        if cashflow_active:
+            profile = customer_cashflow.apply_day(world, db, meta, profile, stamp, occupied)
         if not policy['active'] or not occupied or stamp != profile['stamp']:
             continue
         available = max(0, profile['cash']-profile['reserved']-policy['essentialReserveCents'])

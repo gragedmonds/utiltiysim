@@ -11,6 +11,7 @@ from urllib.parse import parse_qs, unquote, urlsplit
 from . import (
     contacts,
     cruise,
+    customer_cashflow,
     customer_finance,
     development,
     field_cancellation,
@@ -180,6 +181,18 @@ def make_server(world, port=8026, viewer_dir=None, field_db=None, cruise_worker=
                         args.get("after", [""])[0], int(args["before"][0]) if "before" in args else None,
                         args.get("serviceAfter", [""])[0], args.get("beforeDay", [None])[0]))
                 except (ValueError, TypeError, KeyError) as exc:
+                    return self.reply(422, {"error": str(exc)})
+            if url.path in ("/customer-cashflow", "/customer-cashflow.js"):
+                return self.static(Path(__file__).with_name("customer_cashflow.html" if url.path == "/customer-cashflow"
+                                                          else "customer_cashflow.js"))
+            if url.path == "/api/customer-cashflow":
+                try:
+                    args = parse_qs(url.query, keep_blank_values=True)
+                    if set(args)-{"premise", "before"} or "premise" not in args or any(len(v) != 1 for v in args.values()):
+                        raise ValueError("Provide one premise and optional history date.")
+                    return self.reply(200, customer_cashflow.inspect(world, args["premise"][0],
+                                                                   before=args.get("before", [None])[0]))
+                except (ValueError, TypeError) as exc:
                     return self.reply(422, {"error": str(exc)})
             if url.path in ("/storms", "/storms.js"):
                 return self.static(Path(__file__).with_name("storms.html" if url.path == "/storms" else "storms.js"))
@@ -358,6 +371,9 @@ def make_server(world, port=8026, viewer_dir=None, field_db=None, cruise_worker=
                                 result = field_execution.command(field, p)
                     elif self.path == "/api/customer-finance":
                         result = customer_finance.command(world, p)
+                    elif self.path == "/api/customer-cashflow":
+                        with cruise.manual_control(world, field):
+                            result = customer_cashflow.command(world, p)
                     elif self.path == "/api/development":
                         result = development.command(world, p)
                     elif self.path == "/api/contacts":
