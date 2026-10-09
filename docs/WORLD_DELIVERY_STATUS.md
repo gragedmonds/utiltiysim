@@ -43,6 +43,10 @@ does not acknowledge transport or erase the historical payment intention.
 
 ## Reproduce local verification
 
+The combined non-slow Python regression passed all **1,150 tests** in 1,315.58
+seconds. Ruff, **301 viewer tests** and **11 viewer-conformance checks** passed.
+The Python run emitted six existing Starlette/httpx deprecation warnings.
+
 The 9 October candidate has independent code review and fresh desktop acceptance
 for storm controls and water/sewer/network travel estimates. The travel check
 preserves both owner databases byte for byte. Storm recovery tests demonstrate
