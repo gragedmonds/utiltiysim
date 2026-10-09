@@ -101,6 +101,8 @@ def command(field, payload):
                 if old["payload"] != canonical(payload):
                     raise ValueError("Conflicting field reporting command retry.")
                 return json.loads(old["result"])
+            if row["state"] == "cancelled":
+                raise ValueError("Cancelled assignments cannot change reporting policy or submit claims.")
             current = policy(db, row)
             if payload["expectedRevision"] != current["policyRevision"]:
                 raise ValueError("Reporting policy revision changed.")
@@ -144,7 +146,7 @@ def command(field, payload):
 
 
 def inspect(field, actor_id="world-admin", limit=25, after=0):
-    from . import field_water_mains
+    from . import field_cancellation, field_water_mains
     execution._text(actor_id)
     execution._page(after, limit)
     with field.db() as db:
@@ -160,6 +162,8 @@ def inspect(field, actor_id="world-admin", limit=25, after=0):
             physical = execution._physical_result(field, row, current)
             report = _report(field, db, row)
             items.append({"assignment": json.loads(row["payload"]), "state": row["state"], **current,
+                          "assignmentChecksum": row["checksum"],
+                          "lifecycle": field_cancellation.inspect_item(field, db, row, actor_id, physical),
                           "phase": field_water_mains.public_phase(db, row),
                           # Current lifecycle checks can inspect physical truth;
                           # never add them to a crew's filtered report view.
@@ -173,7 +177,7 @@ def inspect(field, actor_id="world-admin", limit=25, after=0):
                           "reportTransport": {"state": report["state"], "attempts": report["attempts"],
                                               "lastError": report["last_error"]} if report else None,
                           "canConfigure": actor_id == "world-admin" and row["state"] == "accepted" and not physical,
-                          "canSubmit": current["reportMode"] == "manual" and physical is not None and report is None,
+                          "canSubmit": row["state"] != "cancelled" and current["reportMode"] == "manual" and physical is not None and report is None,
                           "submitActorId": row["crew"]})
         return {"schemaVersion": VERSION, "modelVersion": VERSION, "environmentId": meta["environment"],
                 "worldFingerprint": meta["fingerprint"], "through": meta["through"], "ownerId": field.owner_id,

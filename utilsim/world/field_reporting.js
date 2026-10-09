@@ -13,9 +13,9 @@ function controls(){
  $('assignmentSelect').disabled=locked||!state?.items.length;
  $('first').disabled=locked||after===0;$('next').disabled=locked||!state?.nextAfter;
  $('refresh').disabled=busy||loading||identityChanged;
- for(const id of ['configure','reportMode','workMode'])$(id).disabled=locked||!item?.canConfigure;
+ for(const id of ['configure','reportMode','workMode'])$(id).disabled=locked||item?.state==='cancelled'||!item?.canConfigure;
  $('workMode').disabled||=$('reportMode').value!=='manual';
- for(const id of ['submitReport','claimedOutcome'])$(id).disabled=locked||!item?.canSubmit||!item?.submitActorId;
+ for(const id of ['submitReport','claimedOutcome'])$(id).disabled=locked||item?.state==='cancelled'||!item?.canSubmit||!item?.submitActorId;
  $('retry').hidden=!pending;$('retry').disabled=blocked();
  $('pendingDetails').hidden=!pending;
  if(pending)$('pendingDetails').textContent=`Retained ${pending.action} command for ${pending.assignmentId}, actor ${pending.actorId}, policy revision ${pending.expectedRevision}. ${pending.action==='submit'?'Claim: '+pending.outcome:pending.reportMode+' reporting / '+pending.workMode+' work'}. Retry confirms this exact command even if the saved state has already changed.`;
@@ -46,6 +46,12 @@ function renderSelection(){
  }
  $('policyHelp').textContent=`Saved policy revision ${item.policyRevision}. `+(item.canConfigure?'Policy can be changed before this visit.':'Policy is locked because physical execution has started or the visit is recorded.');
  $('submitHelp').textContent=item.canSubmit?`Submit as assigned simulator crew ${item.submitActorId}. The report will use today's date (${state.through}) plus ${a.reportDelayDays} day(s) of transport delay.`:item.reportId?'This report is already submitted and cannot be changed.':item.reportMode==='automatic'?'Automatic reporting is enabled. No manual submission is needed.':'Run the accepted visit from Crews and visits or cruise control before submitting.';
+ if(item.state==='cancelled'){
+  $('physicalResult').textContent='Cancelled before physical execution. No physical work was undone.';
+  $('reportStatus').textContent='No report can be submitted for this cancelled assignment.';
+  $('policyHelp').textContent='Cancelled assignment: reporting policy is locked.';
+  $('submitHelp').textContent='Use Crews and visits to accept an explicitly linked replacement. This does not cancel an enterprise order.';
+ }
  controls();
 }
 function render(){
@@ -54,7 +60,7 @@ function render(){
  if(!state.items.some(item=>item.assignment.assignmentId===selectedId))selectedId=state.items[0]?.assignment.assignmentId||'';
  $('assignmentSelect').innerHTML=state.items.length?state.items.map(item=>`<option value="${esc(item.assignment.assignmentId)}">${esc(item.assignment.assignmentId)} · ${esc(operations[item.assignment.operation]||item.assignment.operation)} · ${esc(item.assignment.crewId)}</option>`).join(''):'<option value="">No assignments</option>';
  $('assignmentSelect').value=selectedId;
- $('history').innerHTML=state.items.length?state.items.map(item=>{const a=item.assignment;return `<tr><td>${esc(a.assignmentId)}<br>${esc(a.orderId)} · revision ${esc(a.orderRevision)}</td><td>${esc(operations[a.operation]||a.operation)}<br>${esc(a.crewId)}</td><td>${esc(item.reportMode)} / ${esc(item.workMode)}<br>Revision ${esc(item.policyRevision)}</td><td>${esc(outcomeText(a.operation,item.actualOutcome))}<br>${esc(item.visitDate)}</td><td>${esc(item.claimedOutcome?(phases[a.operation]?outcomeText(a.operation,item.claimedOutcome):item.claimedOutcome):'Not submitted')}</td></tr>`;}).join(''):'<tr><td colspan="5">No accepted assignments.</td></tr>';
+ $('history').innerHTML=state.items.length?state.items.map(item=>{const a=item.assignment;return `<tr><td>${esc(a.assignmentId)}<br>${esc(a.orderId)} · revision ${esc(a.orderRevision)}</td><td>${esc(operations[a.operation]||a.operation)}<br>${esc(a.crewId)}</td><td>${esc(item.reportMode)} / ${esc(item.workMode)}<br>Revision ${esc(item.policyRevision)}</td><td>${esc(item.state==='cancelled'?'Cancelled before visit':outcomeText(a.operation,item.actualOutcome))}<br>${esc(item.visitDate)}</td><td>${esc(item.claimedOutcome?(phases[a.operation]?outcomeText(a.operation,item.claimedOutcome):item.claimedOutcome):'Not submitted')}</td></tr>`;}).join(''):'<tr><td colspan="5">No accepted assignments.</td></tr>';
  renderSelection();
 }
 async function request(body=null,cursor=after){
@@ -100,6 +106,7 @@ async function send(action){
  if(blocked())return;
  const item=selected();
  if(!pending){
+  if(item?.state==='cancelled')return;
   if(action==='configure'?!item?.canConfigure:action==='submit'?!item?.canSubmit||!item?.submitActorId:true)return;
   const extras=action==='configure'?{reportMode:$('reportMode').value,workMode:$('workMode').value}:{outcome:$('claimedOutcome').value};
   if(action==='configure'&&extras.workMode==='inspect-only'&&extras.reportMode!=='manual'){message('Inspection without repair requires manual reporting.',true);return;}

@@ -48,6 +48,7 @@ def _owned_store(db, binding):
         "field_outbox": "sequence id assignment available_day envelope checksum state attempts receipt last_error",
         "field_reporting": "assignment revision assignment_checksum report_mode work_mode event_id",
         "field_main_phases": "assignment assignment_checksum predecessor predecessor_checksum",
+        "field_cancellations": "assignment assignment_checksum revision cancelled_day reason event_id replacement replacement_checksum",
     }
     indexes = {"field_assignment_due", "field_crew_usage", "field_outbox_due"}
     tables = {r["name"] for r in objects if r["type"] == "table"}
@@ -67,8 +68,9 @@ def _owned_store(db, binding):
         raise ValueError("Existing database has no valid field ownership record; it was not changed.")
     if stored_binding != binding:
         raise ValueError("Field database belongs to another world or owner.")
-    from . import field_reporting, field_water_mains
-    expected = set(columns) - {"field_reporting", "field_main_phases"} if enabled(db) else {"meta", "commands", "events"}
+    from . import field_cancellation, field_reporting, field_water_mains
+    optional = {"field_reporting", "field_main_phases", "field_cancellations"}
+    expected = set(columns) - optional if enabled(db) else {"meta", "commands", "events"}
     if field_reporting.enabled(db):
         if not enabled(db):
             raise ValueError("Reporting schema requires a recognized enabled field execution store.")
@@ -77,6 +79,10 @@ def _owned_store(db, binding):
         if not enabled(db):
             raise ValueError("Main phases require a recognized enabled field execution store.")
         expected.add("field_main_phases")
+    if field_cancellation.enabled(db):
+        if not enabled(db) or not field_water_mains.enabled(db):
+            raise ValueError("Cancellation requires a recognized enabled main-phase field store.")
+        expected.add("field_cancellations")
     if tables != expected:
         raise ValueError("Existing database has an incomplete field schema; it was not changed.")
     return True
@@ -421,6 +427,8 @@ def _execute(world, db, meta, row, actor, cause):
     from .field_reporting import policy
     if actor != row["crew"]:
         raise ValueError("Only the assigned crew may execute this assignment.")
+    if row["state"] == "cancelled":
+        raise ValueError("Cancelled assignments cannot execute.")
     if row["state"] == "executed":
         return json.loads(row["result"])
     recorded_day = meta["through"]
@@ -469,7 +477,6 @@ def command(world, payload):
 def _command(world, payload):
     """Shared owner transaction, reached through the appropriate public boundary."""
     _validate(payload)
-    from . import field_water_mains
     encoded = canonical(payload)
     with world.db() as db:
         meta = world.metadata(db)
@@ -506,38 +513,46 @@ def _command(world, payload):
                                 payload, payload["causalReference"])
             result = {"crewId": payload["crewId"], "revision": revision + 1, "eventId": event}
         elif action == "accept":
-            if payload["scheduledDate"] < meta["through"]:
-                raise ValueError("Cannot accept an assignment in the past.")
-            with world.world.db() as physical_db:
-                _target(physical_db, meta, payload["operation"], payload["assetId"], payload["scheduledDate"])
-            crew = db.execute("SELECT * FROM field_crews WHERE id=?", (payload["crewId"],)).fetchone()
-            skill = _skill(payload["operation"])
-            if not crew or skill not in json.loads(crew["skills"]):
-                raise ValueError(f"Crew lacks the required {skill} skill.")
-            if db.execute("SELECT 1 FROM field_assignments WHERE id=? OR (order_id=? AND order_revision=?)",
-                          (payload["assignmentId"], payload["orderId"], payload["orderRevision"])).fetchone():
-                raise ValueError("Assignment or order revision is already accepted.")
-            if payload["operation"] in field_water_mains.OPERATIONS:
-                field_water_mains.predecessor(db, payload)
-            event = world.event(db, meta["environment"], meta["through"], "FieldAssignmentAccepted", payload["assignmentId"],
-                                payload, payload["causalReference"])
-            db.execute("INSERT INTO field_assignments(id,crew,asset,order_id,order_revision,scheduled_day,"
-                       "report_delay_days,payload,checksum,accepted_event) VALUES(?,?,?,?,?,?,?,?,?,?)",
-                       (payload["assignmentId"], payload["crewId"], payload["assetId"], payload["orderId"],
-                        payload["orderRevision"], payload["scheduledDate"], payload["reportDelayDays"],
-                        encoded, checksum(payload), event))
-            if payload["operation"] in field_water_mains.OPERATIONS:
-                field_water_mains.store_binding(world, db, payload, checksum(payload))
-            row = _assignment(db, payload["assignmentId"])
-            ack = _enqueue(world, db, meta, row, "ack", {
-                "order_id": row["order_id"], "revision": row["order_revision"], "dispatch_ref": row["id"],
-                "crew_ref": row["crew"], "planned_date": row["scheduled_day"]}, event, meta["through"])
-            result = {"assignmentId": row["id"], "state": "accepted", "eventId": event, "ackId": ack}
+            result = _accept(world, db, meta, payload)
         else:
             result = _execute(world, db, meta, _assignment(db, payload["assignmentId"]),
                               payload["actorId"], payload["commandId"])
         db.execute("INSERT INTO commands VALUES(?,?,?)", (payload["commandId"], encoded, canonical(result)))
         return result
+
+
+
+def _accept(world, db, meta, payload):
+    """Shared acceptance transition inside the caller-owned field transaction."""
+    from . import field_water_mains
+    encoded = canonical(payload)
+    if payload["scheduledDate"] < meta["through"]:
+        raise ValueError("Cannot accept an assignment in the past.")
+    with world.world.db() as physical_db:
+        _target(physical_db, meta, payload["operation"], payload["assetId"], payload["scheduledDate"])
+    crew = db.execute("SELECT * FROM field_crews WHERE id=?", (payload["crewId"],)).fetchone()
+    skill = _skill(payload["operation"])
+    if not crew or skill not in json.loads(crew["skills"]):
+        raise ValueError(f"Crew lacks the required {skill} skill.")
+    if db.execute("SELECT 1 FROM field_assignments WHERE id=? OR (order_id=? AND order_revision=?)",
+                  (payload["assignmentId"], payload["orderId"], payload["orderRevision"])).fetchone():
+        raise ValueError("Assignment or order revision is already accepted.")
+    if payload["operation"] in field_water_mains.OPERATIONS:
+        field_water_mains.predecessor(db, payload)
+    event = world.event(db, meta["environment"], meta["through"], "FieldAssignmentAccepted", payload["assignmentId"],
+                        payload, payload["causalReference"])
+    db.execute("INSERT INTO field_assignments(id,crew,asset,order_id,order_revision,scheduled_day,"
+               "report_delay_days,payload,checksum,accepted_event) VALUES(?,?,?,?,?,?,?,?,?,?)",
+               (payload["assignmentId"], payload["crewId"], payload["assetId"], payload["orderId"],
+                payload["orderRevision"], payload["scheduledDate"], payload["reportDelayDays"],
+                encoded, checksum(payload), event))
+    if payload["operation"] in field_water_mains.OPERATIONS:
+        field_water_mains.store_binding(world, db, payload, checksum(payload))
+    row = _assignment(db, payload["assignmentId"])
+    ack = _enqueue(world, db, meta, row, "ack", {
+        "order_id": row["order_id"], "revision": row["order_revision"], "dispatch_ref": row["id"],
+        "crew_ref": row["crew"], "planned_date": row["scheduled_day"]}, event, meta["through"])
+    return {"assignmentId": row["id"], "state": "accepted", "eventId": event, "ackId": ack}
 
 
 def _daily(world, db, meta):
@@ -658,7 +673,7 @@ def relay(world, send, limit=25):
 
 def inspect(world, after=0, limit=25):
     """Administrator-only execution/delivery status; never an enterprise worklist."""
-    from . import field_water_mains
+    from . import field_cancellation, field_water_mains
     _page(after, limit)
     with world.db() as db:
         meta = world.metadata(db)
@@ -678,6 +693,8 @@ def inspect(world, after=0, limit=25):
                 messages.append({**{k: message[k] for k in ("id", "state", "attempts", "last_error", "available_day")},
                                  "schema": envelope["schema"]})
             items.append({"assignment": json.loads(assignment["payload"]), "state": row["state"],
+                          "assignmentChecksum": assignment["checksum"],
+                          "lifecycle": field_cancellation.inspect_item(world, db, assignment),
                           "result": json.loads(row["result"]) if row["result"] else None, "messages": messages,
                           "phase": field_water_mains.public_phase(db, assignment),
                           "blockedReason": _availability(db, assignment, meta["through"], world) if row["state"] == "accepted" else None})

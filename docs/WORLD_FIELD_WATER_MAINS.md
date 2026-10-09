@@ -111,12 +111,15 @@ The report envelope shape and acknowledgement-before-report relay ordering are
 unchanged. The local report schema adds six phase-specific outcome sentences;
 older enum validators need the additive schema update for these reports.
 
-Pending phase cancellation or superseding is not implemented. An immutable
-chain tied to inspection-only work or a stale lifecycle remains visible and
-pending. Corrective work requires explicitly accepted new local phase
-assignments; old assignments are never silently retired. There is no automatic
-dispatcher, hourly labor/travel model, recipient integration or enterprise
-closure claim in this slice.
+An immutable chain tied to inspection-only work or a stale lifecycle remains
+visible and pending until an explicit operator action. The optional
+[assignment lifecycle extension](WORLD_FIELD_CANCELLATION.md) can cancel selected
+unexecuted main phases and accept linked replacements with new local references.
+Pending descendants require explicit selection. Completed visits cannot be
+cancelled, and cancellation never reopens valves or undoes physical work. Old
+assignments, reports and acknowledgements remain inspectable. There is no
+automatic dispatcher, hourly labor/travel model, recipient integration or
+enterprise closure claim in this slice.
 
 `tests/test_world_field_water_mains.py` verifies each phase's physical/report
 crash boundary and physical rollback, shared capacity, private token filtering,
