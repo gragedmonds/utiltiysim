@@ -13,6 +13,7 @@ from . import (
     cruise,
     customer_cashflow,
     customer_finance,
+    customer_notices,
     development,
     field_cancellation,
     field_execution,
@@ -156,6 +157,21 @@ def make_server(world, port=8026, viewer_dir=None, field_db=None, cruise_worker=
                                                      int(args.get("offset", ["0"])[0]), int(args.get("limit", ["25"])[0]))
                     return self.reply(200, result)
                 except (ValueError, TypeError, KeyError) as exc:
+                    return self.reply(422, {"error": str(exc)})
+            if url.path in ("/customer-notices", "/customer-notices.js"):
+                return self.static(Path(__file__).with_name("customer-notices.html" if url.path == "/customer-notices"
+                                                          else "customer-notices.js"))
+            if url.path in ("/api/customer-notices", "/api/financial-contact-intents"):
+                try:
+                    args = parse_qs(url.query, keep_blank_values=True)
+                    if set(args)-{"after", "limit"} or any(len(v) != 1 for v in args.values()):
+                        raise ValueError("Use one optional financial-contact cursor and limit.")
+                    limit = int(args.get("limit", ["25"])[0])
+                    result = (customer_notices.inspect(world, int(args.get("after", ["0"])[0]), limit)
+                              if url.path == "/api/customer-notices" else
+                              customer_notices.ready(world, args.get("after", [None])[0], limit))
+                    return self.reply(200, result)
+                except (ValueError, TypeError) as exc:
                     return self.reply(422, {"error": str(exc)})
             if url.path in ("/contacts", "/contacts.js"):
                 return self.static(Path(__file__).with_name("contacts.html" if url.path == "/contacts" else "contacts.js"))
@@ -371,6 +387,9 @@ def make_server(world, port=8026, viewer_dir=None, field_db=None, cruise_worker=
                                 result = field_execution.command(field, p)
                     elif self.path == "/api/customer-finance":
                         result = customer_finance.command(world, p)
+                    elif self.path == "/api/customer-notices":
+                        with cruise.manual_control(world, field):
+                            result = customer_notices.command(world, p)
                     elif self.path == "/api/customer-cashflow":
                         with cruise.manual_control(world, field):
                             result = customer_cashflow.command(world, p)

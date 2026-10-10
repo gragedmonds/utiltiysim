@@ -17,8 +17,8 @@ remain available from the first page.
 
 Setup is saved to the existing simulation library after each accepted change.
 New setups default to **Quick setup**: six screens covering identity, services,
-town size, region, meter mix, and review. Remaining settings keep their engine
-defaults or previously tuned values. **Full setup** exposes all refinement pages.
+town size, region, meter mix, and review. Size changes suggest Studio staffing;
+other settings keep engine defaults or previously tuned values. **Full setup** exposes all refinement pages.
 The first-page cards and sidebar switch let users change paths without losing
 values or pins. Existing drafts keep their full path and current page. Review
 and engine validation include all active settings even when Quick setup hides
@@ -108,6 +108,18 @@ the generated district template is capped at the engine's live home limit.
 The UI shows the whole-utility total and explains that staffing is per district.
 Switching modes retains both sets of values. Review identifies settings not
 used by the selected mode.
+
+Changing the home count reuses the existing billing-analyst and contact-agent
+suggestions, scaled to the saved district template, not the whole-utility total.
+With the standard defaults, 5,000 homes suggests 5 analysts and 3 contact agents;
+25,000 total homes uses the 10,000-home district and suggests 11 and 5.
+These are illustrative starting values, not a service-level guarantee. Manually
+tuned, imported, or pinned staffing stays unchanged. **Use size suggestion**
+adopts the current suggestion and lets later size changes update that field again.
+Initial load, reload, mode changes, and Quick/Full navigation do not recalculate
+staffing. Size and review screens show the actual retained staffing; the same
+values are saved when creating the Studio configuration. Staffing remains dormant
+in a Living world and does not change its field crews or execution authority.
 
 ## Editing the backend catalogue
 

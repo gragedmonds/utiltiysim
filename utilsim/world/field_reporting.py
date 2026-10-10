@@ -171,7 +171,7 @@ def inspect(field, actor_id="world-admin", limit=25, after=0):
                           if actor_id == "world-admin" and row["state"] == "accepted" else None,
                           "actualOutcome": physical["outcome"] if physical else None,
                           "claimedOutcome": json.loads(report["envelope"])["data"]["outcome"] if report else None,
-                          "visitDate": physical["effectiveDate"] if physical else None,
+                          "visitDate": physical.get("visitDate", physical["effectiveDate"]) if physical else None,
                           "reportId": report["id"] if report else None,
                           "reportAvailableDate": report["available_day"] if report else None,
                           "reportTransport": {"state": report["state"], "attempts": report["attempts"],

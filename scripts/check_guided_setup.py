@@ -153,6 +153,37 @@ def main():
                 jump('Place', 'Town size')
                 page.locator('[data-choice="total-25000"]').click()
                 expect(page.locator('[data-input="town:town.houses"]')).to_have_value('25000')
+                expect(page.locator('[data-staffing-summary]')).to_contain_text('11 billing analysts · 5 contact-centre agents per district')
+                page.locator('#gw-search').fill('analysts')
+                page.locator('#gw-search-results [data-result="analysts-2"]').first.click()
+                analyst = page.locator('[data-card="run:process.analysts"]')
+                analyst.locator('.gw-exact summary').click()
+                analyst.locator('[data-input]').fill('7')
+                jump('Place', 'Town size')
+                page.locator('.gw-exact summary').click()
+                page.locator('[data-input="town:town.houses"]').fill('5000')
+                expect(page.locator('[data-staffing-summary]')).to_contain_text('7 billing analysts · 3 contact-centre agents')
+                page.locator('#gw-search').fill('analysts')
+                page.locator('#gw-search-results [data-result="analysts-2"]').first.click()
+                analyst = page.locator('[data-card="run:process.analysts"]')
+                analyst.get_by_role('button', name='Use size suggestion').click()
+                expect(analyst.locator('[data-input]')).to_have_value('5')
+                analyst.locator('.gw-exact summary').click()
+                analyst.locator('[data-input]').fill('7')
+                jump('Place', 'Town size')
+                page.locator('.gw-exact summary').click()
+                page.locator('[data-input="town:town.houses"]').fill('25000')
+                page.locator('#gw-pace-switch').click()
+                page.reload()
+                expect(page.locator('[data-staffing-summary]')).to_contain_text('7 billing analysts · 5 contact-centre agents per district')
+                page.set_viewport_size({'width': 960, 'height': 800})
+                assert page.evaluate('document.documentElement.scrollWidth <= innerWidth'), 'Staffing size overflow'
+                page.screenshot(path=str(args.out / '09-staffing-small-desktop.png'), full_page=True)
+                page.set_viewport_size({'width': 1440, 'height': 1000})
+                page.locator('#gw-review').click()
+                expect(page.locator('[data-staffing-summary]')).to_contain_text('7 billing analysts · 5 contact-centre agents per district')
+                page.screenshot(path=str(args.out / '10-staffing-review.png'), full_page=True)
+                page.locator('#gw-pace-switch').click()
                 page_ids = page.locator('.gw nav [data-jump]').evaluate_all('(elements)=>elements.map(e=>e.dataset.jump)')
                 for identity in page_ids:
                     target = page.locator('.gw nav [data-jump="' + identity + '"]')
@@ -172,6 +203,9 @@ def main():
                 assert studio['status'] == 'ready' and studio['totalHomes'] == 25000
                 assert studio['townOverrides']['town']['houses'] == 10000
                 assert studio['guidedSetup']['mode'] == 'studio'
+                assert studio['settings']['process']['analysts'] == 7
+                assert studio['settings']['contact']['agents'] == 5
+                assert studio['staffing']['edited']['process.analysts'] is True
                 hosted = browser.new_page(viewport={'width': 1440, 'height': 1000})
                 hosted.on('pageerror', lambda e: errors.append(str(e)))
                 hosted.goto(base + '/#/new')
@@ -184,7 +218,7 @@ def main():
                 hosted.locator('#gw-next').click()
                 expect(hosted.locator('.gw-validated')).to_be_visible(timeout=30000)
                 assert not errors, errors
-                (args.out / 'result.json').write_text(json.dumps({'worldId': world_id, 'studioPagesVisited': len(page_ids), 'hostedValidated': True, 'errors': errors, 'status': response.json()}, indent=2), encoding='utf-8')
+                (args.out / 'result.json').write_text(json.dumps({'worldId': world_id, 'studioPagesVisited': len(page_ids), 'hostedValidated': True, 'staffing': studio['settings'], 'staffingPreservedAfterReloadAndCreate': True, 'errors': errors, 'status': response.json()}, indent=2), encoding='utf-8')
                 browser.close()
         finally:
             engine.terminate()

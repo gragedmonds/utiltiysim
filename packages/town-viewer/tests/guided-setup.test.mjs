@@ -84,3 +84,45 @@ test('creation identity persists for identical requests and changes with the rev
  assert.deepEqual(worldRequest(d,config),first);assert.equal(worldRequest(structuredClone(d),config).commandId,first.commandId);
  d.name='Another environment';assert.notEqual(worldRequest(d,config).commandId,first.commandId);
 });
+
+test('staffing stays at engine defaults until size changes, then follows the saved district',()=>{
+ const d=draft();d.execution='local';d.guidedSetup.mode='studio';
+ const config={...data,homeLimit:10000,defaults:{...data.defaults,run:{process:{analysts:2},contact:{agents:1}}}};
+ initialize(d,config);changePace(d,'full',pagesFor(data,fields),wizard);
+ setValue(d,config,fields,'town:town.houses',500);assert.deepEqual(d.settings,{});
+ setValue(d,config,fields,'town:town.houses',5000);
+ assert.equal(d.settings.process.analysts,5);assert.equal(d.settings.contact.agents,3);
+ setValue(d,config,fields,'town:town.houses',25000);
+ assert.equal(d.settings.process.analysts,11);assert.equal(d.settings.contact.agents,5);
+ const saved=JSON.parse(JSON.stringify(d));initialize(saved,config);saved.guidedSetup.mode='world';changePace(saved,'quick',pagesFor(data,fields),wizard);
+ assert.deepEqual(saved.settings,d.settings);assert.deepEqual(saved.staffing,d.staffing);
+ d.guidedSetup.pins['town:town.houses']=false;
+ applyChoice(d,config,fields,'size',{id:'reference',values:{'town:town.houses':1900}});
+ assert.deepEqual(d.settings,{});assert.equal(d.totalHomes,1900);
+});
+
+test('staffing edits matching the last suggestion remain pinned across size changes and reload',()=>{
+ const d=draft();d.execution='local';d.guidedSetup.mode='studio';
+ setValue(d,data,fields,'town:town.houses',5000);
+ setValue(d,data,fields,'run:process.analysts',5);
+ const restored=JSON.parse(JSON.stringify(d));initialize(restored,data);
+ setValue(restored,data,fields,'town:town.houses',10000);
+ assert.equal(restored.settings.process.analysts,5);assert.equal(restored.settings.contact.agents,5);
+ assert.equal(restored.guidedSetup.suggestions['run:process.analysts'],11);
+ resetValue(restored,data,fields,'run:process.analysts');assert.equal(restored.settings.process.analysts,11);
+ assert.equal(restored.guidedSetup.pins['run:process.analysts'],undefined);
+ setValue(restored,data,fields,'town:town.houses',3800);
+ assert.equal(restored.settings.process.analysts,4);assert.equal(restored.settings.contact.agents,2);
+});
+
+test('imported and parent-pinned staffing are preserved, and pinned size choices have no staffing side effect',()=>{
+ const imported={settings:{process:{analysts:4},contact:{agents:9}},townOverrides:{},execution:'local'};
+ initialize(imported,data);setValue(imported,data,fields,'town:town.houses',5000);
+ assert.equal(imported.settings.process.analysts,4);assert.equal(imported.settings.contact.agents,9);
+ const d=draft();d.guidedSetup.mode='studio';d.guidedSetup.pins['run:process']=true;
+ setValue(d,data,fields,'town:town.houses',5000);assert.equal(d.settings.process,undefined);
+ assert.equal(d.settings.contact.agents,3);
+ const before=structuredClone(d.settings);
+ assert.deepEqual(applyChoice(d,data,fields,'size',{id:'small',values:{'town:town.houses':100}}),['town:town.houses']);
+ assert.deepEqual(d.settings,before);
+});

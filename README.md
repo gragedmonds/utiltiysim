@@ -5,6 +5,8 @@ Shared development repository for a seeded utility-town simulator and its meter-
 Work is being developed in parallel. Keep changes on isolated branches and review integration contracts before merging. The town prototype and its handoff documentation will be proposed separately under `prototypes/town-lab`.
 
 For the durable v2 world's restored map, see [World map](docs/WORLD_MAP.md).
+For a detailed design handoff covering screens, behavior, release status and
+remaining integration gaps, see [UtilitySim capabilities](docs/UTILITYSIM_CAPABILITIES.md).
 Open a saved world with `python -m utilsim.world.server --db PATH_TO_WORLD_SQLITE --open-map`.
 The launcher app also includes **Saved world maps**: create a new world from a
 town selected from Studio's saved results or a complete snapshot file, or register an existing world database and reopen
