@@ -104,8 +104,11 @@ predate its referenced settlement. A valid provider settlement can arrive before
 the transport acknowledgment, supporting an acknowledgment lost after processing.
 
 Partial settlements/returns, provider cancellation, fees, other currencies,
-invoice balance revisions, credit notes, invoice generation, cash debits/income
-schedules and enterprise posting are explicitly unsupported. A reserved intention
+invoice balance revisions, credit notes, invoice generation and enterprise posting
+are explicitly unsupported. Optional recurring income and essential expenses are
+configured separately through [household cashflow](WORLD_CUSTOMER_CASHFLOW.md)
+within this same finance owner. They never spend provider-reserved funds or create
+debt from unfunded necessities. A reserved intention
 with no supported provider confirmation remains reserved; the model never guesses
 a failure or releases funds silently. Cohort migration is unsupported: vacancy or
 applied occupancy changes freeze new behavior, while previous intentions can still
