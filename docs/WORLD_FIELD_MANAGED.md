@@ -151,6 +151,12 @@ state and cannot be released. An unchanged plan never creates a replacement job
 or repeats the physical effect. `inspect(owner, after=0, limit=25)` supplies a
 bounded, stable sequence cursor for plan/binding/result audit.
 
+Managed plans pin the resolved runtime database path. This version supports
+recovery at the original path only: relocating the runtime/world/field database
+set does not authorize rebinding, and the adapter rejects the changed runtime
+path. There is no authenticated relocation contract yet. Preserve the original
+owners and paths when restoring managed work; do not rewrite stored bindings.
+
 ## Verification
 
 Focused tests live in `tests/test_world_field_managed.py`. The isolated real-Run
@@ -169,3 +175,13 @@ unchanged source pack, and unchanged baseline. The observation consumer is an
 explicit fixture acknowledgement, not enterprise integration. Output records
 the exact tested Virtual-Systems revision; it does not claim the private field
 recipient has accepted this adapter.
+
+A separate combined acceptance subsequently connected this adapter to the
+actual private Billing recipient and ISU observation ingestion. It used public
+`b822af0451f9983b15a1fb0a5f88a70e5193d2ef` and private
+`0bc113d0991328bfd6e5bf480962d83af6ab2ecf`: one physical repair, 6,618 observations
+and one Billing report on 570 premises. Both the physical job and report job
+recovered a lost acknowledgement on their second attempt. Billing remained
+`reported`, with the report `pending` clerk review. This is isolated composition
+evidence, not production mapping agreement or a completed cross-system scenario.
+See the [compact result](WORLD_MANAGED_RECIPIENT_ACCEPTANCE_2026_10_09.json).
