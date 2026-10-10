@@ -49,6 +49,7 @@ def _owned_store(db, binding):
         "field_reporting": "assignment revision assignment_checksum report_mode work_mode event_id",
         "field_main_phases": "assignment assignment_checksum predecessor predecessor_checksum",
         "field_cancellations": "assignment assignment_checksum revision cancelled_day reason event_id replacement replacement_checksum",
+        "field_managed": "assignment visit_day request plan binding result",
     }
     indexes = {"field_assignment_due", "field_crew_usage", "field_outbox_due"}
     tables = {r["name"] for r in objects if r["type"] == "table"}
@@ -68,8 +69,8 @@ def _owned_store(db, binding):
         raise ValueError("Existing database has no valid field ownership record; it was not changed.")
     if stored_binding != binding:
         raise ValueError("Field database belongs to another world or owner.")
-    from . import field_cancellation, field_reporting, field_water_mains
-    optional = {"field_reporting", "field_main_phases", "field_cancellations"}
+    from . import field_cancellation, field_managed, field_reporting, field_water_mains
+    optional = {"field_reporting", "field_main_phases", "field_cancellations", "field_managed"}
     expected = set(columns) - optional if enabled(db) else {"meta", "commands", "events"}
     if field_reporting.enabled(db):
         if not enabled(db):
@@ -83,6 +84,10 @@ def _owned_store(db, binding):
         if not enabled(db) or not field_water_mains.enabled(db):
             raise ValueError("Cancellation requires a recognized enabled main-phase field store.")
         expected.add("field_cancellations")
+    if field_managed.enabled(db):
+        if not enabled(db):
+            raise ValueError("Managed visits require an enabled field store.")
+        expected.add("field_managed")
     if tables != expected:
         raise ValueError("Existing database has an incomplete field schema; it was not changed.")
     return True
@@ -323,7 +328,7 @@ def _target(db, meta, operation, identity, day):
     return {"commodity": skill, "edgeId": identity}
 
 
-def _physical(field, field_db, meta, row, actor):
+def _physical(field, field_db, meta, row, actor, managed=None):
     """Trusted broker: authorization is persisted assignment, never caller fault IDs.
 
     World commits its own idempotency journal with the repair. A crash before the
@@ -335,7 +340,7 @@ def _physical(field, field_db, meta, row, actor):
     prior = _physical_result(field, row, reporting)
     if prior:
         return prior
-    unavailable = _availability(field_db, row, meta["through"], field)
+    unavailable = _availability(field_db, row, managed["visitDate"] if managed else meta["through"], field)
     if unavailable:
         raise ValueError(unavailable)
     world = field.world
@@ -367,6 +372,7 @@ def _physical(field, field_db, meta, row, actor):
                 "assignmentId": row["id"], "authorizationEventId": row["accepted_event"],
                 "assignmentChecksum": row["checksum"], "fieldOwnerId": field.owner_id,
                 "causalReference": row["accepted_event"],
+                **({"managedVisit": managed} if managed else {}),
                 **({"reason": "Assigned on-site plumbing inspection and repair"} if operation == OPERATION else
                    {"operation": operation, "reason": "Assigned on-site inspection and physical action"})})
         # Only legitimate on-site findings cross back to the workforce owner.
@@ -374,13 +380,16 @@ def _physical(field, field_db, meta, row, actor):
                        "physicalEventId": result["eventId"] if result else None}
         if reporting["workMode"] == "inspect-only":
             observation["outcome"] = "not_attempted"
+        if managed:
+            observation["visitDate"] = managed["visitDate"]
+            observation["managedVisit"] = managed
         db.execute("INSERT INTO commands VALUES(?,?,?)", (identity,
                    canonical(_physical_binding(field, row, reporting)), canonical(observation)))
         return observation
 
 
 def _availability(db, row, day, field=None):
-    from . import field_water_mains
+    from . import field_managed, field_water_mains
     crew = db.execute("SELECT * FROM field_crews WHERE id=?", (row["crew"],)).fetchone()
     skill = _skill(json.loads(row["payload"])["operation"])
     if not crew or skill not in json.loads(crew["skills"]):
@@ -395,6 +404,7 @@ def _availability(db, row, day, field=None):
         return "Crew is off shift."
     used = db.execute("SELECT COUNT(*) FROM field_assignments WHERE crew=? AND executed_day=?",
                       (crew["id"], day)).fetchone()[0]
+    used += field_managed.held(db, crew["id"], day, excluding=row["id"])
     if used >= crew["daily_capacity"]:
         return "Crew daily capacity is exhausted."
     return None
@@ -423,7 +433,8 @@ def _report_data(world, meta, row, actor, outcome):
             "observations": _narrative(json.loads(row["payload"])["operation"], outcome), "attachments": []}
 
 
-def _execute(world, db, meta, row, actor, cause):
+def _execute(world, db, meta, row, actor, cause, managed=None):
+    from . import field_managed
     from .field_reporting import policy
     if actor != row["crew"]:
         raise ValueError("Only the assigned crew may execute this assignment.")
@@ -431,8 +442,12 @@ def _execute(world, db, meta, row, actor, cause):
         raise ValueError("Cancelled assignments cannot execute.")
     if row["state"] == "executed":
         return json.loads(row["result"])
+    prior = _physical_result(world, row, policy(db, row))
+    if managed is None and field_managed.record(db, row["id"]) and not prior:
+        raise ValueError("This assignment is owned by the shared runtime; local execution is disabled.")
     recorded_day = meta["through"]
-    physical = _physical(world, db, meta, row, actor)
+    physical = _physical(world, db, meta, row, actor, managed=managed)
+    managed = physical.get("managedVisit")
     meta = {**meta, "through": physical["effectiveDate"]}
     outcome = physical["outcome"]
     event = world.event(db, meta["environment"], meta["through"], "FieldVisitExecuted", row["asset"],
@@ -447,8 +462,10 @@ def _execute(world, db, meta, row, actor, cause):
     result = {"assignmentId": row["id"], "state": "executed", "outcome": outcome, "eventId": event,
               "physicalEventId": physical["physicalEventId"], "reportId": report_id,
               "effectiveDate": meta["through"], "actorId": actor}
+    if managed:
+        result.update(visitDate=physical["visitDate"], managedVisit=managed)
     db.execute("UPDATE field_assignments SET state='executed',executed_day=?,result=? WHERE id=?",
-               (meta["through"], canonical(result), row["id"]))
+               (physical.get("visitDate", meta["through"]), canonical(result), row["id"]))
     return result
 
 
@@ -556,6 +573,7 @@ def _accept(world, db, meta, payload):
 
 
 def _daily(world, db, meta):
+    from . import field_managed
     if not enabled(db):
         return []
     _recover(world, db, meta)
@@ -564,6 +582,8 @@ def _daily(world, db, meta):
                       "ORDER BY scheduled_day,sequence", (meta["through"],)).fetchall()
     for candidate in rows:
         row = _assignment(db, candidate["id"])
+        if field_managed.record(db, row["id"]):
+            continue
         if _availability(db, row, meta["through"], world) is None:
             results.append(_execute(world, db, meta, row, row["crew"], row["accepted_event"]))
     return results
