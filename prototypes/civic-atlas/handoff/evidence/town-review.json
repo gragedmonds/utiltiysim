@@ -1,0 +1,27 @@
+{
+  "townId": "town-92daf819d09dfd34",
+  "homes": 120,
+  "residents": 292,
+  "premises": 135,
+  "parks": 3,
+  "developedEnvelopeKm2": 0.2473,
+  "residentsPerEnvelopeKm2": 1181,
+  "homesPerEnvelopeHectare": 4.85,
+  "allRoadKm": 4.623,
+  "roadKmInsideEnvelope": 3.92,
+  "roadMetresPerHomeInsideEnvelope": 32.7,
+  "roadComponents": 1,
+  "junctionsDegree3Plus": 20,
+  "roadEndsIncludingTownExits": 8,
+  "roadSegmentsWithoutAddressedPremises": [
+    "R-4",
+    "R-6",
+    "R-11",
+    "R-16",
+    "R-26",
+    "R-29",
+    "R-37",
+    "R-38"
+  ],
+  "densityDefinition": "Residents in occupied residential premises / convex hull of saved parcels and parks. Not total map bounds or a municipal density claim."
+}

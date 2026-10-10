@@ -1,0 +1,1 @@
+Block study checks passed: 14 real property picks, A/B camera, pan/zoom, overlay rendering, stale-art fallback, unchanged source.
