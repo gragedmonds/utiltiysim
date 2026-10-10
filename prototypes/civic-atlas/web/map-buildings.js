@@ -253,9 +253,9 @@ export function buildingGeometry(family,home={}){
     }
   } else if(family==='school'){
     const centerW=w*.30,wingW=w*.35,wingH=h*.75;
-    courses(0,0,.02*d,centerW,h,d,BRICK[0]);roof(0,h,.02*d,centerW+.7,d+.7,Math.min(2.4,centerW*.25),p.roof,true);
+    courses(0,0,.02*d,centerW,h,d,BRICK[0]);if(home.roof==='flat')flatRoof(0,h,.02*d,centerW,d);else roof(0,h,.02*d,centerW+.7,d+.7,Math.min(2.4,centerW*.25),p.roof,true);
     for(const sign of [-1,1]){
-      const x=sign*w*.325;courses(x,0,-d*.10,wingW,wingH,d*.75,'#dac8a6');roof(x,wingH,-d*.10,wingW+.5,d*.75+.5,1.5,p.roof,true);
+      const x=sign*w*.325;courses(x,0,-d*.10,wingW,wingH,d*.75,'#dac8a6');if(home.roof==='flat')flatRoof(x,wingH,-d*.10,wingW,d*.75);else roof(x,wingH,-d*.10,wingW+.5,d*.75+.5,1.5,p.roof,true);
       const windows=Math.max(3,Math.round(wingW/3.8));for(let floor=0;floor<stories;floor++)for(let i=0;i<windows;i++)window(x+(-.5+(i+.5)/windows)*wingW*.88,(floor+.55)*wingH/stories,d*.275+.03,Math.min(1.6,wingW/windows*.60),Math.min(1.6,wingH/stories*.54));
     }
     door(0,.28,d*.52+.025,Math.min(2.2,centerW*.4),2.55);box(stone,0,3.13,d*.52+.1,centerW*.83,.45,.38);
@@ -271,7 +271,7 @@ export function buildingGeometry(family,home={}){
     door(0,.3,tz+d*.135+.04,Math.min(1.8,tw*.62),2.65,'#7b6753');steps(0,tz+d*.135+.3,tw*.88,.3);
     for(const sign of [-1,1])for(let i=0;i<4;i++)window(sign*(naveW/2+.025),h*.54,(-.40+i*.23)*naveD,1.0,Math.min(2.9,h*.57),sign);
   } else if(family==='pump_house'){
-    courses(0,0,0,w,h,d,'#c8c6b1');roof(0,h,0,w+.7,d+.7,Math.min(2.2,w*.18),'#65817b',true);
+    courses(0,0,0,w,h,d,'#c8c6b1');if(home.roof==='flat')flatRoof(0,h,0,w,d);else roof(0,h,0,w+.7,d+.7,Math.min(2.2,w*.18),'#65817b',true);
     const gateW=Math.min(3,w*.26);box(stone,-w*.18,h*.33,d/2+.06,gateW+.4,h*.62,.18);box('#587971',-w*.18,h*.31,d/2+.18,gateW,h*.58,.10);
     box(stone,-w*.18,h*.33,d/2+.25,.08,h*.6,.06);window(w*.28,h*.55,d/2+.04,Math.min(2.8,w*.18),1.0);
     for(const sign of [-1,1]){window(sign*(w/2+.025),h*.57,-d*.2,1.5,1.2,sign);for(let i=0;i<5;i++)box('#647e73',sign*(w/2+.05),h*.62+i*.13,d*.23,.09,.07,d*.22);}

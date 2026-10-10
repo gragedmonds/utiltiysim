@@ -2,7 +2,10 @@ import * as THREE from '/viewer/vendor/three.module.js';
 export const BLOCK={id:'pine-willow-eight',center:{x:66,z:-137},viewHeight:100,aspect:1.5,ids:['P-00038','P-00039','P-00040','P-00041','P-00042','P-00047','P-00048','P-00049'],polygon:[{x:19.35848,z:-170.65066},{x:20.44617,z:-163.39938},{x:14.28999,z:-95.68139},{x:109.68034,z:-101.64329},{x:121.21199,z:-179.48189}]};
 export const SECOND_BLOCK={id:'oak-birch-six',center:{x:172,z:-148},viewHeight:110,aspect:1.5,ids:['P-00063','P-00064','P-00065','P-00087','P-00088','P-00089'],polygon:[{x:135.1864,z:-181.00722},{x:123.48163,z:-102},{x:203.53157,z:-102},{x:200.46494,z:-147.99941},{x:230.93385,z:-195.08772}]};
 export const COMMERCIAL_BLOCK={id:'main-north-six',center:{x:57,z:-32},viewHeight:96,aspect:1.5,ids:['P-00121','P-00122','P-00123','P-00124','P-00125','P-00126'],polygon:[{x:1.5,z:-51},{x:110.45,z:-51},{x:110.45,z:-10.5},{x:1.5,z:-10.5}]};
-export function sourceSignature(town,block=BLOCK){return JSON.stringify({townId:town.id,topologyRevision:town.topologyRevision,premises:town.premises.filter(p=>block.ids.includes(p.id)).map(p=>({id:p.id,x:p.x,z:p.z,angle:p.angle,side:p.side,elevationM:p.elevationM,solar:p.solar,solarKW:p.solarKW,width:p.width,depth:p.depth,height:p.height,stories:p.stories,roof:p.roof})),terrain:town.terrain,buildings:town.buildings.filter(b=>b.premiseIds?.some(id=>block.ids.includes(id))),parcels:town.parcels.filter(p=>block.ids.includes(p.premiseId)),roads:town.roads});}
+export const PARK_BLOCK={id:'maple-park',center:{x:194.48,z:65.96},viewHeight:115,aspect:1.5,ids:[],parkIds:['PARK-01'],polygon:[{x:139.4,z:24.48},{x:249.56,z:24.48},{x:249.56,z:107.44},{x:139.4,z:107.44}]};
+export const SCHOOL_BLOCK={id:'brookfield-school',center:{x:338.64,z:63.92},viewHeight:110,aspect:1.5,ids:['P-00133'],facilityIds:['SCHOOL-01'],polygon:[{x:299.2,z:23.12},{x:378.08,z:23.12},{x:378.08,z:104.72},{x:299.2,z:104.72}]};
+export const DEPOT_BLOCK={id:'operations-depot',center:{x:451.52,z:74.46},viewHeight:72,aspect:1.5,ids:['P-00135'],facilityIds:['DEPOT-01'],polygon:[{x:429.76,z:52.36},{x:473.28,z:52.36},{x:473.28,z:96.56},{x:429.76,z:96.56}]};
+export function sourceSignature(town,block=BLOCK){return JSON.stringify({townId:town.id,topologyRevision:town.topologyRevision,premises:town.premises.filter(p=>block.ids.includes(p.id)).map(p=>({id:p.id,x:p.x,z:p.z,angle:p.angle,side:p.side,elevationM:p.elevationM,solar:p.solar,solarKW:p.solarKW,width:p.width,depth:p.depth,height:p.height,stories:p.stories,roof:p.roof})),terrain:town.terrain,buildings:town.buildings.filter(b=>b.premiseIds?.some(id=>block.ids.includes(id))),parcels:town.parcels.filter(p=>block.ids.includes(p.premiseId)),roads:town.roads,...((block.parkIds||block.facilityIds)?{parks:town.parks.filter(p=>block.parkIds?.includes(p.id)),parkDesign:town.atlasDesign?.parks?.filter(p=>block.parkIds?.includes(p.id)),facilities:town.facilities,waterBodies:town.waterBodies,landscapeRevision:2}:{})});}
 export function blockCamera(map,block=BLOCK){const s=map.scene,c=s.camera.clone(),target=new THREE.Vector3(block.center.x,s.heightAt(block.center.x,block.center.z),block.center.z);c.position.copy(target).addScaledVector(map.direction,1000);c.quaternion.copy(s.camera.quaternion);c.left=-block.viewHeight*block.aspect/2;c.right=-c.left;c.top=block.viewHeight/2;c.bottom=-c.top;c.zoom=1;c.updateProjectionMatrix();c.updateMatrixWorld(true);return{camera:c,target};}
 export function createBlockPlate(map, options) {
   const block = options.block || BLOCK;
@@ -96,7 +99,7 @@ export function createBlockPlate(map, options) {
           const t=Math.max(0,Math.min(1,((x-a.x)*dx+(y-a.y)*dy)/(dx*dx+dy*dy)));
           distance=Math.min(distance,Math.hypot(x-a.x-t*dx,y-a.y-t*dy));
         }
-        rgba.data[k]*=Math.min(1,distance/7);
+        rgba.data[k]*=Math.min(1,distance/(block.parkIds?42:7));
       }
       ctx.putImageData(rgba,0,0); texture.dispose(); texture=new THREE.CanvasTexture(canvas);
       texture.colorSpace=THREE.SRGBColorSpace; texture.anisotropy=8;

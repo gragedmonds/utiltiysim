@@ -5,6 +5,7 @@ import {buildingGeometry} from './map-buildings.js';
 import {installIllustratedFoliage} from './map-foliage.js';
 import {installMaterialAtlas} from './map-materials.js';
 import {naturalizeLandscape,renderNaturalBanks} from './map-landscape.js';
+import {installGrassPalette} from './map-grass.js';
 import {renderParcelGardens} from './map-gardens.js';
 import {createBuildingSprites} from './map-building-sprites.js';
 import {replaceTreeAssets,replaceCivicAssets,addResidentialCharacter,groundTexture,renderParks,renderAtlasDesign,applyBuildingFamilies,renderTownCenter,renderWaterTowers} from './map-assets.js';
@@ -141,9 +142,9 @@ export class AtlasMap {
     });
     this.el.dataset.materials='loading';
     this.materialReady=installMaterialAtlas(s,{url:'./assets/civic-material-atlas.png',signal:this.abort.signal}).then(art=>{
-      this.materialArt=art;if(art)this.el.dataset.materials='ready';return art;
+      this.materialArt=art;if(art)this.el.dataset.materials='ready';this.grassArt=installGrassPalette(s);return art;
     }).catch(error=>{
-      this.el.dataset.materials='fallback';console.warn('Illustrated materials unavailable; using procedural surfaces.',error);return null;
+      this.grassArt=installGrassPalette(s);this.el.dataset.materials='fallback';console.warn('Illustrated materials unavailable; using procedural surfaces.',error);return null;
     });
     this.buildingSprites=createBuildingSprites(s,this.town,{url:'./assets/civic-houses-one-storey.png',calibrated:true});
     this.buildingReady=this.buildingSprites.ready.then(art=>{this.el.dataset.buildings=art?'ready':'fallback';this.request();return art;});
@@ -161,12 +162,15 @@ export class AtlasMap {
   }
   async loadBlockArtwork(){
     try{
-      const {createBlockPlate,BLOCK,SECOND_BLOCK,COMMERCIAL_BLOCK}=await import('./map-block-plate.js');
+      const {createBlockPlate,BLOCK,SECOND_BLOCK,COMMERCIAL_BLOCK,PARK_BLOCK,SCHOOL_BLOCK,DEPOT_BLOCK}=await import('./map-block-plate.js');
       if(this.abort.signal.aborted)return null;
       this.blockPlates=[
         createBlockPlate(this,{block:BLOCK,metadataUrl:'./assets/civic-block-pine-willow.json',imageUrl:'./assets/civic-block-pine-willow.png',signal:this.abort.signal}),
         createBlockPlate(this,{block:SECOND_BLOCK,metadataUrl:'./assets/civic-block-oak-birch.json',imageUrl:'./assets/civic-block-oak-birch.png',manageOverlays:false,signal:this.abort.signal}),
         createBlockPlate(this,{block:COMMERCIAL_BLOCK,metadataUrl:'./assets/civic-block-main-north.json',imageUrl:'./assets/civic-block-main-north.png',manageOverlays:false,signal:this.abort.signal}),
+        createBlockPlate(this,{block:PARK_BLOCK,metadataUrl:'./assets/civic-block-maple-park.json',imageUrl:'./assets/civic-block-maple-park.png',manageOverlays:false,signal:this.abort.signal}),
+        createBlockPlate(this,{block:SCHOOL_BLOCK,metadataUrl:'./assets/civic-block-school.json',imageUrl:'./assets/civic-block-school.png',manageOverlays:false,signal:this.abort.signal}),
+        createBlockPlate(this,{block:DEPOT_BLOCK,metadataUrl:'./assets/civic-block-depot.json',imageUrl:'./assets/civic-block-depot.png',manageOverlays:false,signal:this.abort.signal}),
       ];
       await Promise.all(this.blockPlates.map(plate=>plate.ready));
       if(this.abort.signal.aborted)return null;

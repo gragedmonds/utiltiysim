@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import {assessSiteFit,chooseFittingAsset} from './web/site-fit.js';
+const rect=(x,z)=>[{x:-x,z:-z},{x:x,z:-z},{x:x,z:z},{x:-x,z:z}];
+const home={family:'cottage',x:0,z:0,width:10,depth:10};
+assert.equal(assessSiteFit(home,rect(10,12)).fits,true);
+assert.equal(assessSiteFit({...home,width:4},rect(10,12)).fits,false);
+assert.equal(assessSiteFit({...home,width:25},rect(30,30)).fits,false);
+const depot={family:'depot',x:0,z:0,width:38,depth:22};
+const cramped=assessSiteFit(depot,rect(23,22));assert.equal(cramped.footprintFits,true);assert.equal(cramped.fits,false,'depot cannot fit just because roof fits');
+assert.equal(assessSiteFit(depot,rect(24,26)).fits,true);
+assert.equal(assessSiteFit({...depot,yaw:Math.PI/2},rect(26,24)).fits,true);
+const notch=[{x:-20,z:-20},{x:20,z:-20},{x:20,z:20},{x:2,z:20},{x:2,z:0},{x:-2,z:0},{x:-2,z:20},{x:-20,z:20}];
+assert.equal(assessSiteFit(home,notch).fits,false,'concave notch cannot be bridged by an envelope');
+const smaller={...home,width:8,depth:8};assert.deepEqual(chooseFittingAsset([{...home,width:16,depth:18},smaller],rect(8,10)).candidate,smaller);
+assert.equal(chooseFittingAsset([depot],rect(10,10)),null);
+assert.equal(assessSiteFit({...home,x:NaN},rect(10,10)).fits,false);
+console.log('PASS: minimum/maximum sizes, footprint vs access, rotated envelopes, concave parcels, smaller-variant fallback, no-fit and invalid inputs.');

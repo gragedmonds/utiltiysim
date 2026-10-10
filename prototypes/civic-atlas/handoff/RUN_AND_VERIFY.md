@@ -74,3 +74,17 @@ sha256sum -c prototypes/civic-atlas/handoff/MANIFEST.sha256
 ```
 
 The manifest intentionally excludes itself and ignored runtime output. After editing the package, regenerate the manifest before using it as a new transfer baseline.
+
+
+## Current city-place and welcome checks
+
+With the reference server running, these focused checks exercise the new work:
+
+```sh
+node prototypes/civic-atlas/check-city-places.mjs
+node prototypes/civic-atlas/check-welcome.mjs
+node prototypes/civic-atlas/check-site-fit.mjs
+ATLAS_ACCESS_BROWSER=1 node prototypes/civic-atlas/check-road-access.mjs
+```
+
+The main map defaults to six registered areas for the reference world. The separate block-study page still compares its original one/two/three neighborhood areas; use the main map's **Explore a place** control for the new park, school and depot. **City design** presents labeled visual studies; unavailable premise families have no saved-map example button.

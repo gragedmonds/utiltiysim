@@ -2,11 +2,11 @@
 
 Handoff date: **10 October 2026**. Status: **incomplete exploration; visual and product target not achieved**.
 
-The owner's latest assessment is: “We're definitely not where we need to be with this at all.” Treat that as the current status. Earlier agent reviews accepted particular rendering and interaction experiments; they do **not** constitute owner approval, whole-town visual parity, or readiness to ship. The next implementer is free to replace the rendering approach while retaining useful discoveries and simulation contracts.
+The owner likes the redesigned welcome and the new city-family concept art, but explicitly requires that quality in the working map. Grass consistency, realistic streets/access, site fit and wider building variety remain review priorities. This is **not** owner approval of whole-town visual parity or readiness to ship. Earlier scoped agent checks do not substitute for that acceptance.
 
 ## Continued implementation
 
-Work resumed after this handoff. See [the 10 October continuation](handoff/ITERATION_2026_10_10.md) for the reviewed Claude proposal, redesigned welcome/overview and three-area map experiment. The owner has not signed off on visual quality; the original status above remains the acceptance boundary.
+Work resumed after this handoff. Start with [city places and shared grass](handoff/CITY_PLACES_2026_10_10.md), [welcome account/scroll narrative](handoff/WELCOME_ITERATION_2026_10_10.md), [roads and site review](handoff/ROAD_AND_SITE_REVIEW.md), and [visual review](handoff/VISUAL_REVIEW_CITY_PLACES.md). The main map now includes six illustrated areas. [The earlier continuation](handoff/ITERATION_2026_10_10.md) preserves the Claude proposal review and previous three-area baseline. The owner has not signed off on the overall result.
 
 ## What is in this folder
 
@@ -16,7 +16,7 @@ The executable prototype still uses the UtilitySim engine and viewer dependencie
 
 Read in this order:
 
-1. [Original B / Civic Atlas target](handoff/references/B-civic-atlas-target.png), then [current full map](handoff/evidence/map-1600.png). The difference is material.
+1. [Original B / Civic Atlas target](handoff/references/B-civic-atlas-target.png), then [current whole-town map](handoff/evidence/city-places/map-satellite-overview.png) and [current park close view](handoff/evidence/city-places/map-park.png). The difference is material.
 2. [Original map design](handoff/original-documents/CIVIC_ATLAS_MAP_DESIGN.md) and [original shell design](handoff/original-documents/CIVIC_ATLAS_SHELL_DESIGN.md).
 3. [Findings and approaches](handoff/FINDINGS_AND_APPROACHES.md): what was tried, useful results, failures and unresolved decisions.
 4. [Remaining work and acceptance](handoff/NEXT_STEPS.md): priorities and concrete review gates.
@@ -64,6 +64,9 @@ The map must present the engine's world faithfully. Decorative trees, gardens an
 | `web/map-buildings.js`, `web/map-building-sprites.js` | Native architecture and eligible painted replacements |
 | `web/map-foliage.js`, `web/map-materials.js`, `web/map-landscape.js`, `web/map-gardens.js` | Decorative landscape and surface rendering |
 | `web/map-block-plate.js`, `web/block-study.js` | Whole-block artwork alignment, invalidation, A/B and lifecycle |
+| `web/map-grass.js`, `web/map-public-space.js` | Shared turf palette and native park programs |
+| `web/map-road-access.js`, `web/site-fit.js` | Curb-clipped access and conservative design-study fit rules |
+| `web/welcome.js`, `web/welcome.css`, `web/city-design.js` | Account disclosure, scrolling introduction and explicit concept catalogue |
 | `web/map-preview.js` | Actual property thumbnails using the existing scene renderer |
 | `web/assets/` | Final artwork, block source signatures and asset provenance |
 | `render-*-guide.mjs` | Exact-camera geometry guides for image generation |

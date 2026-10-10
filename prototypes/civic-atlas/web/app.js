@@ -1,3 +1,4 @@
+import {renderCityDesign,CITY_FAMILIES} from './city-design.js';
 import {renderOverview} from './overview.js';
 import {AtlasMap} from './map.js';
 import {propertyPreview} from './map-preview.js';
@@ -40,12 +41,12 @@ const geographyCaption=()=>town?.atlasDesign?'Curated geography · saved physica
 function toast(message){$('toast').textContent=message;$('toast').classList.add('visible');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').classList.remove('visible'),4500);}
 async function api(path,options){const response=await fetch('/atlas/api/'+path,{...options,headers:{'Content-Type':'application/json',...options?.headers}});const data=await response.json();if(!response.ok)throw Error(typeof data.detail==='string'?data.detail:'The request could not be completed.');return data;}
 function route(next,replace=false){
- if(!['welcome','map','overview','configure','activity','connections'].includes(next))next='welcome';
+ if(!['welcome','map','overview','configure','activity','connections','city-design'].includes(next))next='welcome';
  page=next;
  document.body.dataset.view=next;
  document.querySelectorAll('.page').forEach(el=>el.hidden=el.id!==next+'-page');
  document.querySelectorAll('nav [data-page]').forEach(el=>{el.classList.toggle('active',el.dataset.page===next);if(el.dataset.page===next)el.setAttribute('aria-current','page');else el.removeAttribute('aria-current');});
- $('page-title').textContent={welcome:'Welcome',map:'Town map',overview:'Overview',configure:'Configure',activity:'Activity',connections:'Connections'}[next];
+ $('page-title').textContent={welcome:'Welcome',map:'Town map',overview:'Overview',configure:'Configure',activity:'Activity',connections:'Connections','city-design':'City design'}[next];
  map?.setVisible(next==='map');
  if(next!=='map')window.scrollTo(0,0);
  if(!replace&&location.hash!=='#'+next)history.pushState(null,'','#'+next);
@@ -61,6 +62,7 @@ function weather(){
 }
 function dayEvents(limit=5){return state.daysHistory.slice(0,limit).map(d=>`<div class="event-row"><span class="event-icon">${icon('check')}</span><div><strong>A physical day completed</strong><p>${fmt(d.observations)} observations recorded · ${fmt(d.temperature)} °C</p></div><small>${shortDay(d.day)}</small></div>`).join('');}
 function refreshViews(){
+ $('city-design-page').innerHTML=renderCityDesign(town,{esc});
  const population=town.premises.filter(p=>p.premiseType==='residential'&&p.occupied).reduce((sum,p)=>sum+(p.occupants||0),0);
  const roadsKm=town.roads.reduce((sum,r)=>sum+r.lengthM,0)/1000;
  $('hero-homes').textContent=fmt(town.homes);$('hero-people').textContent=fmt(population);
@@ -152,7 +154,22 @@ function sketchChanged(draft,drawing){
  $('sketch-length').textContent=Math.round(length)+' m';$('sketch-points').textContent=draft.points.length+' points';
  $('undo-sketch').disabled=!draft.points.length;$('clear-sketch').disabled=!draft.points.length;$('export-sketch').disabled=draft.points.length<2;
 }
+function visitPlace(id){
+ const family=CITY_FAMILIES.find(f=>f.id===id);
+ const home=id==='depot'?town.premises.find(p=>p.buildingType==='depot'):family?.match?town.premises.find(family.match):null;
+ const park=family?.park?town.atlasDesign?.parks?.find(p=>p.kind===family.park):null;
+ if(!home&&!park)return;
+ route('map');map.setDrawing(false);
+ if(home){selectProperty(home,true);return;}
+ ++requestVersion;selected=null;detail=null;map.clearSelection();emptyInspector();
+ const xs=park.polygon.map(p=>p.x),zs=park.polygon.map(p=>p.z);
+ map.focus({x:(Math.min(...xs)+Math.max(...xs))/2,z:(Math.min(...zs)+Math.max(...zs))/2,width:Math.max(...xs)-Math.min(...xs),depth:Math.max(...zs)-Math.min(...zs)},true);
+ $('legend-text').textContent=park.name+' · saved park, illustrated amenities';
+}
 function bind(){
+ const places=CITY_FAMILIES.filter(f=>f.match?town.premises.some(f.match):town.atlasDesign?.parks?.some(p=>p.kind===f.park));
+ $('place-tour').innerHTML='<option value="">Choose a destination…</option>'+places.map(f=>`<option value="${f.id}">${esc(f.park?town.atlasDesign.parks.find(p=>p.kind===f.park).name:f.tag)}</option>`).join('')+(town.premises.some(p=>p.buildingType==='depot')?'<option value="depot">Utility operations depot</option>':'');
+ $('place-tour').onchange=e=>{visitPlace(e.target.value);e.target.value='';};
  const artStatus=$('map-art-status'),canvasHost=$('map-canvas');
  const updateArtStatus=()=>{
   const mode=canvasHost.dataset.blockArt,count=Number(canvasHost.dataset.blockCount);
@@ -164,7 +181,7 @@ function bind(){
   artStatus.parentElement.classList.toggle('with-art-status',!artStatus.hidden);
   artStatus.dataset.state=mode||'native';
   artStatus.textContent=mode==='ready'
-   ?`Experimental artwork · ${Number.isInteger(count)&&count>0?`${count} saved block${count===1?'':'s'}`:'saved blocks'}`
+   ?`Experimental artwork · ${Number.isInteger(count)&&count>0?`${count} saved area${count===1?'':'s'}`:'saved areas'}`
    :mode==='fallback'?'Experimental artwork unavailable · native assets'
    :mode==='loading'?'Experimental artwork · loading':'';
  };
@@ -174,6 +191,8 @@ function bind(){
  updateArtStatus();
  document.addEventListener('click',e=>{
   const scrollButton=e.target.closest('[data-scroll-target]');if(scrollButton){$(scrollButton.dataset.scrollTarget)?.scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth',block:'start'});return;}
+  const cityFilter=e.target.closest('[data-city-filter]');if(cityFilter){document.querySelectorAll('[data-city-filter]').forEach(b=>b.setAttribute('aria-pressed',String(b===cityFilter)));document.querySelectorAll('[data-city-group]').forEach(card=>card.hidden=cityFilter.dataset.cityFilter!=='all'&&card.dataset.cityGroup!==cityFilter.dataset.cityFilter);return;}
+  const cityExample=e.target.closest('[data-city-example]');if(cityExample){visitPlace(cityExample.dataset.cityExample);return;}
   const pageButton=e.target.closest('[data-page]');if(pageButton){route(pageButton.dataset.page);return;}
   if(e.target.closest('#map-art-toggle')){map.setBlockArtwork(!map.blockArtStats?.enabled);updateArtStatus();return;}
   if(e.target.closest('.advance-button')){advance();return;}
@@ -221,7 +240,7 @@ async function boot(){
   $('boot').hidden=true;route(location.hash.slice(1)||'welcome',true);
   document.body.dataset.ready='true';
   // Read-only diagnostics for repeatable browser acceptance checks.
-  window.atlasDiagnostics=()=>({townId:town.id,selectedId:selected?.id,through:state.through,drawing:map.drawing,draft:map.draft(),camera:map.scene.camera.position.toArray(),target:map.scene.controls.target.toArray(),projection:map.scene.camera.isOrthographicCamera?'orthographic':'perspective',cameraZoom:map.scene.camera.zoom,frustum:map.scene.camera.isOrthographicCamera?[map.scene.camera.left,map.scene.camera.right,map.scene.camera.top,map.scene.camera.bottom]:null,renderer:map.scene.performanceState()});
+  window.atlasDiagnostics=()=>({townId:town.id,grass:map.grassArt,artwork:{enabled:Boolean(map.blockArtStats?.enabled),count:map.blockArtStats?.count||0,areas:map.blockPlates?.map(p=>({...p.stats}))||[]},selectedId:selected?.id,through:state.through,drawing:map.drawing,draft:map.draft(),camera:map.scene.camera.position.toArray(),target:map.scene.controls.target.toArray(),projection:map.scene.camera.isOrthographicCamera?'orthographic':'perspective',cameraZoom:map.scene.camera.zoom,frustum:map.scene.camera.isOrthographicCamera?[map.scene.camera.left,map.scene.camera.right,map.scene.camera.top,map.scene.camera.bottom]:null,renderer:map.scene.performanceState()});
  }catch(error){$('app').hidden=true;$('boot-message').textContent='The world could not open: '+error.message;$('retry').hidden=false;console.error(error);}
 }
 boot();

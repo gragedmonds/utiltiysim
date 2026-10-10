@@ -1,5 +1,6 @@
 import * as THREE from '/viewer/vendor/three.module.js';
 import {GeometryBuilder,hash,roofGeometry} from '/viewer/lowpoly.js';
+import {furnishPark} from './map-public-space.js';
 
 // These are illustrative asset skins. Source positions, footprints, categories,
 // heights, occupancy and every simulation record remain unchanged.
@@ -191,6 +192,9 @@ export function renderParks(scene,town){
       }
     }
     if(entry){const start=mix(center,entry.edge,.83),end=mix(entry.edge,entry.front,entry.distance/entry.total);walk([start,entry.edge,end],true);}
+    const program=furnishPark(scene,{kind:parkKind,box,contains:p=>contains(p,polygon),clearPad,paths:pathPieces});
+    if(program.mesh)group.add(program.mesh);
+    clearings.push(...program.areas);
     allPaths.push(...pathPieces);
     for(let i=0;i<180;i++){
       const n=hash(`${park.id}:plant:${i}`),p={x:box.minX+(n%10000)/10000*(box.maxX-box.minX),z:box.minZ+((n>>>13)%10000)/10000*(box.maxZ-box.minZ)};
@@ -430,16 +434,19 @@ export function renderTownCenter(scene,town){
   }
   // Replace the old centerline-to-door ribbons, which visually crossed traffic
   // lanes and split this shared pedestrian frontage into isolated driveways.
-  const legacyAccess=scene.townDressing?.meshes.find((m,i)=>i>=12&&!m.isInstancedMesh);
+  const legacyAccess=scene.townDressing?.meshes.find(m=>m.userData.atlasAccess);
   if(legacyAccess)legacyAccess.visible=false;
-  for(const landmark of scene.townDressing?.plan.landmarks||[]){
-    if(!landmark.access||ids.has(landmark.premiseId))continue;
-    const [a,b]=landmark.access,dx=b.x-a.x,dz=b.z-a.z,length=Math.hypot(dx,dz);if(length<1)continue;
-    const nx=-dz/length*1.8,nz=dx/length*1.8;
-    quad([{x:a.x+nx,z:a.z+nz},{x:b.x+nx,z:b.z+nz},{x:b.x-nx,z:b.z-nz},{x:a.x-nx,z:a.z-nz}]);
+  const accessRanges=[];
+  // Reuse the validated, curb-clipped polygons from refineStreetSurfaces.
+  // Recreating these from landmark.access would restore the centerline strips
+  // this pass just hid, visibly laying school/depot access across traffic lanes.
+  for(const access of legacyAccess?.userData.atlasAccess.quads||[]){
+    if(ids.has(access.premiseId))continue;
+    const firstVertex=paving.length/3;quad(access.polygon);
+    accessRanges.push({premiseId:access.premiseId,firstVertex,vertexCount:paving.length/3-firstVertex});
   }
   const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(paving,3));geometry.computeVertexNormals();
-  const mesh=new THREE.Mesh(geometry,new THREE.MeshStandardMaterial({color:'#c4bdab',roughness:1}));mesh.userData.atlasSurface=2;mesh.receiveShadow=true;scene.root.add(mesh);
+  const mesh=new THREE.Mesh(geometry,new THREE.MeshStandardMaterial({color:'#c4bdab',roughness:1}));mesh.userData.atlasSurface=2;mesh.userData.atlasAccessRanges=accessRanges;mesh.receiveShadow=true;scene.root.add(mesh);
   const lineGeometry=new THREE.BufferGeometry();lineGeometry.setAttribute('position',new THREE.Float32BufferAttribute(joints,3));scene.root.add(new THREE.LineSegments(lineGeometry,new THREE.LineBasicMaterial({color:'#a9a593',transparent:true,opacity:.45,depthWrite:false})));
   const props=new THREE.Mesh(furniture.build(),new THREE.MeshStandardMaterial({vertexColors:true,roughness:1}));props.castShadow=true;props.receiveShadow=true;scene.root.add(props);
 }

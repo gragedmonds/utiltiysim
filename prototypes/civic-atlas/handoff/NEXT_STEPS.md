@@ -57,3 +57,10 @@ Use the original shell brief and capability inventory for detailed coverage. Res
 ## Handoff completion versus product completion
 
 This package is complete when another person can read the original intent, inspect the source and results, run the preserved experiment, and understand the gaps. The product is complete only after the required visuals and workflows are implemented and assessed against the owner's expectations. No agent is continuing background work after this handoff.
+
+
+## Owner steering after the city-place pass
+
+The welcome hero and new concept art are liked; the working map must meet that standard. Preserve the now shared grass palette while extending native detail. Prioritize realistic road curves and joined sidewalk boundaries, residential door/driveway-to-curb connections, explicit pole/streetlight/traffic-control distinctions, solar status based on records, and a clearly labeled below-ground topology view. Validate minimum/maximum building dimensions **and the full site/access envelope** before choosing a variant; an undersized lot must produce another candidate or a no-fit outcome. The current ball diamond is a practice-scale illustration, not a regulation field.
+
+The account disclosure and scrolling welcome are now implemented, with real sign-in explicitly unconfigured. Follow [the current city-place findings](CITY_PLACES_2026_10_10.md) and [road/site review](ROAD_AND_SITE_REVIEW.md) rather than treating older completed priorities as still pending. The sketch editor still cannot commit streets or populate simulator parcels.

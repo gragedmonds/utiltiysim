@@ -49,3 +49,73 @@ body[data-view="welcome"] .workspace{margin-left:0}
 @media(min-width:1700px){#welcome-page .welcome-hero{height:780px}}
 @media(max-width:1150px){#welcome-page{padding:0 28px 40px}.welcome-masthead{height:86px}.welcome-masthead nav{gap:18px}#welcome-page .welcome-hero{height:690px}#welcome-page .welcome-copy{padding:43px 36px;max-width:570px}#welcome-page .welcome-copy h1{font-size:51px}#welcome-page .welcome-copy>p{font-size:14px;max-width:320px}.welcome-connections{padding:19px;left:16px;right:16px;bottom:16px}.welcome-connection-cards>button{padding:13px;gap:9px}.welcome-connection-cards strong{font-size:12px}.welcome-system-icon{width:32px;height:32px}.welcome-connection-cards small{font-size:10px}.welcome-art-caption{bottom:195px}}
 @media(max-width:760px){#welcome-page{padding:0 16px 28px}.welcome-masthead nav{display:none}.welcome-wordmark{font-size:22px}.welcome-resume{font-size:10px}#welcome-page .welcome-hero{height:820px}#welcome-page .welcome-copy{padding:35px 25px}#welcome-page .welcome-copy h1{font-size:40px;letter-spacing:-1px}#welcome-page .welcome-hero:before{background:linear-gradient(180deg,#fafcfdf5,#fafcfdab 38%,transparent 65%)}#hero-image{object-position:61% 50%}.welcome-connections-heading>span{display:none}.welcome-connection-cards{grid-template-columns:1fr;gap:8px}.welcome-connection-cards>button{padding:10px 13px}.welcome-connection-cards small{font-size:11px}.welcome-art-caption{bottom:293px}#welcome-page .capability-grid{grid-template-columns:1fr}#welcome-page>.section-heading h2{font-size:25px}}
+
+/* Account disclosure: the prototype has a local workspace, not an auth session. */
+.welcome-masthead-actions{display:flex;align-items:center;gap:15px}
+.welcome-account{position:relative;z-index:30}
+.welcome-account-button{padding:11px 10px;font-size:12px;gap:9px;border-radius:6px}
+.welcome-account-button[aria-expanded="true"]{background:#e9f1f1}
+.welcome-account-panel{position:absolute;right:0;top:calc(100% + 12px);width:290px;background:#fff;border:1px solid #dbe6e5;border-radius:12px;padding:22px;box-shadow:0 18px 50px #18364925;text-align:left}
+.welcome-account-panel>.eyebrow{font-size:8px;letter-spacing:1.5px;margin-bottom:12px}
+.welcome-account-panel>strong{display:block;font-size:16px;margin-bottom:9px}
+.welcome-account-panel>p{font-size:12px;line-height:1.7;color:#607780;margin-bottom:15px}
+.welcome-account-panel>button{width:100%;justify-content:space-between;padding:12px 0;font-size:12px;border-top:1px solid #e8eeeb}
+.welcome-account-panel>small{display:block;font-size:10px;color:#6c8183;line-height:1.5;margin-top:2px}
+#welcome-sign-in-dialog{max-width:480px;width:calc(100% - 32px);padding:36px}
+#welcome-sign-in-dialog h2{font-size:29px}
+#welcome-sign-in-dialog p+p{margin-top:12px}
+#welcome-sign-in-dialog p{color:#617780}
+.welcome-dialog-close{position:absolute;right:14px;top:12px;width:32px;height:32px;font-size:25px;border-radius:5px}
+
+/* Four short chapters move through one illustrated, fixed-angle world. */
+.welcome-discovery{padding-top:59px;scroll-margin-top:20px}
+.welcome-discovery>.section-heading{margin:0 0 38px;gap:25px}
+.welcome-discovery .section-heading h2{font:34px/1.2 Georgia,serif;color:#14394b;margin-top:12px;letter-spacing:-.65px}
+.welcome-discovery .section-heading p{font-size:12px;line-height:1.8;color:#637b7e}
+.welcome-story{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,.8fr);gap:80px;align-items:start;--story-drift:0px}
+.welcome-story-visual{position:sticky;top:35px;align-self:start;padding-top:16px}
+.welcome-story-frame{height:min(570px,66vh);min-height:350px;border:1px solid #d1ddd3;border-radius:13px;overflow:hidden;position:relative;background:#b3c58d;box-shadow:0 18px 40px #15382e0e;isolation:isolate}
+.welcome-story-scene{position:absolute;inset:0;opacity:0;visibility:hidden;transition:opacity .55s ease,visibility .55s;pointer-events:none}
+.welcome-story-scene.is-current{opacity:1;visibility:visible}
+.welcome-story-scene>img{width:100%;height:calc(100% + 38px);object-fit:cover;object-position:center;position:absolute;left:0;top:-19px;transform:translateY(var(--story-drift));will-change:transform}
+.welcome-story-scene:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,#173b3420,transparent 34%,#173b341a 62%,#0c2c37d9);pointer-events:none}
+.welcome-scene-label{position:absolute;z-index:1;left:29px;right:29px;bottom:48px;color:#fff;text-shadow:0 1px 3px #15392f33}
+.welcome-scene-label>span{display:block;font-size:9px;letter-spacing:1.5px;color:#d3e5dc;margin-bottom:12px}
+.welcome-scene-label>strong{display:block;font:29px/1.16 Georgia,serif;max-width:370px;font-weight:400;letter-spacing:-.3px}
+.welcome-scene-label>small{display:block;font-size:11px;line-height:1.6;color:#d8e8dd;margin-top:14px}
+.welcome-story-art-note{position:absolute;z-index:2;bottom:16px;left:29px;right:20px;font-size:9px;color:#e0e9de;line-height:1.5}
+#welcome-page .welcome-story-progress{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:18px}
+#welcome-page .welcome-story-progress button{border-radius:0;border-top:2px solid #dce6df;padding:12px 0;display:flex;align-items:center;justify-content:flex-start;gap:8px;background:none;font-size:10px;color:#667b7b}
+#welcome-page .welcome-story-progress button b{font-size:10px;font-weight:500;color:#8da197}
+#welcome-page .welcome-story-progress button[aria-current="step"]{border-color:#008997;color:#087686}
+#welcome-page .welcome-story-progress button[aria-current="step"] b{color:#087686}
+#welcome-page .welcome-story-progress button:hover{color:#087686;border-color:#81b8ae}
+.welcome-story-chapter{min-height:365px;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;padding:35px 0 42px;border-bottom:1px solid #e2e9e2;scroll-margin-top:40px}
+.welcome-story-chapter:last-child{border-bottom:0}
+.welcome-chapter-number{display:flex;align-items:center;gap:14px;font-size:11px;letter-spacing:1.5px;color:#778c87;margin-bottom:18px}
+.welcome-chapter-number i{display:grid;place-items:center;width:31px;height:31px;background:#e9f1ec;border-radius:7px;color:#367e78}
+.welcome-story-chapter.is-current .welcome-chapter-number{color:#087f89}
+.welcome-story-chapter h3{font:30px/1.17 Georgia,serif;letter-spacing:-.5px;margin:0 0 16px;max-width:350px;color:#14384e}
+.welcome-story-chapter>p{font-size:14px;line-height:1.85;color:#617a7d;max-width:390px}
+.welcome-chapter-tags{display:flex;flex-wrap:wrap;gap:7px 15px;margin-top:20px}
+.welcome-chapter-tags>span{font-size:10px;color:#64817b;position:relative;padding-left:10px;line-height:1.5}
+.welcome-chapter-tags>span:before{content:"";position:absolute;left:0;top:5px;width:4px;height:4px;border-radius:50%;background:#85b49a}
+.welcome-story-chapter .text-button{padding:17px 0 0;font-size:12px;color:#087b87}
+.welcome-chapter-mobile-art{display:none}
+#welcome-page .welcome-ecosystem{margin-top:30px;padding:36px;background:#edf3ee;border:1px solid #dfe8e0;border-radius:12px}
+#welcome-page .welcome-ecosystem h2{font-size:27px}
+#welcome-page .welcome-ecosystem .ecosystem-names>span{background:#ffffffa0;border-color:#d7e3d9;font-size:10px}
+#welcome-page .saved-world-section{margin-top:40px}
+#welcome-page .welcome-masthead nav button:hover{background:#eaf1ef;color:#187984}
+@media(max-width:1150px){.welcome-masthead{gap:18px}.welcome-masthead nav{gap:16px}.welcome-masthead-actions{gap:5px}.welcome-story{gap:45px;grid-template-columns:minmax(0,1fr) minmax(0,.8fr)}.welcome-discovery .section-heading h2{font-size:30px}.welcome-story-chapter{min-height:375px}.welcome-story-chapter h3{font-size:27px}.welcome-story-chapter>p{font-size:13px}.welcome-scene-label{left:23px;right:23px}.welcome-scene-label>strong{font-size:26px}.welcome-story-art-note{left:23px;font-size:8px}}
+@media(max-width:900px){.welcome-masthead nav{display:none}.welcome-story{gap:30px}.welcome-story-chapter h3{font-size:25px}.welcome-story-frame{min-height:370px}.welcome-story-progress button>span{font-size:9px}#welcome-page .welcome-ecosystem{padding:28px}.welcome-story-chapter>p{line-height:1.75}}
+@media(max-width:760px){.welcome-masthead{gap:8px}.welcome-masthead-actions{gap:2px}.welcome-resume{display:none}.welcome-account-button{padding:10px 5px;font-size:11px}.welcome-account-panel{width:min(290px,calc(100vw - 32px))}.welcome-discovery{padding-top:40px}.welcome-discovery>.section-heading{margin-bottom:22px}.welcome-discovery .section-heading h2{font-size:29px}.welcome-discovery .section-heading .eyebrow{font-size:8px;line-height:1.6}.welcome-story{display:block}.welcome-story-visual{display:none}.welcome-story-chapter{min-height:0;padding:25px 0 31px}.welcome-story-chapter h3{font-size:27px;max-width:none}.welcome-story-chapter>p{max-width:none;font-size:13px}.welcome-chapter-number{margin-bottom:13px}.welcome-chapter-mobile-art{display:block;width:100%;height:210px;object-fit:cover;border-radius:10px;border:1px solid #d6e1d3;margin:0 0 22px}.welcome-story-chapter .text-button{padding-top:20px}.welcome-chapter-tags{margin-top:15px}#welcome-page .welcome-ecosystem{padding:23px;margin-top:12px}#welcome-page .welcome-ecosystem h2{font-size:25px}#welcome-page .saved-world-card{flex-wrap:wrap;gap:14px;padding:18px}#welcome-page .saved-world-card>.primary{margin-left:0;width:100%}#welcome-page .saved-world-card>div{min-width:0}#welcome-sign-in-dialog{padding:30px 24px}#welcome-sign-in-dialog h2{font-size:27px}}
+@media(prefers-reduced-motion:reduce){.welcome-story-scene{transition:none}.welcome-story-scene>img{transform:none;will-change:auto}.welcome-story-chapter{scroll-behavior:auto}}
+/* The setup chapter uses the finished industry study, cropped from its source atlas.
+   Keep each study square; the outer frame crops the square without distorting it. */
+.welcome-industry-crop{position:absolute;inset:0;overflow:hidden;container-type:size}
+.welcome-industry-art{position:absolute;left:50%;top:50%;width:calc(max(100cqw,100cqh) + 28px);aspect-ratio:1;overflow:hidden;transform:translate(-50%,calc(-50% + var(--story-drift,0px)))}
+.welcome-industry-art>img{position:absolute;max-width:none;width:400%;height:200%;left:-200%;top:-100%;object-fit:fill}
+@media(max-width:760px){.welcome-industry-mobile{height:auto;aspect-ratio:1;overflow:hidden;position:relative;container-type:size}.welcome-industry-mobile .welcome-industry-art{transform:translate(-50%,-50%)}}
+@media(prefers-reduced-motion:reduce){.welcome-industry-art{transform:translate(-50%,-50%)}}
+.welcome-industry-mobile-caption{position:absolute;bottom:12px;left:12px;right:auto;z-index:1;font-size:9px;line-height:1.5;color:white;background:#153a46c9;border-radius:4px;padding:5px 8px}

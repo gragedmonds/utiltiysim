@@ -16,6 +16,7 @@ const errors = [];
 try {
   const page = await browser.newPage({ viewport: { width: 1600, height: 1000 } });
   page.on('pageerror', e => errors.push(e.message));
+  page.on('console',m=>{if(m.type()==='error'&&/THREE|WebGL|shader/i.test(m.text()))errors.push(m.text());});
   const ready = async () => {
     await page.waitForFunction(() => document.body.dataset.ready === 'true' || document.querySelector('#retry')?.hidden === false, null, {timeout:120000});
     assert.equal(await page.evaluate(() => document.body.dataset.ready), 'true', await page.locator('#boot-message').textContent());

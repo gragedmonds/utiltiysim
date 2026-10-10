@@ -182,3 +182,5 @@ nav button{font-size:13px;gap:11px;padding:12px 12px}
 
 /* Rendering comparison stays available without changing the saved world. */
 #map-art-toggle[aria-pressed="true"]{background:#e0f1f1;color:#007b88;border-radius:4px}
+
+.place-tour{position:absolute;left:18px;bottom:68px;z-index:5;display:grid;gap:6px;padding:12px 14px;background:#fffffff2;border:1px solid #dce4db;border-radius:8px;box-shadow:0 3px 12px #163b4420;color:#234453;font-size:10px;font-weight:600;letter-spacing:.04em}.place-tour select{max-width:215px;padding:6px 20px 6px 0;border:0;background:transparent;color:#173f49;font:500 12px inherit;letter-spacing:0}.map-page:has(#sketch-tools:not([hidden])) .place-tour{display:none}

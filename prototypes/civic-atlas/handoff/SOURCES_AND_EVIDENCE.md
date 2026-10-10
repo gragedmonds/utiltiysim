@@ -50,3 +50,10 @@ Both block input guides and registration guides are copied into `guides/`, toget
 ## What is intentionally excluded
 
 Installed dependencies, caches, local browser profiles, transient SQLite databases, credentials, hundreds of intermediate screenshots, and rejected temporary asset variants are excluded. Final source, final artwork, original concepts/documents, representative before/after evidence and retained verification scripts are included. Do not depend on absolute `/workspace/ui-review` or `/tmp` references in historical notes; equivalent key captures are indexed above.
+
+
+## Current city-place and welcome evidence
+
+See [CITY_PLACES_2026_10_10.md](CITY_PLACES_2026_10_10.md) for generated-image provenance and what is runtime vs concept-only. [evidence/city-places/](evidence/city-places/) contains the final working map/grass, source inspection, native comparison, account menu and scrolling welcome captures. Source registration guides for Maple Park, school and depot are preserved in `guides/<site>/registration.png`; per-site JSON signatures are with the runtime image assets.
+
+[WELCOME_ITERATION_2026_10_10.md](WELCOME_ITERATION_2026_10_10.md), [ROAD_AND_SITE_REVIEW.md](ROAD_AND_SITE_REVIEW.md) and [VISUAL_REVIEW_CITY_PLACES.md](VISUAL_REVIEW_CITY_PLACES.md) record the parallel agents' scoped work. These are implementation/QA notes, not product-wide acceptance.

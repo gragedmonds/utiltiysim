@@ -1,6 +1,7 @@
 import * as THREE from '/viewer/vendor/three.module.js';
 import {GeometryBuilder} from '/viewer/lowpoly.js';
 import {streetWidth} from '/viewer/roads.js';
+import {frontageAccessQuad,pavementQuad} from './map-road-access.js';
 
 function convexHull(points){
   const ordered=[...points].sort((a,b)=>a.x-b.x||a.z-b.z),cross=(o,a,b)=>(a.x-o.x)*(b.z-o.z)-(a.z-o.z)*(b.x-o.x),lower=[],upper=[];
@@ -45,9 +46,10 @@ export function refineStreetSurfaces(scene,town){
       }
     }
   }
+  const pavement=town.roads.flatMap(road=>road.points.slice(1).map((b,i)=>pavementQuad(road.points[i],b,streetWidth(road))).filter(Boolean));
   for(const node of junctions){
     const hull=extra=>convexHull(node.arms.flatMap(a=>[-1,1].map(side=>({x:node.x+a.dx*node.reach-a.dz*(a.width/2+extra)*side,z:node.z+a.dz*node.reach+a.dx*(a.width/2+extra)*side}))));
-    patch(sidewalk,hull(2),.07);const inner=hull(0);patch(asphalt,inner,.18);
+    patch(sidewalk,hull(2),.07);const inner=hull(0);patch(asphalt,inner,.18);pavement.push(inner);
     for(let i=0;i<inner.length;i++){
       const a=inner[i],b=inner[(i+1)%inner.length],mid={x:(a.x+b.x)/2-node.x,z:(a.z+b.z)/2-node.z};
       if(node.arms.some(arm=>mid.x*arm.dx+mid.z*arm.dz>node.reach-.5&&Math.abs(mid.x*arm.dz-mid.z*arm.dx)<arm.width/2+.1))continue;ribbon(curbs,a,b,.27,.215);
@@ -64,6 +66,22 @@ export function refineStreetSurfaces(scene,town){
   for(const [positions,color,texture]of[[sidewalk,'#c5c8ba',2],[asphalt,'#7e898a',1],[curbs,'#e2e0cf',null],[paint,'#eae7d7',null]]){
     const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));geometry.computeVertexNormals();
     const mesh=new THREE.Mesh(geometry,new THREE.MeshStandardMaterial({color,roughness:1,side:THREE.DoubleSide}));if(texture!==null)mesh.userData.atlasSurface=texture;mesh.receiveShadow=true;scene.root.add(mesh);
+  }
+  // The shared viewer's civic access mesh starts at the saved road centerline.
+  // Clip its decorative pavement to the real road edge, preserving the saved
+  // route and entrance. Keep the mesh identity for artwork fallback toggles.
+  const accessMesh=scene.townDressing?.meshes.find(mesh=>mesh.isMesh&&!mesh.isInstancedMesh);
+  if(accessMesh){
+    const access=[],premises=new Map(town.premises.map(p=>[p.id,p])),roads=new Map(town.roads.map(r=>[r.id,{...r,width:streetWidth(r)}]));
+    let accepted=0,omitted=0;const quads=[];
+    for(const site of scene.townDressing.plan.landmarks){
+      if(!site.access)continue;
+      const home=premises.get(site.premiseId),quad=frontageAccessQuad(site.access,roads.get(home?.roadId),site.kind==='park'?2:3.2,pavement);
+      if(!quad){omitted++;continue;}patch(access,quad,.20);quads.push({premiseId:site.premiseId,polygon:quad});accepted++;
+    }
+    const geometry=new THREE.BufferGeometry(),color=new THREE.Color('#9eaaa6').toArray();geometry.setAttribute('position',new THREE.Float32BufferAttribute(access,3));geometry.setAttribute('color',new THREE.Float32BufferAttribute(access.map((_,i)=>color[i%3]),3));geometry.computeVertexNormals();
+    accessMesh.geometry.dispose();accessMesh.geometry=geometry;
+    accessMesh.userData.atlasAccess={accepted,omitted,source:'saved-frontage',quads};
   }
   // Decorative traffic furniture is proportional to this small rural center.
   // Saved electrical poles and utility equipment are separate and untouched.
