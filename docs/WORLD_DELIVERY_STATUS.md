@@ -1,8 +1,10 @@
 # Living-world delivery status
 
-Owner: `greg-gpt-listener`. Updated 9 October 2026. Branch:
-`greg/utilitysim-continuation`, proposed through public
-[PR #73](https://github.com/gragedmonds/utiltiysim/pull/73).
+Owner: `greg-gpt-listener`. Updated 9 October 2026. The continuation base merged
+as `38cd7617` through public [PR #73](https://github.com/gragedmonds/utiltiysim/pull/73)
+after local and GitHub CI checks passed. Its original wizard draft, PR #62, is
+also recorded as merged; the source branches are retained.
+The following household-cashflow increment is on `greg/world-household-cashflow`.
 
 This record separates implemented local behavior from outstanding integration.
 An idle coordination channel is not evidence that this backlog is complete.
@@ -11,9 +13,10 @@ An idle coordination channel is not evidence that this backlog is complete.
 
 | Area | Working behavior | Remaining boundary |
 | --- | --- | --- |
-| Guided setup | Quick and Full configuration, retained values/pins, validated creation and exact retry on the current world engine | Release review; staffing suggestions and broader operational calibration |
+| Guided setup | Quick and Full configuration, retained values/pins, validated creation and exact retry on the current world engine | Staffing suggestions and broader operational calibration |
 | Travel estimates | Saved-road round trips for water and sewer premise visits; explicit selected work-site access for network-edge planning | A quote does not reserve a worker, establish the physical location, authorize execution or consume shared time |
 | Provider failure | Versioned terminal failure evidence releases unspent reserved customer cash exactly once; no settlement/refund/debt reduction is invented | Actual provider and enterprise recipient adapters, partial amounts, enterprise reconciliation |
+| Household cashflow | Explicit recurring income and essential spending, protected payment reservations, shortfall evidence, cohort isolation and atomic daily replay | Calibrated household/business economics, financial-notice reactions and actual employer/provider integration |
 | Storm scenarios | Dated temperature and utility-risk effects, explicit cancellation before start, shared daily transaction and causal fault history | Geographic storm tracks, wind/rain/flood physics, weather-dependent travel and staffing |
 
 The existing local field model retains finite daily capacity, distinct physical
@@ -34,8 +37,10 @@ does not acknowledge transport or erase the historical payment intention.
 3. Connect authorized dispatch, acknowledgments, submitted reports and enterprise
    acceptance/rework. A completion claim must not fabricate physical repair or
    bypass operation-specific evidence checks.
-4. Extend customer reactions to financial notices and moves, household economics,
-   and service creation for new development through their corresponding owners.
+4. Extend customer reactions to financial notices and moves, richer household
+   economics and service creation for new development through their corresponding
+   owners. Recurring income and essential spending are now local scenario inputs;
+   they do not establish actual financial-document delivery or enterprise debt.
 5. Finish authenticated worker/AI operations with bounded knowledge and budgets.
 6. Execute the twelve integrated acceptance scenarios and the 15,000-account,
    five-year benchmark. Small fixtures and individual component timings do not
@@ -43,9 +48,13 @@ does not acknowledge transport or erase the historical payment intention.
 
 ## Reproduce local verification
 
-The combined non-slow Python regression passed all **1,150 tests** in 1,315.58
+The continuation base passed all **1,150 non-slow Python tests** in 1,315.58
 seconds. Ruff, **301 viewer tests** and **11 viewer-conformance checks** passed.
-The Python run emitted six existing Starlette/httpx deprecation warnings.
+The Python run emitted six existing Starlette/httpx deprecation warnings. The
+cashflow increment passed **1,194 non-slow Python tests** in 1,191.33 seconds,
+with three existing Starlette/httpx deprecation warnings. Its focused checks
+passed 72 combined finance tests and twelve HTTP tests; Ruff, 301 viewer tests,
+11 conformance checks and desktop acceptance also passed.
 
 The 9 October candidate has independent code review and fresh desktop acceptance
 for storm controls and water/sewer/network travel estimates. The travel check
@@ -54,6 +63,10 @@ the effect of five versus seven crews while preserving the distinction between
 physical work and submitted reports. A seven-day, 5,864-premise diagnostic also
 preserves source/map hashes and the completed database across restart. These
 component results do not close the integrated acceptance or scale work above.
+
+Household cashflow also passed a 300-cohort, 60-day conservation/restart comparison:
+18,000 daily records per world and matching digests across twelve domain tables.
+See [the cashflow contract and timings](WORLD_CUSTOMER_CASHFLOW.md).
 
 Use the normal repository regression checks in `CLAUDE.md`. Focused suites are
 `tests/test_world_customer_finance_failures.py`, `tests/test_world_field_travel.py`,
