@@ -33,7 +33,7 @@ identify simulated cohorts, never authenticated named people.
   Return exactly `{id, runId, fingerprint, status: "accepted", receiptId}`.
   This confirms transport acceptance only; it does not spend cash or post anything.
 * `provider_receipt(world, receipt)` — trusted simulated provider callback for full
-  settlement/full return only. Authenticate the permitted provider outside this
+  settlement/full return, plus terminal failure in receipt version 2. Authenticate the permitted provider outside this
   module and validate the original intent fingerprint. No public HTTP route.
 
 Parent server integration for the standalone administrator screen:
@@ -103,13 +103,46 @@ follow intent availability and not exceed the committed clock. A return cannot
 predate its referenced settlement. A valid provider settlement can arrive before
 the transport acknowledgment, supporting an acknowledgment lost after processing.
 
-Partial settlements/returns, provider failures/cancellation, fees, other currencies,
+Partial settlements/returns, provider cancellation, fees, other currencies,
 invoice balance revisions, credit notes, invoice generation, cash debits/income
 schedules and enterprise posting are explicitly unsupported. A reserved intention
 with no supported provider confirmation remains reserved; the model never guesses
 a failure or releases funds silently. Cohort migration is unsupported: vacancy or
 applied occupancy changes freeze new behavior, while previous intentions can still
 settle or return. New occupants cannot inherit predecessor invoice knowledge.
+
+### Terminal provider failure
+
+`schemas/customer-finance-provider-receipt-2.schema.json` adds `status: failed`
+to the same exact receipt fields. Version 1 remains unchanged and rejects failure.
+Version 2 also accepts full settlement and full return with the existing rules.
+A failed receipt must match the complete original intent amount and fingerprint,
+use `settlementReceiptId: null`, and refer to a currently reserved intention.
+Its timestamp must follow availability and cannot exceed the committed world clock.
+
+Failure is an authenticated provider's durable terminal decision that the intent
+has never settled and will never settle. It releases only that intent's cash
+reservation; cash, settled money and known invoice debt do not change. An atomic
+`CustomerPaymentFailed` event and receipt retain the evidence. Identical retries
+return the original result, including after another intention has reserved cash.
+Different receipt IDs cannot repeat the failure, and settlement or return of the
+failed intent is rejected. Failure cannot refund a previously settled intention.
+On a later processed day, the existing customer policy may generate a new payment
+intention with a new ID; the failed intention is never revived or silently retried.
+
+A timeout, exception, lost acknowledgment or unconfirmed processing delay is not
+terminal evidence and never releases cash. The old intention remains in the
+immutable feed, and its delivery acknowledgment may still be pending. Providers
+must retain their original terminal decision and deduplicate any transport replay;
+they must never process that replay as a new payment. Receiving failure evidence
+does not manufacture transport acceptance. No public HTTP endpoint or settlement
+button is added, and the caller remains responsible for authenticating the provider.
+There is no enterprise posting, payment reversal or collections-queue change.
+
+Focused failure checks: `pytest tests/test_world_customer_finance_failures.py`.
+They cover conservation, exact retries/conflicts, lost acknowledgment, independent
+new intentions, timestamp/identity validation, rollback, competing provider decisions
+and unchanged version-1 behavior.
 
 ## Durability, scale and checks
 

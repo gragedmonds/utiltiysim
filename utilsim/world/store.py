@@ -180,6 +180,7 @@ class World:
             occupancy,
             registers,
             sewer,
+            storms,
             water_faults,
             water_mains,
         )
@@ -207,6 +208,9 @@ class World:
                 temperature = round(center - amplitude * math.cos(2 * math.pi * (day.timetuple().tm_yday - 15)
                                                                   / 365.2425) + s["daily_weather_spread_c"] *
                                     (2 * draw(seed, ds, "weather") - 1), 2)
+                meta["_storm"] = storms.daily(self, db, meta, temperature)
+                if meta["_storm"]:
+                    temperature = meta["_storm"]["temperatureC"]
                 db.execute("INSERT INTO days VALUES(?,?)", (ds, temperature))
                 meta["_hazards"] = hazards.daily(self, db, meta, temperature)
                 outages = network_faults.daily(self, db, meta)

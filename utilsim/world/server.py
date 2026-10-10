@@ -16,11 +16,13 @@ from . import (
     field_cancellation,
     field_execution,
     field_reporting,
+    field_travel,
     field_water_mains,
     hazards,
     network_faults,
     occupancy,
     sewer,
+    storms,
     water_faults,
     water_mains,
 )
@@ -110,6 +112,8 @@ def make_server(world, port=8026, viewer_dir=None, field_db=None, cruise_worker=
                 return self.static(Path(__file__).with_name("field_execution.html" if url.path == "/field-execution" else "field_execution.js"))
             if url.path in ("/field-reporting", "/field-reporting.js"):
                 return self.static(Path(__file__).with_name("field_reporting.html" if url.path == "/field-reporting" else "field_reporting.js"))
+            if url.path in ("/field-travel", "/field-travel.js"):
+                return self.static(Path(__file__).with_name("field_travel.html" if url.path == "/field-travel" else "field_travel.js"))
             if url.path == "/api/field-reporting":
                 if field is None:
                     return self.reply(503, {"error": "Field reporting requires a separate --field-db database."})
@@ -176,6 +180,17 @@ def make_server(world, port=8026, viewer_dir=None, field_db=None, cruise_worker=
                         args.get("after", [""])[0], int(args["before"][0]) if "before" in args else None,
                         args.get("serviceAfter", [""])[0], args.get("beforeDay", [None])[0]))
                 except (ValueError, TypeError, KeyError) as exc:
+                    return self.reply(422, {"error": str(exc)})
+            if url.path in ("/storms", "/storms.js"):
+                return self.static(Path(__file__).with_name("storms.html" if url.path == "/storms" else "storms.js"))
+            if url.path == "/api/storms":
+                try:
+                    args = parse_qs(url.query, keep_blank_values=True)
+                    if set(args)-{"before", "eventsBefore"} or any(len(v) != 1 for v in args.values()):
+                        raise ValueError("Use one optional storm history cursor.")
+                    return self.reply(200, storms.inspect(world, before=args.get("before", [None])[0],
+                                                         events_before=args.get("eventsBefore", [None])[0]))
+                except (ValueError, TypeError) as exc:
                     return self.reply(422, {"error": str(exc)})
             if url.path in ("/hazards", "/hazards.js"):
                 return self.static(Path(__file__).with_name("hazards.html" if url.path == "/hazards" else "hazards.js"))
@@ -309,6 +324,10 @@ def make_server(world, port=8026, viewer_dir=None, field_db=None, cruise_worker=
                         if p.get("action") in ("start", "resume") and (not cruise_worker or self.server.cruise_worker_error):
                             return self.reply(503, {"error": "Cruise worker is unavailable. Restart the local server before changing this run."})
                         result = cruise.command(world, p, field)
+                    elif self.path == "/api/field-travel/quote":
+                        if field is None:
+                            return self.reply(503, {"error": "Field travel requires a separate --field-db database."})
+                        result = field_travel.quote(field, p)
                     elif self.path == "/api/field-assignment-lifecycle":
                         if field is None:
                             return self.reply(503, {"error": "Field assignment lifecycle requires a separate --field-db database."})
@@ -347,6 +366,9 @@ def make_server(world, port=8026, viewer_dir=None, field_db=None, cruise_worker=
                         result = water_mains.command(world, p)
                     elif self.path == "/api/hazards":
                         result = hazards.command(world, p)
+                    elif self.path == "/api/storms":
+                        with cruise.manual_control(world, field):
+                            result = storms.command(world, p)
                     elif self.path == "/api/sewer":
                         result = sewer.command(world, p)
                     elif self.path == "/api/network-faults":

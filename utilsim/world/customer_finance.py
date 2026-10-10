@@ -15,6 +15,7 @@ VERSION = 'world-customer-finance/1'
 DELIVERY_VERSION = 'customer-finance-delivery/1'
 INTENT_VERSION = 'payment-intent/1'
 RECEIPT_VERSION = 'customer-finance-provider-receipt/1'
+RECEIPT_VERSION_2 = 'customer-finance-provider-receipt/2'
 MAX_CENTS = 10**12
 COMMON = {'schemaVersion', 'commandId', 'environmentId', 'worldFingerprint', 'runId',
           'actorId', 'expectedRevision', 'effectiveDate', 'action', 'premiseId', 'reason', 'causalReference'}
@@ -278,23 +279,26 @@ def daily(world, db, meta):
 
 
 def provider_receipt(world, receipt):
-    """Trusted simulated provider confirmation; full settlement/return only.
+    """Trusted provider confirmation; version 2 also supports terminal failure.
 
     Each intent permits exactly one settlement and one full return. Distinct
-    provider receipt IDs for the same transition also cannot move cash twice.
+    receipt IDs cannot repeat a transition. Failure confirms no settlement ever
+    occurred or will occur for this intent; transport errors are not evidence.
     """
     fields = {'schemaVersion', 'receiptId', 'environmentId', 'worldFingerprint', 'runId', 'intentId',
               'intentFingerprint', 'status', 'amountCents', 'currency', 'occurredAt', 'settlementReceiptId'}
-    if not isinstance(receipt, dict) or set(receipt) != fields or receipt['schemaVersion'] != RECEIPT_VERSION:
+    if (not isinstance(receipt, dict) or set(receipt) != fields
+            or receipt['schemaVersion'] not in (RECEIPT_VERSION, RECEIPT_VERSION_2)):
         raise ValueError('Invalid simulated provider receipt.')
     for key in fields - {'amountCents', 'settlementReceiptId'}:
         _text(receipt[key])
     _cents(receipt['amountCents'], 1)
     _time(receipt['occurredAt'])
-    if receipt['currency'] != 'USD' or receipt['status'] not in ('settled', 'returned'):
+    statuses = ('settled', 'returned', 'failed') if receipt['schemaVersion'] == RECEIPT_VERSION_2 else ('settled', 'returned')
+    if receipt['currency'] != 'USD' or receipt['status'] not in statuses:
         raise ValueError('Only full simulated USD settlements and returns are supported.')
-    if receipt['status'] == 'settled' and receipt['settlementReceiptId'] is not None:
-        raise ValueError('Settlement cannot reference an earlier settlement.')
+    if receipt['status'] in ('settled', 'failed') and receipt['settlementReceiptId'] is not None:
+        raise ValueError('Settlement or terminal failure cannot reference an earlier settlement.')
     if receipt['status'] == 'returned':
         _text(receipt['settlementReceiptId'])
     encoded = canonical(receipt)
@@ -316,7 +320,9 @@ def provider_receipt(world, receipt):
         # A late acknowledgment is not required: a provider can settle and lose
         # the transport reply. The confirmed receipt is stronger evidence.
         if status == 'settled' and row['payment_state'] != 'reserved':
-            raise ValueError('Intent already settled or returned; replay the original receipt ID.')
+            raise ValueError('Intent already settled, returned or failed; replay the original receipt ID.')
+        if status == 'failed' and row['payment_state'] != 'reserved':
+            raise ValueError('Terminal failure requires an unspent reserved intent; replay the original receipt ID.')
         if status == 'returned':
             settlement = db.execute('SELECT payload FROM customer_finance_inbox WHERE id=?',
                                     ('provider:'+receipt['settlementReceiptId'],)).fetchone()
@@ -329,15 +335,19 @@ def provider_receipt(world, receipt):
             db.execute('UPDATE customer_finance_profiles SET cash=cash-?,reserved=reserved-?,settled=settled+?,revision=revision+1 '
                        'WHERE premise=?', (amount, amount, amount, row['premise']))
             db.execute('UPDATE customer_finance_invoices SET settled=settled+? WHERE id=?', (amount, row['invoice']))
-        else:
+        elif status == 'returned':
             current_cash = db.execute('SELECT cash FROM customer_finance_profiles WHERE premise=?', (row['premise'],)).fetchone()[0]
             _cents(current_cash + amount)
             db.execute('UPDATE customer_finance_profiles SET cash=cash+?,settled=settled-?,revision=revision+1 WHERE premise=?',
                        (amount, amount, row['premise']))
             db.execute('UPDATE customer_finance_invoices SET settled=settled-? WHERE id=?', (amount, row['invoice']))
+        else:
+            db.execute('UPDATE customer_finance_profiles SET reserved=reserved-?,revision=revision+1 WHERE premise=?',
+                       (amount, row['premise']))
         db.execute('UPDATE customer_finance_intents SET payment_state=? WHERE id=?', (status, row['id']))
-        event = world.event(db, meta['environment'], meta['through'], 'CustomerPaymentSettled' if status == 'settled'
-                            else 'CustomerPaymentReturned', row['premise'], receipt, row['id'])
+        event_type = {'settled': 'CustomerPaymentSettled', 'returned': 'CustomerPaymentReturned',
+                      'failed': 'CustomerPaymentFailed'}[status]
+        event = world.event(db, meta['environment'], meta['through'], event_type, row['premise'], receipt, row['id'])
         result = {'receiptId': receipt['receiptId'], 'status': 'recorded', 'eventId': event}
         db.execute('INSERT INTO customer_finance_inbox VALUES(?,?,?)', (identity, encoded, canonical(result)))
         return result
