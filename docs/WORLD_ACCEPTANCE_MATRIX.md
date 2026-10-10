@@ -63,6 +63,11 @@ were published through PR #73. Cashflow passed an expanded 1,194 Python tests,
 60-day comparison. Later candidate test results must be recorded separately;
 these historical counts are not the count of an untested later revision.
 
+The combined notice/staffing/managed-field candidate passed **1,268 non-slow
+Python tests** in 1,496.01 seconds, plus Ruff, **304 viewer tests** and **11
+conformance checks**. Three existing Starlette/httpx deprecation warnings remain.
+These regression results do not close the cross-system scenarios above.
+
 The physical scale preflight used two distinct towns containing 15,892 source
 accounts and 14,288 premises. Its ten-minute budget stopped after 38 days per
 world (607.68 seconds including final checks), with 1,459,080 truth rows and the

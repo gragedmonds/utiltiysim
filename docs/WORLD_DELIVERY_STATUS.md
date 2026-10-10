@@ -80,8 +80,10 @@ delays, pause/restart, pagination and uncertain delivery. Guided staffing passed
 passed 127 focused existing/new field cases and actual shared-runtime acceptance
 on 570 premises, including repair, cancellation, lost acknowledgement/retry,
 delayed report and DST. These counts overlap broader suites and must not be
-summed as independent coverage. The combined regression is recorded separately
-after completion.
+summed as independent coverage. The combined candidate passed **1,268 non-slow
+Python tests** in 1,496.01 seconds, with three existing Starlette/httpx warnings,
+plus Ruff, **304 viewer tests** and **11 conformance checks**. Independent
+cross-feature review found no remaining blocker. Publication is a separate gate.
 
 The physical-only scale preflight reached 38 days for two independent districts
 containing 15,892 source accounts, with integrity/source/replay checks passing.
