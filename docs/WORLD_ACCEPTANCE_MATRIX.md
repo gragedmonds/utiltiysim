@@ -2,8 +2,8 @@
 
 This is the acceptance ledger for the twelve platform scenarios, not a claim
 that twelve passing financial unit tests establish platform completion. Updated
-9 October 2026 against public PRs #73 and #74, and the subsequent
-notice/staffing/managed-field candidate. The private requirements baseline
+9 October 2026 against merged public PRs #73, #74 and #75, including
+notice/staffing/managed-field work. The private requirements baseline
 is the source of the SCN identifiers and their end-to-end outcomes.
 
 **No complete cross-system scenario or five-year integrated benchmark is marked
@@ -15,15 +15,15 @@ invented enterprise state. A fixture callback is labeled as such.
 
 | Scenario | Implemented and tested components | Remaining end-to-end acceptance |
 | --- | --- | --- |
-| SCN-001 Hidden leak | Persistent physical water leak; consumption changes; observation-only export; local investigation-bound assignment, physical repair, and separately delayed report | Detect through actual enterprise observations, create authorized work, reserve shared workforce/travel, deliver and accept the report, and show that each owner learns only through its interface |
+| SCN-001 Hidden leak | Persistent physical water leak; consumption changes; observation-only export; local investigation-bound assignment, physical repair, separately delayed report; isolated real shared reservation/job and Billing recipient acceptance | Detect through actual enterprise observations, create authorized work, obtain clerk acceptance, and show that each owner learns only through its interface |
 | SCN-002 Broken meter / repeated zero | Meter failure/observation gaps; physical replacement; enterprise reading validation and billing dependencies | Zero-read escalation over repeated cycles, analyst history review, authorized reread/exchange with shared field capacity, and subsequent billing release. The world's default failed-meter output is missing, not automatically a zero-read scenario |
 | SCN-003 New 500-home subdivision | Saved vacant properties can progress through construction, commissioning and occupancy; filtered service notices can be delayed | Actual new subdivision geometry/services and 500-home operational onboarding; account/meter work, billing, contact and field demand after each dependency. Reusing a few existing vacant premises is not this scenario |
 | SCN-004 Major weather event | Dated temperature/risk stress; correlated four-domain faults; causal symptom contacts; finite local crews and recovery | Weather-dependent travel and staff availability, authorized enterprise work creation, shared reservations, and a measured end-to-end backlog/recovery curve |
 | SCN-005 Billing batch failure | Shared runtime jobs, dependencies, pause/retry; enterprise bill/invoice transactions and failure recovery | Schedule the real overnight batch, demonstrate stranded daytime work and growing unbilled population, recover it, and measure resulting delivered invoices, customer responses and operational load |
-| SCN-006 Payment processor failure | Delivered invoice knowledge; cash reservations; explicit terminal provider failure, settlement and full return; notice-reaction candidate | Durable actual document delivery, authenticated provider adapter, independently retried world/ledger consequences, wrong/pending enterprise balances, collections/calls and reconciliation. Lost transport acknowledgment is not provider failure |
-| SCN-007 Rate increase and call demand | Versioned enterprise pricing; world reacts to delivered notices and inability to fund a known due invoice in the current candidate | Effective-date rate change through actual bills/delivery, segment-specific high-bill inquiries/disputes/arrangement requests, and real call-center work. Payment-help notices alone do not model rate-increase reactions |
+| SCN-006 Payment processor failure | Delivered invoice knowledge; cash reservations; explicit terminal provider failure, settlement and full return; notice reactions | Durable actual document delivery, authenticated provider adapter, independently retried world/ledger consequences, wrong/pending enterprise balances, collections/calls and reconciliation. Lost transport acknowledgment is not provider failure |
+| SCN-007 Rate increase and call demand | Versioned enterprise pricing; world reacts to delivered notices and inability to fund a known due invoice in the public implementation | Effective-date rate change through actual bills/delivery, segment-specific high-bill inquiries/disputes/arrangement requests, and real call-center work. Payment-help notices alone do not model rate-increase reactions |
 | SCN-008 Disconnect with continued usage | Existing enterprise disconnect/service-order controls; separate physical consumption and observations | Explicit permitted physical disconnect outcome, continued-use detection from observations, investigation/rework and eventual reconciliation. An enterprise status must not silently force physical truth |
-| SCN-009 Physical work without recorded completion | Manual reporting; completed physical repair can remain unreported; false reports do not repair assets; field/world crash recovery | Actual recipient handling and enterprise process held open despite repaired physical state, followed by authorized reconciliation and operation-specific acceptance. A test inbox receipt is not enterprise closure |
+| SCN-009 Physical work without recorded completion | Manual reporting; completed physical repair can remain unreported; false reports do not repair assets; field/world crash recovery; actual Billing report remains pending clerk review after lost-reply recovery | Full scenario with enterprise work held open despite repaired physical state, followed by authorized reconciliation and operation-specific acceptance. A test inbox receipt is not enterprise closure |
 | SCN-010 Seven staff versus five | Local fixed-workload comparisons show different completion days under finite daily capacity | Same incoming workload and shared conditions, full hourly/shift/travel reservations, backlog age and downstream bill/contact/collection consequences; compare the complete integrated run |
 | SCN-011 Veteran versus new hire | Existing Studio workforce/productivity assumptions; field operation time assumptions and explicit manual misreporting | Bind per-worker skill/speed/error profiles to the durable shared execution path; compare equivalent work and measured rework, without equating a planner's staffing suggestion with execution capacity |
 | SCN-012 Move-in / move-out | Dated physical occupancy and cohort isolation; enterprise first/final-reading lifecycle components | Actual customer contact through account/service actions, four-domain first/final reads and bills, and persistent stuck states when required actions are missing |
@@ -46,8 +46,19 @@ These checks establish their stated component boundary only:
   adapter has passed isolated acceptance against actual runtime authentication,
   jobs, reservations, cancellation and calendars. One repair and one cancelled
   visit, lost-acknowledgement retry, delayed reporting and DST checks passed on
-  570 premises against runtime revision `0b52c868`. This does not connect the
-  private recipient or establish every field operation's shared execution.
+  570 premises against runtime revision `0b52c868`. That initial diagnostic uses
+  a fixture observation consumer and does not connect the private recipient.
+- [Combined managed-field recipient evidence](WORLD_MANAGED_RECIPIENT_ACCEPTANCE_2026_10_09.json):
+  a separate isolated run at public `b822af0` / private `0bc113d0` connected
+  ManagedField to actual Run reservations/jobs, RuntimeFieldRelay, Billing and
+  ISU. On 570 premises it produced one physical repair, 6,618 actual observations
+  and one Billing report, recovering lost acknowledgements at both the physical
+  and recipient boundaries. Billing stayed `reported`; the report stayed
+  `pending` clerk review. Source, baseline and history were preserved. This
+  supplies bounded SCN-001/009 evidence; detection, authorized work creation,
+  clerk acceptance/reconciliation and full scenario execution remain open.
+  Production mapping agreement is false. Managed recovery still requires the
+  original runtime database path; authenticated relocation is unsupported.
 - [Storms](WORLD_STORMS.md): dated physical stress and recoverable causal events;
   a 5,864-premise seven-day diagnostic is larger-town component evidence.
 - [Customer cash](WORLD_CUSTOMER_FINANCE.md),
@@ -63,9 +74,10 @@ were published through PR #73. Cashflow passed an expanded 1,194 Python tests,
 60-day comparison. Later candidate test results must be recorded separately;
 these historical counts are not the count of an untested later revision.
 
-The combined notice/staffing/managed-field candidate passed **1,268 non-slow
+The combined notice/staffing/managed-field change passed **1,268 non-slow
 Python tests** in 1,496.01 seconds, plus Ruff, **304 viewer tests** and **11
 conformance checks**. Three existing Starlette/httpx deprecation warnings remain.
+GitHub CI also passed before PR #75 merged as `6461a1e22444e1de3f19d51c79e2c6f8ef62ead0`. Its four-platform [runtime release](https://github.com/gragedmonds/utiltiysim/releases/tag/runner-6461a1e22444) was subsequently verified published.
 These regression results do not close the cross-system scenarios above.
 
 The physical scale preflight used two distinct towns containing 15,892 source

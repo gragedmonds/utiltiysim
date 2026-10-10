@@ -1,0 +1,28 @@
+{
+  "passed": true,
+  "refs": {
+    "public": "b822af0451f9983b15a1fb0a5f88a70e5193d2ef",
+    "private": "0bc113d0991328bfd6e5bf480962d83af6ab2ecf"
+  },
+  "premises": 570,
+  "physicalRepairs": 1,
+  "actualObservationRows": 6618,
+  "billingReportCount": 1,
+  "billingStatus": "reported",
+  "reportStatus": "pending",
+  "physicalVisitJobAttempts": 2,
+  "billingReportJobAttempts": 2,
+  "visitDate": "2026-01-02",
+  "physicalEffectiveDate": "2026-01-03",
+  "reportAvailableAt": "2026-01-05T05:00:00Z",
+  "reportAudit": {
+    "actor": "field-delivery",
+    "channel": "field",
+    "time": "2026-01-05T05:00:00.000000Z",
+    "business_time": "2026-01-05"
+  },
+  "sourceBaselineAndHistoryPreserved": true,
+  "productionMappingAgreement": false,
+  "trackedFilesChanged": false,
+  "scope": "Fresh isolated ManagedField -> real Run reservation/job -> RuntimeFieldRelay -> actual Billing pending clerk review; real ISU observation ingestion; both lost-reply boundaries recovered."
+}
