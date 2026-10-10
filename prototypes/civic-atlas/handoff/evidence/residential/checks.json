@@ -1,0 +1,103 @@
+{
+  "passed": true,
+  "samples": [
+    "orchard-meadow-six",
+    "juniper-cedar-six",
+    "cedar-pine-eight"
+  ],
+  "artwork": {
+    "enabled": true,
+    "count": 9,
+    "templates": [],
+    "rejected": [],
+    "areas": [
+      {
+        "ready": true,
+        "enabled": true,
+        "invalidated": false,
+        "reason": "Camera-calibrated block experiment",
+        "overlayRecords": 9
+      },
+      {
+        "ready": true,
+        "enabled": true,
+        "invalidated": false,
+        "reason": "Camera-calibrated block experiment",
+        "overlayRecords": 0
+      },
+      {
+        "ready": true,
+        "enabled": true,
+        "invalidated": false,
+        "reason": "Camera-calibrated block experiment",
+        "overlayRecords": 0
+      },
+      {
+        "ready": true,
+        "enabled": true,
+        "invalidated": false,
+        "reason": "Camera-calibrated block experiment",
+        "overlayRecords": 0
+      },
+      {
+        "ready": true,
+        "enabled": true,
+        "invalidated": false,
+        "reason": "Camera-calibrated block experiment",
+        "overlayRecords": 0
+      },
+      {
+        "ready": true,
+        "enabled": true,
+        "invalidated": false,
+        "reason": "Camera-calibrated block experiment",
+        "overlayRecords": 0
+      },
+      {
+        "ready": true,
+        "enabled": true,
+        "invalidated": false,
+        "reason": "Camera-calibrated block experiment",
+        "overlayRecords": 0
+      },
+      {
+        "ready": true,
+        "enabled": true,
+        "invalidated": false,
+        "reason": "Camera-calibrated block experiment",
+        "overlayRecords": 0
+      },
+      {
+        "ready": true,
+        "enabled": true,
+        "invalidated": false,
+        "reason": "Camera-calibrated block experiment",
+        "overlayRecords": 0
+      }
+    ]
+  },
+  "pickedPremises": [
+    "P-00050",
+    "P-00051",
+    "P-00052",
+    "P-00077",
+    "P-00078",
+    "P-00079",
+    "P-00090",
+    "P-00091",
+    "P-00092",
+    "P-00093",
+    "P-00094",
+    "P-00096",
+    "P-00105",
+    "P-00106",
+    "P-00107",
+    "P-00108",
+    "P-00114",
+    "P-00115",
+    "P-00116",
+    "P-00117"
+  ],
+  "sourceUnchanged": true,
+  "consoleErrors": []
+}

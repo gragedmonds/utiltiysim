@@ -1,0 +1,108 @@
+{
+  "schemaVersion": "civic-atlas-town-template/1",
+  "templateId": "community-church",
+  "cameraDirection": [
+    0.10942489340428357,
+    0.8206867005321268,
+    0.5608025786969533
+  ],
+  "frame": {
+    "center": {
+      "x": 0,
+      "z": 0
+    },
+    "viewHeight": 120,
+    "aspect": 1.5
+  },
+  "polygon": [
+    {
+      "x": 55,
+      "z": 40
+    },
+    {
+      "x": 55,
+      "z": -40
+    },
+    {
+      "x": -55,
+      "z": -40
+    },
+    {
+      "x": -55,
+      "z": 40
+    }
+  ],
+  "signature": "{\"schema\":\"civic-atlas-town-template/1\",\"templateId\":\"community-church\",\"polygon\":[{\"x\":-55,\"z\":-40},{\"x\":-55,\"z\":40},{\"x\":55,\"z\":40},{\"x\":55,\"z\":-40}],\"surface\":[90,90,90,90,90,90,90,90,90,90,90,90,90,90,90,90,90,90,90,90,90,90,90,90,90],\"slots\":[{\"slot\":0,\"x\":0,\"z\":0,\"width\":26,\"depth\":18,\"height\":9,\"elevationM\":90,\"stories\":1,\"angle\":3.1416,\"side\":1,\"roof\":\"gable\",\"roofTone\":0.1341,\"solar\":false,\"solarKW\":0,\"solarPeakKW\":0,\"hasPool\":false,\"poolPolygon\":null,\"family\":\"church\",\"buildingType\":\"church\",\"premiseType\":\"institutional\",\"front\":{\"x\":0,\"z\":-50},\"parcel\":[{\"x\":-45,\"z\":-35},{\"x\":-45,\"z\":35},{\"x\":45,\"z\":35},{\"x\":45,\"z\":-35}],\"footprint\":[{\"x\":-13,\"z\":-9},{\"x\":-13,\"z\":9},{\"x\":13,\"z\":9},{\"x\":13,\"z\":-9}],\"buildingHeight\":9,\"buildingStories\":1,\"buildingRoof\":\"gable\",\"footprintWidth\":26,\"footprintDepth\":18}],\"facilities\":[{\"kind\":\"church\",\"x\":0,\"z\":0,\"polygon\":[{\"x\":-45,\"z\":-35},{\"x\":-45,\"z\":35},{\"x\":45,\"z\":35},{\"x\":45,\"z\":-35}],\"premiseSlot\":0}],\"parks\":[]}",
+  "sourceTownId": "town-9472ec73f5115ff1",
+  "sourceBlockId": "BLOCK-02-06",
+  "target": [
+    715,
+    90,
+    150
+  ],
+  "width": 1536,
+  "height": 1024,
+  "anchors": [
+    {
+      "slot": 1,
+      "id": "P-00522",
+      "address": "160 Willow Street",
+      "buildingType": "church",
+      "stories": 1,
+      "roof": "gable",
+      "solar": false,
+      "solarKW": 0,
+      "hasPool": false,
+      "width": 26,
+      "depth": 18,
+      "height": 9,
+      "front": {
+        "x": 715,
+        "z": 100
+      },
+      "frontPixel": {
+        "x": 849.7110866857158,
+        "y": 168.32158908890034
+      },
+      "footprint": [
+        {
+          "x": 702,
+          "z": 159
+        },
+        {
+          "x": 728,
+          "z": 159
+        },
+        {
+          "x": 728,
+          "z": 141
+        },
+        {
+          "x": 702,
+          "z": 141
+        }
+      ],
+      "parcel": [
+        {
+          "x": 760,
+          "z": 185
+        },
+        {
+          "x": 760,
+          "z": 115
+        },
+        {
+          "x": 670,
+          "z": 115
+        },
+        {
+          "x": 670,
+          "z": 185
+        }
+      ],
+      "x": 768,
+      "y": 490.0590673034213
+    }
+  ],
+  "placements": 1
+}

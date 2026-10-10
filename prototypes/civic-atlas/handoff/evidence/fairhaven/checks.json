@@ -1,0 +1,471 @@
+{
+  "passed": true,
+  "world": {
+    "id": "town-9472ec73f5115ff1",
+    "name": "Fairhaven",
+    "homes": 500,
+    "premises": 525,
+    "occupiedResidents": 1185
+  },
+  "artwork": {
+    "enabled": true,
+    "count": 58,
+    "totalBlocks": 58,
+    "readyCount": 58,
+    "fallbackCount": 0,
+    "textureCount": 12,
+    "templates": [
+      {
+        "id": "garden-cottages",
+        "ready": true,
+        "count": 15,
+        "reason": "Source-matched reusable illustration"
+      },
+      {
+        "id": "mixed-porches",
+        "ready": true,
+        "count": 13,
+        "reason": "Source-matched reusable illustration"
+      },
+      {
+        "id": "solar-gardens",
+        "ready": true,
+        "count": 11,
+        "reason": "Source-matched reusable illustration"
+      },
+      {
+        "id": "courtyard-homes",
+        "ready": true,
+        "count": 11,
+        "reason": "Source-matched reusable illustration"
+      },
+      {
+        "id": "mainstreet-north-five-square",
+        "ready": true,
+        "count": 1,
+        "reason": "Source-matched reusable illustration"
+      },
+      {
+        "id": "mainstreet-north-five",
+        "ready": true,
+        "count": 1,
+        "reason": "Source-matched reusable illustration"
+      },
+      {
+        "id": "mainstreet-south-five-tower",
+        "ready": true,
+        "count": 1,
+        "reason": "Source-matched reusable illustration"
+      },
+      {
+        "id": "mainstreet-south-five-square",
+        "ready": true,
+        "count": 1,
+        "reason": "Source-matched reusable illustration"
+      },
+      {
+        "id": "primary-school",
+        "ready": true,
+        "count": 1,
+        "reason": "Source-matched reusable illustration"
+      },
+      {
+        "id": "community-church",
+        "ready": true,
+        "count": 1,
+        "reason": "Source-matched reusable illustration"
+      },
+      {
+        "id": "service-depot",
+        "ready": true,
+        "count": 1,
+        "reason": "Source-matched reusable illustration"
+      },
+      {
+        "id": "east-workshops",
+        "ready": true,
+        "count": 1,
+        "reason": "Source-matched reusable illustration"
+      }
+    ],
+    "rejected": [],
+    "areas": []
+  },
+  "registration": [
+    {
+      "templateId": "garden-cottages",
+      "placements": 15,
+      "solarSlots": 0,
+      "poolSlots": 0
+    },
+    {
+      "templateId": "mixed-porches",
+      "placements": 13,
+      "solarSlots": 0,
+      "poolSlots": 0
+    },
+    {
+      "templateId": "solar-gardens",
+      "placements": 11,
+      "solarSlots": 3,
+      "poolSlots": 0
+    },
+    {
+      "templateId": "courtyard-homes",
+      "placements": 11,
+      "solarSlots": 0,
+      "poolSlots": 2
+    },
+    {
+      "templateId": "mainstreet-north-five-square",
+      "placements": 1,
+      "solarSlots": 0,
+      "poolSlots": 0
+    },
+    {
+      "templateId": "mainstreet-north-five",
+      "placements": 1,
+      "solarSlots": 0,
+      "poolSlots": 0
+    },
+    {
+      "templateId": "mainstreet-south-five-tower",
+      "placements": 1,
+      "solarSlots": 0,
+      "poolSlots": 0
+    },
+    {
+      "templateId": "mainstreet-south-five-square",
+      "placements": 1,
+      "solarSlots": 0,
+      "poolSlots": 0
+    },
+    {
+      "templateId": "primary-school",
+      "placements": 1,
+      "solarSlots": 0,
+      "poolSlots": 0
+    },
+    {
+      "templateId": "community-church",
+      "placements": 1,
+      "solarSlots": 0,
+      "poolSlots": 0
+    },
+    {
+      "templateId": "service-depot",
+      "placements": 1,
+      "solarSlots": 0,
+      "poolSlots": 0
+    },
+    {
+      "templateId": "east-workshops",
+      "placements": 1,
+      "solarSlots": 0,
+      "poolSlots": 0
+    }
+  ],
+  "mousePicks": [
+    {
+      "id": "P-00058",
+      "blockId": "BLOCK-01-01",
+      "templateId": "garden-cottages",
+      "buildingType": "detached",
+      "solar": false,
+      "pool": false,
+      "point": {
+        "x": 763.3551197510697,
+        "y": 407.1172478941497
+      }
+    },
+    {
+      "id": "P-00056",
+      "blockId": "BLOCK-01-01",
+      "templateId": "garden-cottages",
+      "buildingType": "detached",
+      "solar": false,
+      "pool": false,
+      "point": {
+        "x": 552.1212926792921,
+        "y": 378.01472008430864
+      }
+    },
+    {
+      "id": "P-00473",
+      "blockId": "BLOCK-06-10",
+      "templateId": "garden-cottages",
+      "buildingType": "detached",
+      "solar": false,
+      "pool": false,
+      "point": {
+        "x": 763.3551197510706,
+        "y": 407.1172478941496
+      }
+    },
+    {
+      "id": "P-00471",
+      "blockId": "BLOCK-06-10",
+      "templateId": "garden-cottages",
+      "buildingType": "detached",
+      "solar": false,
+      "pool": false,
+      "point": {
+        "x": 552.1212926792917,
+        "y": 378.01472008430807
+      }
+    },
+    {
+      "id": "P-00118",
+      "blockId": "BLOCK-01-02",
+      "templateId": "mixed-porches",
+      "buildingType": "detached",
+      "solar": false,
+      "pool": false,
+      "point": {
+        "x": 763.3551197510695,
+        "y": 411.84043570973506
+      }
+    },
+    {
+      "id": "P-00116",
+      "blockId": "BLOCK-01-02",
+      "templateId": "mixed-porches",
+      "buildingType": "detached",
+      "solar": false,
+      "pool": false,
+      "point": {
+        "x": 552.1212926792919,
+        "y": 373.29153226872313
+      }
+    },
+    {
+      "id": "P-00303",
+      "blockId": "BLOCK-06-07",
+      "templateId": "mixed-porches",
+      "buildingType": "detached",
+      "solar": false,
+      "pool": false,
+      "point": {
+        "x": 763.3551197510693,
+        "y": 411.8404357097349
+      }
+    },
+    {
+      "id": "P-00301",
+      "blockId": "BLOCK-06-07",
+      "templateId": "mixed-porches",
+      "buildingType": "detached",
+      "solar": false,
+      "pool": false,
+      "point": {
+        "x": 552.1212926792919,
+        "y": 373.2915322687229
+      }
+    },
+    {
+      "id": "P-00167",
+      "blockId": "BLOCK-01-03",
+      "templateId": "solar-gardens",
+      "buildingType": "detached",
+      "solar": true,
+      "pool": false,
+      "point": {
+        "x": 657.7382062151809,
+        "y": 394.9275778970219
+      }
+    },
+    {
+      "id": "P-00166",
+      "blockId": "BLOCK-01-03",
+      "templateId": "solar-gardens",
+      "buildingType": "detached",
+      "solar": false,
+      "pool": false,
+      "point": {
+        "x": 552.1212926792921,
+        "y": 373.29153226872324
+      }
+    },
+    {
+      "id": "P-00357",
+      "blockId": "BLOCK-06-08",
+      "templateId": "solar-gardens",
+      "buildingType": "detached",
+      "solar": true,
+      "pool": false,
+      "point": {
+        "x": 657.7382062151801,
+        "y": 394.92757789702125
+      }
+    },
+    {
+      "id": "P-00356",
+      "blockId": "BLOCK-06-08",
+      "templateId": "solar-gardens",
+      "buildingType": "detached",
+      "solar": false,
+      "pool": false,
+      "point": {
+        "x": 552.1212926792912,
+        "y": 373.2915322687229
+      }
+    },
+    {
+      "id": "P-00228",
+      "blockId": "BLOCK-01-04",
+      "templateId": "courtyard-homes",
+      "buildingType": "detached",
+      "solar": false,
+      "pool": true,
+      "point": {
+        "x": 763.3551197510693,
+        "y": 407.11724789414916
+      }
+    },
+    {
+      "id": "P-00226",
+      "blockId": "BLOCK-01-04",
+      "templateId": "courtyard-homes",
+      "buildingType": "detached",
+      "solar": false,
+      "pool": false,
+      "point": {
+        "x": 552.1212926792917,
+        "y": 378.01472008430807
+      }
+    },
+    {
+      "id": "P-00413",
+      "blockId": "BLOCK-06-09",
+      "templateId": "courtyard-homes",
+      "buildingType": "detached",
+      "solar": false,
+      "pool": true,
+      "point": {
+        "x": 763.3551197510706,
+        "y": 407.1172478941496
+      }
+    },
+    {
+      "id": "P-00411",
+      "blockId": "BLOCK-06-09",
+      "templateId": "courtyard-homes",
+      "buildingType": "detached",
+      "solar": false,
+      "pool": false,
+      "point": {
+        "x": 552.121292679293,
+        "y": 378.01472008430864
+      }
+    },
+    {
+      "id": "P-00521",
+      "blockId": "BLOCK-02-05",
+      "templateId": "primary-school",
+      "buildingType": "school",
+      "solar": false,
+      "pool": false,
+      "point": {
+        "x": 739,
+        "y": 506.83043655324406
+      }
+    },
+    {
+      "id": "P-00522",
+      "blockId": "BLOCK-02-06",
+      "templateId": "community-church",
+      "buildingType": "church",
+      "solar": false,
+      "pool": false,
+      "point": {
+        "x": 739.0000000000006,
+        "y": 504.6505037152816
+      }
+    },
+    {
+      "id": "P-00524",
+      "blockId": "BLOCK-04-10",
+      "templateId": "east-workshops",
+      "buildingType": "industrial",
+      "solar": false,
+      "pool": false,
+      "point": {
+        "x": 839.8161447388023,
+        "y": 527.6977159173287
+      }
+    },
+    {
+      "id": "P-00501",
+      "blockId": "BLOCK-03-05",
+      "templateId": "mainstreet-north-five-square",
+      "buildingType": "storefront",
+      "solar": false,
+      "pool": false,
+      "point": {
+        "x": 503.41105317715284,
+        "y": 577.0777752628367
+      }
+    }
+  ],
+  "tourChecks": [
+    "block:BLOCK-01-01",
+    "block:BLOCK-01-01",
+    "block:BLOCK-06-10",
+    "block:BLOCK-06-10",
+    "block:BLOCK-01-02",
+    "block:BLOCK-01-02",
+    "block:BLOCK-06-07",
+    "block:BLOCK-06-07",
+    "block:BLOCK-01-03",
+    "block:BLOCK-01-03",
+    "block:BLOCK-06-08",
+    "block:BLOCK-06-08",
+    "block:BLOCK-01-04",
+    "block:BLOCK-01-04",
+    "block:BLOCK-06-09",
+    "block:BLOCK-06-09",
+    "block:BLOCK-02-05",
+    "block:BLOCK-02-06",
+    "block:BLOCK-04-10",
+    "block:BLOCK-03-05",
+    "district:ATLAS-MAIN-STREET",
+    "district:ATLAS-EAST-WORKSHOPS",
+    "district:ATLAS-WEST-GARDENS",
+    "district:ATLAS-SOUTH-MEADOWS",
+    "field:FIELD-01",
+    "block:BLOCK-01-01",
+    "district:ATLAS-MAIN-STREET",
+    "district:ATLAS-MAIN-STREET"
+  ],
+  "screenshots": [
+    "out/civic-atlas/review-town500/main-street-1600.png",
+    "out/civic-atlas/review-town500/garden-cottages-1-selected.png",
+    "out/civic-atlas/review-town500/garden-cottages-2-selected.png",
+    "out/civic-atlas/review-town500/mixed-porches-1-selected.png",
+    "out/civic-atlas/review-town500/mixed-porches-2-selected.png",
+    "out/civic-atlas/review-town500/solar-gardens-1-selected.png",
+    "out/civic-atlas/review-town500/solar-gardens-2-selected.png",
+    "out/civic-atlas/review-town500/courtyard-homes-1-selected.png",
+    "out/civic-atlas/review-town500/courtyard-homes-2-selected.png",
+    "out/civic-atlas/review-town500/school-selected.png",
+    "out/civic-atlas/review-town500/church-selected.png",
+    "out/civic-atlas/review-town500/industrial-selected.png",
+    "out/civic-atlas/review-town500/storefront-selected.png",
+    "out/civic-atlas/review-town500/countryside-land-use.png",
+    "out/civic-atlas/review-town500/water-network.png",
+    "out/civic-atlas/review-town500/electric-network.png",
+    "out/civic-atlas/review-town500/gas-network.png",
+    "out/civic-atlas/review-town500/native-same-camera.png",
+    "out/civic-atlas/review-town500/illustrated-same-camera.png",
+    "out/civic-atlas/review-town500/welcome-1600.png",
+    "out/civic-atlas/review-town500/overview-1600.png",
+    "out/civic-atlas/review-town500/configure-1600.png",
+    "out/civic-atlas/review-town500/map-1600.png",
+    "out/civic-atlas/review-town500/welcome-1024.png",
+    "out/civic-atlas/review-town500/overview-1024.png",
+    "out/civic-atlas/review-town500/configure-1024.png",
+    "out/civic-atlas/review-town500/map-1024.png"
+  ],
+  "sourceUnchanged": true,
+  "consoleErrors": []
+}

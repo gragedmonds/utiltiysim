@@ -12,7 +12,7 @@ try{
  const diagnostics=()=>page.evaluate(()=>window.atlasDiagnostics());
  assert.equal((await diagnostics()).artwork.enabled,true);
  assert.ok((await diagnostics()).grass.surfaces>=3,'shared turf shader covers terrain, parks and parcels');
- assert.equal((await diagnostics()).artwork.count,6);
+ assert.equal((await diagnostics()).artwork.count,9);
  for(const place of['park','school','depot','shops','homes','river']){
   await page.locator('#place-tour').selectOption(place);
   if(['school','depot','shops','homes'].includes(place))await page.waitForFunction(()=>document.querySelector('#inspector-content').textContent.includes('Physical property'));
@@ -70,5 +70,5 @@ try{
  await page.screenshot({path:`${out}/map-park-1024.png`});
  const after=await(await page.request.get(base+'/atlas/api/bootstrap')).json();assert.deepEqual(after,before,'art, tours and study navigation do not alter the saved world');assert.deepEqual(errors,[]);
  await writeFile(`${out}/city-checks.json`,JSON.stringify({passed:true,sourceUnchanged:true,artwork:(await diagnostics()).artwork,realMousePicks:['school','depot',...blockIds],consoleErrors:errors},null,2)+'\n');
- console.log('PASS: six map illustrations, civic property mouse picking, park tours, utility overlay, A/B camera preservation, study filters, responsive layout, unchanged saved world.');
+ console.log('PASS: nine map illustrations, civic property mouse picking, park tours, utility overlay, A/B camera preservation, study filters, responsive layout, unchanged saved world.');
 }finally{await browser.close();}

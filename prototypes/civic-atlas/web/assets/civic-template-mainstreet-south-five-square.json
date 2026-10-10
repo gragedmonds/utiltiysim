@@ -1,0 +1,348 @@
+{
+  "schemaVersion": "civic-atlas-town-template/1",
+  "templateId": "mainstreet-south-five-square",
+  "cameraDirection": [
+    0.10942489340428357,
+    0.8206867005321268,
+    0.5608025786969533
+  ],
+  "frame": {
+    "center": {
+      "x": 0,
+      "z": 0
+    },
+    "viewHeight": 120,
+    "aspect": 1.5
+  },
+  "polygon": [
+    {
+      "x": 55,
+      "z": 40
+    },
+    {
+      "x": 55,
+      "z": -40
+    },
+    {
+      "x": -55,
+      "z": -40
+    },
+    {
+      "x": -55,
+      "z": 40
+    }
+  ],
+  "signature": "{\"schema\":\"civic-atlas-town-template/1\",\"templateId\":\"mainstreet-south-five-square\",\"polygon\":[{\"x\":-55,\"z\":-40},{\"x\":-55,\"z\":40},{\"x\":55,\"z\":40},{\"x\":55,\"z\":-40}],\"surface\":[90,90,90,90,90,90,90,90,90,90,90,90,90,90,90,90,90,90,90,90,90,90,90,90,90],\"slots\":[{\"slot\":0,\"x\":-44,\"z\":-26,\"width\":18,\"depth\":22,\"height\":6.9,\"elevationM\":90,\"stories\":2,\"angle\":0,\"side\":1,\"roof\":\"flat\",\"roofTone\":0.35,\"solar\":false,\"solarKW\":0,\"solarPeakKW\":0,\"hasPool\":false,\"poolPolygon\":null,\"family\":\"brick_shop\",\"buildingType\":\"storefront\",\"premiseType\":\"commercial\",\"front\":{\"x\":-44,\"z\":-50},\"parcel\":[{\"x\":-33.5,\"z\":-2},{\"x\":-33.5,\"z\":-38},{\"x\":-54.5,\"z\":-38},{\"x\":-54.5,\"z\":-2}],\"footprint\":[{\"x\":-35,\"z\":-15},{\"x\":-35,\"z\":-37},{\"x\":-53,\"z\":-37},{\"x\":-53,\"z\":-15}],\"buildingHeight\":6.9,\"buildingStories\":2,\"buildingRoof\":\"flat\",\"footprintWidth\":18,\"footprintDepth\":22},{\"slot\":1,\"x\":-22,\"z\":-26,\"width\":18,\"depth\":22,\"height\":4.3,\"elevationM\":90,\"stories\":1,\"angle\":0,\"side\":1,\"roof\":\"flat\",\"roofTone\":0.35,\"solar\":false,\"solarKW\":0,\"solarPeakKW\":0,\"hasPool\":false,\"poolPolygon\":null,\"family\":\"brick_shop\",\"buildingType\":\"storefront\",\"premiseType\":\"commercial\",\"front\":{\"x\":-22,\"z\":-50},\"parcel\":[{\"x\":-11.5,\"z\":-2},{\"x\":-11.5,\"z\":-38},{\"x\":-32.5,\"z\":-38},{\"x\":-32.5,\"z\":-2}],\"footprint\":[{\"x\":-13,\"z\":-15},{\"x\":-13,\"z\":-37},{\"x\":-31,\"z\":-37},{\"x\":-31,\"z\":-15}],\"buildingHeight\":4.3,\"buildingStories\":1,\"buildingRoof\":\"flat\",\"footprintWidth\":18,\"footprintDepth\":22},{\"slot\":2,\"x\":0,\"z\":-26,\"width\":18,\"depth\":22,\"height\":6.9,\"elevationM\":90,\"stories\":2,\"angle\":0,\"side\":1,\"roof\":\"flat\",\"roofTone\":0.35,\"solar\":false,\"solarKW\":0,\"solarPeakKW\":0,\"hasPool\":false,\"poolPolygon\":null,\"family\":\"brick_shop\",\"buildingType\":\"storefront\",\"premiseType\":\"commercial\",\"front\":{\"x\":0,\"z\":-50},\"parcel\":[{\"x\":-10.5,\"z\":-2},{\"x\":-10.5,\"z\":-38},{\"x\":10.5,\"z\":-38},{\"x\":10.5,\"z\":-2}],\"footprint\":[{\"x\":-9,\"z\":-15},{\"x\":-9,\"z\":-37},{\"x\":9,\"z\":-37},{\"x\":9,\"z\":-15}],\"buildingHeight\":6.9,\"buildingStories\":2,\"buildingRoof\":\"flat\",\"footprintWidth\":18,\"footprintDepth\":22},{\"slot\":3,\"x\":22,\"z\":-26,\"width\":18,\"depth\":22,\"height\":6.9,\"elevationM\":90,\"stories\":2,\"angle\":0,\"side\":1,\"roof\":\"flat\",\"roofTone\":0.35,\"solar\":false,\"solarKW\":0,\"solarPeakKW\":0,\"hasPool\":false,\"poolPolygon\":null,\"family\":\"brick_shop\",\"buildingType\":\"storefront\",\"premiseType\":\"commercial\",\"front\":{\"x\":22,\"z\":-50},\"parcel\":[{\"x\":11.5,\"z\":-2},{\"x\":11.5,\"z\":-38},{\"x\":32.5,\"z\":-38},{\"x\":32.5,\"z\":-2}],\"footprint\":[{\"x\":13,\"z\":-15},{\"x\":13,\"z\":-37},{\"x\":31,\"z\":-37},{\"x\":31,\"z\":-15}],\"buildingHeight\":6.9,\"buildingStories\":2,\"buildingRoof\":\"flat\",\"footprintWidth\":18,\"footprintDepth\":22},{\"slot\":4,\"x\":44,\"z\":-26,\"width\":18,\"depth\":22,\"height\":4.3,\"elevationM\":90,\"stories\":1,\"angle\":0,\"side\":1,\"roof\":\"flat\",\"roofTone\":0.35,\"solar\":false,\"solarKW\":0,\"solarPeakKW\":0,\"hasPool\":false,\"poolPolygon\":null,\"family\":\"brick_shop\",\"buildingType\":\"storefront\",\"premiseType\":\"commercial\",\"front\":{\"x\":44,\"z\":-50},\"parcel\":[{\"x\":33.5,\"z\":-2},{\"x\":33.5,\"z\":-38},{\"x\":54.5,\"z\":-38},{\"x\":54.5,\"z\":-2}],\"footprint\":[{\"x\":35,\"z\":-15},{\"x\":35,\"z\":-37},{\"x\":53,\"z\":-37},{\"x\":53,\"z\":-15}],\"buildingHeight\":4.3,\"buildingStories\":1,\"buildingRoof\":\"flat\",\"footprintWidth\":18,\"footprintDepth\":22}],\"facilities\":[],\"parks\":[{\"polygon\":[{\"x\":-55,\"z\":10},{\"x\":-55,\"z\":35},{\"x\":55,\"z\":35},{\"x\":55,\"z\":10}],\"kind\":\"civic\"}]}",
+  "sourceTownId": "town-9472ec73f5115ff1",
+  "sourceBlockId": "BLOCK-04-06",
+  "target": [
+    715,
+    90,
+    350
+  ],
+  "width": 1536,
+  "height": 1024,
+  "anchors": [
+    {
+      "slot": 1,
+      "id": "P-00516",
+      "address": "150 Main Street",
+      "buildingType": "storefront",
+      "stories": 2,
+      "roof": "flat",
+      "solar": false,
+      "solarKW": 0,
+      "hasPool": false,
+      "width": 18,
+      "depth": 22,
+      "height": 6.9,
+      "front": {
+        "x": 671,
+        "z": 300
+      },
+      "frontPixel": {
+        "x": 481.19408573313365,
+        "y": 109.30949121538538
+      },
+      "footprint": [
+        {
+          "x": 680,
+          "z": 335
+        },
+        {
+          "x": 662,
+          "z": 335
+        },
+        {
+          "x": 662,
+          "z": 313
+        },
+        {
+          "x": 680,
+          "z": 313
+        }
+      ],
+      "parcel": [
+        {
+          "x": 681.5,
+          "z": 348
+        },
+        {
+          "x": 681.5,
+          "z": 312
+        },
+        {
+          "x": 660.5,
+          "z": 312
+        },
+        {
+          "x": 660.5,
+          "z": 348
+        }
+      ],
+      "x": 441.9727641239898,
+      "y": 257.45374671866887
+    },
+    {
+      "slot": 2,
+      "id": "P-00517",
+      "address": "156 Main Street",
+      "buildingType": "storefront",
+      "stories": 1,
+      "roof": "flat",
+      "solar": false,
+      "solarKW": 0,
+      "hasPool": false,
+      "width": 18,
+      "depth": 22,
+      "height": 4.3,
+      "front": {
+        "x": 693,
+        "z": 300
+      },
+      "frontPixel": {
+        "x": 665.4525862094258,
+        "y": 138.81554015214357
+      },
+      "footprint": [
+        {
+          "x": 702,
+          "z": 335
+        },
+        {
+          "x": 684,
+          "z": 335
+        },
+        {
+          "x": 684,
+          "z": 313
+        },
+        {
+          "x": 702,
+          "z": 313
+        }
+      ],
+      "parcel": [
+        {
+          "x": 703.5,
+          "z": 348
+        },
+        {
+          "x": 703.5,
+          "z": 312
+        },
+        {
+          "x": 682.5,
+          "z": 312
+        },
+        {
+          "x": 682.5,
+          "z": 348
+        }
+      ],
+      "x": 626.231264600282,
+      "y": 293.2982873233278
+    },
+    {
+      "slot": 3,
+      "id": "P-00518",
+      "address": "160 Main Street",
+      "buildingType": "storefront",
+      "stories": 2,
+      "roof": "flat",
+      "solar": false,
+      "solarKW": 0,
+      "hasPool": false,
+      "width": 18,
+      "depth": 22,
+      "height": 6.9,
+      "front": {
+        "x": 715,
+        "z": 300
+      },
+      "frontPixel": {
+        "x": 849.7110866857169,
+        "y": 168.3215890889013
+      },
+      "footprint": [
+        {
+          "x": 724,
+          "z": 335
+        },
+        {
+          "x": 706,
+          "z": 335
+        },
+        {
+          "x": 706,
+          "z": 313
+        },
+        {
+          "x": 724,
+          "z": 313
+        }
+      ],
+      "parcel": [
+        {
+          "x": 725.5,
+          "z": 348
+        },
+        {
+          "x": 725.5,
+          "z": 312
+        },
+        {
+          "x": 704.5,
+          "z": 312
+        },
+        {
+          "x": 704.5,
+          "z": 348
+        }
+      ],
+      "x": 810.489765076573,
+      "y": 316.4658445921848
+    },
+    {
+      "slot": 4,
+      "id": "P-00519",
+      "address": "164 Main Street",
+      "buildingType": "storefront",
+      "stories": 2,
+      "roof": "flat",
+      "solar": false,
+      "solarKW": 0,
+      "hasPool": false,
+      "width": 18,
+      "depth": 22,
+      "height": 6.9,
+      "front": {
+        "x": 737,
+        "z": 300
+      },
+      "frontPixel": {
+        "x": 1033.9695871620079,
+        "y": 197.82763802565904
+      },
+      "footprint": [
+        {
+          "x": 746,
+          "z": 335
+        },
+        {
+          "x": 728,
+          "z": 335
+        },
+        {
+          "x": 728,
+          "z": 313
+        },
+        {
+          "x": 746,
+          "z": 313
+        }
+      ],
+      "parcel": [
+        {
+          "x": 747.5,
+          "z": 348
+        },
+        {
+          "x": 747.5,
+          "z": 312
+        },
+        {
+          "x": 726.5,
+          "z": 312
+        },
+        {
+          "x": 726.5,
+          "z": 348
+        }
+      ],
+      "x": 994.748265552864,
+      "y": 345.97189352894253
+    },
+    {
+      "slot": 5,
+      "id": "P-00520",
+      "address": "170 Main Street",
+      "buildingType": "storefront",
+      "stories": 1,
+      "roof": "flat",
+      "solar": false,
+      "solarKW": 0,
+      "hasPool": false,
+      "width": 18,
+      "depth": 22,
+      "height": 4.3,
+      "front": {
+        "x": 759,
+        "z": 300
+      },
+      "frontPixel": {
+        "x": 1218.228087638299,
+        "y": 227.33368696241723
+      },
+      "footprint": [
+        {
+          "x": 768,
+          "z": 335
+        },
+        {
+          "x": 750,
+          "z": 335
+        },
+        {
+          "x": 750,
+          "z": 313
+        },
+        {
+          "x": 768,
+          "z": 313
+        }
+      ],
+      "parcel": [
+        {
+          "x": 769.5,
+          "z": 348
+        },
+        {
+          "x": 769.5,
+          "z": 312
+        },
+        {
+          "x": 748.5,
+          "z": 312
+        },
+        {
+          "x": 748.5,
+          "z": 348
+        }
+      ],
+      "x": 1179.0067660291552,
+      "y": 381.81643413360143
+    }
+  ],
+  "placements": 1
+}

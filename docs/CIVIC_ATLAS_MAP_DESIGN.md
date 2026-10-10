@@ -251,3 +251,11 @@ Keep parcel identity and picking independent of the image. Hide ordinary parcel 
 Building, parcel, road, terrain or appearance changes invalidate affected block artwork. Native geometry remains usable while replacement art is generated and checked. A road change may alter several block boundaries; an explicit city rebuild may queue all blocks. Utility readings, outages, selection, activity and network highlighting use separate layers and do not require repainting the town.
 
 Production work still needs per-block dependency fingerprints, a versioned style/camera contract, cached accepted images, retryable generation jobs, neighboring-edge context and rejection of results for superseded world revisions. The prototype currently uses manually generated images, strict source/camera checks and conservative all-area fallback; it does not implement this automatic queue or establish city-scale generation cost, latency or performance.
+
+## 12. Residential quality and the 500-home milestone
+
+Backyards should read as usable private outdoor space: open lawn, modest patios, clear side access and selective planting. Do not fill every empty area with trees. Plan unassigned land deliberately as small parks, greens, paths, squares or other appropriate uses, without silently expanding parcel ownership. Fields and hedgerows can form a rural fringe beyond the urban edge; their appearance must not imply a working agricultural simulation.
+
+Solar and pool presence are household settings that must constrain artwork. House count, footprint, roof, storeys and frontage remain source facts. A small solar home must not grow to accommodate an invented panel layout; a pool cannot appear on a household without that attribute.
+
+The next concrete demo is a fresh, interactive **500-home town plus commercial/industrial properties**, with main-street commerce, separated industrial access, schools and churches near neighborhoods, planned open spaces and countryside edges. Retain the earlier Brookfield world. The milestone is a working map with distinct source records and useful inspection, not a PNG. Repeated source-compatible block templates are acceptable for demonstrating scale; disclose reuse and do not claim that every block was independently generated. Arbitrary rotation/scaling of fixed-camera art is not valid reuse.

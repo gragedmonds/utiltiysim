@@ -33,10 +33,21 @@ class AdvanceRequest(BaseModel):
 
 
 def prepare_world(store: Path, houses: int, seed: str, *, showcase: bool = False,
-                  reference: bool = False) -> World:
+                  reference: bool = False, town500: bool = False) -> World:
     store.mkdir(parents=True, exist_ok=True)
     world = World(store / "world.sqlite")
+    if town500 and world.status().get("environmentId"):
+        if WorldMap(world).snapshot().get("atlasDesign", {}).get("version") != "civic-atlas-town500/1":
+            raise ValueError("The 500-home profile needs its own store; this existing world was not changed.")
     if not world.status().get("environmentId"):
+        if town500:
+            from town500_world import build_town500_snapshot
+
+            snapshot = build_town500_snapshot(seed=seed)
+            (store / "source-snapshot.json").write_text(json.dumps(snapshot, separators=(",", ":")))
+            world.initialize(snapshot, "Fairhaven", start="2026-01-01")
+            world.advance("2026-01-08")
+            return world
         if reference:
             from reference_world import build_reference_snapshot
 
@@ -149,8 +160,8 @@ def main():
     import uvicorn
 
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--port", type=int, default=8040)
-    parser.add_argument("--store", type=Path, default=ROOT / "out/civic-atlas")
+    parser.add_argument("--port", type=int)
+    parser.add_argument("--store", type=Path)
     parser.add_argument("--houses", type=int, choices=(80, 180, 320, 480))
     parser.add_argument("--seed")
     profiles = parser.add_mutually_exclusive_group()
@@ -158,15 +169,18 @@ def main():
                           help="Use more park land, a school at 320+ homes, and a shorter commercial core.")
     profiles.add_argument("--reference", action="store_true",
                           help="Use the curated Civic Atlas reference town with real simulation records.")
+    profiles.add_argument("--town500", action="store_true",
+                          help="Use Fairhaven: 500 homes plus commercial/civic/industrial sites; defaults to port 8041 and a separate store.")
     args = parser.parse_args()
-    if args.reference and args.houses is not None:
+    if (args.reference or args.town500) and args.houses is not None:
         parser.error("The curated reference town has a fixed layout; --houses applies to generated profiles.")
-    default_seed = "CIVIC-ATLAS-REFERENCE-01" if args.reference else (
+    default_seed = "CIVIC-ATLAS-FAIRHAVEN-01" if args.town500 else "CIVIC-ATLAS-REFERENCE-01" if args.reference else (
         "CIVIC-ATLAS-PARK-01" if args.showcase else "CIVIC-ATLAS-01")
-    world = prepare_world(args.store, args.houses or (320 if args.showcase else 180),
-                          args.seed or default_seed, showcase=args.showcase, reference=args.reference)
+    store = args.store or ROOT / ("out/civic-atlas-town500-v2" if args.town500 else "out/civic-atlas")
+    world = prepare_world(store, args.houses or (500 if args.town500 else 320 if args.showcase else 180),
+                          args.seed or default_seed, showcase=args.showcase, reference=args.reference, town500=args.town500)
     print(json.dumps({"world": world.status(), "note": "Existing stores are resumed, never regenerated."}), flush=True)
-    uvicorn.run(create_app(world), host="127.0.0.1", port=args.port, proxy_headers=False)
+    uvicorn.run(create_app(world), host="127.0.0.1", port=args.port or (8041 if args.town500 else 8040), proxy_headers=False)
 
 
 if __name__ == "__main__":

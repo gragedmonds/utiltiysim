@@ -1,7 +1,8 @@
+import {worldProfile} from './city-design.js';
 /** Map-led Living World dashboard. All quantities and the map image are supplied
  * by the actual saved world; this module does not advance or synthesize state. */
 export function renderOverview({town,state,population,roadsKm,advance,mapImage,day,fmt,icon,esc,dayEvents,weather}) {
-  const designed=Boolean(town.atlasDesign);
+  const profile=worldProfile(town,state),name=esc(profile.name);
   const completed=state.lastCompletedDay?day(state.lastCompletedDay):'No completed days';
   const nextDay=day(state.through);
   const latest=state.daysHistory?.[0];
@@ -16,14 +17,14 @@ export function renderOverview({town,state,population,roadsKm,advance,mapImage,d
   ];
   return `<div class="ov-dashboard">
     <div class="ov-heading">
-      <div><span class="ov-eyebrow">YOUR LIVING WORLD</span><h1>Brookfield, at a glance.</h1><p>A place to explore. A physical world to understand.</p></div>
+      <div><span class="ov-eyebrow">YOUR LIVING WORLD</span><h1>${name}, at a glance.</h1><p>A place to explore. A physical world to understand.</p></div>
       <div class="ov-saved-state"><span class="ov-state-dot"></span><div><small>WORLD SAVED THROUGH</small><strong>${esc(completed)}</strong></div></div>
     </div>
     <div class="ov-primary-grid">
-      <section class="ov-map-panel" aria-label="Saved Brookfield geography">
-        <div class="ov-panel-heading"><div><span class="ov-eyebrow">A WORLD WORTH EXPLORING</span><h2>Your town, in perspective.</h2></div><span class="ov-map-type">${designed?'Designed reference town':'Generated fictional town'}</span></div>
-        <button type="button" class="ov-map-link" data-page="map" aria-label="Open the interactive Brookfield town map">
-          ${mapImage?`<img src="${esc(mapImage)}" alt="Actual saved Brookfield geography rendered by Civic Atlas" decoding="async">`:'<span class="ov-map-unavailable">Open the town map to explore its saved geography.</span>'}
+      <section class="ov-map-panel" aria-label="Saved ${name} geography">
+        <div class="ov-panel-heading"><div><span class="ov-eyebrow">A WORLD WORTH EXPLORING</span><h2>Your town, in perspective.</h2></div><span class="ov-map-type">${esc(profile.label)}</span></div>
+        <button type="button" class="ov-map-link" data-page="map" aria-label="Open the interactive ${name} town map">
+          ${mapImage?`<img src="${esc(mapImage)}" alt="Actual saved ${name} geography rendered by Civic Atlas" decoding="async">`:'<span class="ov-map-unavailable">Open the town map to explore its saved geography.</span>'}
           <span class="ov-map-caption"><span class="ov-state-dot"></span>Saved geography · real world records</span>
           <span class="ov-map-action">${icon('map')}Explore town map <span aria-hidden="true">→</span></span>
         </button>

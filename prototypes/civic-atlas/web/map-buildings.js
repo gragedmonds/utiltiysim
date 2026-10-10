@@ -5,7 +5,8 @@ import {GeometryBuilder, roofGeometry, hash} from '/viewer/lowpoly.js';
  * Original Civic Atlas architectural assets. All geometry is in actual meters,
  * centered on the recorded footprint, ground at y=0, frontage towards local +Z.
  * home.height is the eaves/wall height (matching the shared viewer convention).
- * Roofs, cornices and steeples extend above it; minor eaves extend beyond footprint.
+ * Roofs and cornices extend above it; minor eaves extend beyond footprint.
+ * Authored church height is a total envelope including its steeple.
  * Assets are visual representations, never additional building or utility records.
  * Use MeshStandardMaterial({vertexColors:true, roughness:.9}) and rotate/translate
  * to the recorded home orientation. The caller owns disposal and picking metadata.
@@ -263,13 +264,43 @@ export function buildingGeometry(family,home={}){
     if(h>5)window(0,h*.73,d*.52+.035,1.75,1.6);steps(0,d*.52+.4,centerW*.75,.3);
     const flag=new THREE.CylinderGeometry(.045,.065,5.5,5);b.add(flag,'#b1b1a3',w*.43,2.75,d*.41);flag.dispose();box('#678d99',w*.43+.48,4.70,d*.41,.95,.65,.05);
   } else if(family==='church'){
-    const naveW=w*.72,naveD=d*.86,naveZ=-d*.06,rh=Math.min(4,w*.38);
-    courses(0,0,naveZ,naveW,h,naveD,'#e4ddca');roof(0,h,naveZ,naveW+.65,naveD+.65,rh,'#6b7a7d');gable(0,h,naveZ+naveD/2+.02,naveW,rh*.90,'#e4ddca');
-    const tw=w*.32,tz=d*.32,th=h+rh*.64;courses(0,0,tz,tw,th,d*.27,'#d5c7ac');box(stone,0,th-.3,tz,tw+.28,.35,d*.27+.28);
-    for(const sign of [-1,1]){box(shadow,sign*tw*.27,th-1.0,tz+d*.135+.02,tw*.22,.8,.04);box(stone,sign*tw*.27,th-.45,tz+d*.135+.05,tw*.27,.10,.11);}
-    const spire=new THREE.ConeGeometry(tw*.78,Math.max(2.5,tw*1.55),4);b.add(spire,'#66817f',0,th+Math.max(2.5,tw*1.55)/2,tz,1,1,1,0,Math.PI/4);spire.dispose();
-    door(0,.3,tz+d*.135+.04,Math.min(1.8,tw*.62),2.65,'#7b6753');steps(0,tz+d*.135+.3,tw*.88,.3);
-    for(const sign of [-1,1])for(let i=0;i<4;i++)window(sign*(naveW/2+.025),h*.54,(-.40+i*.23)*naveD,1.0,Math.min(2.9,h*.57),sign);
+    // The authored church height is its total envelope, including the steeple.
+    // Allocate that height deliberately rather than flattening a tall tower
+    // with the residential eaves/roof-detail allowance below.
+    const naveW=w*.94,naveD=d*.76,naveZ=-d*.12,naveH=h*.49,roofH=h*.205;
+    courses(0,0,naveZ,naveW,naveH,naveD,'#e8dfc9');
+    roof(0,naveH,naveZ,naveW+.45,naveD+.45,roofH,'#657978');
+    for(const sign of [-1,1]){
+      gable(0,naveH,naveZ+sign*(naveD/2+.025),naveW,roofH*.96,'#e8dfc9');
+      box(stone,sign*(naveW/2-.10),naveH/2,naveZ,.24,naveH,naveD+.10);
+    }
+    const towerW=Math.min(w*.16,h*.34),towerD=Math.min(d*.30,towerW*1.10),towerZ=d*.32,towerH=h*.70,spireBase=towerH+.14,spireH=h-spireBase;
+    courses(0,0,towerZ,towerW,towerH,towerD,'#dbd0b8');
+    box(stone,0,towerH-.03,towerZ,towerW+.24,.20,towerD+.24);
+    const spire=new THREE.ConeGeometry(towerW*.72,spireH,4);spire.rotateY(Math.PI/4);
+    b.add(spire,'#52766f',0,spireBase+spireH/2,towerZ,1,1,towerD/towerW);spire.dispose();
+    // Narrow louvred belfry openings and a continuous light cornice make the
+    // bell stage readable even when the saved frontage faces away from camera.
+    const bellY=towerH-.80;
+    for(const sign of [-1,1]){
+      box(shadow,0,bellY,towerZ+sign*(towerD/2+.025),towerW*.43,.95,.045);
+      for(let j=0;j<4;j++)box('#a6b2a0',0,bellY-.30+j*.20,towerZ+sign*(towerD/2+.055),towerW*.46,.06,.08);
+      box(shadow,sign*(towerW/2+.025),bellY,towerZ,.045,.95,towerD*.34);
+      for(let j=0;j<4;j++)box('#a6b2a0',sign*(towerW/2+.055),bellY-.30+j*.20,towerZ,.08,.06,towerD*.36);
+    }
+    function archedWindow(x,y,z,ww,hh,side=0){
+      for(const [pad,color,offset]of [[.14,stone,.035],[0,'#607f87',.09]]){
+        const aw=ww+pad*2,ah=hh+pad*2,shape=new THREE.Shape();
+        shape.moveTo(-aw/2,0);shape.lineTo(aw/2,0);shape.lineTo(aw/2,ah-aw/2);shape.absarc(0,ah-aw/2,aw/2,0,Math.PI,false);shape.closePath();
+        const geometry=new THREE.ShapeGeometry(shape,8);b.add(geometry,color,x+(side?offset*side:0),y-pad,z+(side?0:offset),1,1,1,0,side*Math.PI/2);geometry.dispose();
+      }
+      if(side){box(stone,x+side*.12,y+hh*.44,z,.09,hh*.82,.08);box(stone,x+side*.12,y+hh*.42,z,.09,.075,ww);}
+      else {box(stone,x,y+hh*.44,z+.12,.08,hh*.82,.09);box(stone,x,y+hh*.42,z+.12,ww,.075,.09);}
+    }
+    for(const sign of [-1,1])for(let i=0;i<4;i++)archedWindow(sign*(naveW/2+.035),.8,naveZ+(-.35+i*.23)*naveD,Math.min(1.5,naveD*.11),naveH*.55,sign);
+    for(const x of [-naveW*.30,naveW*.30])archedWindow(x,.75,naveZ+naveD/2+.025,Math.min(1.8,naveW*.09),naveH*.58);
+    door(0,.20,towerZ+towerD/2+.035,Math.min(1.7,towerW*.61),Math.min(2.65,naveH*.64),'#79634c');
+    steps(0,towerZ+towerD/2+.24,towerW*.84,.22);
   } else if(family==='pump_house'){
     courses(0,0,0,w,h,d,'#c8c6b1');if(home.roof==='flat')flatRoof(0,h,0,w,d);else roof(0,h,0,w+.7,d+.7,Math.min(2.2,w*.18),'#65817b',true);
     const gateW=Math.min(3,w*.26);box(stone,-w*.18,h*.33,d/2+.06,gateW+.4,h*.62,.18);box('#587971',-w*.18,h*.31,d/2+.18,gateW,h*.58,.10);
@@ -299,10 +330,20 @@ export function buildingGeometry(family,home={}){
     for(let i=0;i<3;i++)b.add(panel,'#9baeb0',x,y+.07,z+(-1+i)*Math.min(4,d*.33)/3,Math.min(3.2,w*.28),.025,.035,0,0,rz);
     panel.dispose();
   }
-  const geometry=b.build();geometry.computeBoundingBox();
+  const geometry=b.build();
+  let localFrontYaw=0;
+  if(family==='church'&&home.front&&Number.isFinite(home.front.x)&&Number.isFinite(home.front.z)&&Number.isFinite(home.x)&&Number.isFinite(home.z)){
+    const dx=home.front.x-home.x,dz=home.front.z-home.z;
+    if(Math.hypot(dx,dz)>.01){
+      const parentYaw=-(Number(home.angle)||0)+(home.side===-1?Math.PI:0)+Math.PI;
+      localFrontYaw=Math.atan2(dx,dz)-parentYaw;
+      geometry.rotateY(localFrontYaw);
+    }
+  }
+  geometry.computeBoundingBox();
   // Wall height remains authoritative; compact roof ornaments to a consistent
   // decorative allowance rather than changing physical storey heights.
   const excess=geometry.boundingBox.max.y-h;
   if(excess>2.5){const positions=geometry.attributes.position;for(let i=0;i<positions.count;i++){const y=positions.getY(i);if(y>h)positions.setY(i,h+(y-h)*2.5/excess);}positions.needsUpdate=true;geometry.computeVertexNormals();geometry.computeBoundingBox();geometry.computeBoundingSphere();}
-geometry.userData={family,sourcePremiseId:home.id,units:'meters',front:'+Z',decorativeArchitecture:true};return geometry;
+geometry.userData={family,sourcePremiseId:home.id,units:'meters',front:family==='church'&&home.front?'recorded frontage':'+Z',localFrontYaw,heightConvention:family==='church'?'total':'eaves',decorativeArchitecture:true};return geometry;
 }

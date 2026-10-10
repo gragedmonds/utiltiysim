@@ -1,0 +1,108 @@
+{
+  "schemaVersion": "civic-atlas-town-template/1",
+  "templateId": "service-depot",
+  "cameraDirection": [
+    0.10942489340428357,
+    0.8206867005321268,
+    0.5608025786969533
+  ],
+  "frame": {
+    "center": {
+      "x": 0,
+      "z": 0
+    },
+    "viewHeight": 120,
+    "aspect": 1.5
+  },
+  "polygon": [
+    {
+      "x": 55,
+      "z": 40
+    },
+    {
+      "x": 55,
+      "z": -40
+    },
+    {
+      "x": -55,
+      "z": -40
+    },
+    {
+      "x": -55,
+      "z": 40
+    }
+  ],
+  "signature": "{\"schema\":\"civic-atlas-town-template/1\",\"templateId\":\"service-depot\",\"polygon\":[{\"x\":-55,\"z\":-40},{\"x\":-55,\"z\":40},{\"x\":55,\"z\":40},{\"x\":55,\"z\":-40}],\"surface\":[90,90,90,90,90,90,90,90,90,90,90,90,90,90,90,90,90,90,90,90,90,90,90,90,90],\"slots\":[{\"slot\":0,\"x\":21,\"z\":0,\"width\":32,\"depth\":24,\"height\":5.2,\"elevationM\":90,\"stories\":1,\"angle\":-1.5708,\"side\":-1,\"roof\":\"flat\",\"roofTone\":0.4975,\"solar\":false,\"solarKW\":0,\"solarPeakKW\":0,\"hasPool\":false,\"poolPolygon\":null,\"family\":\"depot\",\"buildingType\":\"depot\",\"premiseType\":\"utility\",\"front\":{\"x\":65,\"z\":0},\"parcel\":[{\"x\":-5,\"z\":-35},{\"x\":-5,\"z\":35},{\"x\":47,\"z\":35},{\"x\":47,\"z\":-35}],\"footprint\":[{\"x\":33,\"z\":-16},{\"x\":33,\"z\":16},{\"x\":9,\"z\":16},{\"x\":9,\"z\":-16}],\"buildingHeight\":5.2,\"buildingStories\":1,\"buildingRoof\":\"flat\",\"footprintWidth\":32,\"footprintDepth\":24}],\"facilities\":[{\"kind\":\"depot\",\"x\":21,\"z\":0,\"polygon\":[{\"x\":-5,\"z\":-35},{\"x\":-5,\"z\":35},{\"x\":47,\"z\":35},{\"x\":47,\"z\":-35}],\"premiseSlot\":0}],\"parks\":[]}",
+  "sourceTownId": "town-9472ec73f5115ff1",
+  "sourceBlockId": "BLOCK-03-10",
+  "target": [
+    1235,
+    90,
+    250
+  ],
+  "width": 1536,
+  "height": 1024,
+  "anchors": [
+    {
+      "slot": 1,
+      "id": "P-00523",
+      "address": "77 East Service Road",
+      "buildingType": "depot",
+      "stories": 1,
+      "roof": "flat",
+      "solar": false,
+      "solarKW": 0,
+      "hasPool": false,
+      "width": 32,
+      "depth": 24,
+      "height": 5.2,
+      "front": {
+        "x": 1300,
+        "z": 250
+      },
+      "frontPixel": {
+        "x": 1312.4001150435845,
+        "y": 599.1769627676966
+      },
+      "footprint": [
+        {
+          "x": 1244,
+          "z": 234
+        },
+        {
+          "x": 1244,
+          "z": 266
+        },
+        {
+          "x": 1268,
+          "z": 266
+        },
+        {
+          "x": 1268,
+          "z": 234
+        }
+      ],
+      "parcel": [
+        {
+          "x": 1282,
+          "z": 285
+        },
+        {
+          "x": 1282,
+          "z": 215
+        },
+        {
+          "x": 1230,
+          "z": 215
+        },
+        {
+          "x": 1230,
+          "z": 285
+        }
+      ],
+      "x": 943.8831140910022,
+      "y": 527.4878815583783
+    }
+  ],
+  "placements": 1
+}

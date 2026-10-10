@@ -4,6 +4,14 @@ Use a full clone of `gragedmonds/utiltiysim`, branch `codex/civic-atlas-handoff`
 
 ## Setup and launch
 
+The latest demonstration is **Fairhaven**. After installing dependencies, start it separately:
+
+```sh
+.venv/bin/python prototypes/civic-atlas/server.py --town500 --port 8041 --store out/civic-atlas-town500-v2
+```
+
+Open `http://127.0.0.1:8041/#map` (or `#welcome`). Run `node prototypes/civic-atlas/check-town500.mjs` and `node prototypes/civic-atlas/check-town-template-renderer.mjs` against this server; both default to 8041. Python coverage includes `test_town500_world.py`. [Fairhaven handoff](FAIRHAVEN_500_2026_10_10.md) explains source counts, template reuse and limits. Commands below describe the older Brookfield profile on 8040.
+
 The observed environment used Python 3.11, Node 24 and Chromium. Python requires 3.11 or later. Install `uv` and Node/npm using the normal platform tooling, then:
 
 ```sh
@@ -18,7 +26,7 @@ On Windows use `.venv\Scripts\python.exe`. Open these paths on the loopback serv
 | --- | --- |
 | `http://127.0.0.1:8040/` | Main shell, illustrated reference town |
 | `http://127.0.0.1:8040/#welcome` | Welcome with Account menu and scrolling chapters |
-| `http://127.0.0.1:8040/?art=blocks#map` | Main shell with six experimental illustrated areas |
+| `http://127.0.0.1:8040/?art=blocks#map` | Main shell with nine experimental illustrated areas |
 | `http://127.0.0.1:8040/?art=native#map` | Native-only comparison |
 | `http://127.0.0.1:8040/block-study.html` | Eight-property A/B |
 | `http://127.0.0.1:8040/block-study.html?blocks=2` | Fourteen-property, two-block A/B |
@@ -90,4 +98,4 @@ node prototypes/civic-atlas/check-site-fit.mjs
 ATLAS_ACCESS_BROWSER=1 node prototypes/civic-atlas/check-road-access.mjs
 ```
 
-The main map defaults to six registered areas for the reference world. The separate block-study page still compares its original one/two/three neighborhood areas; use the main map's **Explore a place** control for the new park, school and depot. **City design** presents labeled visual studies; unavailable premise families have no saved-map example button.
+The main map defaults to nine registered areas for the reference world. `node prototypes/civic-atlas/check-residential-samples.mjs` checks its three latest neighborhoods. The separate block-study page still compares its original one/two/three neighborhood areas; use the main map's **Explore a place** control for the new park, school and depot. **City design** presents labeled visual studies; unavailable premise families have no saved-map example button.

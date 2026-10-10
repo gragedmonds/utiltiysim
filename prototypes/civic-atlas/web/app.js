@@ -1,7 +1,7 @@
-import {renderCityDesign,CITY_FAMILIES} from './city-design.js';
+import {renderCityDesign,CITY_FAMILIES,worldProfile,townDestinations} from './city-design.js';
 import {renderOverview} from './overview.js';
 import {AtlasMap} from './map.js';
-import {SCHOOL_BLOCK} from './map-block-plate.js';
+import {SCHOOL_BLOCK,RESIDENTIAL_BLOCKS} from './map-block-plate.js';
 import {propertyPreview} from './map-preview.js';
 const $=id=>document.getElementById(id);
 const esc=value=>String(value??'Not recorded').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -38,7 +38,7 @@ function icons(root=document){root.querySelectorAll('[data-icon]').forEach(el=>e
 let town,state,map,selected,detail,requestVersion=0,page='welcome',busy=false,filter='days';
 let toastTimer,mapImage;
 let stateStale=false;
-const geographyCaption=()=>town?.atlasDesign?'Curated geography · saved physical records':'Generated geography · saved world records';
+const geographyCaption=()=>worldProfile(town,state).caption;
 function toast(message){$('toast').textContent=message;$('toast').classList.add('visible');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').classList.remove('visible'),4500);}
 async function api(path,options){const response=await fetch('/atlas/api/'+path,{...options,headers:{'Content-Type':'application/json',...options?.headers}});const data=await response.json();if(!response.ok)throw Error(typeof data.detail==='string'?data.detail:'The request could not be completed.');return data;}
 function route(next,replace=false){
@@ -63,7 +63,12 @@ function weather(){
 }
 function dayEvents(limit=5){return state.daysHistory.slice(0,limit).map(d=>`<div class="event-row"><span class="event-icon">${icon('check')}</span><div><strong>A physical day completed</strong><p>${fmt(d.observations)} observations recorded · ${fmt(d.temperature)} °C</p></div><small>${shortDay(d.day)}</small></div>`).join('');}
 function refreshViews(){
- $('city-design-page').innerHTML=renderCityDesign(town,{esc});
+ const profile=worldProfile(town,state);
+ $('city-design-page').innerHTML=renderCityDesign(town,{esc,state});
+ document.querySelectorAll('.world-switch strong,.header-world,.saved-world-card h3').forEach(el=>el.textContent=profile.name);
+ document.querySelector('.world-avatar').textContent=profile.name.charAt(0).toUpperCase();
+ document.querySelector('.welcome-resume').innerHTML=`Resume ${esc(profile.name)} <span>→</span>`;
+ document.querySelector('#map-page h1').textContent=profile.name+' · Town map';
  const population=town.premises.filter(p=>p.premiseType==='residential'&&p.occupied).reduce((sum,p)=>sum+(p.occupants||0),0);
  const roadsKm=town.roads.reduce((sum,r)=>sum+r.lengthM,0)/1000;
  $('hero-homes').textContent=fmt(town.homes);$('hero-people').textContent=fmt(population);
@@ -73,7 +78,7 @@ function refreshViews(){
  $('map-next-date').textContent='Next day: '+day(state.through);
  $('global-clock').textContent=stateStale?'State unavailable · last known records':`${busy?'Advancing':state.clockOwner==='local-cruise'?'Cruise control':state.managedDelivery?'Shared clock':'Manual clock'} · saved through ${day(state.lastCompletedDay)}`;
  $('global-clock').classList.toggle('state-stale',stateStale);
- $('saved-world-summary').textContent=`${town.atlasDesign?'Designed reference town':'Generated neighborhoods'} · daily history saved locally`;
+ $('saved-world-summary').textContent=`${profile.label} · daily history saved locally`;
  $('saved-world-date').textContent=day(state.lastCompletedDay);
  $('day-history').innerHTML=state.daysHistory.slice(0,7).reverse().map(d=>`<div class="history-day" title="${esc(d.observations)} observations, ${esc(d.temperature)} °C"><span></span>${shortDay(d.day)}</div>`).join('');
  const advance=`<button class="primary advance-button" ${busy||state.managedDelivery||state.manualAdvanceAllowed===false?'disabled':''}>${icon('play')}${busy?'Simulating…':'Simulate next day'}</button>`;
@@ -81,10 +86,10 @@ function refreshViews(){
  const cfg=town.config?.town||{};
  const assumptionNames={annual_meter_drift:['Annual meter drift',v=>`${fmt(v*100)}% / year`],annual_meter_failure:['Annual meter failure assumption',v=>`${fmt(v*100)}% / year`],daily_weather_spread_c:['Daily weather spread',v=>`${fmt(v)} °C`],summer_mean_c:['Summer mean temperature',v=>`${fmt(v)} °C`],winter_mean_c:['Winter mean temperature',v=>`${fmt(v)} °C`]};
  $('configure-page').innerHTML=heading('CURRENT CONFIGURATION','What makes this world tick.','The saved town and its active daily model, in one place. Configuration is read-only in this first prototype.')+
- `<div class="configuration-state"><span class="status-good">Current · saved</span><span>Read-only inspection</span><span>Map sketches stay separate from active settings</span></div><div class="config-grid"><div class="panel"><h2>Town & geography</h2><p>${town.atlasDesign?'Designed reference town. Utility assets and daily records come from the runtime.':'Generated once, retained across every simulated day.'}</p>${row('Street pattern',town.atlasDesign?'Curated reference layout':'Connected neighborhoods')}${row('Homes / all premises',`${fmt(town.homes)} / ${fmt(town.count)}`)}${row('Road network',`${roadsKm.toFixed(1)} km`)}${row('Terrain relief',`${fmt(cfg.terrain_relief_m)} m`)}${row('Geography',town.atlasDesign?'Fictional · designed reference':'Fictional · seeded generation')}${Array.isArray(town.parks)?row('Saved parks',fmt(town.parks.length)):''}${row(town.atlasDesign?'Model seed':'Seed',esc(town.seed))}<button class="inspector-button" data-page="map">Inspect this geography <span>→</span></button></div><div class="panel"><h2>People & properties</h2><p>Population and homes are distinct model quantities.</p>${row('Residential occupants',fmt(population))}${row('Occupied residential properties',fmt(town.premises.filter(p=>p.premiseType==='residential'&&p.occupied).length))}${row('Nonresidential premises',fmt(town.count-town.homes))}${row('Shops & commercial premises',fmt(town.premises.filter(p=>p.premiseType==='commercial').length))}${row('Community facilities',fmt(town.premises.filter(p=>p.premiseType==='institutional').length))}${row('Model path','Durable Living World')}${row('Runtime model',esc(state.modelVersion))}${row('Clock owner',state.clockOwner==='local-cruise'?'Local cruise control':state.managedDelivery?'Shared runtime':'Local manual control')}<div class="notice">Studio annual replay and staffing settings belong to a separate execution path. They are not controls for this world's clock.</div></div><div class="panel"><h2>Weather & device assumptions</h2><p>Illustrative assumptions, not a calibrated forecast.</p>${Object.entries(state.settings).map(([k,v])=>row(esc(assumptionNames[k]?.[0]||k.replaceAll('_',' ')),assumptionNames[k]?assumptionNames[k][1](v):fmt(v))).join('')}</div><div class="panel"><h2>Room to grow</h2><p>The full product has more domain workflows. These are not yet connected to the Civic Atlas shell.</p>${row('Infrastructure','Faults · risk · water mains')}${row('People','Occupancy · awareness · finances')}${row('Field work','Assignments · visits · reports')}${row('Development','Existing serviced premises')}<div class="notice warning">Road drawing is a planning sketch. Greenfield construction, automatic parcels, new houses, and utility commissioning are future backend work.</div></div></div>`;
+ `<div class="configuration-state"><span class="status-good">Current · saved</span><span>Read-only inspection</span><span>Map sketches stay separate from active settings</span></div><div class="config-grid"><div class="panel"><h2>Town & geography</h2><p>${esc(profile.description)}</p>${row('Street pattern',esc(profile.pattern))}${row('Homes / all premises',`${fmt(town.homes)} / ${fmt(town.count)}`)}${row('Road network',`${roadsKm.toFixed(1)} km`)}${row('Terrain relief',`${fmt(cfg.terrain_relief_m)} m`)}${row('Geography',esc(profile.label))}${Array.isArray(town.parks)?row('Saved parks',fmt(town.parks.length)):''}${row(profile.authored?'Model seed':'Seed',esc(town.seed))}<button class="inspector-button" data-page="map">Inspect this geography <span>→</span></button></div><div class="panel"><h2>People & properties</h2><p>Population and homes are distinct model quantities.</p>${row('Residential occupants',fmt(population))}${row('Occupied residential properties',fmt(town.premises.filter(p=>p.premiseType==='residential'&&p.occupied).length))}${row('Nonresidential premises',fmt(town.count-town.homes))}${row('Shops & commercial premises',fmt(town.premises.filter(p=>p.premiseType==='commercial').length))}${row('Community facilities',fmt(town.premises.filter(p=>p.premiseType==='institutional').length))}${row('Industrial premises',fmt(town.premises.filter(p=>p.buildingType==='industrial').length))}${row('Model path','Durable Living World')}${row('Runtime model',esc(state.modelVersion))}${row('Clock owner',state.clockOwner==='local-cruise'?'Local cruise control':state.managedDelivery?'Shared runtime':'Local manual control')}<div class="notice">Studio annual replay and staffing settings belong to a separate execution path. They are not controls for this world's clock.</div></div><div class="panel"><h2>Weather & device assumptions</h2><p>Illustrative assumptions, not a calibrated forecast.</p>${Object.entries(state.settings).map(([k,v])=>row(esc(assumptionNames[k]?.[0]||k.replaceAll('_',' ')),assumptionNames[k]?assumptionNames[k][1](v):fmt(v))).join('')}</div><div class="panel"><h2>Room to grow</h2><p>The full product has more domain workflows. These are not yet connected to the Civic Atlas shell.</p>${row('Infrastructure','Faults · risk · water mains')}${row('People','Occupancy · awareness · finances')}${row('Field work','Assignments · visits · reports')}${row('Development','Existing serviced premises')}<div class="notice warning">Road drawing is a planning sketch. Greenfield construction, automatic parcels, new houses, and utility commissioning are future backend work.</div></div></div>`;
  renderActivity();
  const connections=[['Virtual Systems','Operational consumers learn through observations and authorized evidence.'],['Utility Billing One','Billing workflows within the intended connected ecosystem.'],['M2C App Data Agent','The intended data handoff to downstream analysis.'],['M2C Celonis App','Process analysis within the wider ecosystem.'],['UCascade','A separate application in the intended operational loop.'],['M2C_SEW · Portlet','A navigation entry to connected applications.']];
- $('connections-page').innerHTML=heading('THE CONNECTED ECOSYSTEM','One world. Different responsibilities.','Explore the intended application landscape. No live external integrations are configured in this prototype.')+`<div class="ecosystem-flow panel"><div class="flow-title"><span class="eyebrow">INTENDED DATA EXCHANGE</span><span class="pill">Architecture · not live status</span></div><div class="flow-track"><span>Virtual Systems</span><b>→</b><span>Utility Billing One</span><b>→</b><span>M2C App Data Agent</span><b>→</b><span>M2C Celonis App</span><b>→</b><span>UCascade</span></div><p>Virtual Systems also feeds the M2C App Data Agent. UCascade feeds back to Utility Billing One. M2C_SEW · Portlet provides navigation to M2C Celonis App and UCascade.</p></div><div class="connection-grid">${connections.map(([name,desc],i)=>`<div class="connection-card"><span class="connection-symbol">${icon(i===0?'connections':i===1?'overview':'activity')}</span><h2>${name}</h2><p>${desc}</p><span class="pill">○ Not configured</span></div>`).join('')}</div><h2 class="section-title">Follow the evidence, not just the connection.</h2><div class="panel"><p>Physical event → available observation → submitted message → transport receipt → recipient processing. Each stage needs its own evidence and effective time.</p><div class="notice">${fmt(state.observations)} observations are stored in Brookfield. A saved observation does not imply that an operational system has received or processed it.</div></div>`;
+ $('connections-page').innerHTML=heading('THE CONNECTED ECOSYSTEM','One world. Different responsibilities.','Explore the intended application landscape. No live external integrations are configured in this prototype.')+`<div class="ecosystem-flow panel"><div class="flow-title"><span class="eyebrow">INTENDED DATA EXCHANGE</span><span class="pill">Architecture · not live status</span></div><div class="flow-track"><span>Virtual Systems</span><b>→</b><span>Utility Billing One</span><b>→</b><span>M2C App Data Agent</span><b>→</b><span>M2C Celonis App</span><b>→</b><span>UCascade</span></div><p>Virtual Systems also feeds the M2C App Data Agent. UCascade feeds back to Utility Billing One. M2C_SEW · Portlet provides navigation to M2C Celonis App and UCascade.</p></div><div class="connection-grid">${connections.map(([name,desc],i)=>`<div class="connection-card"><span class="connection-symbol">${icon(i===0?'connections':i===1?'overview':'activity')}</span><h2>${name}</h2><p>${desc}</p><span class="pill">○ Not configured</span></div>`).join('')}</div><h2 class="section-title">Follow the evidence, not just the connection.</h2><div class="panel"><p>Physical event → available observation → submitted message → transport receipt → recipient processing. Each stage needs its own evidence and effective time.</p><div class="notice">${fmt(state.observations)} observations are stored in ${esc(profile.name)}. A saved observation does not imply that an operational system has received or processed it.</div></div>`;
  document.querySelectorAll('.advance-button').forEach(b=>{b.disabled=busy||state.managedDelivery||state.manualAdvanceAllowed===false;b.title=state.manualAdvanceAllowed===false?(state.clockReason||'The runtime controls this clock.'):`Commit the physical day ${day(state.through)}`;b.innerHTML=icon('play')+(busy?'Simulating…':'Simulate next day');});
  icons();
 }
@@ -121,7 +126,7 @@ async function selectProperty(home,focus=false){
 }
 function renderProperty(utility){
  if(!detail)return;utility??=(map.layer==='town'?'water':map.layer);const a=detail.assets.find(a=>a.commodity===utility),p=detail.premise;
- $('inspector-content').innerHTML=`<div class="inspector-head has-selection"><div style="display:flex;justify-content:space-between;align-items:center"><span class="eyebrow">PROPERTY RECORD</span><button id="close-inspector" aria-label="Clear property selection">×</button></div><div class="property-identity"><div id="selected-property-preview" class="property-preview" title="Schematic fallback while the saved-property preview loads">${propertySchematic(selected)}<span class="schematic-label">SCHEMATIC</span></div><div><h2>${esc(p.address)}</h2><p class="property-character">${esc(selected.buildingType.replaceAll('_',' '))} · ${esc(selected.premiseType)}</p></div></div><div class="property-state"><span class="pill">${p.occupied?'Occupied':'Vacant'}</span><span>${selected.premiseType==='residential'?`${fmt(p.occupants)} ${p.occupants===1?'resident':'residents'}`:'Nonresidential property'}</span></div></div><div class="asset-tabs">${['water','electric','gas'].map(u=>`<button data-asset="${u}" class="${u===utility?'active':''}">${u==='electric'?'Electric':u[0].toUpperCase()+u.slice(1)}</button>`).join('')}</div><div class="inspector-section"><h3>${icon(utility)}${utility==='electric'?'Electricity':utility[0].toUpperCase()+utility.slice(1)} service</h3>${a?`<div class="data-row"><span>Device condition</span><span class="${a.condition==='healthy'?'status-good':'status-warn'}">${esc(a.condition)}</span></div><span class="eyebrow" style="font-size:8px;margin-top:19px">RECORDED DAILY USE</span><div class="reading-value">${fmt(a.observed_quantity)} <small>${unit(a.unit)}</small></div><p class="inspector-note">${day(detail.lastCompletedDay)} · ${esc(a.observed_status||'No observation')}</p>${row('Physical use',`${fmt(a.true_quantity)} ${unit(a.unit)}`)}${row('Meter',esc(a.id))}${row('Installed',esc(a.installed))}`:'<p class="inspector-note">No physical meter is recorded for this service.</p>'}</div><div class="inspector-section"><h3>${icon(selected.premiseType==='residential'?'home':'overview')}Physical property</h3>${row('Occupancy',p.occupied?'Occupied':'Vacant')}${selected.premiseType==='residential'?row('Residents',fmt(p.occupants)):row('Property use',esc(selected.premiseType))}${row('Floor area',`${fmt(p.floorAreaM2)} m²`)}${row('Built',esc(selected.yearBuilt))}${row('Property reference',esc(p.id))}<button class="inspector-button" id="property-history">See world activity <span>→</span></button></div><div class="inspector-section"><p class="inspector-note">Administrator physical truth · live flow and pressure measurements are not provided here. <span id="property-preview-note">Schematic shown while the saved-property preview loads.</span></p></div>`;
+ $('inspector-content').innerHTML=`<div class="inspector-head has-selection"><div style="display:flex;justify-content:space-between;align-items:center"><span class="eyebrow">PROPERTY RECORD</span><button id="close-inspector" aria-label="Clear property selection">×</button></div><div class="property-identity"><div id="selected-property-preview" class="property-preview" title="Schematic fallback while the saved-property preview loads">${propertySchematic(selected)}<span class="schematic-label">SCHEMATIC</span></div><div><h2>${esc(p.address)}</h2><p class="property-character">${esc(selected.buildingType.replaceAll('_',' '))} · ${esc(selected.premiseType)}</p></div></div><div class="property-state"><span class="pill">${p.occupied?'Occupied':'Vacant'}</span><span>${selected.premiseType==='residential'?`${fmt(p.occupants)} ${p.occupants===1?'resident':'residents'}`:'Nonresidential property'}</span></div></div><div class="asset-tabs">${['water','electric','gas'].map(u=>`<button data-asset="${u}" class="${u===utility?'active':''}">${u==='electric'?'Electric':u[0].toUpperCase()+u.slice(1)}</button>`).join('')}</div><div class="inspector-section"><h3>${icon(utility)}${utility==='electric'?'Electricity':utility[0].toUpperCase()+utility.slice(1)} service</h3>${a?`<div class="data-row"><span>Device condition</span><span class="${a.condition==='healthy'?'status-good':'status-warn'}">${esc(a.condition)}</span></div><span class="eyebrow" style="font-size:8px;margin-top:19px">RECORDED DAILY USE</span><div class="reading-value">${fmt(a.observed_quantity)} <small>${unit(a.unit)}</small></div><p class="inspector-note">${day(detail.lastCompletedDay)} · ${esc(a.observed_status||'No observation')}</p>${row('Physical use',`${fmt(a.true_quantity)} ${unit(a.unit)}`)}${row('Meter',esc(a.id))}${row('Installed',esc(a.installed))}`:'<p class="inspector-note">No physical meter is recorded for this service.</p>'}</div><div class="inspector-section"><h3>${icon(selected.premiseType==='residential'?'home':'overview')}Physical property</h3>${row('Occupancy',p.occupied?'Occupied':'Vacant')}${selected.premiseType==='residential'?row('Residents',fmt(p.occupants)):row('Property use',esc(selected.premiseType))}${row('Floor area',`${fmt(p.floorAreaM2)} m²`)}${row('Built',esc(selected.yearBuilt))}${row('Property reference',esc(p.id))}${selected.buildingType==='church'&&town.atlasDesign?.churchDemandModel?`<p class="inspector-note">${esc(town.atlasDesign.churchDemandModel)}</p>`:''}<button class="inspector-button" id="property-history">See world activity <span>→</span></button></div><div class="inspector-section"><p class="inspector-note">Administrator physical truth · live flow and pressure measurements are not provided here. <span id="property-preview-note">Schematic shown while the saved-property preview loads.</span></p></div>`;
  loadPropertyPreview(selected);
 }
 async function loadPropertyPreview(home){
@@ -156,12 +161,23 @@ function sketchChanged(draft,drawing){
  $('undo-sketch').disabled=!draft.points.length;$('clear-sketch').disabled=!draft.points.length;$('export-sketch').disabled=draft.points.length<2;
 }
 function visitPlace(id){
- if(id==='school-block'&&town.atlasDesign&&SCHOOL_BLOCK.ids.every(id=>town.premises.some(p=>p.id===id))){
+ const destination=townDestinations(town).find(p=>p.id===id);
+ if(destination){
+  route('map');map.setDrawing(false);
+  if(destination.home){selectProperty(destination.home,true);return;}
+  ++requestVersion;selected=null;detail=null;map.clearSelection();emptyInspector();
+  const xs=destination.area.polygon.map(p=>p.x),zs=destination.area.polygon.map(p=>p.z);
+  map.focus({x:(Math.min(...xs)+Math.max(...xs))/2,z:(Math.min(...zs)+Math.max(...zs))/2,width:Math.max(...xs)-Math.min(...xs),depth:Math.max(...zs)-Math.min(...zs)},true);
+  $('legend-text').textContent=destination.name+' · '+destination.note;
+  return;
+ }
+ const block=id==='school-block'?{...SCHOOL_BLOCK,label:'School neighborhood'}:RESIDENTIAL_BLOCKS.find(b=>b.id===id);
+ if(block&&worldProfile(town,state).reference&&block.ids.every(id=>town.premises.some(p=>p.id===id))){
   route('map');map.setDrawing(false);++requestVersion;selected=null;detail=null;
   map.clearSelection();emptyInspector();
-  const xs=SCHOOL_BLOCK.polygon.map(p=>p.x),zs=SCHOOL_BLOCK.polygon.map(p=>p.z);
-  map.focus({...SCHOOL_BLOCK.center,width:Math.max(...xs)-Math.min(...xs),depth:Math.max(...zs)-Math.min(...zs)},true);
-  $('legend-text').textContent='School neighborhood · 3 saved properties';return;
+  const xs=block.polygon.map(p=>p.x),zs=block.polygon.map(p=>p.z);
+  map.focus({...block.center,width:Math.max(...xs)-Math.min(...xs),depth:Math.max(...zs)-Math.min(...zs)},true);
+  $('legend-text').textContent=block.label+' · '+block.ids.length+' saved properties';return;
  }
  const family=CITY_FAMILIES.find(f=>f.id===id);
  const home=id==='depot'?town.premises.find(p=>p.buildingType==='depot'):family?.match?town.premises.find(family.match):null;
@@ -177,7 +193,18 @@ function visitPlace(id){
 function bind(){
  const places=CITY_FAMILIES.filter(f=>f.match?town.premises.some(f.match):town.atlasDesign?.parks?.some(p=>p.kind===f.park));
  $('place-tour').innerHTML='<option value="">Choose a destination…</option>'+places.map(f=>`<option value="${f.id}">${esc(f.park?town.atlasDesign.parks.find(p=>p.kind===f.park).name:f.tag)}</option>`).join('')+(town.premises.some(p=>p.buildingType==='depot')?'<option value="depot">Utility operations depot</option>':'');
- if(town.atlasDesign&&SCHOOL_BLOCK.ids.every(id=>town.premises.some(p=>p.id===id)))$('place-tour').add(new Option('School neighborhood · whole block','school-block'));
+ if(worldProfile(town,state).reference&&SCHOOL_BLOCK.ids.every(id=>town.premises.some(p=>p.id===id)))$('place-tour').add(new Option('School neighborhood · whole block','school-block'));
+ if(worldProfile(town,state).reference){
+  const samples=document.createElement('optgroup');samples.label='Residential block samples';
+  for(const block of RESIDENTIAL_BLOCKS)if(block.ids.every(id=>town.premises.some(p=>p.id===id)))samples.append(new Option(block.label,block.id));
+  if(samples.children.length)$('place-tour').append(samples);
+ }
+ const destinations=townDestinations(town);
+ for(const group of new Set(destinations.map(p=>p.group))){
+  const options=document.createElement('optgroup');options.label=group;
+  for(const place of destinations.filter(p=>p.group===group))options.append(new Option(place.name,place.id));
+  $('place-tour').append(options);
+ }
  $('place-tour').onchange=e=>{visitPlace(e.target.value);e.target.value='';};
  const artStatus=$('map-art-status'),canvasHost=$('map-canvas');
  const updateArtStatus=()=>{
@@ -219,10 +246,10 @@ function bind(){
  $('find-selection').onclick=()=>selected?map.focus(selected,true):toast('Select a property first, or search for an address.');
  $('undo-sketch').onclick=()=>{map.points.pop();map.updateDraft();};$('clear-sketch').onclick=()=>{map.points=[];map.updateDraft();};
  $('frontage').onchange=e=>{map.frontage=e.target.checked;map.updateDraft();};
- $('export-sketch').onclick=()=>{const blob=new Blob([JSON.stringify(map.draft(),null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='brookfield-road-sketch.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('Planning draft exported. No simulation records changed.');};
+ $('export-sketch').onclick=()=>{const blob=new Blob([JSON.stringify(map.draft(),null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=worldProfile(town,state).name.toLowerCase().replace(/[^a-z0-9]+/g,'-')+'-road-sketch.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('Planning draft exported. No simulation records changed.');};
  $('map-search').oninput=e=>{
   const q=e.target.value.trim().toLowerCase();$('search-results').hidden=!q;$('map-search').setAttribute('aria-expanded',String(Boolean(q)));
-  const matches=town.premises.filter(p=>(p.address+' '+p.id).toLowerCase().includes(q)).slice(0,12);
+  const matches=town.premises.filter(p=>[p.address,p.id,p.name,p.buildingType?.replaceAll('_',' '),p.premiseType].filter(Boolean).join(' ').toLowerCase().includes(q)).slice(0,12);
   $('search-results').innerHTML=matches.length?matches.map(p=>`<button data-property="${esc(p.id)}"><span>${esc(p.address)}</span><small>${esc(p.premiseType)}</small></button>`).join(''):'<p>No properties match that search.</p>';
  };
  $('map-search').onkeydown=e=>{if(e.key==='Enter')$('search-results').querySelector('button')?.click();if(e.key==='Escape')$('search-results').hidden=true;if(e.key==='ArrowDown'){$('search-results').querySelector('button')?.focus();e.preventDefault();}};
@@ -241,15 +268,16 @@ async function boot(){
  try{
   const data=await api('bootstrap');town=data.snapshot;state=data.state;
   $('app').hidden=false;$('welcome-page').hidden=true;$('map-page').hidden=false;
-  map=new AtlasMap($('map-canvas'),town,{onSelect:selectProperty,onSketch:sketchChanged,notify:toast,initialView:town.atlasDesign?{x:65,z:-65,viewHeightM:245}:undefined,art:new URLSearchParams(location.search).get('art')||(town.atlasDesign?'blocks':'native')});
+  map=new AtlasMap($('map-canvas'),town,{onSelect:selectProperty,onSketch:sketchChanged,notify:toast,initialView:worldProfile(town,state).initialView,art:new URLSearchParams(location.search).get('art')||worldProfile(town,state).defaultArt});
   await map.visualReady;
   await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
   mapImage=map.capture();
   emptyInspector();refreshViews();bind();
   $('boot').hidden=true;route(location.hash.slice(1)||'welcome',true);
+  const place=new URLSearchParams(location.search).get('place');if(place&&location.hash==='#map')visitPlace(place);
   document.body.dataset.ready='true';
   // Read-only diagnostics for repeatable browser acceptance checks.
-  window.atlasDiagnostics=()=>({townId:town.id,grass:map.grassArt,artwork:{enabled:Boolean(map.blockArtStats?.enabled),count:map.blockArtStats?.count||0,areas:map.blockPlates?.map(p=>({...p.stats}))||[]},selectedId:selected?.id,through:state.through,drawing:map.drawing,draft:map.draft(),camera:map.scene.camera.position.toArray(),target:map.scene.controls.target.toArray(),projection:map.scene.camera.isOrthographicCamera?'orthographic':'perspective',cameraZoom:map.scene.camera.zoom,frustum:map.scene.camera.isOrthographicCamera?[map.scene.camera.left,map.scene.camera.right,map.scene.camera.top,map.scene.camera.bottom]:null,renderer:map.scene.performanceState()});
+  window.atlasDiagnostics=()=>({townId:town.id,grass:map.grassArt,artwork:{enabled:Boolean(map.blockArtStats?.enabled),count:map.blockArtStats?.count||0,totalBlocks:map.blockArtStats?.totalBlocks,readyCount:map.blockArtStats?.readyCount,fallbackCount:map.blockArtStats?.fallbackCount,textureCount:map.blockArtStats?.textureCount,templates:map.blockArtStats?.templates?.map(t=>({...t}))||[],rejected:map.blockArtStats?.rejected?.map(r=>({...r}))||[],areas:map.blockPlates?.map(p=>({...p.stats}))||[]},selectedId:selected?.id,through:state.through,drawing:map.drawing,draft:map.draft(),camera:map.scene.camera.position.toArray(),target:map.scene.controls.target.toArray(),projection:map.scene.camera.isOrthographicCamera?'orthographic':'perspective',cameraZoom:map.scene.camera.zoom,frustum:map.scene.camera.isOrthographicCamera?[map.scene.camera.left,map.scene.camera.right,map.scene.camera.top,map.scene.camera.bottom]:null,renderer:map.scene.performanceState()});
  }catch(error){$('app').hidden=true;$('boot-message').textContent='The world could not open: '+error.message;$('retry').hidden=false;console.error(error);}
 }
 boot();

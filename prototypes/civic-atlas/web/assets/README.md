@@ -32,3 +32,24 @@ Use the original user reference as the art target. A detailed asset is not autom
 The commercial image and welcome art were manually generated with the session image tool. These files do not implement the proposed offline pack-generation pipeline. The commercial sample includes decorative pedestrian frontage inside its mask; separating all sidewalk/stateful equipment layers remains part of production design work.
 
 The school image now covers its complete street-bounded block, including P-00101 and P-00102 alongside P-00133. Final source: `exec-d178d02f-9f24-4845-a9d1-2026a5edcd86.png`; 1536 × 1024, 190 m view height. The guide includes source parcel outlines. The unsupported playground was removed after containment review; planting outside individual parcels is decorative. See [whole-block findings and provenance](../../handoff/WHOLE_BLOCK_2026_10_10.md).
+
+## Fairhaven template assets
+
+All twelve `civic-template-*.png` files were manually generated with the image tool from exact-camera source guides on 10 October 2026. Each is copied unchanged from the final generation; its companion JSON contains normalized source registration. The Orchard residential sample supplied the shared style reference. Source generation filenames are provenance, not runtime dependencies.
+
+| Template | Final generation |
+| --- | --- |
+| garden-cottages | exec-764cad99-1f58-4e76-9334-5dfff72194c7.png |
+| mixed-porches | exec-77f8163a-28eb-4131-b6c5-ae65ee4a2444.png |
+| solar-gardens | exec-1975b2cb-1b6b-416c-8166-946a2fa1c440.png |
+| courtyard-homes | exec-0c31d43b-d058-4997-a022-2321619b697b.png |
+| community-church | exec-f2bf8918-8856-4152-a16a-ab6131059a63.png |
+| primary-school | exec-3c2bc525-cd3b-47d1-bc56-9756d19f6e9d.png |
+| east-workshops | exec-774cc598-2704-426c-978e-570005d436eb.png |
+| service-depot | exec-0a2d274b-cdc6-4303-addc-4ec0e6d1b7d5.png |
+| mainstreet-north-five | exec-e1c7f18b-b91a-447a-9381-90c24d940d77.png |
+| mainstreet-north-five-square | exec-4626b403-e23d-4410-ab64-8eb3f84d0cec.png |
+| mainstreet-south-five-square | exec-4779b673-0392-4a3c-891f-cea71af8db84.png |
+| mainstreet-south-five-tower | exec-97e21ef2-aa05-4aad-bb97-44ae32df6245.png |
+
+All images are 1536 × 1024 at a fixed 120 m view height. Runtime masks to the registered block and preserves source picking. The shared texture is reused only at matching physical translations. Church and southern commercial fronts received a corrective pass to follow their source frontage. Painted site access, vegetation and vehicles remain decorative. See [Fairhaven findings](../../handoff/FAIRHAVEN_500_2026_10_10.md).

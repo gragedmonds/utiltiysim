@@ -8,6 +8,14 @@ A desktop prototype of the Civic Atlas direction for UtilitySim v2. It combines 
 
 ## Run
 
+For the latest **interactive 500-home Fairhaven demonstration**, use the same dependencies below and run:
+
+```sh
+.venv/bin/python prototypes/civic-atlas/server.py --town500 --port 8041 --store out/civic-atlas-town500-v2
+```
+
+Open `http://127.0.0.1:8041/#map`. This separate authored town has 525 source properties, 58 illustrated blocks, schools/civic/retail/light-industry sites, shared greens and seven descriptive fields. See [Fairhaven findings and limits](handoff/FAIRHAVEN_500_2026_10_10.md). The older reference profile below remains available separately.
+
 From the repository root, after the repository's Python dependencies and viewer assets are installed:
 
 ```bash

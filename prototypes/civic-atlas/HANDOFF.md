@@ -1,14 +1,16 @@
 # Civic Atlas / UtilitySim v2 — start here
 
+**Moving to another machine or chat? Read [START_ELSEWHERE.md](START_ELSEWHERE.md)** for a self-contained setup guide, current state, known gaps and a ready-to-paste continuation prompt.
+
 Handoff date: **10 October 2026**. Status: **incomplete exploration; visual and product target not achieved**.
 
 The owner likes the redesigned welcome and the new city-family concept art, but explicitly requires that quality in the working map. Grass consistency, realistic streets/access, site fit and wider building variety remain review priorities. This is **not** owner approval of whole-town visual parity or readiness to ship. Earlier scoped agent checks do not substitute for that acceptance.
 
 ## Continued implementation
 
-Latest: [whole-school-block continuation](handoff/WHOLE_BLOCK_2026_10_10.md). The owner accepts block regeneration after physical edits. The running map now includes the school and its two neighboring homes in one continuous street-bounded illustration, with individual source inspection preserved.
+Latest: [Fairhaven interactive 500-home town](handoff/FAIRHAVEN_500_2026_10_10.md), with twelve registered images across 58 blocks, real utility records, civic/commercial sites, light industry, shared greens and surrounding fields. Run the separate `--town500` profile on 8041. Brookfield on 8040 retains [three additional residential samples](handoff/RESIDENTIAL_SAMPLES_2026_10_10.md), for nine illustrated areas in that older world. The owner accepts block regeneration after physical edits.
 
-Work resumed after this handoff. Start with [city places and shared grass](handoff/CITY_PLACES_2026_10_10.md), [welcome account/scroll narrative](handoff/WELCOME_ITERATION_2026_10_10.md), [roads and site review](handoff/ROAD_AND_SITE_REVIEW.md), and [visual review](handoff/VISUAL_REVIEW_CITY_PLACES.md). The main map now includes six illustrated areas. [The earlier continuation](handoff/ITERATION_2026_10_10.md) preserves the Claude proposal review and previous three-area baseline. The owner has not signed off on the overall result.
+Earlier stages: [whole school block](handoff/WHOLE_BLOCK_2026_10_10.md), [city places and shared grass](handoff/CITY_PLACES_2026_10_10.md), [welcome account/scroll narrative](handoff/WELCOME_ITERATION_2026_10_10.md), and [roads and site review](handoff/ROAD_AND_SITE_REVIEW.md). [The earlier continuation](handoff/ITERATION_2026_10_10.md) preserves the Claude proposal review and previous three-area baseline. The owner has not signed off on the overall result.
 
 ## What is in this folder
 
@@ -37,10 +39,10 @@ The map must present the engine's world faithfully. Decorative trees, gardens an
 
 | Area | Current evidence | Major missing work |
 | --- | --- | --- |
-| Geography | Authored Brookfield fixture: 120 homes, 292 residents, 135 premises, 388 meters, 3 parks | Realistic procedural layout and editing; larger settlement validation |
+| Geography | Separate authored fixtures: Brookfield 120 homes; Fairhaven 500 homes, 1,185 occupied residents, 525 premises, 4 parks, 7 descriptive fields | Organic procedural layout and editing; varied lots and rural transitions |
 | Map | Fixed orthographic camera, pan/zoom, search, source property picking, topology layers | Whole-town reference-quality composition, production performance and accessibility review |
 | Individual art | Calibrated house/shop sprites, foliage, ground materials, geometric fallbacks | Consistent richness across all building types and landscape; fewer conspicuous repeated forms |
-| Whole-block art | Six manually generated areas, including residential/commercial blocks and a school block with two homes; same-world A/B | Automatic constrained generation, more land uses, close-view resolution, occlusion and regeneration lifecycle |
+| Whole-block art | Brookfield nine areas; Fairhaven twelve shared images across 58 strictly registered placements; local native fallback and same-world A/B | Automatic constrained generation, less repetition, close-view resolution, depth and replacement workflow |
 | Shell | Welcome, Overview, Configure, Activity, Town map, Connections; current property records | Complete creation/configuration/editing and operational workflows; page-by-page capability reconciliation |
 | Simulation | Real durable SQLite world and daily observations; guarded next-day advancement | Full newer capability inventory integrated into this shell |
 | Road editing | Browser-only draft, snapping aids, frontage preview and JSON export | Validated engine mutations and affected-world/art regeneration |
@@ -61,6 +63,7 @@ The map must present the engine's world faithfully. Decorative trees, gardens an
 | --- | --- |
 | `server.py` | Local FastAPI adapter over the real durable world; bootstrap, property records, guarded advance |
 | `reference_world.py` | Authored source town fixture and actual simulation initialization inputs |
+| `town500_world.py`, `web/map-town-plates.js` | Fairhaven source plan and normalized shared-template rendering with per-placement fallback |
 | `web/app.js`, `web/style.css`, `web/index.html` | Application shell, pages and record inspector |
 | `web/map.js` | Camera, map composition, input, selection, topology and draft interactions |
 | `web/map-buildings.js`, `web/map-building-sprites.js` | Native architecture and eligible painted replacements |
@@ -76,4 +79,4 @@ The map must present the engine's world faithfully. Decorative trees, gardens an
 
 ## Chosen direction and remaining proof
 
-The owner has chosen whole-block composition and explicitly accepts regenerating affected blocks when buildings or roads change. Keep native geometry as the temporary fallback and utility conditions as separate overlays. The school experiment now covers its full street-bounded block with two neighboring homes; see [whole-block continuation](handoff/WHOLE_BLOCK_2026_10_10.md). Automatic generation, per-block invalidation, depth and city-scale resolution/performance remain unproven. The user requests evaluation in the live application, not standalone generated images.
+The owner has chosen whole-block composition and explicitly accepts regenerating affected blocks when buildings or roads change. Keep native geometry as the temporary fallback and utility conditions as separate overlays. Fairhaven now demonstrates shared whole-block illustration at 500 homes, strict physical mismatch fallback and real property interaction. Automatic generation, production editing, depth and larger-city performance remain unproven. The user requests evaluation in the live application, not standalone generated images.

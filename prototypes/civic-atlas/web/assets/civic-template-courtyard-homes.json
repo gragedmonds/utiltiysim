@@ -1,0 +1,648 @@
+{
+  "schemaVersion": "civic-atlas-town-template/1",
+  "templateId": "courtyard-homes",
+  "cameraDirection": [
+    0.10942489340428357,
+    0.8206867005321268,
+    0.5608025786969533
+  ],
+  "frame": {
+    "center": {
+      "x": 0,
+      "z": 0
+    },
+    "viewHeight": 120,
+    "aspect": 1.5
+  },
+  "polygon": [
+    {
+      "x": 55,
+      "z": 40
+    },
+    {
+      "x": 55,
+      "z": -40
+    },
+    {
+      "x": -55,
+      "z": -40
+    },
+    {
+      "x": -55,
+      "z": 40
+    }
+  ],
+  "signature": "{\"schema\":\"civic-atlas-town-template/1\",\"templateId\":\"courtyard-homes\",\"polygon\":[{\"x\":-55,\"z\":-40},{\"x\":-55,\"z\":40},{\"x\":55,\"z\":40},{\"x\":55,\"z\":-40}],\"surface\":[90,90,90,90,90,90,90,90,90,90,90,90,90,90,90,90,90,90,90,90,90,90,90,90,90],\"slots\":[{\"slot\":0,\"x\":-44,\"z\":-26,\"width\":14,\"depth\":10,\"height\":3.7,\"elevationM\":90,\"stories\":1,\"angle\":0,\"side\":1,\"roof\":\"hip\",\"roofTone\":0.22,\"solar\":false,\"solarKW\":0,\"solarPeakKW\":0,\"hasPool\":false,\"poolPolygon\":null,\"family\":\"cottage\",\"buildingType\":\"detached\",\"premiseType\":\"residential\",\"front\":{\"x\":-44,\"z\":-50},\"parcel\":[{\"x\":-33.5,\"z\":-38},{\"x\":-33.5,\"z\":-6},{\"x\":-54.5,\"z\":-6},{\"x\":-54.5,\"z\":-38}],\"footprint\":[{\"x\":-37,\"z\":-21},{\"x\":-37,\"z\":-31},{\"x\":-51,\"z\":-31},{\"x\":-51,\"z\":-21}],\"buildingHeight\":3.7,\"buildingStories\":1,\"buildingRoof\":\"hip\",\"footprintWidth\":14,\"footprintDepth\":10},{\"slot\":1,\"x\":-22,\"z\":-26,\"width\":12,\"depth\":9,\"height\":6.3,\"elevationM\":90,\"stories\":2,\"angle\":0,\"side\":1,\"roof\":\"gable\",\"roofTone\":0.34,\"solar\":false,\"solarKW\":0,\"solarPeakKW\":0,\"hasPool\":false,\"poolPolygon\":null,\"family\":\"craftsman\",\"buildingType\":\"detached\",\"premiseType\":\"residential\",\"front\":{\"x\":-22,\"z\":-50},\"parcel\":[{\"x\":-11.5,\"z\":-38},{\"x\":-11.5,\"z\":-6},{\"x\":-32.5,\"z\":-6},{\"x\":-32.5,\"z\":-38}],\"footprint\":[{\"x\":-16,\"z\":-21.5},{\"x\":-16,\"z\":-30.5},{\"x\":-28,\"z\":-30.5},{\"x\":-28,\"z\":-21.5}],\"buildingHeight\":6.3,\"buildingStories\":2,\"buildingRoof\":\"gable\",\"footprintWidth\":12,\"footprintDepth\":9},{\"slot\":2,\"x\":0,\"z\":-26,\"width\":12,\"depth\":10,\"height\":6.3,\"elevationM\":90,\"stories\":2,\"angle\":0,\"side\":1,\"roof\":\"gable\",\"roofTone\":0.46,\"solar\":false,\"solarKW\":0,\"solarPeakKW\":0,\"hasPool\":true,\"poolPolygon\":[{\"x\":-2,\"z\":-11},{\"x\":-2,\"z\":-17},{\"x\":2,\"z\":-17},{\"x\":2,\"z\":-11}],\"family\":\"craftsman\",\"buildingType\":\"detached\",\"premiseType\":\"residential\",\"front\":{\"x\":0,\"z\":-50},\"parcel\":[{\"x\":-10.5,\"z\":-38},{\"x\":-10.5,\"z\":-6},{\"x\":10.5,\"z\":-6},{\"x\":10.5,\"z\":-38}],\"footprint\":[{\"x\":-6,\"z\":-21},{\"x\":-6,\"z\":-31},{\"x\":6,\"z\":-31},{\"x\":6,\"z\":-21}],\"buildingHeight\":6.3,\"buildingStories\":2,\"buildingRoof\":\"gable\",\"footprintWidth\":12,\"footprintDepth\":10},{\"slot\":3,\"x\":22,\"z\":-26,\"width\":13,\"depth\":9,\"height\":3.7,\"elevationM\":90,\"stories\":1,\"angle\":0,\"side\":1,\"roof\":\"hip\",\"roofTone\":0.58,\"solar\":false,\"solarKW\":0,\"solarPeakKW\":0,\"hasPool\":false,\"poolPolygon\":null,\"family\":\"cottage\",\"buildingType\":\"detached\",\"premiseType\":\"residential\",\"front\":{\"x\":22,\"z\":-50},\"parcel\":[{\"x\":11.5,\"z\":-38},{\"x\":11.5,\"z\":-6},{\"x\":32.5,\"z\":-6},{\"x\":32.5,\"z\":-38}],\"footprint\":[{\"x\":15.5,\"z\":-21.5},{\"x\":15.5,\"z\":-30.5},{\"x\":28.5,\"z\":-30.5},{\"x\":28.5,\"z\":-21.5}],\"buildingHeight\":3.7,\"buildingStories\":1,\"buildingRoof\":\"hip\",\"footprintWidth\":13,\"footprintDepth\":9},{\"slot\":4,\"x\":44,\"z\":-26,\"width\":11,\"depth\":11,\"height\":6.3,\"elevationM\":90,\"stories\":2,\"angle\":0,\"side\":1,\"roof\":\"gable\",\"roofTone\":0.22,\"solar\":false,\"solarKW\":0,\"solarPeakKW\":0,\"hasPool\":false,\"poolPolygon\":null,\"family\":\"craftsman\",\"buildingType\":\"detached\",\"premiseType\":\"residential\",\"front\":{\"x\":44,\"z\":-50},\"parcel\":[{\"x\":33.5,\"z\":-38},{\"x\":33.5,\"z\":-6},{\"x\":54.5,\"z\":-6},{\"x\":54.5,\"z\":-38}],\"footprint\":[{\"x\":38.5,\"z\":-20.5},{\"x\":38.5,\"z\":-31.5},{\"x\":49.5,\"z\":-31.5},{\"x\":49.5,\"z\":-20.5}],\"buildingHeight\":6.3,\"buildingStories\":2,\"buildingRoof\":\"gable\",\"footprintWidth\":11,\"footprintDepth\":11},{\"slot\":5,\"x\":-44,\"z\":26,\"width\":14,\"depth\":10,\"height\":6.3,\"elevationM\":90,\"stories\":2,\"angle\":0,\"side\":-1,\"roof\":\"gable\",\"roofTone\":0.34,\"solar\":false,\"solarKW\":0,\"solarPeakKW\":0,\"hasPool\":false,\"poolPolygon\":null,\"family\":\"craftsman\",\"buildingType\":\"detached\",\"premiseType\":\"residential\",\"front\":{\"x\":-44,\"z\":50},\"parcel\":[{\"x\":-33.5,\"z\":38},{\"x\":-33.5,\"z\":6},{\"x\":-54.5,\"z\":6},{\"x\":-54.5,\"z\":38}],\"footprint\":[{\"x\":-37,\"z\":21},{\"x\":-37,\"z\":31},{\"x\":-51,\"z\":31},{\"x\":-51,\"z\":21}],\"buildingHeight\":6.3,\"buildingStories\":2,\"buildingRoof\":\"gable\",\"footprintWidth\":14,\"footprintDepth\":10},{\"slot\":6,\"x\":-22,\"z\":26,\"width\":12,\"depth\":9,\"height\":3.7,\"elevationM\":90,\"stories\":1,\"angle\":0,\"side\":-1,\"roof\":\"hip\",\"roofTone\":0.46,\"solar\":false,\"solarKW\":0,\"solarPeakKW\":0,\"hasPool\":false,\"poolPolygon\":null,\"family\":\"cottage\",\"buildingType\":\"detached\",\"premiseType\":\"residential\",\"front\":{\"x\":-22,\"z\":50},\"parcel\":[{\"x\":-11.5,\"z\":38},{\"x\":-11.5,\"z\":6},{\"x\":-32.5,\"z\":6},{\"x\":-32.5,\"z\":38}],\"footprint\":[{\"x\":-16,\"z\":21.5},{\"x\":-16,\"z\":30.5},{\"x\":-28,\"z\":30.5},{\"x\":-28,\"z\":21.5}],\"buildingHeight\":3.7,\"buildingStories\":1,\"buildingRoof\":\"hip\",\"footprintWidth\":12,\"footprintDepth\":9},{\"slot\":7,\"x\":0,\"z\":26,\"width\":12,\"depth\":10,\"height\":6.3,\"elevationM\":90,\"stories\":2,\"angle\":0,\"side\":-1,\"roof\":\"gable\",\"roofTone\":0.58,\"solar\":false,\"solarKW\":0,\"solarPeakKW\":0,\"hasPool\":true,\"poolPolygon\":[{\"x\":-2,\"z\":11},{\"x\":-2,\"z\":17},{\"x\":2,\"z\":17},{\"x\":2,\"z\":11}],\"family\":\"craftsman\",\"buildingType\":\"detached\",\"premiseType\":\"residential\",\"front\":{\"x\":0,\"z\":50},\"parcel\":[{\"x\":-10.5,\"z\":38},{\"x\":-10.5,\"z\":6},{\"x\":10.5,\"z\":6},{\"x\":10.5,\"z\":38}],\"footprint\":[{\"x\":-6,\"z\":21},{\"x\":-6,\"z\":31},{\"x\":6,\"z\":31},{\"x\":6,\"z\":21}],\"buildingHeight\":6.3,\"buildingStories\":2,\"buildingRoof\":\"gable\",\"footprintWidth\":12,\"footprintDepth\":10},{\"slot\":8,\"x\":22,\"z\":26,\"width\":13,\"depth\":9,\"height\":6.3,\"elevationM\":90,\"stories\":2,\"angle\":0,\"side\":-1,\"roof\":\"gable\",\"roofTone\":0.22,\"solar\":false,\"solarKW\":0,\"solarPeakKW\":0,\"hasPool\":false,\"poolPolygon\":null,\"family\":\"craftsman\",\"buildingType\":\"detached\",\"premiseType\":\"residential\",\"front\":{\"x\":22,\"z\":50},\"parcel\":[{\"x\":11.5,\"z\":38},{\"x\":11.5,\"z\":6},{\"x\":32.5,\"z\":6},{\"x\":32.5,\"z\":38}],\"footprint\":[{\"x\":15.5,\"z\":21.5},{\"x\":15.5,\"z\":30.5},{\"x\":28.5,\"z\":30.5},{\"x\":28.5,\"z\":21.5}],\"buildingHeight\":6.3,\"buildingStories\":2,\"buildingRoof\":\"gable\",\"footprintWidth\":13,\"footprintDepth\":9},{\"slot\":9,\"x\":44,\"z\":26,\"width\":11,\"depth\":11,\"height\":3.7,\"elevationM\":90,\"stories\":1,\"angle\":0,\"side\":-1,\"roof\":\"hip\",\"roofTone\":0.34,\"solar\":false,\"solarKW\":0,\"solarPeakKW\":0,\"hasPool\":false,\"poolPolygon\":null,\"family\":\"cottage\",\"buildingType\":\"detached\",\"premiseType\":\"residential\",\"front\":{\"x\":44,\"z\":50},\"parcel\":[{\"x\":33.5,\"z\":38},{\"x\":33.5,\"z\":6},{\"x\":54.5,\"z\":6},{\"x\":54.5,\"z\":38}],\"footprint\":[{\"x\":38.5,\"z\":20.5},{\"x\":38.5,\"z\":31.5},{\"x\":49.5,\"z\":31.5},{\"x\":49.5,\"z\":20.5}],\"buildingHeight\":3.7,\"buildingStories\":1,\"buildingRoof\":\"hip\",\"footprintWidth\":11,\"footprintDepth\":11}],\"commons\":[{\"kind\":\"common_green\",\"polygon\":[{\"x\":-55,\"z\":-6},{\"x\":-55,\"z\":6},{\"x\":55,\"z\":6},{\"x\":55,\"z\":-6}],\"descriptiveOnly\":true}]}",
+  "sourceTownId": "town-9472ec73f5115ff1",
+  "sourceBlockId": "BLOCK-01-04",
+  "target": [
+    455,
+    90,
+    50
+  ],
+  "width": 1536,
+  "height": 1024,
+  "anchors": [
+    {
+      "slot": 1,
+      "id": "P-00226",
+      "address": "92 Orchard Road",
+      "buildingType": "detached",
+      "stories": 1,
+      "roof": "hip",
+      "solar": false,
+      "solarKW": 0,
+      "hasPool": false,
+      "width": 14,
+      "depth": 10,
+      "height": 3.7,
+      "front": {
+        "x": 411,
+        "z": 0
+      },
+      "frontPixel": {
+        "x": 481.1940857331332,
+        "y": 109.30949121538464
+      },
+      "footprint": [
+        {
+          "x": 418,
+          "z": 29
+        },
+        {
+          "x": 404,
+          "z": 29
+        },
+        {
+          "x": 404,
+          "z": 19
+        },
+        {
+          "x": 418,
+          "z": 19
+        }
+      ],
+      "parcel": [
+        {
+          "x": 421.5,
+          "z": 44
+        },
+        {
+          "x": 421.5,
+          "z": 12
+        },
+        {
+          "x": 400.5,
+          "z": 12
+        },
+        {
+          "x": 400.5,
+          "z": 44
+        }
+      ],
+      "x": 441.97276412398935,
+      "y": 265.2549672330081
+    },
+    {
+      "slot": 2,
+      "id": "P-00227",
+      "address": "98 Orchard Road",
+      "buildingType": "detached",
+      "stories": 2,
+      "roof": "gable",
+      "solar": false,
+      "solarKW": 0,
+      "hasPool": false,
+      "width": 12,
+      "depth": 9,
+      "height": 6.3,
+      "front": {
+        "x": 433,
+        "z": 0
+      },
+      "frontPixel": {
+        "x": 665.4525862094243,
+        "y": 138.8155401521426
+      },
+      "footprint": [
+        {
+          "x": 439,
+          "z": 28.5
+        },
+        {
+          "x": 427,
+          "z": 28.5
+        },
+        {
+          "x": 427,
+          "z": 19.5
+        },
+        {
+          "x": 439,
+          "z": 19.5
+        }
+      ],
+      "parcel": [
+        {
+          "x": 443.5,
+          "z": 44
+        },
+        {
+          "x": 443.5,
+          "z": 12
+        },
+        {
+          "x": 422.5,
+          "z": 12
+        },
+        {
+          "x": 422.5,
+          "z": 44
+        }
+      ],
+      "x": 626.2312646002805,
+      "y": 288.4225245018649
+    },
+    {
+      "slot": 3,
+      "id": "P-00228",
+      "address": "102 Orchard Road",
+      "buildingType": "detached",
+      "stories": 2,
+      "roof": "gable",
+      "solar": false,
+      "solarKW": 0,
+      "hasPool": true,
+      "width": 12,
+      "depth": 10,
+      "height": 6.3,
+      "front": {
+        "x": 455,
+        "z": 0
+      },
+      "frontPixel": {
+        "x": 849.7110866857155,
+        "y": 168.32158908890057
+      },
+      "footprint": [
+        {
+          "x": 461,
+          "z": 29
+        },
+        {
+          "x": 449,
+          "z": 29
+        },
+        {
+          "x": 449,
+          "z": 19
+        },
+        {
+          "x": 461,
+          "z": 19
+        }
+      ],
+      "parcel": [
+        {
+          "x": 465.5,
+          "z": 44
+        },
+        {
+          "x": 465.5,
+          "z": 12
+        },
+        {
+          "x": 444.5,
+          "z": 12
+        },
+        {
+          "x": 444.5,
+          "z": 44
+        }
+      ],
+      "x": 810.4897650765716,
+      "y": 317.92857343862283
+    },
+    {
+      "slot": 4,
+      "id": "P-00229",
+      "address": "108 Orchard Road",
+      "buildingType": "detached",
+      "stories": 1,
+      "roof": "hip",
+      "solar": false,
+      "solarKW": 0,
+      "hasPool": false,
+      "width": 13,
+      "depth": 9,
+      "height": 3.7,
+      "front": {
+        "x": 477,
+        "z": 0
+      },
+      "frontPixel": {
+        "x": 1033.969587162007,
+        "y": 197.82763802565853
+      },
+      "footprint": [
+        {
+          "x": 483.5,
+          "z": 28.5
+        },
+        {
+          "x": 470.5,
+          "z": 28.5
+        },
+        {
+          "x": 470.5,
+          "z": 19.5
+        },
+        {
+          "x": 483.5,
+          "z": 19.5
+        }
+      ],
+      "parcel": [
+        {
+          "x": 487.5,
+          "z": 44
+        },
+        {
+          "x": 487.5,
+          "z": 12
+        },
+        {
+          "x": 466.5,
+          "z": 12
+        },
+        {
+          "x": 466.5,
+          "z": 44
+        }
+      ],
+      "x": 994.7482655528632,
+      "y": 353.77311404328196
+    },
+    {
+      "slot": 5,
+      "id": "P-00230",
+      "address": "112 Orchard Road",
+      "buildingType": "detached",
+      "stories": 2,
+      "roof": "gable",
+      "solar": false,
+      "solarKW": 0,
+      "hasPool": false,
+      "width": 11,
+      "depth": 11,
+      "height": 6.3,
+      "front": {
+        "x": 499,
+        "z": 0
+      },
+      "frontPixel": {
+        "x": 1218.228087638298,
+        "y": 227.3336869624165
+      },
+      "footprint": [
+        {
+          "x": 504.5,
+          "z": 29.5
+        },
+        {
+          "x": 493.5,
+          "z": 29.5
+        },
+        {
+          "x": 493.5,
+          "z": 18.5
+        },
+        {
+          "x": 504.5,
+          "z": 18.5
+        }
+      ],
+      "parcel": [
+        {
+          "x": 509.5,
+          "z": 44
+        },
+        {
+          "x": 509.5,
+          "z": 12
+        },
+        {
+          "x": 488.5,
+          "z": 12
+        },
+        {
+          "x": 488.5,
+          "z": 44
+        }
+      ],
+      "x": 1179.0067660291543,
+      "y": 376.94067131213876
+    },
+    {
+      "slot": 6,
+      "id": "P-00216",
+      "address": "91 Willow Street",
+      "buildingType": "detached",
+      "stories": 2,
+      "roof": "gable",
+      "solar": false,
+      "solarKW": 0,
+      "hasPool": false,
+      "width": 14,
+      "depth": 10,
+      "height": 6.3,
+      "front": {
+        "x": 411,
+        "z": 100
+      },
+      "frontPixel": {
+        "x": 317.77191236170006,
+        "y": 796.6663130375879
+      },
+      "footprint": [
+        {
+          "x": 418,
+          "z": 71
+        },
+        {
+          "x": 404,
+          "z": 71
+        },
+        {
+          "x": 404,
+          "z": 81
+        },
+        {
+          "x": 418,
+          "z": 81
+        }
+      ],
+      "parcel": [
+        {
+          "x": 421.5,
+          "z": 88
+        },
+        {
+          "x": 421.5,
+          "z": 56
+        },
+        {
+          "x": 400.5,
+          "z": 56
+        },
+        {
+          "x": 400.5,
+          "z": 88
+        }
+      ],
+      "x": 356.9932339708438,
+      "y": 616.3420229126525
+    },
+    {
+      "slot": 7,
+      "id": "P-00217",
+      "address": "97 Willow Street",
+      "buildingType": "detached",
+      "stories": 1,
+      "roof": "hip",
+      "solar": false,
+      "solarKW": 0,
+      "hasPool": false,
+      "width": 12,
+      "depth": 9,
+      "height": 3.7,
+      "front": {
+        "x": 433,
+        "z": 100
+      },
+      "frontPixel": {
+        "x": 502.03041283799104,
+        "y": 826.1723619743459
+      },
+      "footprint": [
+        {
+          "x": 439,
+          "z": 71.5
+        },
+        {
+          "x": 427,
+          "z": 71.5
+        },
+        {
+          "x": 427,
+          "z": 80.5
+        },
+        {
+          "x": 439,
+          "z": 80.5
+        }
+      ],
+      "parcel": [
+        {
+          "x": 443.5,
+          "z": 88
+        },
+        {
+          "x": 443.5,
+          "z": 56
+        },
+        {
+          "x": 422.5,
+          "z": 56
+        },
+        {
+          "x": 422.5,
+          "z": 88
+        }
+      ],
+      "x": 541.2517344471348,
+      "y": 652.1865635173117
+    },
+    {
+      "slot": 8,
+      "id": "P-00218",
+      "address": "101 Willow Street",
+      "buildingType": "detached",
+      "stories": 2,
+      "roof": "gable",
+      "solar": false,
+      "solarKW": 0,
+      "hasPool": true,
+      "width": 12,
+      "depth": 10,
+      "height": 6.3,
+      "front": {
+        "x": 455,
+        "z": 100
+      },
+      "frontPixel": {
+        "x": 686.2889133142821,
+        "y": 855.6784109111038
+      },
+      "footprint": [
+        {
+          "x": 461,
+          "z": 71
+        },
+        {
+          "x": 449,
+          "z": 71
+        },
+        {
+          "x": 449,
+          "z": 81
+        },
+        {
+          "x": 461,
+          "z": 81
+        }
+      ],
+      "parcel": [
+        {
+          "x": 465.5,
+          "z": 88
+        },
+        {
+          "x": 465.5,
+          "z": 56
+        },
+        {
+          "x": 444.5,
+          "z": 56
+        },
+        {
+          "x": 444.5,
+          "z": 88
+        }
+      ],
+      "x": 725.510234923426,
+      "y": 675.3541207861686
+    },
+    {
+      "slot": 9,
+      "id": "P-00219",
+      "address": "107 Willow Street",
+      "buildingType": "detached",
+      "stories": 2,
+      "roof": "gable",
+      "solar": false,
+      "solarKW": 0,
+      "hasPool": false,
+      "width": 13,
+      "depth": 9,
+      "height": 6.3,
+      "front": {
+        "x": 477,
+        "z": 100
+      },
+      "frontPixel": {
+        "x": 870.5474137905737,
+        "y": 885.1844598478617
+      },
+      "footprint": [
+        {
+          "x": 483.5,
+          "z": 71.5
+        },
+        {
+          "x": 470.5,
+          "z": 71.5
+        },
+        {
+          "x": 470.5,
+          "z": 80.5
+        },
+        {
+          "x": 483.5,
+          "z": 80.5
+        }
+      ],
+      "parcel": [
+        {
+          "x": 487.5,
+          "z": 88
+        },
+        {
+          "x": 487.5,
+          "z": 56
+        },
+        {
+          "x": 466.5,
+          "z": 56
+        },
+        {
+          "x": 466.5,
+          "z": 88
+        }
+      ],
+      "x": 909.7687353997176,
+      "y": 704.8601697229265
+    },
+    {
+      "slot": 10,
+      "id": "P-00220",
+      "address": "111 Willow Street",
+      "buildingType": "detached",
+      "stories": 1,
+      "roof": "hip",
+      "solar": false,
+      "solarKW": 0,
+      "hasPool": false,
+      "width": 11,
+      "depth": 11,
+      "height": 3.7,
+      "front": {
+        "x": 499,
+        "z": 100
+      },
+      "frontPixel": {
+        "x": 1054.8059142668649,
+        "y": 914.6905087846197
+      },
+      "footprint": [
+        {
+          "x": 504.5,
+          "z": 70.5
+        },
+        {
+          "x": 493.5,
+          "z": 70.5
+        },
+        {
+          "x": 493.5,
+          "z": 81.5
+        },
+        {
+          "x": 504.5,
+          "z": 81.5
+        }
+      ],
+      "parcel": [
+        {
+          "x": 509.5,
+          "z": 88
+        },
+        {
+          "x": 509.5,
+          "z": 56
+        },
+        {
+          "x": 488.5,
+          "z": 56
+        },
+        {
+          "x": 488.5,
+          "z": 88
+        }
+      ],
+      "x": 1094.0272358760087,
+      "y": 740.7047103275856
+    }
+  ],
+  "placements": 11
+}

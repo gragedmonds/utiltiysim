@@ -7,6 +7,7 @@ import {installMaterialAtlas} from './map-materials.js';
 import {naturalizeLandscape,renderNaturalBanks} from './map-landscape.js';
 import {installGrassPalette} from './map-grass.js';
 import {renderParcelGardens} from './map-gardens.js';
+import {renderPublicSpace} from './map-public-space.js';
 import {createBuildingSprites} from './map-building-sprites.js';
 import {replaceTreeAssets,replaceCivicAssets,addResidentialCharacter,groundTexture,renderParks,renderAtlasDesign,applyBuildingFamilies,renderTownCenter,renderWaterTowers} from './map-assets.js';
 import {addStreetMarkings,softenTrees,makeStreetLabels,enrichNeighborhood,refineStreetSurfaces} from './map-art.js';
@@ -133,6 +134,15 @@ export class AtlasMap {
     this.neighborhoodArt=enrichNeighborhood(s,this.town);
     this.gardenArt=renderParcelGardens(s,this.town);
     this.landscapeArt=naturalizeLandscape(s,this.town);
+    if(this.town.atlasDesign?.version?.startsWith('civic-atlas-town500/')){
+      this.publicSpaceArt=renderPublicSpace(s,this.town);
+      const matrix=new THREE.Matrix4(),position=new THREE.Vector3();
+      s.root.traverse(mesh=>{
+        if(!mesh.isInstancedMesh||mesh.userData.atlasTreeKind===undefined)return;
+        for(let i=0;i<mesh.count;i++){mesh.getMatrixAt(i,matrix);position.setFromMatrixPosition(matrix);if(this.publicSpaceArt.containsFarmland(position)||this.publicSpaceArt.containsCommons?.(position))mesh.setMatrixAt(i,new THREE.Matrix4().makeScale(0,0,0));}
+        mesh.instanceMatrix.needsUpdate=true;mesh.computeBoundingSphere();
+      });
+    }
     this.el.dataset.foliage='loading';
     this.foliageReady=installIllustratedFoliage(s,{url:'./assets/civic-foliage-atlas.png',signal:this.abort.signal}).then(art=>{
       this.illustratedFoliage=art;if(art){this.el.dataset.foliage='ready';art.setSelected(this.selected);}return art;
@@ -162,7 +172,16 @@ export class AtlasMap {
   }
   async loadBlockArtwork(){
     try{
-      const {createBlockPlate,BLOCK,SECOND_BLOCK,COMMERCIAL_BLOCK,PARK_BLOCK,SCHOOL_BLOCK,DEPOT_BLOCK}=await import('./map-block-plate.js');
+      if(this.town.atlasDesign?.version?.startsWith('civic-atlas-town500/')){
+        const {createTownPlates}=await import('./map-town-plates.js');
+        if(this.abort.signal.aborted)return null;
+        this.townPlates=createTownPlates(this,{signal:this.abort.signal});
+        this.blockArtStats=this.townPlates.stats;await this.townPlates.ready;
+        if(this.abort.signal.aborted)return null;
+        this.townPlates.setEnabled(true);this.syncTownPlateState();
+        return this.blockArtStats;
+      }
+      const {createBlockPlate,BLOCK,SECOND_BLOCK,COMMERCIAL_BLOCK,PARK_BLOCK,SCHOOL_BLOCK,DEPOT_BLOCK,RESIDENTIAL_BLOCKS}=await import('./map-block-plate.js');
       if(this.abort.signal.aborted)return null;
       this.blockPlates=[
         createBlockPlate(this,{block:BLOCK,metadataUrl:'./assets/civic-block-pine-willow.json',imageUrl:'./assets/civic-block-pine-willow.png',signal:this.abort.signal}),
@@ -171,6 +190,7 @@ export class AtlasMap {
         createBlockPlate(this,{block:PARK_BLOCK,metadataUrl:'./assets/civic-block-maple-park.json',imageUrl:'./assets/civic-block-maple-park.png',manageOverlays:false,signal:this.abort.signal}),
         createBlockPlate(this,{block:SCHOOL_BLOCK,metadataUrl:'./assets/civic-block-school.json',imageUrl:'./assets/civic-block-school.png',manageOverlays:false,signal:this.abort.signal}),
         createBlockPlate(this,{block:DEPOT_BLOCK,metadataUrl:'./assets/civic-block-depot.json',imageUrl:'./assets/civic-block-depot.png',manageOverlays:false,signal:this.abort.signal}),
+        ...RESIDENTIAL_BLOCKS.map(block=>createBlockPlate(this,{block,metadataUrl:`./assets/civic-block-${block.id}.json`,imageUrl:`./assets/civic-block-${block.id}.png`,manageOverlays:false,signal:this.abort.signal})),
       ];
       await Promise.all(this.blockPlates.map(plate=>plate.ready));
       if(this.abort.signal.aborted)return null;
@@ -188,6 +208,7 @@ export class AtlasMap {
     }
   }
   setBlockArtwork(enabled){
+    if(this.townPlates){const active=this.townPlates.setEnabled(enabled);this.syncTownPlateState(enabled);return active;}
     if(!this.blockArtStats?.ready)return false;
     const results=this.blockPlates.map(plate=>plate.setEnabled(enabled));
     const active=Boolean(enabled)&&results.every(Boolean);
@@ -195,9 +216,18 @@ export class AtlasMap {
     this.blockArtStats.enabled=active;
     this.el.dataset.blockArt=active?'ready':'native';
     this.el.dataset.blockCount=active?String(this.blockPlates.length):'0';
-    this.request();return active;
+    this.refreshBlockOverlays();this.request();return active;
   }
-  refreshBlockOverlays(){this.blockPlates?.[0]?.liftOverlays();}
+  syncTownPlateState(requested=true){const stats=this.townPlates.stats;this.el.dataset.blockArt=stats.enabled?'ready':requested?'fallback':'native';this.el.dataset.blockCount=String(stats.count);this.refreshBlockOverlays();this.request();}
+  refreshBlockOverlays(){
+    if(this.townPlates)this.townPlates.liftOverlays();else this.blockPlates?.[0]?.liftOverlays();
+    // Selected native trees fade in the transparent pass. Keep those cards
+    // beneath opaque regions of the block art instead of adding ghost crowns.
+    this.nativeFoliageOrders??=[];
+    const foliage=this.scene.root.children.find(group=>group.name==='Illustrated foliage');
+    for(const mesh of foliage?.children||[])if(mesh.material?.transparent&&mesh.renderOrder>2&&!this.nativeFoliageOrders.some(r=>r.mesh===mesh))this.nativeFoliageOrders.push({mesh,order:mesh.renderOrder});
+    for(const record of this.nativeFoliageOrders)record.mesh.renderOrder=this.blockArtStats?.enabled?1:record.order;
+  }
   worldAt(clientX,clientY) {
     const r=this.canvas.getBoundingClientRect();
     this.scene.camera.updateMatrixWorld();
@@ -478,5 +508,5 @@ export class AtlasMap {
   }
   capture() {const s=this.scene;s.renderer.render(s.scene,s.camera);return this.canvas.toDataURL('image/png');}
   setVisible(value) {this.scene.suspended=!value;if(value){this.scene.resize();this.request();}}
-  destroy(){this.abort.abort();this.blockPlates?.forEach(plate=>plate.destroy());this.streetLabels?.destroy();this.neighborhoodArt?.destroy();this.gardenArt?.destroy();this.illustratedFoliage?.destroy();this.materialArt?.destroy();this.buildingSprites?.destroy();this.twoStoreySprites?.destroy();this.commercialSprites?.destroy();this.authoredAssets?.destroy();this.bankArt?.destroy();this.landscapeArt?.destroy();this.groundMap?.dispose();this.scene.destroy();}
+  destroy(){this.abort.abort();this.townPlates?.destroy();this.blockPlates?.forEach(plate=>plate.destroy());this.streetLabels?.destroy();this.neighborhoodArt?.destroy();this.gardenArt?.destroy();this.publicSpaceArt?.destroy();this.illustratedFoliage?.destroy();this.materialArt?.destroy();this.buildingSprites?.destroy();this.twoStoreySprites?.destroy();this.commercialSprites?.destroy();this.authoredAssets?.destroy();this.bankArt?.destroy();this.landscapeArt?.destroy();this.groundMap?.dispose();this.scene.destroy();}
 }
