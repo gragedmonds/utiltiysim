@@ -1,0 +1,1 @@
+PASS: responsive pages, fixed camera, pan/zoom, draft gestures/export/persistence, real inspection, panel scrolling, topology. Screenshots: out/civic-atlas/review-gold-standard

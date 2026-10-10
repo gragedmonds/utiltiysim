@@ -2,6 +2,8 @@
 
 **Start with [HANDOFF.md](HANDOFF.md).** As of 10 October 2026, the owner says this is still well short of the requested result. This folder preserves the runnable exploration, original documents, concept artwork, findings, evidence and continuation plan. Agent-level experiment checks are not product or visual sign-off.
 
+The welcome now uses explicitly labeled concept landscape artwork; the Overview uses the actual saved map. The reference town opens with three illustrated areas (14 homes and 6 shops); the layers button compares native assets without changing world data. Use `?art=native#map` for a native-only load. [Continuation and remaining gaps](handoff/ITERATION_2026_10_10.md).
+
 A desktop prototype of the Civic Atlas direction for UtilitySim v2. It combines authored reference geography, engine-generated households and networks, and a durable daily world with a new welcome screen, application shell, and fixed orthographic 2.5D map. It is an isolated development entry point, not a replacement for the released launcher.
 
 ## Run

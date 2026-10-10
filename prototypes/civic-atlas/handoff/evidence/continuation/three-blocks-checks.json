@@ -1,0 +1,69 @@
+{
+  "passed": true,
+  "twoBlocks": true,
+  "threeBlocks": true,
+  "pickedPremises": [
+    "P-00038",
+    "P-00039",
+    "P-00040",
+    "P-00041",
+    "P-00042",
+    "P-00047",
+    "P-00048",
+    "P-00049",
+    "P-00063",
+    "P-00064",
+    "P-00065",
+    "P-00087",
+    "P-00088",
+    "P-00089",
+    "P-00121",
+    "P-00122",
+    "P-00123",
+    "P-00124",
+    "P-00125",
+    "P-00126"
+  ],
+  "invalidations": [
+    {
+      "name": "road",
+      "rejected": true
+    },
+    {
+      "name": "frontage side",
+      "rejected": true
+    },
+    {
+      "name": "terrain",
+      "rejected": true
+    },
+    {
+      "name": "solar",
+      "rejected": true
+    },
+    {
+      "name": "wrong framing",
+      "rejected": true
+    }
+  ],
+  "closestResolution": {
+    "cssPixelsPerMetre": 21.869822485207102,
+    "texturePixelsPerMetre": 10.24,
+    "cssPixelsPerTexel": 2.135724852071006,
+    "logicalCameraDistance": 65
+  },
+  "lifecycle": {
+    "beforeImage": true,
+    "lateTextureDisposed": true,
+    "overlayRecords": 12
+  },
+  "checks": [
+    "same-camera A/B",
+    "20 original property picks",
+    "footprints and utility overlays",
+    "pan and zoom",
+    "stale-art fallback",
+    "unchanged source world",
+    "no page errors"
+  ]
+}

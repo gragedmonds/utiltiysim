@@ -23,3 +23,10 @@ The complete final source PNGs are packaged above under stable asset names. The 
 | Adjacent six-home block | `exec-240051b8-e2b4-421e-be3d-6a58898b2f26.png` |
 
 Use the original user reference as the art target. A detailed asset is not automatically correct: review its camera angle, lighting, alpha edge, physical scale, and fit with the scene. See `docs/CIVIC_ATLAS_VISUAL_QA.md` at the repository root for the independent review loop and unresolved art gaps.
+
+## 10 October continuation
+
+- `civic-welcome-landscape.png`: generated promotional landscape used only on the welcome page, visibly labeled concept landscape. It is not Brookfield source geography and is never used as the operational map or Overview's saved-town image. Source: `exec-1b095a40-ec1d-4aca-b0de-1ad2308d78b9.png`; visual reference: the original B / Civic Atlas concept.
+- `civic-block-main-north.png` and `.json`: six source storefronts P-00121–P-00126 along Main Street. The first two have one storey, the remaining four two storeys; all roofs are flat, with no recorded solar. Restaurants are P-00121 and P-00125. Complete generated source: `exec-20b202a8-d5b7-4f2d-887f-c2664018cf22.png`. Input: exact-camera commercial registration guide; style reference: Pine–Willow block. Framing is 1536 × 1024 over96 m view height. Runtime masks to a commercial strip, retaining source geometry for picking. Equipment/park outside the strip remains native.
+
+The commercial image and welcome art were manually generated with the session image tool. These files do not implement the proposed offline pack-generation pipeline. The commercial sample includes decorative pedestrian frontage inside its mask; separating all sidewalk/stateful equipment layers remains part of production design work.

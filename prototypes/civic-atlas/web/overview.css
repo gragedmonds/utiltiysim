@@ -1,0 +1,81 @@
+/* Overview owns its composition. Shared navigation and map controls stay in the shell. */
+#overview-page{max-width:1800px;padding:29px 32px 42px}
+#overview-page .ov-dashboard{color:#173b49}
+#overview-page .ov-heading{display:flex;justify-content:space-between;align-items:center;gap:24px;margin-bottom:24px}
+#overview-page .ov-eyebrow{display:block;font-size:9px;line-height:1.5;letter-spacing:1.65px;font-weight:600;color:#728d89}
+#overview-page .ov-heading h1{font:38px/1.14 Georgia,serif;letter-spacing:-.9px;margin:7px 0 10px;color:#153b49}
+#overview-page .ov-heading p{font-size:13px;color:#6b8282;line-height:1.6}
+#overview-page .ov-saved-state{display:flex;align-items:center;gap:11px;padding:12px 17px;border:1px solid #dce7df;background:#fbfdfa;border-radius:8px;flex-shrink:0}
+#overview-page .ov-state-dot{display:inline-block;width:6px;height:6px;flex-shrink:0;border-radius:50%;background:#80ad99}
+#overview-page .ov-saved-state small{display:block;font-size:8px;letter-spacing:1.2px;color:#7c9088;margin-bottom:6px}
+#overview-page .ov-saved-state strong{font-size:13px;font-weight:500;color:#3b6866}
+#overview-page .ov-primary-grid{display:grid;grid-template-columns:minmax(0,1.9fr) minmax(310px,1fr);gap:20px;align-items:stretch}
+#overview-page .ov-map-panel{display:flex;flex-direction:column;overflow:hidden;border:1px solid #d8e3da;border-radius:12px;background:#fff}
+#overview-page .ov-panel-heading{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:19px 22px 18px;flex-shrink:0}
+#overview-page .ov-panel-heading h2{font:23px/1.2 Georgia,serif;letter-spacing:-.35px;margin-top:5px}
+#overview-page .ov-map-type{border:1px solid #dce7dd;border-radius:20px;padding:6px 9px;font-size:9px;line-height:1.5;color:#72887c;background:#fbfdf9;text-align:center}
+#overview-page .ov-map-link{display:block;position:relative;width:100%;padding:0;flex:1;min-height:520px;overflow:hidden;isolation:isolate;text-align:left;background:#dce6d6;border:0;border-top:1px solid #dae4d8;border-bottom:1px solid #dae4d8;cursor:pointer}
+#overview-page .ov-map-link img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center;transition:transform .35s ease;z-index:0}
+#overview-page .ov-map-link:hover{filter:none}
+#overview-page .ov-map-link:hover img{transform:scale(1.015)}
+#overview-page .ov-map-link:focus-visible{outline:3px solid #d69d45;outline-offset:-5px}
+#overview-page .ov-map-caption{position:absolute;z-index:1;top:17px;left:17px;display:inline-flex;align-items:center;gap:7px;padding:8px 10px;border:1px solid #e4ebe0c9;border-radius:5px;background:#ffffffed;color:#597a70;font-size:10px;box-shadow:0 2px 10px #193c3210}
+#overview-page .ov-map-action{position:absolute;z-index:1;bottom:21px;right:21px;display:flex;align-items:center;gap:11px;border:1px solid #00858a;background:#007c80;color:#fff;border-radius:7px;padding:14px 17px;font-size:13px;font-weight:600;box-shadow:0 4px 17px #113c4130}
+#overview-page .ov-map-action>span{margin-left:8px}
+#overview-page .ov-map-action .icon{width:18px;height:18px}
+#overview-page .ov-map-unavailable{display:block;color:#527768;padding:120px 35px;line-height:1.8;text-align:center;font-size:14px}
+#overview-page .ov-map-facts{display:flex;gap:23px;flex-wrap:wrap;align-items:center;min-height:54px;padding:15px 22px;font-size:11px;color:#809187;flex-shrink:0}
+#overview-page .ov-map-facts>span{display:flex;align-items:center;gap:5px}
+#overview-page .ov-map-facts b{font-weight:600;color:#476f66}
+#overview-page .ov-map-facts .icon{width:15px;height:15px;color:#7a998c;margin-right:3px}
+#overview-page .ov-world-panel{display:flex;flex-direction:column;border:1px solid #dce5dc;background:#fff;border-radius:12px;overflow:hidden}
+#overview-page .ov-world-heading{padding:21px 23px 16px;border-bottom:1px solid #e7ece5}
+#overview-page .ov-context{display:block;color:#718881;font-size:11px;margin-top:8px}
+#overview-page .ov-metrics{display:grid;grid-template-columns:1fr 1fr;padding:8px 23px 20px;column-gap:19px}
+#overview-page .ov-metric{padding-top:19px}
+#overview-page .ov-metric-label{display:flex;align-items:center;gap:6px;font-size:11px;color:#67847d;line-height:1.4}
+#overview-page .ov-metric-label .icon{width:14px;height:14px;color:#74978a}
+#overview-page .ov-metric>strong{display:block;font:35px/1.1 Georgia,serif;color:#1e5960;margin:9px 0 5px;letter-spacing:-.75px}
+#overview-page .ov-metric>small{display:block;color:#7d9185;font-size:10px;line-height:1.6}
+#overview-page .ov-next-day{padding:20px 23px;background:linear-gradient(145deg,#f2f7ef,#eaf3ee);border-top:1px solid #dde9dd;margin-top:auto}
+#overview-page .ov-next-day-label{display:flex;align-items:center;gap:7px;font-size:8px;color:#668579;font-weight:600;letter-spacing:1px;flex-wrap:wrap}
+#overview-page .ov-next-day-label .icon{width:14px;height:14px}
+#overview-page .ov-clock-label{margin-left:auto;font-size:9px;letter-spacing:0;font-weight:400;color:#7e9586}
+#overview-page .ov-next-date{font:26px/1.15 Georgia,serif;margin:11px 0;color:#275d5d}
+#overview-page .ov-next-day p{font-size:11px;line-height:1.75;color:#6b8479;max-width:350px}
+#overview-page .ov-advance-action{margin-top:16px}
+#overview-page .ov-advance-action .primary{width:100%;padding:12px 15px;min-height:42px;border-radius:6px;font-size:12px;justify-content:center}
+#overview-page .ov-advance-action .primary .icon{width:14px;height:14px}
+#overview-page .ov-config-link{width:100%;padding:15px 22px;font-size:11px;color:#528076;justify-content:flex-start;border-top:1px solid #dce7db;min-height:49px;background:#fbfdf9}
+#overview-page .ov-config-link>.icon{width:15px;height:15px}
+#overview-page .ov-config-link>span{margin-left:auto}
+#overview-page .ov-lower-grid{display:grid;grid-template-columns:minmax(0,1.08fr) minmax(0,1.12fr) minmax(235px,.85fr);gap:20px;margin-top:22px}
+#overview-page .ov-lower-panel{border:1px solid #dde6dd;background:#fff;border-radius:10px;padding:22px;min-width:0}
+#overview-page .ov-lower-heading{display:flex;justify-content:space-between;align-items:center;gap:13px}
+#overview-page .ov-lower-panel h2{font:23px/1.2 Georgia,serif;letter-spacing:-.3px;margin:7px 0 9px;color:#214c55}
+#overview-page .ov-lower-panel>p{font-size:11px;line-height:1.85;color:#71867e}
+#overview-page .ov-temperature{white-space:nowrap;font:26px Georgia,serif;color:#578b7b;letter-spacing:-.4px}
+#overview-page .ov-temperature small{font:11px Arial,sans-serif;margin-left:4px;color:#8aa092}
+#overview-page .ov-weather-chart{margin-top:2px}
+#overview-page .ov-weather-chart .weather-chart{height:132px;margin-top:10px}
+#overview-page .ov-weather-chart .chart-dates{font-size:9px;color:#859a8c;gap:10px}
+#overview-page .ov-weather-chart>p{font-size:12px;line-height:1.7;color:#758b7f;margin-top:24px}
+#overview-page .ov-inline-link{font-size:11px;color:#277e7c;padding:6px 0;white-space:nowrap;gap:8px;justify-content:flex-start}
+#overview-page .ov-history-panel .event-row{gap:11px;padding:14px 0}
+#overview-page .ov-history-panel .event-row .event-icon{padding:7px;background:#edf4e9;color:#65917a}
+#overview-page .ov-history-panel .event-row .event-icon .icon{width:14px;height:14px}
+#overview-page .ov-history-panel .event-row strong{font-size:11px;color:#47685f;line-height:1.5}
+#overview-page .ov-history-panel .event-row p{font-size:10px;line-height:1.7;color:#789084}
+#overview-page .ov-history-panel .event-row small{font-size:9px;color:#8b9d91}
+#overview-page .ov-empty-history{padding:25px 0;font-size:12px;line-height:1.8;color:#7c9387}
+#overview-page .ov-evidence-panel{background:linear-gradient(150deg,#f1f6ef,#e7f0e9);border-color:#d9e5d8}
+#overview-page .ov-evidence-icon{display:grid;place-items:center;width:34px;height:34px;border:1px solid #d2e3d4;background:#fbfef8;border-radius:8px;color:#568b78;margin-bottom:15px}
+#overview-page .ov-evidence-icon .icon{width:17px;height:17px}
+#overview-page .ov-evidence-panel h2{font-size:22px;line-height:1.23;margin-top:9px;margin-bottom:13px}
+#overview-page .ov-evidence-panel p strong{font-weight:600;color:#486e60}
+#overview-page .ov-evidence-panel .ov-inline-link{margin-top:15px}
+@media(min-width:1750px){#overview-page{padding:35px 42px 50px}#overview-page .ov-map-link{min-height:560px}#overview-page .ov-metrics{padding-bottom:25px}#overview-page .ov-metric>strong{font-size:40px}#overview-page .ov-metric{padding-top:24px}}
+@media(max-width:1250px){#overview-page{padding:26px 24px 35px}#overview-page .ov-primary-grid{grid-template-columns:minmax(0,1.6fr) minmax(285px,1fr);gap:16px}#overview-page .ov-heading h1{font-size:33px}#overview-page .ov-panel-heading{padding:17px}#overview-page .ov-panel-heading h2{font-size:21px}#overview-page .ov-map-type{max-width:95px;font-size:8px}#overview-page .ov-map-facts{padding:13px 17px;gap:10px 16px;font-size:10px}#overview-page .ov-world-heading,#overview-page .ov-next-day{padding-left:19px;padding-right:19px}#overview-page .ov-metrics{padding-left:19px;padding-right:19px;column-gap:15px}#overview-page .ov-metric>strong{font-size:32px}#overview-page .ov-metric-label{font-size:10px}#overview-page .ov-metric>small{font-size:9px}#overview-page .ov-lower-grid{grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:16px}#overview-page .ov-evidence-panel{grid-column:1/-1;display:grid;grid-template-columns:42px minmax(200px,.8fr) minmax(200px,1fr) auto;align-items:center;gap:8px 15px;padding:20px}#overview-page .ov-evidence-icon{grid-row:1/3;margin:0}#overview-page .ov-evidence-panel>.ov-eyebrow{grid-column:2;align-self:end}#overview-page .ov-evidence-panel h2{grid-column:2;grid-row:2;margin:0;font-size:21px}#overview-page .ov-evidence-panel p{grid-column:3;grid-row:1/3}#overview-page .ov-evidence-panel .ov-inline-link{grid-column:4;grid-row:1/3;margin:0}}
+@media(max-width:1050px){#overview-page{padding:24px 22px 35px}#overview-page .ov-heading{gap:15px;margin-bottom:20px}#overview-page .ov-heading h1{font-size:30px}#overview-page .ov-heading p{font-size:12px}#overview-page .ov-saved-state{padding:10px 12px}#overview-page .ov-saved-state small{font-size:7px}#overview-page .ov-saved-state strong{font-size:11px}#overview-page .ov-primary-grid{grid-template-columns:minmax(0,1.45fr) minmax(280px,1fr);gap:14px}#overview-page .ov-map-link{min-height:390px}#overview-page .ov-panel-heading{display:block;padding:15px 17px}#overview-page .ov-panel-heading h2{font-size:20px}#overview-page .ov-map-type{display:inline-flex;max-width:none;margin-top:8px;padding:4px 8px}#overview-page .ov-map-caption{font-size:9px;left:12px;top:12px;padding:7px 8px;max-width:calc(100% - 24px);line-height:1.5}#overview-page .ov-map-action{right:14px;bottom:16px;font-size:12px;padding:12px 14px}#overview-page .ov-map-facts{font-size:10px;gap:8px 12px}#overview-page .ov-map-facts .icon{display:none}#overview-page .ov-lower-panel{padding:20px}#overview-page .ov-lower-panel h2{font-size:21px}#overview-page .ov-evidence-panel{grid-template-columns:36px minmax(190px,1fr) minmax(210px,1.1fr)}#overview-page .ov-evidence-panel .ov-inline-link{grid-column:3;grid-row:3}#overview-page .ov-evidence-panel h2{font-size:20px}#overview-page .ov-evidence-panel p{grid-row:1/3}}
+@media(max-width:800px){#overview-page .ov-heading{align-items:flex-start}#overview-page .ov-heading h1{font-size:27px}#overview-page .ov-saved-state{display:none}#overview-page .ov-primary-grid{grid-template-columns:1fr}#overview-page .ov-map-link{min-height:360px}#overview-page .ov-panel-heading{display:flex}#overview-page .ov-world-panel{display:grid;grid-template-columns:1fr 1fr}#overview-page .ov-world-heading{grid-column:1/-1}#overview-page .ov-metrics{padding-top:0}#overview-page .ov-next-day{margin:0;border-top:0;border-left:1px solid #dde9dd}#overview-page .ov-config-link{grid-column:1/-1}#overview-page .ov-lower-grid{grid-template-columns:1fr}#overview-page .ov-evidence-panel{display:block}#overview-page .ov-evidence-icon{margin-bottom:14px}#overview-page .ov-evidence-panel h2{margin:8px 0 12px}#overview-page .ov-evidence-panel .ov-inline-link{margin-top:12px}}
+@media(prefers-reduced-motion:reduce){#overview-page .ov-map-link img{transition:none}}

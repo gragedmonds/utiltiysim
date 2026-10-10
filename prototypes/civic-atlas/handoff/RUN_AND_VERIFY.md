@@ -16,8 +16,9 @@ On Windows use `.venv\Scripts\python.exe`. Open these paths on the loopback serv
 
 | URL | Purpose |
 | --- | --- |
-| `http://127.0.0.1:8040/` | Main shell, native artwork |
-| `http://127.0.0.1:8040/?art=blocks#map` | Main shell with both experimental baked blocks |
+| `http://127.0.0.1:8040/` | Main shell, illustrated reference town |
+| `http://127.0.0.1:8040/?art=blocks#map` | Main shell with three experimental illustrated areas |
+| `http://127.0.0.1:8040/?art=native#map` | Native-only comparison |
 | `http://127.0.0.1:8040/block-study.html` | Eight-property A/B |
 | `http://127.0.0.1:8040/block-study.html?blocks=2` | Fourteen-property, two-block A/B |
 
@@ -33,7 +34,7 @@ A fresh reference store initializes the town and seven completed physical days; 
 npm install --prefix out/civic-atlas/browser --no-save playwright-core@1.64.0
 node prototypes/civic-atlas/check-browser.mjs
 ATLAS_ART=blocks ATLAS_REVIEW_OUTPUT=out/civic-atlas/review-blocks node prototypes/civic-atlas/check-browser.mjs
-ATLAS_BLOCKS=2 node prototypes/civic-atlas/check-block-study.mjs
+ATLAS_BLOCKS=3 node prototypes/civic-atlas/check-block-study.mjs
 ```
 
 Browser commands need the server running and a local Chromium installation. Set `CHROMIUM_PATH` when it is not `/usr/bin/chromium`. `PLAYWRIGHT_MODULE` can point to a different installed `playwright-core/index.mjs`; otherwise scripts resolve the repository-local installation above. `ATLAS_URL` selects another local server. The `NAME=value command` syntax is for POSIX shells; set environment variables separately in PowerShell.

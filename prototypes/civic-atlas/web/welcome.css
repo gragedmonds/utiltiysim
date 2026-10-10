@@ -1,0 +1,51 @@
+/* Welcome is a landscape-led introduction; the operational shell starts on entry. */
+body[data-view="welcome"]{background:#fafbf9}
+body[data-view="welcome"]>.sidebar,body[data-view="welcome"] #app>.sidebar,body[data-view="welcome"] .topbar{display:none}
+body[data-view="welcome"] .workspace{margin-left:0}
+#welcome-page{padding:0 48px 56px;max-width:1600px;margin:auto}
+.welcome-masthead{height:100px;display:flex;align-items:center;justify-content:space-between;gap:28px}
+.welcome-wordmark{font-size:25px;font-weight:750;letter-spacing:-1px;gap:6px;position:relative;padding:0 0 15px;color:#082d4c}
+.welcome-wordmark>span{color:#008494;font-size:20px}
+.welcome-wordmark small{position:absolute;bottom:0;left:0;font-size:8px;letter-spacing:3.5px;font-weight:500;color:#637c8d}
+.welcome-masthead nav{display:flex;gap:25px}
+.welcome-masthead nav button{font-size:12px;padding:8px 0;color:#566b7e;gap:0}
+.welcome-resume{padding:10px 15px;border:1px solid #d6e0e6;border-radius:6px;font-size:12px;background:white}
+#welcome-page .welcome-hero{display:block;position:relative;isolation:isolate;height:720px;min-height:0;border-radius:12px;border:1px solid #dfe5e7;overflow:hidden;background:#e8eee5;box-shadow:0 12px 40px #14385409}
+#hero-image{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 54%;z-index:-2}
+#welcome-page .welcome-hero:before{content:"";position:absolute;inset:0;z-index:-1;background:linear-gradient(100deg,#fafcfcf5 0%,#f9fbfbd9 23%,#fbfcfc55 44%,transparent 65%),linear-gradient(0deg,#173d481a,transparent 40%);pointer-events:none}
+#welcome-page .welcome-copy{padding:62px 56px;max-width:720px;background:none;display:block}
+#welcome-page .welcome-copy .eyebrow{font-size:10px;letter-spacing:2.2px;color:#557489;margin-bottom:23px}
+#welcome-page .welcome-copy h1{font:normal clamp(42px,4.1vw,66px)/1.08 Georgia,serif;letter-spacing:-2.1px;color:#072b47;margin:0 0 23px}
+#welcome-page .welcome-copy>p{font-size:16px;line-height:1.7;color:#566f83;max-width:365px;margin:0 0 27px}
+.welcome-actions{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+#welcome-page .primary.big{min-width:183px;padding:15px 18px;background:#008697;border-color:#008697;font-size:13px;box-shadow:0 5px 14px #00647b22}
+.welcome-secondary{padding:15px 18px;background:#ffffffeb;border:1px solid #dde5e9;border-radius:6px;font-size:12px;box-shadow:0 3px 9px #22415408}
+.welcome-art-caption{position:absolute;right:23px;bottom:210px;font-size:10px;color:#fff;background:#183a48bf;padding:6px 10px;border-radius:4px;letter-spacing:.25px}
+.welcome-connections{position:absolute;bottom:22px;left:22px;right:22px;padding:21px 24px 22px;background:#ffffffed;border:1px solid #ffffff;border-radius:9px;box-shadow:0 5px 20px #10304112;backdrop-filter:blur(12px)}
+.welcome-connections-heading{display:flex;justify-content:space-between;align-items:center;margin-bottom:15px;gap:15px}
+.welcome-connections h2{font:600 15px Atlas,Arial,sans-serif;color:#103552;margin:0 0 5px}
+.welcome-connections-heading p{font-size:11px;color:#60758b}
+.welcome-connections-heading>span{font-size:10px;color:#637788}
+.welcome-connection-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:13px}
+.welcome-connection-cards>button{padding:15px 17px;background:white;border:1px solid #e5eaee;border-radius:7px;justify-content:flex-start;gap:13px;text-align:left;box-shadow:0 3px 8px #153b4f06}
+.welcome-connection-cards>button:hover{border-color:#9abfc8;box-shadow:0 5px 12px #163b4610}
+.welcome-system-icon{height:38px;width:38px;border-radius:8px;display:grid;place-items:center;color:white;flex-shrink:0}
+.system-blue{background:#239afb}.system-violet{background:#9266e8}.system-green{background:#04b89b}
+.welcome-connection-cards strong{font-size:13px;font-weight:600;display:block;color:#143352;margin-bottom:6px}
+.welcome-connection-cards small{font-size:11px;color:#697c8c;line-height:1.5;display:block}
+.welcome-connection-cards b{font-weight:400;color:#708398;margin-left:auto;align-self:flex-start}
+#welcome-page>.section-heading{margin:43px 0 21px;scroll-margin-top:24px}
+#welcome-page>.section-heading h2{font:28px Georgia;color:#163851;margin-top:9px}
+#welcome-page .capability-grid{gap:18px}
+#welcome-page .capability-grid>button{padding:24px;min-height:198px;border-color:#e0e7ea;border-radius:8px}
+#welcome-page .capability-grid h3{font-size:14px}
+#welcome-page .capability-grid p{font-size:13px;line-height:1.75}
+#welcome-page .capability-grid>button>i{background:#eaf2f3;color:#147888}
+#welcome-page .welcome-ecosystem{padding:34px 0;margin-top:18px}
+#welcome-page .saved-world-card{padding:22px}
+#welcome-page .saved-world-card .hero-facts{margin:4px 0 7px;padding:0;border:0;gap:16px}
+#welcome-page .saved-world-card .hero-facts span{flex-basis:auto}
+#welcome-page .saved-world-card .hero-facts b{color:#2d6370}
+@media(min-width:1700px){#welcome-page .welcome-hero{height:780px}}
+@media(max-width:1150px){#welcome-page{padding:0 28px 40px}.welcome-masthead{height:86px}.welcome-masthead nav{gap:18px}#welcome-page .welcome-hero{height:690px}#welcome-page .welcome-copy{padding:43px 36px;max-width:570px}#welcome-page .welcome-copy h1{font-size:51px}#welcome-page .welcome-copy>p{font-size:14px;max-width:320px}.welcome-connections{padding:19px;left:16px;right:16px;bottom:16px}.welcome-connection-cards>button{padding:13px;gap:9px}.welcome-connection-cards strong{font-size:12px}.welcome-system-icon{width:32px;height:32px}.welcome-connection-cards small{font-size:10px}.welcome-art-caption{bottom:195px}}
+@media(max-width:760px){#welcome-page{padding:0 16px 28px}.welcome-masthead nav{display:none}.welcome-wordmark{font-size:22px}.welcome-resume{font-size:10px}#welcome-page .welcome-hero{height:820px}#welcome-page .welcome-copy{padding:35px 25px}#welcome-page .welcome-copy h1{font-size:40px;letter-spacing:-1px}#welcome-page .welcome-hero:before{background:linear-gradient(180deg,#fafcfdf5,#fafcfdab 38%,transparent 65%)}#hero-image{object-position:61% 50%}.welcome-connections-heading>span{display:none}.welcome-connection-cards{grid-template-columns:1fr;gap:8px}.welcome-connection-cards>button{padding:10px 13px}.welcome-connection-cards small{font-size:11px}.welcome-art-caption{bottom:293px}#welcome-page .capability-grid{grid-template-columns:1fr}#welcome-page>.section-heading h2{font-size:25px}}

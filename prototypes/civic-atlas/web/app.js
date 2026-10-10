@@ -1,3 +1,4 @@
+import {renderOverview} from './overview.js';
 import {AtlasMap} from './map.js';
 import {propertyPreview} from './map-preview.js';
 const $=id=>document.getElementById(id);
@@ -8,6 +9,7 @@ const fmt=value=>Number.isFinite(Number(value))&&value!==null?nf.format(Number(v
 const day=value=>value?new Date(value+'T12:00:00Z').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',timeZone:'UTC'}):'No completed days';
 const shortDay=value=>new Date(value+'T12:00:00Z').toLocaleDateString('en-US',{month:'short',day:'numeric',timeZone:'UTC'});
 const paths={
+ layers:'m3 8 9-5 9 5-9 5z M3 12l9 5 9-5 M3 16l9 5 9-5',
  overview:'M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z',
  map:'m3 5 6-2 6 2 6-2v16l-6 2-6-2-6 2z M9 3v16 M15 5v16',
  sliders:'M4 6h16 M4 12h16 M4 18h16 M8 3v6 M16 9v6 M10 15v6',
@@ -32,7 +34,7 @@ const paths={
 function icon(name){return `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="${paths[name]||paths.info}"/></svg>`;}
 function icons(root=document){root.querySelectorAll('[data-icon]').forEach(el=>el.innerHTML=icon(el.dataset.icon));}
 let town,state,map,selected,detail,requestVersion=0,page='welcome',busy=false,filter='days';
-let toastTimer;
+let toastTimer,mapImage;
 let stateStale=false;
 const geographyCaption=()=>town?.atlasDesign?'Curated geography · saved physical records':'Generated geography · saved world records';
 function toast(message){$('toast').textContent=message;$('toast').classList.add('visible');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').classList.remove('visible'),4500);}
@@ -40,6 +42,7 @@ async function api(path,options){const response=await fetch('/atlas/api/'+path,{
 function route(next,replace=false){
  if(!['welcome','map','overview','configure','activity','connections'].includes(next))next='welcome';
  page=next;
+ document.body.dataset.view=next;
  document.querySelectorAll('.page').forEach(el=>el.hidden=el.id!==next+'-page');
  document.querySelectorAll('nav [data-page]').forEach(el=>{el.classList.toggle('active',el.dataset.page===next);if(el.dataset.page===next)el.setAttribute('aria-current','page');else el.removeAttribute('aria-current');});
  $('page-title').textContent={welcome:'Welcome',map:'Town map',overview:'Overview',configure:'Configure',activity:'Activity',connections:'Connections'}[next];
@@ -61,20 +64,17 @@ function refreshViews(){
  const population=town.premises.filter(p=>p.premiseType==='residential'&&p.occupied).reduce((sum,p)=>sum+(p.occupants||0),0);
  const roadsKm=town.roads.reduce((sum,r)=>sum+r.lengthM,0)/1000;
  $('hero-homes').textContent=fmt(town.homes);$('hero-people').textContent=fmt(population);
- $('hero-geography').textContent=town.atlasDesign?'Designed reference town · saved physical records':'Procedural geography · saved physical state';
- $('hero-image').alt=town.atlasDesign?'The designed Brookfield reference town, rendered by Civic Atlas':'The generated Brookfield neighborhood, rendered by Civic Atlas';
  if(!map?.drawing)$('map-caption-text').textContent=geographyCaption();
  $('activity-count').textContent=fmt(state.days);
  $('map-date').textContent=day(state.lastCompletedDay);
  $('map-next-date').textContent='Next day: '+day(state.through);
  $('global-clock').textContent=stateStale?'State unavailable · last known records':`${busy?'Advancing':state.clockOwner==='local-cruise'?'Cruise control':state.managedDelivery?'Shared clock':'Manual clock'} · saved through ${day(state.lastCompletedDay)}`;
  $('global-clock').classList.toggle('state-stale',stateStale);
- $('saved-world-summary').textContent=`${fmt(town.homes)} homes · ${fmt(population)} residents · ${town.atlasDesign?'designed reference town':'generated neighborhoods'}`;
+ $('saved-world-summary').textContent=`${town.atlasDesign?'Designed reference town':'Generated neighborhoods'} · daily history saved locally`;
  $('saved-world-date').textContent=day(state.lastCompletedDay);
  $('day-history').innerHTML=state.daysHistory.slice(0,7).reverse().map(d=>`<div class="history-day" title="${esc(d.observations)} observations, ${esc(d.temperature)} °C"><span></span>${shortDay(d.day)}</div>`).join('');
  const advance=`<button class="primary advance-button" ${busy||state.managedDelivery||state.manualAdvanceAllowed===false?'disabled':''}>${icon('play')}${busy?'Simulating…':'Simulate next day'}</button>`;
- $('overview-page').innerHTML=heading('LIVING WORLD · ADMINISTRATOR VIEW','A small town. A bigger picture.',`Brookfield is saved through ${day(state.lastCompletedDay)}. Next physical day: ${day(state.through)}.`,advance)+
- `<div class="stats-grid">${stat('Residents',population,'Saved residential occupancy')}${stat('Homes',town.homes,`${fmt(town.count)} total premises`)}${stat('Physical meters',state.assets,'Electricity, water, and gas')}${stat('Days simulated',state.days,'Durable daily history')}</div><div class="content-columns"><div class="panel"><h2>The weather in Brookfield</h2><p>Recorded daily conditions · illustrative physical model</p>${weather()}</div><div class="panel"><h2>A town you can explore</h2><p>${fmt(town.roads.length)} road segments. ${roadsKm.toFixed(1)} km of connected streets. Each property and utility connection belongs to the saved world.</p><img src="${$('hero-image').src}" alt="${town.atlasDesign?'Designed reference town':'Generated town'} · Brookfield" style="width:100%;height:145px;object-fit:cover;border-radius:7px;margin-top:15px"><button class="primary" data-page="map">Explore the town ${icon('map')}</button></div></div><div class="content-columns"><div class="panel"><h2>Recent physical history</h2>${dayEvents(4)}</div><div class="panel"><h2>From the world to its systems</h2><p>${fmt(state.observations)} meter observations have been recorded. They are local evidence; no external recipient is connected in this prototype.</p><div class="notice">${state.manualAdvanceAllowed===false?esc(state.clockReason||'This world clock is controlled by its runtime.'):'The simulation clock is advanced manually, one day at a time.'} Closing this page does not erase the saved world.</div><button class="inspector-button" data-page="connections">See the ecosystem <span>→</span></button></div></div>`;
+ $('overview-page').innerHTML=renderOverview({town,state,population,roadsKm,advance,mapImage,day,fmt,icon,esc,dayEvents,weather});
  const cfg=town.config?.town||{};
  const assumptionNames={annual_meter_drift:['Annual meter drift',v=>`${fmt(v*100)}% / year`],annual_meter_failure:['Annual meter failure assumption',v=>`${fmt(v*100)}% / year`],daily_weather_spread_c:['Daily weather spread',v=>`${fmt(v)} °C`],summer_mean_c:['Summer mean temperature',v=>`${fmt(v)} °C`],winter_mean_c:['Winter mean temperature',v=>`${fmt(v)} °C`]};
  $('configure-page').innerHTML=heading('CURRENT CONFIGURATION','What makes this world tick.','The saved town and its active daily model, in one place. Configuration is read-only in this first prototype.')+
@@ -156,6 +156,10 @@ function bind(){
  const artStatus=$('map-art-status'),canvasHost=$('map-canvas');
  const updateArtStatus=()=>{
   const mode=canvasHost.dataset.blockArt,count=Number(canvasHost.dataset.blockCount);
+  const artToggle=$('map-art-toggle');
+  artToggle.disabled=!map.blockArtStats?.ready;
+  artToggle.setAttribute('aria-pressed',String(Boolean(map.blockArtStats?.enabled)));
+  artToggle.title=map.blockArtStats?.ready?(map.blockArtStats.enabled?'Use individual assets':'Use illustrated blocks'):'Illustrated blocks unavailable for this world';
   artStatus.hidden=!['loading','ready','fallback'].includes(mode);
   artStatus.parentElement.classList.toggle('with-art-status',!artStatus.hidden);
   artStatus.dataset.state=mode||'native';
@@ -169,7 +173,9 @@ function bind(){
  map.abort.signal.addEventListener('abort',()=>artObserver.disconnect(),{once:true});
  updateArtStatus();
  document.addEventListener('click',e=>{
+  const scrollButton=e.target.closest('[data-scroll-target]');if(scrollButton){$(scrollButton.dataset.scrollTarget)?.scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth',block:'start'});return;}
   const pageButton=e.target.closest('[data-page]');if(pageButton){route(pageButton.dataset.page);return;}
+  if(e.target.closest('#map-art-toggle')){map.setBlockArtwork(!map.blockArtStats?.enabled);updateArtStatus();return;}
   if(e.target.closest('.advance-button')){advance();return;}
   const layer=e.target.closest('[data-layer]');if(layer){map.setLayer(layer.dataset.layer);document.querySelectorAll('[data-layer]').forEach(b=>b.classList.toggle('active',b===layer));$('legend-text').textContent=layer.dataset.layer==='town'?(selected?selected.address+' · selected property':'Select a property to explore'):`${layer.textContent.trim()} network · topology, not live flow`;document.querySelector('.legend-line').style.background={town:'#659785',water:'#149faf',electric:'#e5a735',gas:'#a783d8'}[layer.dataset.layer];renderProperty();return;}
   const asset=e.target.closest('[data-asset]');if(asset){renderProperty(asset.dataset.asset);return;}
@@ -207,10 +213,10 @@ async function boot(){
  try{
   const data=await api('bootstrap');town=data.snapshot;state=data.state;
   $('app').hidden=false;$('welcome-page').hidden=true;$('map-page').hidden=false;
-  map=new AtlasMap($('map-canvas'),town,{onSelect:selectProperty,onSketch:sketchChanged,notify:toast});
+  map=new AtlasMap($('map-canvas'),town,{onSelect:selectProperty,onSketch:sketchChanged,notify:toast,initialView:town.atlasDesign?{x:65,z:-65,viewHeightM:245}:undefined,art:new URLSearchParams(location.search).get('art')||(town.atlasDesign?'blocks':'native')});
   await map.visualReady;
   await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
-  $('hero-image').src=map.capture();
+  mapImage=map.capture();
   emptyInspector();refreshViews();bind();
   $('boot').hidden=true;route(location.hash.slice(1)||'welcome',true);
   document.body.dataset.ready='true';

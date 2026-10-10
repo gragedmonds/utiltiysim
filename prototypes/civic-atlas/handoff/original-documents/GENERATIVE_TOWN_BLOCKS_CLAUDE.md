@@ -36,11 +36,9 @@ The picture is replaceable decoration; the IDs never move.
 - **Rotation sets never converged.** The isometric batch-v2 sheets drifted between angles. Civic Atlas has
   committed to one fixed orthographic camera, so a per-block image only needs that one view.
 - **The two-block study already showed it works.** Fourteen houses across two plates kept exact picking, utility
-  overlays and pan/zoom in the tested views. Agent review accepted that limited experiment; the owner has not
-  accepted the full-town appearance or this proposed pipeline.
-- **Whole-town plates have a larger replacement cost.** A source manifest can support picking under a town-wide
-  image too, but a parcel edit invalidates a much larger plate. Resolution, memory and regeneration cost favour
-  smaller independently replaceable regions.
+  overlays and pan/zoom, and passed visual review for scale, palette and seams at the captured views.
+- **Whole-town images do not.** A single town render cannot be hit-tested reliably, cannot be regenerated when one
+  parcel changes, and cannot hold resolution at street zoom.
 
 ## 3. Non-negotiables
 
@@ -49,12 +47,10 @@ Carried from the art handoff, the map design and the owner's direction:
 1. Visual placement never creates, deletes or renumbers premises, service points, meters or registers.
 2. The simulation is authoritative. Artwork carries no state. Outages, pressure, incidents and crews are overlays.
 3. Utility equipment keeps explicit attachment anchors defined independently of image crops.
-4. Every painted building must match its source identity, footprint, frontage and recorded physical features.
-   Validate projected geometry with height and allowed eaves; a roof may project beyond a ground-level lot boundary
-   without the building crossing it. Wrong building counts or unexplained geometric drift fail acceptance.
+4. A generated house that crosses a lot line, or a block with the wrong house count, fails acceptance however good
+   it looks.
 5. Generation runs offline into a pack. The desktop app never calls an image model at runtime and works offline.
-6. A block whose pixel-affecting source or rendering dependencies changed is refused and falls back to native
-   rendering until new art is accepted. Invalidation follows dependencies, including affected neighbouring blocks.
+6. A block whose source geometry changed is refused and falls back to native rendering until new art is accepted.
 
 ## 4. Two layers per block
 
@@ -72,23 +68,19 @@ Carried from the art handoff, the map design and the owner's direction:
 ### Metadata layer
 
 - One manifest per block (section 5), generated from the snapshot before any image exists.
-- Lot hit regions retain source parcel and building geometry and explicit premise IDs. A parcel can contain
-  multiple buildings and a building can serve multiple premises. Native source geometry remains authoritative for
-  picking; the art pipeline cannot move a hit region to follow a painting error.
-- Anchors: recorded meter, service and driveway positions where the snapshot supplies them. A network connection
-  does not necessarily specify a wall attachment. Any derived visual attachment must be labelled as derived,
-  identify its source asset and derivation version, and never be presented as a recorded measurement. Missing
-  anchors remain unavailable rather than invented.
-- Registration: record the complete orthographic projection, coordinate convention and image frame. Four corner
-  fiducials detect crop or frame drift; they do not detect internal movement of roofs or anchors. Validate each
-  building and required attachment against the guide separately, including expected occlusion.
+- Lot hit regions: one polygon per lot, keyed by premise and parcel ID. Native footprints remain the picking surface,
+  as in the study.
+- Anchors: meter wall point, service drop, driveway, pole tap. These come from the network plan; the image must
+  honour them and the QA gate checks that it does.
+- Registration: the camera, target and frame the guide was rendered with. Because the guide is rendered through the
+  exact map camera, a correctly framed image needs no warp. Four corner fiducials in the guide detect drift and
+  reject images the model cropped or shifted.
 
 ## 5. Block manifest
 
 Proposed schema `utility-block/0.1`. It extends the study's `civic-atlas-block-art/1` metadata (signature, block
 polygon, camera, anchors, frame) with lots, anchors, family and provenance. All coordinates are town metres; image
-space is reached only through the recorded camera. In the example, ground polygons use `[x, z]`; 3D positions
-use `[x, y, z]`, with x east, y up and z south. The example contains one of the block's lots, not the full manifest.
+space is reached only through the recorded camera.
 
 ```json
 {
@@ -97,12 +89,7 @@ use `[x, y, z]`, with x east, y up and z south. The example contains one of the 
   "family": "postwar_grid_res",
   "seed": 42,
   "styleCard": "civic-atlas/v3",
-  "camera": {
-    "type": "orthographic",
-    "position": [491, 120, 1004], "target": [475, 0, 922], "up": [0, 1, 0],
-    "frustum": {"left": -90, "right": 90, "top": 60, "bottom": -60, "near": 0.5, "far": 2000},
-    "zoom": 1, "frame": [1536, 1024], "pixelRatio": 1
-  },
+  "camera": {"direction": [0, 0, 0], "quaternion": [0, 0, 0, 1], "target": [0, 0, 0], "frame": [1536, 1024]},
   "sourceSignature": "sha256:…",
 
   "footprint": {
@@ -117,20 +104,15 @@ use `[x, y, z]`, with x east, y up and z south. The example contains one of the 
   "lots": [
     {
       "parcelId": "p-2210",
-      "premiseIds": ["prm-01877"],
+      "premiseId": "prm-01877",
       "frontage": "rd-092",
-      "parcelPolygon": [[452.0, 930.0], [470.0, 930.0], [470.0, 950.0], [452.0, 950.0]],
-      "buildings": [{
-        "buildingId": "bld-01877", "premiseIds": ["prm-01877"],
-        "footprint": [[456, 935], [468, 935], [468, 946], [456, 946]],
-        "type": "house", "era": "postwar", "roof": "gable", "stories": 1,
-        "heightM": 5.2, "frontDirection": [0, 1], "solar": false
-      }],
-      "anchors": [{
-        "assetId": "meter-01877", "premiseId": "prm-01877", "kind": "meter",
-        "position": [468, 1.5, 941], "wall": "E", "authority": "recorded",
-        "expectedVisibility": "occluded"
-      }]
+      "building": {"type": "house", "era": "postwar", "roof": "gable", "stories": 1, "solar": false, "occupied": true},
+      "hit": [[452.0, 930.0], [470.0, 930.0], [470.0, 950.0], [452.0, 950.0]],
+      "anchors": {
+        "meter": {"xy": [469.2, 941.0], "wall": "E"},
+        "serviceDrop": {"xy": [461.0, 960.5], "roadId": "rd-092"},
+        "driveway": {"xy": [474.0, 960.5]}
+      }
     }
   ],
 
@@ -140,7 +122,7 @@ use `[x, y, z]`, with x east, y up and z south. The example contains one of the 
     "base": "blocks/blk-0417/base.webp",
     "detail": "blocks/blk-0417/detail.webp",
     "mask": "blocks/blk-0417/mask.png",
-    "presentationMasks": {"buildings": "blocks/blk-0417/building-ids.png"}
+    "variants": {"night": "blocks/blk-0417/night.webp", "outage": "recolor:dim-0.55", "winter": "recolor:lut-winter"}
   },
 
   "provenance": {
@@ -152,7 +134,7 @@ use `[x, y, z]`, with x east, y up and z south. The example contains one of the 
     "chosen": 2,
     "approval": "pending | auto | reviewed",
     "reviewedBy": null,
-    "qa": {"status": "pending", "report": "blocks/blk-0417/qa.json"}
+    "qa": {"lotCountMatch": true, "anchorFit": 0.96, "edgeLeakPx": 0, "lightDirDeg": 3, "paletteDelta": 0.04}
   }
 }
 ```
@@ -162,43 +144,35 @@ Field ownership:
 | Field | Written by | Rule |
 | --- | --- | --- |
 | `footprint`, `lots`, `sourceSignature` | Manifest derivation from the snapshot | Read-only to the art pipeline. |
-| `anchors` | Recorded source positions or explicitly versioned derivation | Retain asset identity and authority; never move an anchor to fit the image. |
+| `anchors` | Network plan | The image must fit them; never the reverse. |
 | `family`, `streetscape` | Derivation from land use and era | Selects the style card and prompt details. |
 | `image` | Pipeline | Replaceable at any time without touching an ID. |
 | `provenance` | Pipeline and reviewer | Audit trail; keeps guide, output, settings and approval together. |
 
 Rules:
 
-- Source parcel and building hit regions are immutable. Incorrect painted placement is rejected or regenerated,
-  never repaired by moving the source geometry. Presentation masks resolve to existing building and premise IDs.
-- An apartment court may have multiple buildings and many premises. Picking a building resolves its premise list;
-  the picture neither creates units nor forces a one-lot/one-premise relationship.
-- The source/render signature covers every pixel-affecting dependency: relevant parcel/building/anchor geometry,
-  terrain elevation, adjacent road and curb geometry, physical features, camera/frustum/frame, lighting, style,
-  seed, and guide, mask and compositor versions. Record the dependency IDs and versions so an edit invalidates
-  every affected plate, including neighbouring shadow or canopy dependencies. Exclude unrelated world records and
-  transient state. Do not assume an edit always affects only one block.
-- Keep an artifact key for the source/render signature plus model version, prompt, reference-image hashes and
-  generated content hash. Record which accepted artifact is bound to the current source signature.
-- Occupancy, incidents and outages are runtime data, not static artwork facts. Per-premise state needs identity
-  masks or native overlays; dimming an entire block cannot represent one affected premise. Seasonal geometry and
-  close-view detail remain separate proposals, not capabilities supplied by a colour lookup alone.
+- Hit regions may be nudged inside their own lot so a painted house lines up. One lot keeps exactly one premise.
+- An apartment court is one lot with many premises. Its hit region is the building; units resolve through the
+  premise list, not the picture.
+- The cache key is a hash of footprint, lots, anchors, style card and seed. A parcel edit invalidates only its block.
+  The study's broad signature invalidated on changes that did not affect the block; narrow it to these inputs.
+- State variants are recolour passes on the accepted base image, never new generations, so night and outage cannot
+  drift from day.
 
 ## 6. Block families
 
 A family is a style card plus a footprint class. Derivation tags each block from land use and era. All families share
-one camera, sun angle and palette so they sit together. Family descriptions are styling hints, not a source of
-infrastructure: service types, voltages, equipment and premise membership must come from the saved model.
+one camera, sun angle and palette so they sit together.
 
 | Family | Typical content | Notes |
 | --- | --- | --- |
 | `postwar_grid_res` | 6–12 detached homes, two frontages | Most of a town. Era and roof type are the main levers. |
-| `main_street_1945` | Attached storefronts, rear parking | Signage band, flat roofs, rooftop units; source-backed rear service access. |
-| `modern_culdesac` | Irregular lots on a turning circle | Varied homes; service type and transformer positions only when recorded. |
+| `main_street_1945` | Attached storefronts, rear parking | Signage band, flat roofs, rooftop units; 600 V services behind. |
+| `modern_culdesac` | Irregular lots on a turning circle | Two-storey homes, underground services, pad transformers on lot lines. |
 | `apartment_court` | One parcel, many premises | Hit region is the building, not per unit. |
 | `civic` | School, church, hall, playing field | Facility kind and name go into the prompt. |
 | `industrial` | Plant or depot, yard, fencing | Large meter set and transformer pad are anchors. |
-| `park` | Paths, ball diamond, canopy | Premise membership and equipment anchors follow the source park records. |
+| `park` | Paths, ball diamond, canopy | No premises. Only streetlight and hydrant anchors. |
 | `utility_site` | Substation, tower, pump, city gate | Ground and fence are painted. The equipment stays a sprite so operating state can change it. |
 
 The two study plates are garden-rich postwar blocks. The handoff notes they are "not an adequate style library";
@@ -209,25 +183,20 @@ town.
 
 Runs offline, once per block, keyed by the manifest hash. Output goes into the town pack beside the snapshot.
 
-1. **Derive.** Bounded faces of a planar road representation provide candidate regions, respecting grade-separated
-   crossings. They are not the entire partition: explicit rules also cover dead ends, cul-de-sacs, open town edges,
-   river edges and facility campuses. Assign each source parcel/building exactly once, retaining multi-premise
-   membership and a native fallback for unresolved regions. Record boundary ownership and dependency IDs.
-   Anchors retain recorded or explicitly derived authority. Output: one manifest per supported region.
+1. **Derive.** Faces of the road graph become blocks. Parcels, buildings and premises inside each face become lots.
+   Anchors come from the network plan. Output: one manifest per block.
 2. **Compose.** Render the guide through the exact map camera: plain massing, footprints, lot lines, driveway stubs,
    numbered house anchors and corner fiducials. `prototypes/civic-atlas/render-block-guide.mjs` already does most of
    this for one block; generalise it to any block ID. Assemble the prompt from the family style card plus manifest
-   facts: building count and identity per frontage, eras, roofs, storeys, solar, tree density and actual front directions.
+   facts: lot count per frontage, eras, roofs, storeys, solar, tree density.
 3. **Generate.** Send guide, prompt and style references to an image-edit model. Request three candidates. Include
    already-accepted neighbouring blocks as references so canopy species, lawn tint and roof palette agree.
 4. **Register.** Confirm the full frame was preserved by locating the fiducials. Clip at the curb mask, feather the
-   ground edge, clean the alpha. Reject any candidate whose fiducials moved beyond tolerance. Frame alignment alone
-   does not approve internal geometry; retain the uncut image for containment and clipping-loss checks.
+   ground edge, clean the alpha. Reject any candidate whose fiducials moved beyond tolerance.
 5. **Score.** Run the gates in section 8. Pick the best passing candidate, or send the block back to step 2 with a
    corrected prompt. Borderline candidates go to a review gallery like `assets/town/isometric/batch-v2/index.html`.
-6. **Publish.** Write the accepted base, available detail level, identity/occlusion masks and completed manifest into
-   `packs/<town>/blocks/<blockId>/`. Reuse unchanged dependency signatures. Regenerate the dependency closure of an
-   edit; independent blocks stay cached.
+6. **Publish.** Write base, detail level, mask, recolour variants and the completed manifest into
+   `packs/<town>/blocks/<blockId>/`. Unchanged hashes are reused, so editing one parcel regenerates one block.
 
 ### Choice of image model
 
@@ -244,19 +213,17 @@ Image-to-image is required. Text-only prompts will not put eight houses where ei
 | Gate | Check | Threshold |
 | --- | --- | --- |
 | `frameIntact` | All four fiducials found within tolerance of the guide positions | Hard reject |
-| `buildingIdentity` | Every source building has one matched painted building; wings/dormers are not extra premises. Counts and frontage orientation agree | Hard reject on missing, added or ambiguous identity |
-| `projectedGeometry` | Each match fits the source footprint, height-aware projected silhouette and allowed eaves; no unexplained lot crossing or internal frame warp | Per-building tolerance to calibrate; no centroid-only pass |
-| `anchorRegistration` | Every required anchor keeps asset identity and source projection. Visible attachments fit their projected surface; occluded ones retain correct hidden position and reveal behaviour | Reject any required mismatch; do not average away failures |
-| `edgeIntegrity` | No opaque pixels outside the final mask; inspect the uncut image for important clipped buildings/canopy and inspect adjacent road seams | 0 final leakage, plus visual acceptance of clipping and joins |
+| `lotCountMatch` | Roof count per frontage band equals the manifest | Hard reject |
+| `lotContainment` | Each detected roof centroid lies inside its own lot | Hard reject |
+| `anchorFit` | Share of meter anchors on a wall pixel and service drops on lawn or driveway | ≥ 0.9 (proposed) |
+| `edgeLeakPx` | Opaque pixels outside the curb mask after clipping | 0 |
 | `lightDir` | Shadow direction from roof segments versus the style card's sun angle | ± 10° (proposed) |
 | `paletteDelta` | Mean lawn and paving colour versus accepted neighbours | Review if exceeded |
 | `hazeAndText` | No atmospheric haze, baked labels or watermarks | Hard reject |
 | `solarAndFeatures` | Recorded solar, pools or other modelled roof features are present | Hard reject when modelled |
 
-Thresholds marked proposed must be calibrated on the first proof. Guide-based segmentation can assist review,
-but matching a roof centroid or frame corners cannot prove source fidelity. Retain per-building and per-anchor
-results, expected occlusion and uncertainty. Ambiguous matches require review; unimplemented checks remain pending,
-never implicitly passing. Verify frontage access, storeys and recorded features alongside geometric registration.
+Thresholds marked proposed should be calibrated on the first proof. Roof detection can start as simple segmentation
+against the guide's known footprints; it does not need to be general computer vision.
 
 Automatic acceptance is a later step. Until the gates are trusted, every block needs human approval recorded in
 provenance. The handoff is explicit that agent reviews do not substitute for owner sign-off on the visual milestone.
@@ -269,8 +236,8 @@ Draw order, bottom to top:
 2. **Block images**, each a camera-aligned quad in world coordinates, masked at the curb.
 3. Road layer: pavement, markings, sidewalks and curbs from `roads[]`. It owns every pixel between blocks.
 4. Network overlays for the active lens: mains, valves, hydrants, poles, wires, meters, snapped to block anchors.
-5. State and selection: selected source lot/building outline, incident halo and per-premise lens/state overlays.
-   Any recolour uses validated identity masks; no block-wide outage claim for a single affected premise.
+5. State and selection: selected lot outline from the hit region, incident halo, outage dim via the recolour
+   variant, lens tints.
 6. Crews and vehicles on the road graph, from the operations timeline.
 7. Labels: street names along roads, place names, legend.
 
@@ -278,8 +245,7 @@ Why seams should not show:
 
 - Street-separated blocks never touch. The road layer between them is drawn by the viewer.
 - Every block shares camera, sun angle and palette from one style card, and the palette gate compares neighbours.
-- Cross-road shadows need source-derived native shadow proxies or a separate registered shadow layer. Clipping a
-  painted shadow does not recreate it on the road; continuity and avoidance of duplicate shadows remain proof gates.
+- Shadows that would cross a road belong to the road layer, so long consistent shadows survive the curb cut.
 
 Still unproven, and required before calling this production-ready:
 
@@ -298,8 +264,7 @@ Zoom levels:
 
 ## 10. Edits and invalidation
 
-- A road, parcel, footprint, elevation, frontage or rendering-contract change recomputes the affected dependency
-  signatures, including neighbouring plates where a shared edge, shadow or canopy is influenced.
+- A road, parcel, footprint, elevation or frontage change recomputes the affected manifests' hashes.
 - Changed blocks fall back to native rendering immediately and are queued for regeneration.
 - The study's "Test stale-art fallback" control is the model for this behaviour; keep it.
 - Construction previews in Build mode use native rendering. Generated art appears only after acceptance.
@@ -308,9 +273,8 @@ Zoom levels:
 
 - Cost scales with blocks, not homes. A few thousand homes are a few hundred blocks. A 50,000-resident town is a few
   thousand blocks.
-- Three candidates per block and occasional regeneration are the main generation spend. Budget review time,
-  storage, GPU texture memory and detail levels as well. Runtime state overlays require no image-model calls;
-  seasonal art may require separate generation and validation.
+- Three candidates per block and occasional regeneration are the main spend. Night, outage and season variants are
+  recolour passes and need no model calls.
 - Accepted blocks can be reused across seeds that share a family and footprint class only when the manifest hash
   matches exactly. Never reuse art across different lots.
 - Generation is not part of CI. Packs are produced by an explicit offline command and committed or distributed as
@@ -326,12 +290,10 @@ returns the correct premise.
 2. Derive manifests for every block in a representative area: residential variety, a commercial street, a park and a
    utility site, per handoff Priority 1.
 3. Generate three candidates per block through the adapter, using accepted neighbours as references.
-4. Implement `frameIntact`, source building/anchor correspondence and `edgeIntegrity` first. Review projected
-   geometry, expected occlusion, frontage and physical features explicitly until automated gates are validated.
+4. Implement `frameIntact`, `lotCountMatch`, `lotContainment` and `edgeLeakPx` first; review the rest by eye.
 5. Load accepted blocks through the existing `?art=blocks` path and compare against native assets at the same
    camera, at town, neighbourhood and street zoom.
-6. Change one parcel and then a shared road/terrain dependency. Confirm all affected plates fall back and
-   regenerate, while independent cached plates remain. Test a multi-premise building and an open-edge region.
+6. Change one parcel, confirm only its block falls back and regenerates.
 7. Put the comparable views in front of the owner. Their judgement is the acceptance gate.
 
 ## 13. Decisions still open

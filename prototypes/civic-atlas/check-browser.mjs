@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 const modulePath = process.env.PLAYWRIGHT_MODULE || new URL('../../out/civic-atlas/browser/node_modules/playwright-core/index.mjs', import.meta.url).href;
 const { chromium } = await import(modulePath);
 const base = process.env.ATLAS_URL || 'http://127.0.0.1:8040';
-const artQuery = process.env.ATLAS_ART === 'blocks' ? '?art=blocks' : '';
+const artQuery = ['blocks','native'].includes(process.env.ATLAS_ART) ? '?art='+process.env.ATLAS_ART : '';
 const output = process.env.ATLAS_REVIEW_OUTPUT || fileURLToPath(new URL('../../out/civic-atlas/review/', import.meta.url));
 await mkdir(output, { recursive: true });
 const browser = await chromium.launch({
@@ -16,10 +16,28 @@ const errors = [];
 try {
   const page = await browser.newPage({ viewport: { width: 1600, height: 1000 } });
   page.on('pageerror', e => errors.push(e.message));
-  const ready = () => page.waitForFunction(() => document.body.dataset.ready === 'true');
+  const ready = async () => {
+    await page.waitForFunction(() => document.body.dataset.ready === 'true' || document.querySelector('#retry')?.hidden === false, null, {timeout:120000});
+    assert.equal(await page.evaluate(() => document.body.dataset.ready), 'true', await page.locator('#boot-message').textContent());
+  };
   const diagnostics = () => page.evaluate(() => window.atlasDiagnostics());
   await page.goto(base + '/' + artQuery + '#welcome');
   await ready();
+  assert.equal(await page.locator('.sidebar').isVisible(),false,'welcome is outside the operational shell');
+  await page.locator('#hero-image').evaluate(img=>img.decode());
+  assert.match(await page.locator('#hero-geography').textContent(),/concept landscape/);
+  await page.locator('.welcome-actions [data-page="map"]').click();
+  assert.equal(await page.locator('#map-page').isVisible(),true,'welcome resumes actual map');
+  assert.equal(await page.locator('.sidebar').isVisible(),true,'workspace navigation returns');
+  if(await page.locator('#map-art-toggle').isEnabled()){
+    const before=await diagnostics();
+    await page.locator('#map-art-toggle').click();
+    assert.equal(await page.locator('#map-art-toggle').getAttribute('aria-pressed'),'false');
+    await page.locator('#map-art-toggle').click();
+    assert.equal(await page.locator('#map-art-toggle').getAttribute('aria-pressed'),'true');
+    assert.deepEqual((await diagnostics()).camera,before.camera,'art comparison preserves camera');
+    assert.equal((await diagnostics()).townId,before.townId,'art comparison preserves world');
+  }
   for (const width of [1600, 1024]) {
     await page.setViewportSize({ width, height: width === 1600 ? 1000 : 850 });
     for (const name of ['welcome', 'overview', 'configure', 'activity', 'connections', 'map']) {
@@ -86,8 +104,8 @@ try {
   await page.locator('[data-asset="electric"]').click();
   assert.match(await page.locator('.inspector-section h3').first().textContent(), /Electricity/);
   await page.screenshot({ animations: 'disabled', path: `${output}/property-record.png` });
-  await page.locator('nav [data-page="configure"]').click();
-  await page.locator('nav [data-page="map"]').click();
+  await page.locator('.sidebar nav [data-page="configure"]').click();
+  await page.locator('.sidebar nav [data-page="map"]').click();
   assert.deepEqual((await diagnostics()).camera, selected.camera);
   assert.equal((await diagnostics()).selectedId, selected.selectedId);
   // A compact inspector need not overflow a tall desktop; exercise a short window.

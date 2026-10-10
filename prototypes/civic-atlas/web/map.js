@@ -11,9 +11,9 @@ import {replaceTreeAssets,replaceCivicAssets,addResidentialCharacter,groundTextu
 import {addStreetMarkings,softenTrees,makeStreetLabels,enrichNeighborhood,refineStreetSurfaces} from './map-art.js';
 
 export class AtlasMap {
-  constructor(element, town, {onSelect, onSketch, notify}) {
+  constructor(element, town, {onSelect, onSketch, notify, initialView, art = new URLSearchParams(location.search).get('art') || 'native'}) {
     inspectSnapshot(town);
-    this.el = element; this.town = town; this.onSelect = onSelect; this.onSketch = onSketch; this.notify = notify;
+    this.el = element; this.town = town; this.initialView = initialView; this.art = art; this.onSelect = onSelect; this.onSketch = onSketch; this.notify = notify;
     this.inputMode = 'auto'; this.drawing = false; this.space = false; this.frontage = true;
     this.abort = new AbortController(); this.points = [];
     this.scene = new TownScene(element, result => { if (!this.drawing && result.home) onSelect(result.home); }, 'full', {renderOnDemand:true});
@@ -150,10 +150,10 @@ export class AtlasMap {
     this.twoStoreySprites=createBuildingSprites(s,this.town,{url:'./assets/civic-houses-two-storey.png',stories:2,calibrated:true});
     this.commercialSprites=createBuildingSprites(s,this.town,{url:'./assets/civic-commercial-atlas.png',kind:'commercial',calibrated:true});
     this.visualReady=Promise.all([this.foliageReady,this.materialReady,this.buildingReady,this.twoStoreySprites.ready,this.commercialSprites.ready]);
-    if(new URLSearchParams(location.search).get('art')==='blocks'){
+    if(this.art==='blocks'){
       const nativeReady=this.visualReady;
       this.el.dataset.blockArt='loading';this.el.dataset.blockCount='0';
-      this.blockArtStats={ready:false,enabled:false,count:0,reason:'Two experimental block illustrations are loading'};
+      this.blockArtStats={ready:false,enabled:false,count:0,reason:'Experimental neighborhood illustrations are loading'};
       this.blockReady=nativeReady.then(()=>this.loadBlockArtwork());
       this.visualReady=Promise.all([nativeReady,this.blockReady]);
     }
@@ -161,18 +161,19 @@ export class AtlasMap {
   }
   async loadBlockArtwork(){
     try{
-      const {createBlockPlate,BLOCK,SECOND_BLOCK}=await import('./map-block-plate.js');
+      const {createBlockPlate,BLOCK,SECOND_BLOCK,COMMERCIAL_BLOCK}=await import('./map-block-plate.js');
       if(this.abort.signal.aborted)return null;
       this.blockPlates=[
         createBlockPlate(this,{block:BLOCK,metadataUrl:'./assets/civic-block-pine-willow.json',imageUrl:'./assets/civic-block-pine-willow.png',signal:this.abort.signal}),
         createBlockPlate(this,{block:SECOND_BLOCK,metadataUrl:'./assets/civic-block-oak-birch.json',imageUrl:'./assets/civic-block-oak-birch.png',manageOverlays:false,signal:this.abort.signal}),
+        createBlockPlate(this,{block:COMMERCIAL_BLOCK,metadataUrl:'./assets/civic-block-main-north.json',imageUrl:'./assets/civic-block-main-north.png',manageOverlays:false,signal:this.abort.signal}),
       ];
       await Promise.all(this.blockPlates.map(plate=>plate.ready));
       if(this.abort.signal.aborted)return null;
       if(!this.blockPlates.every(plate=>plate.stats.ready))throw Error(this.blockPlates.find(plate=>!plate.stats.ready)?.stats.reason||'Block illustration is unavailable');
       if(!this.blockPlates.every(plate=>plate.setEnabled(true)))throw Error('Block illustration no longer matches the saved geography');
-      Object.assign(this.blockArtStats,{ready:true,enabled:true,count:2,reason:'Experimental illustrations of two saved blocks'});
-      this.el.dataset.blockArt='ready';this.el.dataset.blockCount='2';this.refreshBlockOverlays();
+      Object.assign(this.blockArtStats,{ready:true,enabled:true,count:this.blockPlates.length,reason:'Experimental illustrations of saved blocks'});
+      this.el.dataset.blockArt='ready';this.el.dataset.blockCount=String(this.blockPlates.length);this.refreshBlockOverlays();
       return this.blockArtStats;
     }catch(error){
       this.blockPlates?.forEach(plate=>plate.setEnabled(false));
@@ -181,6 +182,16 @@ export class AtlasMap {
       this.el.dataset.blockArt='fallback';this.el.dataset.blockCount='0';this.request();
       return this.blockArtStats;
     }
+  }
+  setBlockArtwork(enabled){
+    if(!this.blockArtStats?.ready)return false;
+    const results=this.blockPlates.map(plate=>plate.setEnabled(enabled));
+    const active=Boolean(enabled)&&results.every(Boolean);
+    if(!active)this.blockPlates.forEach(plate=>plate.setEnabled(false));
+    this.blockArtStats.enabled=active;
+    this.el.dataset.blockArt=active?'ready':'native';
+    this.el.dataset.blockCount=active?String(this.blockPlates.length):'0';
+    this.request();return active;
   }
   refreshBlockOverlays(){this.blockPlates?.[0]?.liftOverlays();}
   worldAt(clientX,clientY) {
@@ -246,14 +257,14 @@ export class AtlasMap {
     const projectedHeight=Math.abs(up.x)*width+Math.abs(up.z)*depth+40;
     const fitDistance=Math.max(projectedHeight,projectedWidth/aspect)*1.12/.65;
     const reference=this.town.atlasDesign;
-    const distance=neighborhood?(reference?(reference.focus?.viewHeightM||reference.viewHeightM||440)/.65:s.span*.46):fitDistance;
+    const distance=neighborhood?(reference?(this.initialView?.viewHeightM||reference.focus?.viewHeightM||reference.viewHeightM||440)/.65:s.span*.46):fitDistance;
     s.controls.target.copy(s.center);
     if(neighborhood&&this.parkArt.centers.length){
       const park=this.parkArt.centers[0],school=this.town.premises.find(p=>p.buildingType==='school');
       const x=school?(park.x+school.x)/2:park.x,z=school?(park.z+school.z)/2:park.z;
       s.controls.target.set(x,s.heightAt(x,z),z);
     }
-    if(neighborhood&&reference){const focus=reference.focus||{x:75,z:-10};s.controls.target.set(focus.x,s.heightAt(focus.x,focus.z),focus.z);}
+    if(neighborhood&&reference){const focus=this.initialView||reference.focus||{x:75,z:-10};s.controls.target.set(focus.x,s.heightAt(focus.x,focus.z),focus.z);}
     s.camera.position.copy(s.controls.target).addScaledVector(this.direction,distance);
     s.controls.minDistance=65; s.controls.maxDistance=Math.max(s.span*3,fitDistance*1.1);
     s.controls.update(); this.updateProjection();this.request();

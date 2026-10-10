@@ -4,6 +4,10 @@ Handoff date: **10 October 2026**. Status: **incomplete exploration; visual and 
 
 The owner's latest assessment is: “We're definitely not where we need to be with this at all.” Treat that as the current status. Earlier agent reviews accepted particular rendering and interaction experiments; they do **not** constitute owner approval, whole-town visual parity, or readiness to ship. The next implementer is free to replace the rendering approach while retaining useful discoveries and simulation contracts.
 
+## Continued implementation
+
+Work resumed after this handoff. See [the 10 October continuation](handoff/ITERATION_2026_10_10.md) for the reviewed Claude proposal, redesigned welcome/overview and three-area map experiment. The owner has not signed off on visual quality; the original status above remains the acceptance boundary.
+
 ## What is in this folder
 
 This is the single handoff entry point. It contains the prototype source, final generated assets, original document snapshots, original concept artwork, captured results, technical findings and a continuation plan. Reading the handoff does not require the original chat or ephemeral workspace paths.

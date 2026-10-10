@@ -33,3 +33,9 @@ For production, validate generated image registration before use, overlap and fe
 Generate the adjacent block input with `ATLAS_GUIDE_BLOCK=oak-birch node prototypes/civic-atlas/render-block-guide.mjs`. Its 110-metre frame yields 9.31 texture pixels per metre; the first block’s 100-metre frame yields 10.24. Both use exactly the same orthographic camera direction and world coordinates.
 
 The paired sample passed independent visual review for matching scale/palette, continuous native Oak Avenue, all fourteen house anchors, preserved solar and road access, and no obvious hard plate seam at the captured views. This acceptance applies to these two authored blocks. The main app can optionally load them with `?art=blocks#map`; default native assets remain the fallback. The proof retains native geometry underneath for exact picking and fallback, so it does not yet demonstrate the full rendering-cost savings of a production baked scene.
+
+## Continued commercial study
+
+`/block-study.html?blocks=3` now adds six actual north-side Main Street businesses (P-00121 through P-00126) to the fourteen homes. Use `ATLAS_BLOCKS=3` with the retained check and `ATLAS_GUIDE_BLOCK=main-north` with the guide renderer. Both earlier study routes remain unchanged. The main application now enables all three illustrations by default for the reference town, with an on-map comparison control and explicit `?art=native#map` route. Any plate load/source failure leaves native rendering.
+
+The third area is a commercial strip beside Market Green, not a complete newly derived road-graph face. Its ground/painted frontage is manually bounded. The proposed automatic block manifest and QA pipeline remain unimplemented. The twenty-property check passed; see [continuation evidence](handoff/ITERATION_2026_10_10.md).
