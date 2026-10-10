@@ -13,7 +13,7 @@ The immediate objective is a credible successor implementation that meets the ow
 
 Develop a connected, representative area containing residential variety, a commercial street, a civic or utility landmark, a usable park and a river/bridge transition. Preserve camera framing for before/after comparison. One lush garden block surrounded by much weaker scenery is insufficient.
 
-Evaluate individual assets and whole-block composition against the same criteria:
+Whole-block composition is now the owner's chosen artwork direction; native assets remain the fallback. Evaluate the integrated result against these criteria:
 
 | Dimension | Evidence needed |
 | --- | --- |
@@ -64,3 +64,5 @@ This package is complete when another person can read the original intent, inspe
 The welcome hero and new concept art are liked; the working map must meet that standard. Preserve the now shared grass palette while extending native detail. Prioritize realistic road curves and joined sidewalk boundaries, residential door/driveway-to-curb connections, explicit pole/streetlight/traffic-control distinctions, solar status based on records, and a clearly labeled below-ground topology view. Validate minimum/maximum building dimensions **and the full site/access envelope** before choosing a variant; an undersized lot must produce another candidate or a no-fit outcome. The current ball diamond is a practice-scale illustration, not a regulation field.
 
 The account disclosure and scrolling welcome are now implemented, with real sign-in explicitly unconfigured. Follow [the current city-place findings](CITY_PLACES_2026_10_10.md) and [road/site review](ROAD_AND_SITE_REVIEW.md) rather than treating older completed priorities as still pending. The sketch editor still cannot commit streets or populate simulator parcels.
+
+The owner accepts block regeneration after physical edits, including an explicit full-city rebuild. Prioritize a versioned generation queue with per-block dependencies and stale-result rejection; do not regenerate imagery for changing utility readings. [The whole-school-block proof](WHOLE_BLOCK_2026_10_10.md) replaces the isolated school tile and preserves the original three property identities. Use the running welcome and map for review.

@@ -6,6 +6,8 @@ The owner likes the redesigned welcome and the new city-family concept art, but 
 
 ## Continued implementation
 
+Latest: [whole-school-block continuation](handoff/WHOLE_BLOCK_2026_10_10.md). The owner accepts block regeneration after physical edits. The running map now includes the school and its two neighboring homes in one continuous street-bounded illustration, with individual source inspection preserved.
+
 Work resumed after this handoff. Start with [city places and shared grass](handoff/CITY_PLACES_2026_10_10.md), [welcome account/scroll narrative](handoff/WELCOME_ITERATION_2026_10_10.md), [roads and site review](handoff/ROAD_AND_SITE_REVIEW.md), and [visual review](handoff/VISUAL_REVIEW_CITY_PLACES.md). The main map now includes six illustrated areas. [The earlier continuation](handoff/ITERATION_2026_10_10.md) preserves the Claude proposal review and previous three-area baseline. The owner has not signed off on the overall result.
 
 ## What is in this folder
@@ -38,7 +40,7 @@ The map must present the engine's world faithfully. Decorative trees, gardens an
 | Geography | Authored Brookfield fixture: 120 homes, 292 residents, 135 premises, 388 meters, 3 parks | Realistic procedural layout and editing; larger settlement validation |
 | Map | Fixed orthographic camera, pan/zoom, search, source property picking, topology layers | Whole-town reference-quality composition, production performance and accessibility review |
 | Individual art | Calibrated house/shop sprites, foliage, ground materials, geometric fallbacks | Consistent richness across all building types and landscape; fewer conspicuous repeated forms |
-| Whole-block art | Two manually generated images aligned to 14 source homes; same-world A/B and shell opt-in | Automatic constrained generation, more land uses, close-view resolution, occlusion and regeneration lifecycle |
+| Whole-block art | Six manually generated areas, including residential/commercial blocks and a school block with two homes; same-world A/B | Automatic constrained generation, more land uses, close-view resolution, occlusion and regeneration lifecycle |
 | Shell | Welcome, Overview, Configure, Activity, Town map, Connections; current property records | Complete creation/configuration/editing and operational workflows; page-by-page capability reconciliation |
 | Simulation | Real durable SQLite world and daily observations; guarded next-day advancement | Full newer capability inventory integrated into this shell |
 | Road editing | Browser-only draft, snapping aids, frontage preview and JSON export | Validated engine mutations and affected-world/art regeneration |
@@ -72,6 +74,6 @@ The map must present the engine's world faithfully. Decorative trees, gardens an
 | `render-*-guide.mjs` | Exact-camera geometry guides for image generation |
 | `test_*.py`, `check-*.mjs`, `review-town.py` | Retained functional, interaction and town-plan checks |
 
-## Recommendation, not a settled decision
+## Chosen direction and remaining proof
 
-Keep both rendering paths available during evaluation. Whole-block composition gave the strongest local improvement, but only two manually prepared blocks have been demonstrated. It is premature to declare it the final architecture or to expand it across the town without testing update behavior, depth and resolution. First establish a representative neighborhood that the owner considers close to the target, while preserving source registration and useful interaction.
+The owner has chosen whole-block composition and explicitly accepts regenerating affected blocks when buildings or roads change. Keep native geometry as the temporary fallback and utility conditions as separate overlays. The school experiment now covers its full street-bounded block with two neighboring homes; see [whole-block continuation](handoff/WHOLE_BLOCK_2026_10_10.md). Automatic generation, per-block invalidation, depth and city-scale resolution/performance remain unproven. The user requests evaluation in the live application, not standalone generated images.

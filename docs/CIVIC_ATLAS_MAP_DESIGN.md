@@ -16,6 +16,7 @@ Capability reference: [latest user-supplied inventory](UTILITYSIM_CAPABILITIES.m
 - Support distinct settlement scales around **500, 5,000, and 50,000 residents**. These are populations, not house counts.
 - Keep the actual utility simulation authoritative. The map presents physical records and outcomes; its appearance must not create a second simulation.
 - Preserve the ability to see what is configured, what is happening, and where it is happening.
+- Generate coherent artwork for whole street-bounded blocks, retaining individually selectable source properties underneath. The owner explicitly accepts regenerating affected blocks after building or road changes. Blocks may be irregular polygons; they need not be squares.
 
 The Civic Atlas concept image is art direction, not a rendering specification or evidence of implemented pressure measurements, crew movement, terrain, or integration.
 
@@ -236,7 +237,17 @@ Exercise several seeds and settlement characters at each supported scale, not on
 - Population-to-housing assumptions, including multi-unit buildings.
 - Rules and timing for construction, demolition, road replacement, and infrastructure upgrades.
 - Extent of terrain editing and imported-geography support in the first release.
-- Renderer choice and asset-production approach after the same-world comparison.
+- Production renderer, depth representation, resolution and generation orchestration. Whole-block artwork is the chosen direction; automatic city-scale generation still needs implementation and measurement.
 - Exact fixed-camera pitch and supported input bindings after visibility and device testing. Orthographic 2.5D is the current presentation target; multiple camera angles are not an open requirement for the initial design.
 - Historical replay and crew-position capabilities available in the durable runtime.
 - Scale strategy for large connected worlds and shared utility networks.
+
+## 11. Accepted whole-block regeneration approach — 10 October 2026
+
+The source world defines roads, parcels, building envelopes, storeys, roof types, access and solar status before illustration. Render a fixed-camera registration guide containing those constraints and the neighboring street context, then generate a coherent block with continuous ground, planting and varied architecture. Validate the image against the guide before showing it as the current world. An attractive image is not permission to add, move or merge source properties.
+
+Keep parcel identity and picking independent of the image. Hide ordinary parcel boundaries in Explore; show the selected boundary and expose planning boundaries when needed. School/playground, industrial yard, residential access and similar uses must respect their source parcels even when the grass has no visible seam.
+
+Building, parcel, road, terrain or appearance changes invalidate affected block artwork. Native geometry remains usable while replacement art is generated and checked. A road change may alter several block boundaries; an explicit city rebuild may queue all blocks. Utility readings, outages, selection, activity and network highlighting use separate layers and do not require repainting the town.
+
+Production work still needs per-block dependency fingerprints, a versioned style/camera contract, cached accepted images, retryable generation jobs, neighboring-edge context and rejection of results for superseded world revisions. The prototype currently uses manually generated images, strict source/camera checks and conservative all-area fallback; it does not implement this automatic queue or establish city-scale generation cost, latency or performance.

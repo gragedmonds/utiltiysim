@@ -17,12 +17,15 @@ On Windows use `.venv\Scripts\python.exe`. Open these paths on the loopback serv
 | URL | Purpose |
 | --- | --- |
 | `http://127.0.0.1:8040/` | Main shell, illustrated reference town |
-| `http://127.0.0.1:8040/?art=blocks#map` | Main shell with three experimental illustrated areas |
+| `http://127.0.0.1:8040/#welcome` | Welcome with Account menu and scrolling chapters |
+| `http://127.0.0.1:8040/?art=blocks#map` | Main shell with six experimental illustrated areas |
 | `http://127.0.0.1:8040/?art=native#map` | Native-only comparison |
 | `http://127.0.0.1:8040/block-study.html` | Eight-property A/B |
 | `http://127.0.0.1:8040/block-study.html?blocks=2` | Fourteen-property, two-block A/B |
 
 Use the default reference seed and a new empty store to reproduce the baked art signatures. An existing store is resumed, not regenerated. Geometry or seed changes can correctly trigger native-art fallback. Do not point this experiment at a production/shared world. The server intentionally binds to loopback; do not expose this administrator prototype as a public service.
+
+In Town map, choose **Explore a place → School neighborhood · whole block** to frame the expanded three-property illustration. Click either home or the school to inspect its original record. Use Water and the artwork toggle for overlays and the native comparison. In a cloud environment the loopback address belongs to that environment; a queued browser-open request does not establish that a desktop has forwarded access.
 
 A fresh reference store initializes the town and seven completed physical days; saved screenshots may show a later day because a real-day advance was tested. The store is transient and is not committed. The fixture in `reference_world.py` is the reproducible source.
 

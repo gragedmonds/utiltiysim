@@ -30,6 +30,31 @@ try{
    assert.equal((await diagnostics()).selectedId,home.id);
   }
  }
+ // One painted block must still resolve to three distinct physical properties.
+ const blockIds=['P-00101','P-00102','P-00133'];
+ await page.locator('#place-tour').selectOption('school-block');
+ assert.equal((await diagnostics()).selectedId,undefined);
+ await page.screenshot({path:`${out}/map-school-block.png`});
+ for(const id of blockIds){
+  await page.locator('#place-tour').selectOption('school-block');
+  const home=before.snapshot.premises.find(p=>p.id===id);
+  const point=await page.evaluate(async home=>{
+   const THREE=await import('/viewer/vendor/three.module.js'),d=window.atlasDiagnostics(),c=new THREE.OrthographicCamera(...d.frustum,.5,100000);
+   c.position.fromArray(d.camera);c.lookAt(new THREE.Vector3(...d.target));c.updateMatrixWorld();
+   const p=new THREE.Vector3(home.x,home.elevationM+home.height*.45,home.z).project(c),r=document.querySelector('#map-canvas canvas').getBoundingClientRect();
+   return{x:r.x+(p.x+1)*r.width/2,y:r.y+(1-p.y)*r.height/2};
+  },home);
+  await page.mouse.click(point.x,point.y);
+  await page.waitForFunction(id=>window.atlasDiagnostics().selectedId===id,id);
+  await page.waitForFunction(address=>document.querySelector('#inspector-content').textContent.includes(address),home.address);
+ }
+ await page.locator('#place-tour').selectOption('school-block');
+ const blockFrame=await diagnostics();
+ await page.locator('[data-layer=water]').click();
+ await page.screenshot({path:`${out}/map-school-block-water.png`});
+ await page.locator('[data-layer=town]').click();await page.locator('#map-art-toggle').click();
+ assert.deepEqual((await diagnostics()).camera,blockFrame.camera);
+ await page.screenshot({path:`${out}/map-school-block-native.png`});await page.locator('#map-art-toggle').click();
  await page.locator('#place-tour').selectOption('park');
  const framed=await diagnostics();await page.locator('[data-layer=water]').click();
  await page.screenshot({path:`${out}/map-park-water.png`});
@@ -44,6 +69,6 @@ try{
  await page.locator('#city-study-park [data-city-example]').click();assert.match(await page.locator('#legend-text').textContent(),/Maple Park/);assert.equal((await diagnostics()).selectedId,undefined);
  await page.screenshot({path:`${out}/map-park-1024.png`});
  const after=await(await page.request.get(base+'/atlas/api/bootstrap')).json();assert.deepEqual(after,before,'art, tours and study navigation do not alter the saved world');assert.deepEqual(errors,[]);
- await writeFile(`${out}/city-checks.json`,JSON.stringify({passed:true,sourceUnchanged:true,artwork:(await diagnostics()).artwork,realMousePicks:['school','depot'],consoleErrors:errors},null,2)+'\n');
+ await writeFile(`${out}/city-checks.json`,JSON.stringify({passed:true,sourceUnchanged:true,artwork:(await diagnostics()).artwork,realMousePicks:['school','depot',...blockIds],consoleErrors:errors},null,2)+'\n');
  console.log('PASS: six map illustrations, civic property mouse picking, park tours, utility overlay, A/B camera preservation, study filters, responsive layout, unchanged saved world.');
 }finally{await browser.close();}

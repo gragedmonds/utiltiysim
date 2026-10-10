@@ -1,0 +1,60 @@
+{
+  "passed": true,
+  "sourceUnchanged": true,
+  "artwork": {
+    "enabled": true,
+    "count": 6,
+    "areas": [
+      {
+        "ready": true,
+        "enabled": true,
+        "invalidated": false,
+        "reason": "Camera-calibrated block experiment",
+        "overlayRecords": 9
+      },
+      {
+        "ready": true,
+        "enabled": true,
+        "invalidated": false,
+        "reason": "Camera-calibrated block experiment",
+        "overlayRecords": 0
+      },
+      {
+        "ready": true,
+        "enabled": true,
+        "invalidated": false,
+        "reason": "Camera-calibrated block experiment",
+        "overlayRecords": 0
+      },
+      {
+        "ready": true,
+        "enabled": true,
+        "invalidated": false,
+        "reason": "Camera-calibrated block experiment",
+        "overlayRecords": 0
+      },
+      {
+        "ready": true,
+        "enabled": true,
+        "invalidated": false,
+        "reason": "Camera-calibrated block experiment",
+        "overlayRecords": 0
+      },
+      {
+        "ready": true,
+        "enabled": true,
+        "invalidated": false,
+        "reason": "Camera-calibrated block experiment",
+        "overlayRecords": 0
+      }
+    ]
+  },
+  "realMousePicks": [
+    "school",
+    "depot",
+    "P-00101",
+    "P-00102",
+    "P-00133"
+  ],
+  "consoleErrors": []
+}

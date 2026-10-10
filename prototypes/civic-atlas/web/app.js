@@ -1,6 +1,7 @@
 import {renderCityDesign,CITY_FAMILIES} from './city-design.js';
 import {renderOverview} from './overview.js';
 import {AtlasMap} from './map.js';
+import {SCHOOL_BLOCK} from './map-block-plate.js';
 import {propertyPreview} from './map-preview.js';
 const $=id=>document.getElementById(id);
 const esc=value=>String(value??'Not recorded').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -155,6 +156,13 @@ function sketchChanged(draft,drawing){
  $('undo-sketch').disabled=!draft.points.length;$('clear-sketch').disabled=!draft.points.length;$('export-sketch').disabled=draft.points.length<2;
 }
 function visitPlace(id){
+ if(id==='school-block'&&town.atlasDesign&&SCHOOL_BLOCK.ids.every(id=>town.premises.some(p=>p.id===id))){
+  route('map');map.setDrawing(false);++requestVersion;selected=null;detail=null;
+  map.clearSelection();emptyInspector();
+  const xs=SCHOOL_BLOCK.polygon.map(p=>p.x),zs=SCHOOL_BLOCK.polygon.map(p=>p.z);
+  map.focus({...SCHOOL_BLOCK.center,width:Math.max(...xs)-Math.min(...xs),depth:Math.max(...zs)-Math.min(...zs)},true);
+  $('legend-text').textContent='School neighborhood · 3 saved properties';return;
+ }
  const family=CITY_FAMILIES.find(f=>f.id===id);
  const home=id==='depot'?town.premises.find(p=>p.buildingType==='depot'):family?.match?town.premises.find(family.match):null;
  const park=family?.park?town.atlasDesign?.parks?.find(p=>p.kind===family.park):null;
@@ -169,6 +177,7 @@ function visitPlace(id){
 function bind(){
  const places=CITY_FAMILIES.filter(f=>f.match?town.premises.some(f.match):town.atlasDesign?.parks?.some(p=>p.kind===f.park));
  $('place-tour').innerHTML='<option value="">Choose a destination…</option>'+places.map(f=>`<option value="${f.id}">${esc(f.park?town.atlasDesign.parks.find(p=>p.kind===f.park).name:f.tag)}</option>`).join('')+(town.premises.some(p=>p.buildingType==='depot')?'<option value="depot">Utility operations depot</option>':'');
+ if(town.atlasDesign&&SCHOOL_BLOCK.ids.every(id=>town.premises.some(p=>p.id===id)))$('place-tour').add(new Option('School neighborhood · whole block','school-block'));
  $('place-tour').onchange=e=>{visitPlace(e.target.value);e.target.value='';};
  const artStatus=$('map-art-status'),canvasHost=$('map-canvas');
  const updateArtStatus=()=>{

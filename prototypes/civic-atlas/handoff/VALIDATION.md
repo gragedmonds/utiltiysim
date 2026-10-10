@@ -42,3 +42,12 @@ Final browser runs passed with the integrated welcome, shared grass, six image a
 The first grass shader attempt failed compilation on reserved GLSL word `patch`; screenshots exposed this and it was corrected. The new browser checks capture shader console errors. Access integration review also caught a second renderer recreating the old centerline driveways; final visible-mesh validation now covers it. These failures are resolved in the final run rather than hidden by functional-only tests.
 
 Current evidence: [park](evidence/city-places/map-park.png), [school](evidence/city-places/map-school.png), [depot](evidence/city-places/map-depot.png), [whole town](evidence/city-places/map-satellite-overview.png), [welcome menu](evidence/city-places/account-menu.png), [scroll narrative](evidence/city-places/story-setup.png). The current owner acceptance remains scoped: welcome/concept direction liked; full map fidelity incomplete.
+
+## Whole-school-block continuation — 10 October 2026
+
+- `check-city-places.mjs` passed with the final expanded block image. The added neighborhood destination frames all three properties. Real mouse hits at original building centers open P-00101, P-00102 and P-00133 with their distinct addresses. Water overlays and native/illustrated comparison preserve the camera. The original six-area, depot, catalogue and responsive checks also passed; bootstrap data before/after was identical and no captured JavaScript/WebGL/shader errors occurred. [Retained result](evidence/school-block/checks.json).
+- `check-welcome.mjs` passed against the already running port-8040 server at 1600/1024/390 widths, including Account disclosure, keyboard/focus behavior, truthful unconfigured sign-in, actual workspace navigation, scroll chapters and reduced motion. No welcome source changes were necessary.
+- The guide generator executed with source parcel outlines and exported all three source anchors. Changed application/guide JavaScript syntax and whitespace checks passed.
+- Browser-open request returned `queued`; the user-visible browser tab and cloud-to-desktop forwarding were not verified. No backend code or saved world was changed. Backend tests and the broad shell suite were not rerun for this artwork/tour change.
+
+See [whole-block findings](WHOLE_BLOCK_2026_10_10.md) for rejected playground containment, remaining close-view texture softness and the still-manual generation workflow. Visual improvement and source click checks do not establish pixel-exact image geometry or owner acceptance.
