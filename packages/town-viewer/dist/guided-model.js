@@ -1,4 +1,5 @@
 import {schemaFields,parseField,servedServices,same} from './schema-form.js';
+import {STAFFING,staffingBase,suggestedStaffing,applySuggestedStaffing,markStaffingEdited} from './setup-utility.js';
 
 export const BUCKET={town:'townOverrides',run:'settings',operations:'operations',world:'worldSettings'};
 export const at=(obj,path)=>path.split('.').reduce((v,k)=>v?.[k],obj);
@@ -40,13 +41,27 @@ export function fieldAt(fields,id){
 }
 export function setValue(draft,data,fields,id,raw,{pin=true}={}){
  const f=fieldAt(fields,id);if(!f||f.disabled)throw Error('This setting is unavailable for the selected services.');
+ const previous=valueOf(draft,data,f);
  const districtTotal=id==='town:town.houses'&&draft.guidedSetup.mode==='studio'&&draft.execution==='local';
  const result=parseField(districtTotal?{...f,max:500000}:f,raw);if(!result.ok)throw Error(result.error);
  if(id==='town:town.houses'&&draft.guidedSetup.mode==='world'&&result.value>data.homeLimit)throw Error(`A saved world supports at most ${data.homeLimit.toLocaleString()} homes. Choose Studio year for larger district runs.`);
  if(f.type==='enum'&&!f.options.includes(result.value))throw Error('Choose one of the listed options.');
  put(draft[BUCKET[f.scope]]??={},f.path,districtTotal?Math.min(result.value,data.homeLimit||10000):result.value);
  if(pin)draft.guidedSetup.pins[id]=true;
- if(id==='town:town.houses'){draft.homes=result.value;draft.totalHomes=draft.execution==='local'?result.value:null;}
+ if(pin&&STAFFING.some(s=>id==='run:'+s.path))markStaffingEdited(draft,f.path);
+ if(id==='town:town.houses'){
+  draft.homes=result.value;draft.totalHomes=draft.execution==='local'?result.value:null;
+  if(previous!==result.value){
+   // Staffing repeats in each district, rather than scaling to the whole run total.
+   const base=staffingBase(data.defaults.run),homes=draft.townOverrides.town.houses,want=suggestedStaffing(homes,base);
+   for(const s of STAFFING){
+    const staffId='run:'+s.path;
+    draft.guidedSetup.suggestions[staffId]=want[s.key];
+    if(Object.entries(draft.guidedSetup.pins).some(([key,pinned])=>pinned&&(staffId===key||staffId.startsWith(key+'.'))))markStaffingEdited(draft,s.path);
+   }
+   applySuggestedStaffing(draft,homes,base);
+  }
+ }
  draft.configDirty=true;draft.agentSummaryDirty=!!draft.agentProposal;return result.value;
 }
 export function applyChoice(draft,data,fields,page,choice){
@@ -63,6 +78,10 @@ export function resetValue(draft,data,fields,id){
  const state=draft.guidedSetup,f=fieldAt(fields,id);if(!f)return;
  const value=Object.hasOwn(state.suggestions,id)?state.suggestions[id]:at(data.defaults[f.scope],f.path)??f.default;
  setValue(draft,data,fields,id,value,{pin:false});for(const key of Object.keys(state.pins))if(key===id||key.startsWith(id+'.'))delete state.pins[key];
+ if(STAFFING.some(s=>id==='run:'+s.path)){
+  markStaffingEdited(draft,f.path,false);
+  draft.staffing.applied??={};draft.staffing.applied[f.path]=value;
+ }
 }
 export function regionChoice(region){
  const values=Object.fromEntries(Object.entries(flatten(region.overrides)).map(([k,v])=>['town:'+k,v]));

@@ -1,0 +1,95 @@
+{
+  "schemaVersion": "world-scale-evidence/1",
+  "measuredOn": "2026-10-09 America/New_York",
+  "developmentPreflight": true,
+  "frozenReleaseBenchmark": false,
+  "startingPublicSource": "e5a72fd404b7374c12e15a8c098fef482eed4440",
+  "candidateContext": "Notice/staffing candidate; optional finance, notices and field policies were not enabled in these fresh baseline worlds. No exact frozen implementation fingerprint was recorded for this development invocation.",
+  "budgets": {
+    "maxSeconds": 600,
+    "maxGiB": 20,
+    "minimumFreeGiB": 10
+  },
+  "sourceAvailability": "Generated snapshots and owner databases retained locally at the recorded relative paths; large data is not committed.",
+  "plan": {
+    "schemaVersion": "world-scale-preflight/1",
+    "start": "2026-01-01",
+    "days": 1826,
+    "minimumAccounts": 15000,
+    "sources": [
+      {
+        "path": "out/scale-preflight-10000/snapshot.json.gz",
+        "sha256": "8ee007f3db1972e5841e55363adc89a22a09724e2366205f6e5567b65126d5c3",
+        "town": "town-bbb67a6cd833d13d",
+        "accounts": 11923,
+        "premises": 10718,
+        "sourceServicePoints": 29454
+      },
+      {
+        "path": "packs/town/town-7182208691286eb1.589345bbca.snapshot.json.gz",
+        "sha256": "589345bbcaf81ef5daaec8d75e7f933b08f56a99aa7b1f30c91176d97d913784",
+        "town": "town-7182208691286eb1",
+        "accounts": 3969,
+        "premises": 3570,
+        "sourceServicePoints": 9577
+      }
+    ],
+    "scope": "physical-world districts; no enterprise customer processing"
+  },
+  "result": {
+    "schemaVersion": "world-scale-preflight/1",
+    "scope": "physical-world districts; no enterprise customer processing",
+    "integratedAcceptance": false,
+    "sourceAccounts": 15892,
+    "sourcePremises": 14288,
+    "targetDays": 1826,
+    "stopReason": "wall_time_budget",
+    "targetReached": false,
+    "invocationSeconds": 607.6758846999983,
+    "measuredDistrictDaysThisInvocation": 76,
+    "medianDistrictDaySeconds": 6.614706350001143,
+    "sourceHashesUnchanged": true,
+    "districts": [
+      {
+        "database": "district-1.sqlite",
+        "through": "2026-02-08",
+        "days": 38,
+        "assets": 29454,
+        "truthRows": 1099826,
+        "observationRows": 1099826,
+        "databaseBytes": 525066240,
+        "sqliteQuickCheck": "ok",
+        "completedBoundaryReplayUnchanged": true,
+        "latestPageRows": 25,
+        "latestPageSeconds": 0.0002958999975817278,
+        "latestPageQueryPlan": [
+          "SEARCH observations USING INDEX observations_by_day (day>?)"
+        ]
+      },
+      {
+        "database": "district-2.sqlite",
+        "through": "2026-02-08",
+        "days": 38,
+        "assets": 9577,
+        "truthRows": 359254,
+        "observationRows": 359254,
+        "databaseBytes": 184205312,
+        "sqliteQuickCheck": "ok",
+        "completedBoundaryReplayUnchanged": true,
+        "latestPageRows": 25,
+        "latestPageSeconds": 0.0003392999969946686,
+        "latestPageQueryPlan": [
+          "SEARCH observations USING INDEX observations_by_day (day>?)"
+        ]
+      }
+    ],
+    "limits": [
+      "Source accounts are not onboarded enterprise recipients.",
+      "Districts run sequentially in independent worlds, not one shared utility clock.",
+      "Only baseline physical demand, meter aging and observations participate.",
+      "No bills, payments, calls, field jobs, workforce or live AI are exercised.",
+      "Completed-boundary replay is not interrupted cross-system recovery.",
+      "Budgets are soft at a daily transaction boundary; no extrapolated pass."
+    ]
+  }
+}

@@ -1,0 +1,23 @@
+const $=id=>document.getElementById(id);
+const esc=value=>String(value??'—').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let record=null,pending=null,busy=false,storageOK=true;
+const key='world-customer-notices-pending';
+function message(text,error=false){$('message').textContent=text;$('message').className=error?'error':'';}
+function controls(){for(const el of document.querySelectorAll('input,button'))el.disabled=busy||!!pending||!record;for(const el of document.querySelectorAll('#policy input,#policy button'))el.disabled=busy||!!pending||!record||!storageOK;$('retry').hidden=!pending;$('retry').disabled=busy||!storageOK;$('next').disabled=busy||!!pending||!record?.nextAfter;}
+async function request(path,body){const response=await fetch(path,body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{cache:'no-store'});const value=await response.json();if(!response.ok){const error=Error(value.error||'Request failed.');error.rejected=response.status>=400&&response.status<500;throw error;}return value;}
+async function load(after=0){
+ const next=await request('/api/customer-notices?after='+after);if(record&&record.worldFingerprint!==next.worldFingerprint)throw Error('World identity changed. Reload before editing.');record=next;
+ $('identity').textContent=record.environmentId+' · next physical day '+record.through+' · policy revision '+record.revision;
+ $('state').textContent=!record.enabled?'Payment-help contact generation is not configured.':record.policy.active?'Payment-help contact generation is active.':'Payment-help contact generation is paused.';
+ $('active').checked=record.policy.active;for(const [id,field] of [['probability','noticeProbabilityPerDay'],['delay','deliveryDelaySeconds'],['repeat','repeatAfterDays'],['maximum','maxContacts']])$(id).value=record.policy[field];
+ $('summary').textContent=(record.counts.pending||0)+' pending contacts · '+(record.counts.accepted||0)+' transport acknowledgments · up to 25 records per page';
+ $('history').innerHTML=record.items.length?record.items.map(r=>{const i=r.intent;return `<tr><td>${esc(i.createdAt)}<br>${esc(i.availableAt)}</td><td>${esc(i.premiseId)}<br>${esc(i.invoiceId)}</td><td>${esc(i.reason)}<br>Attempt ${esc(i.attempt)}</td><td>${r.available?'Available':'Delayed'} · ${esc(r.state)}<br>${r.attempts} delivery attempts${r.last_error?'<br>'+esc(r.last_error):''}</td><td>${esc(i.id)}</td></tr>`;}).join(''):'<tr><td colspan="5">No financial-contact intentions recorded.</td></tr>';controls();
+}
+async function send(){
+ if(busy)return;if(!pending){pending={schemaVersion:'world-customer-notices/1',commandId:crypto.randomUUID(),environmentId:record.environmentId,runId:record.runId,worldFingerprint:record.worldFingerprint,actorId:'world-admin',expectedRevision:record.revision,effectiveDate:record.through,action:'configure',active:$('active').checked,noticeProbabilityPerDay:Number($('probability').value),deliveryDelaySeconds:Number($('delay').value),repeatAfterDays:Number($('repeat').value),maxContacts:Number($('maximum').value),reason:$('reason').value.trim(),causalReference:'local-world-controls'};try{sessionStorage.setItem(key,JSON.stringify(pending));}catch{pending=null;message('Enable session storage before changing the policy.',true);return;}}
+ busy=true;controls();message('Recording notice-reaction policy…');try{await request('/api/customer-notices',pending);pending=null;sessionStorage.removeItem(key);await load();message('Policy saved. Reactions are evaluated on future physical days against actual delivered evidence.');}catch(e){if(e.rejected){pending=null;sessionStorage.removeItem(key);}message(e.message+(pending?' Outcome uncertain. Retry the exact retained command.':' Reload the first page before editing.'),true);}finally{busy=false;controls();}
+}
+async function page(after=0){if(busy||pending)return;busy=true;controls();try{await load(after);message('Recorded contacts refreshed.');}catch(e){message(e.message,true);}finally{busy=false;controls();}}
+$('policy').onsubmit=e=>{e.preventDefault();send();};$('retry').onclick=send;$('first').onclick=()=>page();$('next').onclick=()=>page(record.nextAfter);
+try{pending=JSON.parse(sessionStorage.getItem(key)||'null');}catch{storageOK=false;message('Session storage could not be read. Enable it before editing.',true);}
+load().then(()=>{if(storageOK)message(pending?'A retained command needs confirmation. Retry its original world and payload.':'Review the explicit notice-response assumptions before saving.');}).catch(e=>{record=null;message(e.message,true);controls();});controls();

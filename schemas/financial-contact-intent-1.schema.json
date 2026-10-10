@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Customer request for payment help; not a ticket or arrangement",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "environmentId",
+    "runId",
+    "premiseId",
+    "recipientRef",
+    "invoiceId",
+    "deliveredDocumentId",
+    "episodeId",
+    "documentDeliveredAt",
+    "knownAt",
+    "noticedAt",
+    "createdAt",
+    "availableAt",
+    "schemaVersion",
+    "customerKind",
+    "attempt",
+    "previousContactId",
+    "reason"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "environmentId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "runId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "premiseId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "recipientRef": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "invoiceId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "deliveredDocumentId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "episodeId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "documentDeliveredAt": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "Z$"
+    },
+    "knownAt": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "Z$"
+    },
+    "noticedAt": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "Z$"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "Z$"
+    },
+    "availableAt": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "Z$"
+    },
+    "schemaVersion": {
+      "const": "financial-contact-intent/1"
+    },
+    "customerKind": {
+      "enum": [
+        "household",
+        "business"
+      ]
+    },
+    "attempt": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 10
+    },
+    "previousContactId": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "reason": {
+      "enum": [
+        "payment_help",
+        "repeat_payment_help"
+      ]
+    }
+  }
+}
